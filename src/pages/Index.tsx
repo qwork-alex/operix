@@ -4,8 +4,15 @@ import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { ServicePieChart } from "@/components/dashboard/ServicePieChart";
 import { ActiveMap } from "@/components/dashboard/ActiveMap";
 import { RecentActivity } from "@/components/dashboard/RecentActivity";
+import { useDashboardStats } from "@/hooks/useDashboardData";
+import { Loader2 } from "lucide-react";
+
+const formatCurrency = (v: number) =>
+  new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(v);
 
 const Dashboard = () => {
+  const { data, isLoading } = useDashboardStats();
+
   return (
     <div className="space-y-6">
       <div>
@@ -17,29 +24,29 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard
           title="Revenue"
-          value="€88,420"
-          change={12.5}
+          value={isLoading ? "..." : formatCurrency(data?.totalRevenue ?? 0)}
+          change={0}
           icon={<Euro className="h-5 w-5" />}
           glowClass="glow-gold"
         />
         <KPICard
           title="Pending Payments"
-          value="€14,230"
-          change={-3.2}
+          value={isLoading ? "..." : formatCurrency(data?.pendingPayments ?? 0)}
+          change={0}
           icon={<CreditCard className="h-5 w-5" />}
           glowClass="glow-blue"
         />
         <KPICard
           title="Completed Services"
-          value="847"
-          change={8.7}
+          value={isLoading ? "..." : String(data?.completedServices ?? 0)}
+          change={0}
           icon={<CheckCircle2 className="h-5 w-5" />}
           glowClass="glow-green"
         />
         <KPICard
           title="Performance"
-          value="94.2%"
-          change={2.1}
+          value={isLoading ? "..." : `${data?.performance ?? 0}%`}
+          change={0}
           icon={<TrendingUp className="h-5 w-5" />}
         />
       </div>

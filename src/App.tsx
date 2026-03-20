@@ -3,8 +3,11 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthProvider } from "@/hooks/useAuth";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AppLayout } from "@/components/layout/AppLayout";
 import Index from "./pages/Index";
+import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import {
   ServiceOrders,
@@ -22,27 +25,39 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AppLayout>
+    <AuthProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
           <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/service-orders" element={<ServiceOrders />} />
-            <Route path="/payment-orders" element={<PaymentOrders />} />
-            <Route path="/financial" element={<Financial />} />
-            <Route path="/profit" element={<ProfitDistribution />} />
-            <Route path="/accounting" element={<Accounting />} />
-            <Route path="/fleet" element={<Fleet />} />
-            <Route path="/documents" element={<Documents />} />
-            <Route path="/users" element={<UsersPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="*" element={<NotFound />} />
+            <Route path="/auth" element={<Auth />} />
+            <Route
+              path="/*"
+              element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <Routes>
+                      <Route path="/" element={<Index />} />
+                      <Route path="/service-orders" element={<ServiceOrders />} />
+                      <Route path="/payment-orders" element={<PaymentOrders />} />
+                      <Route path="/financial" element={<Financial />} />
+                      <Route path="/profit" element={<ProfitDistribution />} />
+                      <Route path="/accounting" element={<Accounting />} />
+                      <Route path="/fleet" element={<Fleet />} />
+                      <Route path="/documents" element={<Documents />} />
+                      <Route path="/users" element={<UsersPage />} />
+                      <Route path="/settings" element={<SettingsPage />} />
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
           </Routes>
-        </AppLayout>
-      </BrowserRouter>
-    </TooltipProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </AuthProvider>
   </QueryClientProvider>
 );
 
