@@ -14,16 +14,565 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      clients: {
+        Row: {
+          address: string | null
+          contact_email: string | null
+          contact_phone: string | null
+          created_at: string
+          id: string
+          name: string
+          notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      discrepancies: {
+        Row: {
+          created_at: string
+          expected_value: number | null
+          id: string
+          issue_type: string
+          payment_order_id: string | null
+          received_value: number | null
+          resolved: boolean
+          resolved_at: string | null
+          service_order_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          expected_value?: number | null
+          id?: string
+          issue_type: string
+          payment_order_id?: string | null
+          received_value?: number | null
+          resolved?: boolean
+          resolved_at?: string | null
+          service_order_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          expected_value?: number | null
+          id?: string
+          issue_type?: string
+          payment_order_id?: string | null
+          received_value?: number | null
+          resolved?: boolean
+          resolved_at?: string | null
+          service_order_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discrepancies_payment_order_id_fkey"
+            columns: ["payment_order_id"]
+            isOneToOne: false
+            referencedRelation: "payment_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discrepancies_service_order_id_fkey"
+            columns: ["service_order_id"]
+            isOneToOne: false
+            referencedRelation: "service_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      documents: {
+        Row: {
+          created_at: string
+          id: string
+          mime_type: string | null
+          name: string
+          parent_id: string | null
+          size_bytes: number | null
+          storage_path: string | null
+          type: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          mime_type?: string | null
+          name: string
+          parent_id?: string | null
+          size_bytes?: number | null
+          storage_path?: string | null
+          type?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          mime_type?: string | null
+          name?: string
+          parent_id?: string | null
+          size_bytes?: number | null
+          storage_path?: string | null
+          type?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documents_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financial_records: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          notes: string | null
+          reference_id: string | null
+          source: string
+          status: string
+          type: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          id?: string
+          notes?: string | null
+          reference_id?: string | null
+          source: string
+          status?: string
+          type: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          notes?: string | null
+          reference_id?: string | null
+          source?: string
+          status?: string
+          type?: string
+        }
+        Relationships: []
+      }
+      mileage_logs: {
+        Row: {
+          created_at: string
+          date: string
+          driver_user_id: string | null
+          end_km: number
+          fuel_cost: number | null
+          fuel_litres: number | null
+          id: string
+          notes: string | null
+          start_km: number
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          date?: string
+          driver_user_id?: string | null
+          end_km: number
+          fuel_cost?: number | null
+          fuel_litres?: number | null
+          id?: string
+          notes?: string | null
+          start_km: number
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          driver_user_id?: string | null
+          end_km?: number
+          fuel_cost?: number | null
+          fuel_litres?: number | null
+          id?: string
+          notes?: string | null
+          start_km?: number
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mileage_logs_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      partner_clients: {
+        Row: {
+          client_id: string
+          id: string
+          partner_user_id: string
+        }
+        Insert: {
+          client_id: string
+          id?: string
+          partner_user_id: string
+        }
+        Update: {
+          client_id?: string
+          id?: string
+          partner_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_clients_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_orders: {
+        Row: {
+          car_name: string | null
+          client_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          license_plate: string | null
+          list_name: string | null
+          platform: string | null
+          services: Json | null
+          status: string
+          technician_id: string | null
+          total: number | null
+          updated_at: string
+        }
+        Insert: {
+          car_name?: string | null
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          license_plate?: string | null
+          list_name?: string | null
+          platform?: string | null
+          services?: Json | null
+          status?: string
+          technician_id?: string | null
+          total?: number | null
+          updated_at?: string
+        }
+        Update: {
+          car_name?: string | null
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          license_plate?: string | null
+          list_name?: string | null
+          platform?: string | null
+          services?: Json | null
+          status?: string
+          technician_id?: string | null
+          total?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_orders_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_orders_technician_id_fkey"
+            columns: ["technician_id"]
+            isOneToOne: false
+            referencedRelation: "technicians"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          email: string | null
+          full_name: string
+          id: string
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string
+          id: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string
+          id?: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      service_orders: {
+        Row: {
+          car_name: string | null
+          client_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          license_plate: string | null
+          platform: string | null
+          service_1_name: string | null
+          service_1_price: number | null
+          service_2_name: string | null
+          service_2_price: number | null
+          service_3_name: string | null
+          service_3_price: number | null
+          service_4_name: string | null
+          service_4_price: number | null
+          status: string
+          technician_id: string | null
+          total: number | null
+          updated_at: string
+          week: string | null
+        }
+        Insert: {
+          car_name?: string | null
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          license_plate?: string | null
+          platform?: string | null
+          service_1_name?: string | null
+          service_1_price?: number | null
+          service_2_name?: string | null
+          service_2_price?: number | null
+          service_3_name?: string | null
+          service_3_price?: number | null
+          service_4_name?: string | null
+          service_4_price?: number | null
+          status?: string
+          technician_id?: string | null
+          total?: number | null
+          updated_at?: string
+          week?: string | null
+        }
+        Update: {
+          car_name?: string | null
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          license_plate?: string | null
+          platform?: string | null
+          service_1_name?: string | null
+          service_1_price?: number | null
+          service_2_name?: string | null
+          service_2_price?: number | null
+          service_3_name?: string | null
+          service_3_price?: number | null
+          service_4_name?: string | null
+          service_4_price?: number | null
+          status?: string
+          technician_id?: string | null
+          total?: number | null
+          updated_at?: string
+          week?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_orders_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_orders_technician_id_fkey"
+            columns: ["technician_id"]
+            isOneToOne: false
+            referencedRelation: "technicians"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      technician_clients: {
+        Row: {
+          client_id: string
+          id: string
+          technician_id: string
+        }
+        Insert: {
+          client_id: string
+          id?: string
+          technician_id: string
+        }
+        Update: {
+          client_id?: string
+          id?: string
+          technician_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "technician_clients_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technician_clients_technician_id_fkey"
+            columns: ["technician_id"]
+            isOneToOne: false
+            referencedRelation: "technicians"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      technicians: {
+        Row: {
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          phone: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          phone?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          phone?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      vehicles: {
+        Row: {
+          assigned_technician_id: string | null
+          brand: string | null
+          created_at: string
+          id: string
+          insurance_expiry: string | null
+          license_plate: string
+          model: string | null
+          name: string
+          notes: string | null
+          year: number | null
+        }
+        Insert: {
+          assigned_technician_id?: string | null
+          brand?: string | null
+          created_at?: string
+          id?: string
+          insurance_expiry?: string | null
+          license_plate: string
+          model?: string | null
+          name: string
+          notes?: string | null
+          year?: number | null
+        }
+        Update: {
+          assigned_technician_id?: string | null
+          brand?: string | null
+          created_at?: string
+          id?: string
+          insurance_expiry?: string | null
+          license_plate?: string
+          model?: string | null
+          name?: string
+          notes?: string | null
+          year?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicles_assigned_technician_id_fkey"
+            columns: ["assigned_technician_id"]
+            isOneToOne: false
+            referencedRelation: "technicians"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      can_access_client: {
+        Args: { _client_id: string; _user_id: string }
+        Returns: boolean
+      }
+      get_user_role: {
+        Args: { _user_id: string }
+        Returns: Database["public"]["Enums"]["app_role"]
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "partner" | "technician" | "client"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +699,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "partner", "technician", "client"],
+    },
   },
 } as const

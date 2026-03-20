@@ -1,4 +1,4 @@
-import { Bell, Globe, Search } from "lucide-react";
+import { Bell, Globe, Search, LogOut } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import {
@@ -6,7 +6,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { useAuth } from "@/hooks/useAuth";
 
 const languages = [
   { code: "fr", label: "Français" },
@@ -24,6 +26,11 @@ const languages = [
 ];
 
 export function TopBar() {
+  const { profile, role, signOut } = useAuth();
+  const initials = profile?.full_name
+    ? profile.full_name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
+    : "?";
+
   return (
     <header className="flex h-14 items-center justify-between border-b border-border/50 px-4 glass-panel">
       <div className="flex items-center gap-2">
@@ -35,6 +42,12 @@ export function TopBar() {
       </div>
 
       <div className="flex items-center gap-1">
+        {role && (
+          <span className="hidden sm:inline text-[10px] uppercase tracking-widest text-muted-foreground/60 mr-2 px-2 py-0.5 rounded bg-muted/30">
+            {role}
+          </span>
+        )}
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
@@ -55,9 +68,24 @@ export function TopBar() {
           <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-primary" />
         </Button>
 
-        <div className="ml-2 flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-semibold">
-          A
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="ml-2 flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-semibold hover:bg-primary/30 transition-colors">
+              {initials}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="bg-card border-border w-48">
+            <div className="px-3 py-2">
+              <p className="text-sm font-medium text-foreground truncate">{profile?.full_name || "User"}</p>
+              <p className="text-xs text-muted-foreground truncate">{profile?.email}</p>
+            </div>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={signOut} className="text-sm cursor-pointer text-destructive">
+              <LogOut className="h-3.5 w-3.5 mr-2" />
+              Sign Out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   );
