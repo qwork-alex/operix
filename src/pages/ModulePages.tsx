@@ -9,9 +9,7 @@ const PlaceholderPage = ({ title }: { title: string }) => (
   </div>
 );
 
-// ServiceOrders moved to dedicated page
-export const PaymentOrders = () => <PlaceholderPage title="Payment Orders" />;
-export const Financial = () => <PlaceholderPage title="Financial" />;
+// PaymentOrders and Financial moved to dedicated pages
 export const ProfitDistribution = () => <PlaceholderPage title="Profit Distribution" />;
 export const Accounting = () => <PlaceholderPage title="Accounting" />;
 export const Fleet = () => <PlaceholderPage title="Fleet Management" />;

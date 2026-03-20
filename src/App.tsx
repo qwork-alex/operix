@@ -11,9 +11,9 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import ServiceOrdersPage from "./pages/ServiceOrdersPage";
+import PaymentOrdersPage from "./pages/PaymentOrdersPage";
+import FinancialPage from "./pages/FinancialPage";
 import {
-  PaymentOrders,
-  Financial,
   ProfitDistribution,
   Accounting,
   Fleet,
@@ -50,8 +50,8 @@ const App = () => (
                         <Routes>
                           <Route path="/" element={<Index />} />
                           <Route path="/service-orders" element={<ServiceOrdersPage />} />
-                          <Route path="/payment-orders" element={<PaymentOrders />} />
-                          <Route path="/financial" element={<Financial />} />
+                          <Route path="/payment-orders" element={<PaymentOrdersPage />} />
+                          <Route path="/financial" element={<FinancialPage />} />
                           <Route path="/profit" element={<ProfitDistribution />} />
                           <Route path="/accounting" element={<Accounting />} />
                           <Route path="/fleet" element={<Fleet />} />
