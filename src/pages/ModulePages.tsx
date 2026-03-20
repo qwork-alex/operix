@@ -11,7 +11,6 @@ const PlaceholderPage = ({ title }: { title: string }) => (
 
 // PaymentOrders and Financial moved to dedicated pages
 export const ProfitDistribution = () => <PlaceholderPage title="Profit Distribution" />;
-export const ProfitDistribution = () => <PlaceholderPage title="Profit Distribution" />;
 export const Accounting = () => <PlaceholderPage title="Accounting" />;
 export const Fleet = () => <PlaceholderPage title="Fleet Management" />;
 export const Documents = () => <PlaceholderPage title="Documents" />;
