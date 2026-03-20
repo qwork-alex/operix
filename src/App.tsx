@@ -9,8 +9,8 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
+import ServiceOrdersPage from "./pages/ServiceOrdersPage";
 import {
-  ServiceOrders,
   PaymentOrders,
   Financial,
   ProfitDistribution,
@@ -39,7 +39,7 @@ const App = () => (
                   <AppLayout>
                     <Routes>
                       <Route path="/" element={<Index />} />
-                      <Route path="/service-orders" element={<ServiceOrders />} />
+                      <Route path="/service-orders" element={<ServiceOrdersPage />} />
                       <Route path="/payment-orders" element={<PaymentOrders />} />
                       <Route path="/financial" element={<Financial />} />
                       <Route path="/profit" element={<ProfitDistribution />} />
