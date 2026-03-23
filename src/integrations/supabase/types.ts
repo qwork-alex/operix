@@ -646,6 +646,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      sync_discrepancy_for_service_order: {
+        Args: { _service_order_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: "admin" | "partner" | "technician" | "client"
