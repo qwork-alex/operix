@@ -11,7 +11,7 @@ function fmt(v: number) {
 }
 
 export default function FinancialPage() {
-  const { data: summary, isLoading: summaryLoading } = useFinancialSummary();
+  const { data: summary, isLoading: summaryLoading, error: summaryError } = useFinancialSummary();
   const { data: discrepancies = [], isLoading: discLoading } = useDiscrepancies();
   const detectMutation = useDiscrepancyDetection();
 
@@ -28,7 +28,20 @@ export default function FinancialPage() {
     );
   }
 
-  const s = summary!;
+  const s = summary ?? {
+    expectedRevenue: 0,
+    realRevenue: 0,
+    difference: 0,
+    missingMoney: 0,
+    mismatchDiff: 0,
+    totalDiscrepancies: 0,
+    missingCount: 0,
+    mismatchCount: 0,
+    correctCount: 0,
+    discrepancies: [],
+    serviceOrders: [],
+    paymentOrders: [],
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -53,6 +66,12 @@ export default function FinancialPage() {
           Refresh Analysis
         </Button>
       </div>
+
+      {summaryError && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          Failed to load financial data. Please try refreshing.
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -80,15 +99,15 @@ export default function FinancialPage() {
           </CardContent>
         </Card>
 
-        <Card className={`border-border/50 ${s.difference > 0 ? "bg-red-500/5" : s.difference < 0 ? "bg-emerald-500/5" : ""}`}>
+        <Card className={`border-border/50 ${s.difference > 0 ? "bg-destructive/5" : s.difference < 0 ? "bg-emerald-500/5" : ""}`}>
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-              {s.difference > 0 ? <TrendingDown className="h-3.5 w-3.5 text-red-400" /> : <CheckCircle className="h-3.5 w-3.5 text-emerald-400" />}
+              {s.difference > 0 ? <TrendingDown className="h-3.5 w-3.5 text-destructive" /> : <CheckCircle className="h-3.5 w-3.5 text-emerald-400" />}
               Difference
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className={`text-2xl font-bold tabular-nums ${s.difference > 0 ? "text-red-400" : s.difference < 0 ? "text-emerald-400" : "text-foreground"}`}>
+            <p className={`text-2xl font-bold tabular-nums ${s.difference > 0 ? "text-destructive" : s.difference < 0 ? "text-emerald-400" : "text-foreground"}`}>
               {s.difference > 0 ? "-" : s.difference < 0 ? "+" : ""}{fmt(Math.abs(s.difference))}
             </p>
             <p className="text-[11px] text-muted-foreground mt-1">
@@ -106,8 +125,8 @@ export default function FinancialPage() {
           <CardContent>
             <p className="text-2xl font-bold tabular-nums text-foreground">{s.totalDiscrepancies}</p>
             <div className="flex gap-2 mt-1">
-              <span className="text-[11px] text-red-400">{s.missingCount} missing</span>
-              <span className="text-[11px] text-amber-400">{s.mismatchCount} mismatch</span>
+              <span className="text-[11px] text-destructive">{s.missingCount} missing</span>
+              <span className="text-[11px] text-warning">{s.mismatchCount} mismatch</span>
               <span className="text-[11px] text-emerald-400">{s.correctCount} ok</span>
             </div>
           </CardContent>
@@ -146,8 +165,8 @@ export default function FinancialPage() {
                       <TableRow key={d.id} className="text-xs">
                         <TableCell>
                           <Badge variant="outline" className={d.issue_type === "missing"
-                            ? "bg-red-500/10 text-red-400 border-red-500/30"
-                            : "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                            ? "bg-destructive/10 text-destructive border-destructive/30"
+                            : "bg-warning/10 text-warning border-warning/30"
                           }>
                             {d.issue_type === "missing" ? <XCircle className="h-3 w-3 mr-1" /> : <AlertTriangle className="h-3 w-3 mr-1" />}
                             {d.issue_type}
@@ -165,13 +184,13 @@ export default function FinancialPage() {
                         </TableCell>
                         <TableCell className="text-right tabular-nums">{fmt(d.expected_value || 0)}</TableCell>
                         <TableCell className="text-right tabular-nums">{fmt(d.received_value || 0)}</TableCell>
-                        <TableCell className={`text-right tabular-nums font-medium ${gap > 0 ? "text-red-400" : "text-emerald-400"}`}>
+                        <TableCell className={`text-right tabular-nums font-medium ${gap > 0 ? "text-destructive" : "text-emerald-400"}`}>
                           {gap > 0 ? "-" : "+"}{fmt(Math.abs(gap))}
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline" className={d.resolved
                             ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                            : "bg-red-500/10 text-red-400 border-red-500/30"
+                            : "bg-destructive/10 text-destructive border-destructive/30"
                           }>
                             {d.resolved ? "Resolved" : "Open"}
                           </Badge>

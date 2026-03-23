@@ -25,7 +25,7 @@ export function useDashboardStats() {
       const pendingPayments = paymentOrders
         .filter((p) => p.status === "pending")
         .reduce((s, o) => s + Number(o.total || 0), 0);
-      const completedServices = serviceOrders.filter((s) => s.status === "completed").length;
+      const completedServices = serviceOrders.filter((s) => s.status === "completed" || s.status === "confirmed").length;
       const totalServices = serviceOrders.length;
       const performance = totalServices > 0 ? (completedServices / totalServices) * 100 : 0;
 
