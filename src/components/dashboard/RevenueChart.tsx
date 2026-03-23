@@ -77,7 +77,7 @@ export function RevenueChart() {
               fontSize: 12,
               color: "hsl(40, 10%, 92%)",
             }}
-            formatter={(value: number) => [`€${value.toLocaleString()}`, ""]}
+            formatter={(value: any) => [`€${Number(value || 0).toLocaleString()}`, ""]}
           />
           <Area
             type="monotone"
