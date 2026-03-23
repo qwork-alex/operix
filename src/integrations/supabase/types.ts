@@ -14,12 +14,43 @@ export type Database = {
   }
   public: {
     Tables: {
+      backend_event_logs: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          id: string
+          payload: Json | null
+          row_id: string | null
+          table_name: string
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          payload?: Json | null
+          row_id?: string | null
+          table_name: string
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          payload?: Json | null
+          row_id?: string | null
+          table_name?: string
+        }
+        Relationships: []
+      }
       clients: {
         Row: {
           address: string | null
           contact_email: string | null
           contact_phone: string | null
           created_at: string
+          created_by: string | null
           id: string
           name: string
           notes: string | null
@@ -30,6 +61,7 @@ export type Database = {
           contact_email?: string | null
           contact_phone?: string | null
           created_at?: string
+          created_by?: string | null
           id?: string
           name: string
           notes?: string | null
@@ -40,6 +72,7 @@ export type Database = {
           contact_email?: string | null
           contact_phone?: string | null
           created_at?: string
+          created_by?: string | null
           id?: string
           name?: string
           notes?: string | null
@@ -101,6 +134,8 @@ export type Database = {
       documents: {
         Row: {
           created_at: string
+          entity_id: string | null
+          entity_type: string | null
           id: string
           mime_type: string | null
           name: string
@@ -112,6 +147,8 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
           id?: string
           mime_type?: string | null
           name: string
@@ -123,6 +160,8 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
           id?: string
           mime_type?: string | null
           name?: string
@@ -146,9 +185,12 @@ export type Database = {
         Row: {
           amount: number
           created_at: string
+          created_by: string | null
           id: string
           notes: string | null
+          payment_order_id: string | null
           reference_id: string | null
+          service_order_id: string | null
           source: string
           status: string
           type: string
@@ -156,9 +198,12 @@ export type Database = {
         Insert: {
           amount?: number
           created_at?: string
+          created_by?: string | null
           id?: string
           notes?: string | null
+          payment_order_id?: string | null
           reference_id?: string | null
+          service_order_id?: string | null
           source: string
           status?: string
           type: string
@@ -166,14 +211,32 @@ export type Database = {
         Update: {
           amount?: number
           created_at?: string
+          created_by?: string | null
           id?: string
           notes?: string | null
+          payment_order_id?: string | null
           reference_id?: string | null
+          service_order_id?: string | null
           source?: string
           status?: string
           type?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "financial_records_payment_order_id_fkey"
+            columns: ["payment_order_id"]
+            isOneToOne: false
+            referencedRelation: "payment_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_records_service_order_id_fkey"
+            columns: ["service_order_id"]
+            isOneToOne: false
+            referencedRelation: "service_orders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       mileage_logs: {
         Row: {
@@ -258,6 +321,7 @@ export type Database = {
           license_plate: string | null
           list_name: string | null
           platform: string | null
+          service_order_id: string | null
           services: Json | null
           status: string
           technician_id: string | null
@@ -273,6 +337,7 @@ export type Database = {
           license_plate?: string | null
           list_name?: string | null
           platform?: string | null
+          service_order_id?: string | null
           services?: Json | null
           status?: string
           technician_id?: string | null
@@ -288,6 +353,7 @@ export type Database = {
           license_plate?: string | null
           list_name?: string | null
           platform?: string | null
+          service_order_id?: string | null
           services?: Json | null
           status?: string
           technician_id?: string | null
@@ -300,6 +366,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_orders_service_order_id_fkey"
+            columns: ["service_order_id"]
+            isOneToOne: false
+            referencedRelation: "service_orders"
             referencedColumns: ["id"]
           },
           {
@@ -508,6 +581,7 @@ export type Database = {
           assigned_technician_id: string | null
           brand: string | null
           created_at: string
+          created_by: string | null
           id: string
           insurance_expiry: string | null
           license_plate: string
@@ -520,6 +594,7 @@ export type Database = {
           assigned_technician_id?: string | null
           brand?: string | null
           created_at?: string
+          created_by?: string | null
           id?: string
           insurance_expiry?: string | null
           license_plate: string
@@ -532,6 +607,7 @@ export type Database = {
           assigned_technician_id?: string | null
           brand?: string | null
           created_at?: string
+          created_by?: string | null
           id?: string
           insurance_expiry?: string | null
           license_plate?: string
