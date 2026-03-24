@@ -25,7 +25,7 @@ export function useCompanySettings() {
         .eq("user_id", user!.id)
         .maybeSingle();
       if (error) throw error;
-      return data as (CompanySettings & { id: string; user_id: string }) | null;
+      return data as unknown as (CompanySettings & { id: string; user_id: string }) | null;
     },
   });
 
