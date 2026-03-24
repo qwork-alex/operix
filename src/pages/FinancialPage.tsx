@@ -5,12 +5,10 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFinancialSummary, useDiscrepancies, useDiscrepancyDetection } from "@/hooks/usePaymentOrders";
-
-function fmt(v: number) {
-  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(v);
-}
+import { useLanguage } from "@/hooks/useLanguage";
 
 export default function FinancialPage() {
+  const { t, formatCurrency } = useLanguage();
   const { data: summary, isLoading: summaryLoading, error: summaryError } = useFinancialSummary();
   const { data: discrepancies = [], isLoading: discLoading } = useDiscrepancies();
   const detectMutation = useDiscrepancyDetection();
@@ -29,73 +27,57 @@ export default function FinancialPage() {
   }
 
   const s = summary ?? {
-    expectedRevenue: 0,
-    realRevenue: 0,
-    difference: 0,
-    missingMoney: 0,
-    mismatchDiff: 0,
-    totalDiscrepancies: 0,
-    missingCount: 0,
-    mismatchCount: 0,
-    correctCount: 0,
-    discrepancies: [],
-    serviceOrders: [],
-    paymentOrders: [],
+    expectedRevenue: 0, realRevenue: 0, difference: 0, missingMoney: 0,
+    mismatchDiff: 0, totalDiscrepancies: 0, missingCount: 0, mismatchCount: 0,
+    correctCount: 0, discrepancies: [], serviceOrders: [], paymentOrders: [],
   };
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
             <TrendingUp className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <h1 className="text-lg font-semibold text-foreground">Financial Intelligence</h1>
-            <p className="text-xs text-muted-foreground">Expected vs Real revenue comparison</p>
+            <h1 className="text-lg font-semibold text-foreground">{t("fin.title")}</h1>
+            <p className="text-xs text-muted-foreground">{t("fin.subtitle")}</p>
           </div>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => detectMutation.mutate()}
-          disabled={detectMutation.isPending}
-        >
+        <Button variant="outline" size="sm" onClick={() => detectMutation.mutate()} disabled={detectMutation.isPending}>
           <RefreshCw className={`h-4 w-4 mr-1 ${detectMutation.isPending ? "animate-spin" : ""}`} />
-          Refresh Analysis
+          {t("fin.refreshAnalysis")}
         </Button>
       </div>
 
       {summaryError && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-          Failed to load financial data. Please try refreshing.
+          {t("fin.failedLoad")}
         </div>
       )}
 
-      {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="border-border/50">
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-              <TrendingUp className="h-3.5 w-3.5" /> Expected Revenue
+              <TrendingUp className="h-3.5 w-3.5" /> {t("fin.expectedRevenue")}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold tabular-nums text-foreground">{fmt(s.expectedRevenue)}</p>
-            <p className="text-[11px] text-muted-foreground mt-1">From service orders</p>
+            <p className="text-2xl font-bold tabular-nums text-foreground">{formatCurrency(s.expectedRevenue)}</p>
+            <p className="text-[11px] text-muted-foreground mt-1">{t("fin.fromServiceOrders")}</p>
           </CardContent>
         </Card>
 
         <Card className="border-border/50">
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-              <DollarSign className="h-3.5 w-3.5" /> Real Revenue
+              <DollarSign className="h-3.5 w-3.5" /> {t("fin.realRevenue")}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold tabular-nums text-foreground">{fmt(s.realRevenue)}</p>
-            <p className="text-[11px] text-muted-foreground mt-1">From payment orders</p>
+            <p className="text-2xl font-bold tabular-nums text-foreground">{formatCurrency(s.realRevenue)}</p>
+            <p className="text-[11px] text-muted-foreground mt-1">{t("fin.fromPaymentOrders")}</p>
           </CardContent>
         </Card>
 
@@ -103,15 +85,15 @@ export default function FinancialPage() {
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
               {s.difference > 0 ? <TrendingDown className="h-3.5 w-3.5 text-destructive" /> : <CheckCircle className="h-3.5 w-3.5 text-emerald-400" />}
-              Difference
+              {t("fin.difference")}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className={`text-2xl font-bold tabular-nums ${s.difference > 0 ? "text-destructive" : s.difference < 0 ? "text-emerald-400" : "text-foreground"}`}>
-              {s.difference > 0 ? "-" : s.difference < 0 ? "+" : ""}{fmt(Math.abs(s.difference))}
+              {s.difference > 0 ? "-" : s.difference < 0 ? "+" : ""}{formatCurrency(Math.abs(s.difference))}
             </p>
             <p className="text-[11px] text-muted-foreground mt-1">
-              {s.difference > 0 ? "Missing money" : s.difference < 0 ? "Overpayment" : "Balanced"}
+              {s.difference > 0 ? t("fin.missingMoney") : s.difference < 0 ? t("fin.overpayment") : t("fin.balanced")}
             </p>
           </CardContent>
         </Card>
@@ -119,43 +101,42 @@ export default function FinancialPage() {
         <Card className="border-border/50">
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-              <AlertTriangle className="h-3.5 w-3.5" /> Discrepancies
+              <AlertTriangle className="h-3.5 w-3.5" /> {t("fin.discrepancies")}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold tabular-nums text-foreground">{s.totalDiscrepancies}</p>
             <div className="flex gap-2 mt-1">
-              <span className="text-[11px] text-destructive">{s.missingCount} missing</span>
-              <span className="text-[11px] text-warning">{s.mismatchCount} mismatch</span>
-              <span className="text-[11px] text-emerald-400">{s.correctCount} ok</span>
+              <span className="text-[11px] text-destructive">{s.missingCount} {t("fin.missing")}</span>
+              <span className="text-[11px] text-warning">{s.mismatchCount} {t("fin.mismatch")}</span>
+              <span className="text-[11px] text-emerald-400">{s.correctCount} {t("fin.ok")}</span>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Discrepancy Table */}
       <Card className="border-border/50">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium">Discrepancy Details</CardTitle>
+          <CardTitle className="text-sm font-medium">{t("fin.discrepancyDetails")}</CardTitle>
         </CardHeader>
         <CardContent>
           {discrepancies.length === 0 ? (
             <div className="text-center py-8 text-sm text-muted-foreground">
               <CheckCircle className="h-8 w-8 mx-auto mb-2 text-emerald-400" />
-              No discrepancies detected. All payments are matching.
+              {t("fin.noDiscrepancies")}
             </div>
           ) : (
             <div className="rounded-lg border border-border/50 overflow-auto">
               <Table>
                 <TableHeader>
                   <TableRow className="text-[11px]">
-                    <TableHead>Type</TableHead>
-                    <TableHead>Service Order</TableHead>
-                    <TableHead>Payment Order</TableHead>
-                    <TableHead className="text-right">Expected</TableHead>
-                    <TableHead className="text-right">Received</TableHead>
-                    <TableHead className="text-right">Gap</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>{t("label.type")}</TableHead>
+                    <TableHead>{t("nav.serviceOrders")}</TableHead>
+                    <TableHead>{t("nav.paymentOrders")}</TableHead>
+                    <TableHead className="text-right">{t("fin.expected")}</TableHead>
+                    <TableHead className="text-right">{t("fin.received")}</TableHead>
+                    <TableHead className="text-right">{t("fin.gap")}</TableHead>
+                    <TableHead>{t("label.status")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -182,17 +163,17 @@ export default function FinancialPage() {
                             <span>{d.payment_orders.car_name || d.payment_orders.license_plate || "—"}</span>
                           ) : <span className="text-muted-foreground">—</span>}
                         </TableCell>
-                        <TableCell className="text-right tabular-nums">{fmt(d.expected_value || 0)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{fmt(d.received_value || 0)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatCurrency(d.expected_value || 0)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatCurrency(d.received_value || 0)}</TableCell>
                         <TableCell className={`text-right tabular-nums font-medium ${gap > 0 ? "text-destructive" : "text-emerald-400"}`}>
-                          {gap > 0 ? "-" : "+"}{fmt(Math.abs(gap))}
+                          {gap > 0 ? "-" : "+"}{formatCurrency(Math.abs(gap))}
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline" className={d.resolved
                             ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
                             : "bg-destructive/10 text-destructive border-destructive/30"
                           }>
-                            {d.resolved ? "Resolved" : "Open"}
+                            {d.resolved ? t("fin.resolved") : t("fin.open")}
                           </Badge>
                         </TableCell>
                       </TableRow>

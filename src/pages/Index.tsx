@@ -5,46 +5,44 @@ import { ServicePieChart } from "@/components/dashboard/ServicePieChart";
 import { ActiveMap } from "@/components/dashboard/ActiveMap";
 import { RecentActivity } from "@/components/dashboard/RecentActivity";
 import { useDashboardStats } from "@/hooks/useDashboardData";
-import { Loader2 } from "lucide-react";
-
-const formatCurrency = (v: number) =>
-  new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(v);
+import { useLanguage } from "@/hooks/useLanguage";
 
 const Dashboard = () => {
   const { data, isLoading } = useDashboardStats();
+  const { t, formatCurrency } = useLanguage();
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-foreground">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">Overview of your operations</p>
+        <h1 className="text-xl font-bold text-foreground">{t("dashboard.title")}</h1>
+        <p className="text-sm text-muted-foreground">{t("dashboard.subtitle")}</p>
       </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard
-          title="Revenue"
+          title={t("dashboard.revenue")}
           value={isLoading ? "..." : formatCurrency(data?.totalRevenue ?? 0)}
           change={0}
           icon={<Euro className="h-5 w-5" />}
           glowClass="glow-gold"
         />
         <KPICard
-          title="Pending Payments"
+          title={t("dashboard.pendingPayments")}
           value={isLoading ? "..." : formatCurrency(data?.pendingPayments ?? 0)}
           change={0}
           icon={<CreditCard className="h-5 w-5" />}
           glowClass="glow-blue"
         />
         <KPICard
-          title="Completed Services"
+          title={t("dashboard.completedServices")}
           value={isLoading ? "..." : String(data?.completedServices ?? 0)}
           change={0}
           icon={<CheckCircle2 className="h-5 w-5" />}
           glowClass="glow-green"
         />
         <KPICard
-          title="Performance"
+          title={t("dashboard.performance")}
           value={isLoading ? "..." : `${data?.performance ?? 0}%`}
           change={0}
           icon={<TrendingUp className="h-5 w-5" />}
