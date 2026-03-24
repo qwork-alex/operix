@@ -9,8 +9,9 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/useAuth";
+import { useLanguage, type LangCode } from "@/hooks/useLanguage";
 
-const languages = [
+const languages: { code: LangCode; label: string }[] = [
   { code: "fr", label: "Français" },
   { code: "en", label: "English" },
   { code: "pt", label: "Português" },
@@ -27,6 +28,7 @@ const languages = [
 
 export function TopBar() {
   const { profile, role, signOut } = useAuth();
+  const { t, lang, setLang } = useLanguage();
   const initials = profile?.full_name
     ? profile.full_name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
     : "?";
@@ -37,7 +39,7 @@ export function TopBar() {
         <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
         <div className="hidden sm:flex items-center gap-2 ml-2 px-3 py-1.5 rounded-md bg-muted/50 text-muted-foreground text-sm">
           <Search className="h-3.5 w-3.5" />
-          <span className="text-xs">Search...</span>
+          <span className="text-xs">{t("action.search")}</span>
         </div>
       </div>
 
@@ -55,9 +57,13 @@ export function TopBar() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="bg-card border-border">
-            {languages.map((lang) => (
-              <DropdownMenuItem key={lang.code} className="text-sm cursor-pointer">
-                {lang.label}
+            {languages.map((l) => (
+              <DropdownMenuItem
+                key={l.code}
+                className={`text-sm cursor-pointer ${l.code === lang ? "bg-accent text-accent-foreground" : ""}`}
+                onClick={() => setLang(l.code)}
+              >
+                {l.label}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
@@ -82,7 +88,7 @@ export function TopBar() {
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={signOut} className="text-sm cursor-pointer text-destructive">
               <LogOut className="h-3.5 w-3.5 mr-2" />
-              Sign Out
+              {t("action.signOut")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

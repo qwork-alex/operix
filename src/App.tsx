@@ -4,6 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
+import { LanguageProvider } from "@/hooks/useLanguage";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -35,39 +36,41 @@ const App = () => (
   <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <Routes>
-              <Route path="/auth" element={<Auth />} />
-              <Route
-                path="/*"
-                element={
-                  <ProtectedRoute>
-                    <AppLayout>
-                      <ErrorBoundary>
-                        <Routes>
-                          <Route path="/" element={<Index />} />
-                          <Route path="/service-orders" element={<ServiceOrdersPage />} />
-                          <Route path="/payment-orders" element={<PaymentOrdersPage />} />
-                          <Route path="/financial" element={<FinancialPage />} />
-                          <Route path="/profit" element={<ProfitDistribution />} />
-                          <Route path="/accounting" element={<Accounting />} />
-                          <Route path="/fleet" element={<Fleet />} />
-                          <Route path="/documents" element={<Documents />} />
-                          <Route path="/users" element={<UsersPage />} />
-                          <Route path="/settings" element={<SettingsPage />} />
-                          <Route path="*" element={<NotFound />} />
-                        </Routes>
-                      </ErrorBoundary>
-                    </AppLayout>
-                  </ProtectedRoute>
-                }
-              />
-            </Routes>
-          </BrowserRouter>
-        </TooltipProvider>
+        <LanguageProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <Routes>
+                <Route path="/auth" element={<Auth />} />
+                <Route
+                  path="/*"
+                  element={
+                    <ProtectedRoute>
+                      <AppLayout>
+                        <ErrorBoundary>
+                          <Routes>
+                            <Route path="/" element={<Index />} />
+                            <Route path="/service-orders" element={<ServiceOrdersPage />} />
+                            <Route path="/payment-orders" element={<PaymentOrdersPage />} />
+                            <Route path="/financial" element={<FinancialPage />} />
+                            <Route path="/profit" element={<ProfitDistribution />} />
+                            <Route path="/accounting" element={<Accounting />} />
+                            <Route path="/fleet" element={<Fleet />} />
+                            <Route path="/documents" element={<Documents />} />
+                            <Route path="/users" element={<UsersPage />} />
+                            <Route path="/settings" element={<SettingsPage />} />
+                            <Route path="*" element={<NotFound />} />
+                          </Routes>
+                        </ErrorBoundary>
+                      </AppLayout>
+                    </ProtectedRoute>
+                  }
+                />
+              </Routes>
+            </BrowserRouter>
+          </TooltipProvider>
+        </LanguageProvider>
       </AuthProvider>
     </QueryClientProvider>
   </ErrorBoundary>
