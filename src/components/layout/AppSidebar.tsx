@@ -24,22 +24,24 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { NavLink } from "@/components/NavLink";
-
-const mainNav = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Service Orders", url: "/service-orders", icon: FileText },
-  { title: "Payment Orders", url: "/payment-orders", icon: CreditCard },
-  { title: "Financial", url: "/financial", icon: TrendingUp },
-  { title: "Profit Distribution", url: "/profit", icon: PieChart },
-  { title: "Accounting", url: "/accounting", icon: BookOpen },
-  { title: "Fleet", url: "/fleet", icon: Car },
-  { title: "Documents", url: "/documents", icon: FolderOpen },
-  { title: "Users", url: "/users", icon: Users },
-];
+import { useLanguage } from "@/hooks/useLanguage";
 
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
+  const { t } = useLanguage();
+
+  const mainNav = [
+    { title: t("nav.dashboard"), url: "/", icon: LayoutDashboard },
+    { title: t("nav.serviceOrders"), url: "/service-orders", icon: FileText },
+    { title: t("nav.paymentOrders"), url: "/payment-orders", icon: CreditCard },
+    { title: t("nav.financial"), url: "/financial", icon: TrendingUp },
+    { title: t("nav.profit"), url: "/profit", icon: PieChart },
+    { title: t("nav.accounting"), url: "/accounting", icon: BookOpen },
+    { title: t("nav.fleet"), url: "/fleet", icon: Car },
+    { title: t("nav.documents"), url: "/documents", icon: FolderOpen },
+    { title: t("nav.users"), url: "/users", icon: Users },
+  ];
 
   return (
     <Sidebar collapsible="icon" className="border-r border-border/50">
@@ -59,12 +61,12 @@ export function AppSidebar() {
       <SidebarContent className="pt-2">
         <SidebarGroup>
           <SidebarGroupLabel className="text-muted-foreground/60 text-[10px] uppercase tracking-widest">
-            Operations
+            {t("nav.operations")}
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {mainNav.map((item) => (
-                <SidebarMenuItem key={item.title}>
+                <SidebarMenuItem key={item.url}>
                   <SidebarMenuButton asChild>
                     <NavLink
                       to={item.url}
@@ -93,7 +95,7 @@ export function AppSidebar() {
                 activeClassName="bg-sidebar-accent text-primary font-medium"
               >
                 <Settings className="h-4 w-4 shrink-0" />
-                {!collapsed && <span>Settings</span>}
+                {!collapsed && <span>{t("nav.settings")}</span>}
               </NavLink>
             </SidebarMenuButton>
           </SidebarMenuItem>
