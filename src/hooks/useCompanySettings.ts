@@ -20,12 +20,12 @@ export function useCompanySettings() {
     enabled: !!user,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("company_settings" as any)
+        .from("company_settings")
         .select("*")
         .eq("user_id", user!.id)
         .maybeSingle();
       if (error) throw error;
-      return data as unknown as (CompanySettings & { id: string; user_id: string }) | null;
+      return data;
     },
   });
 
@@ -33,22 +33,21 @@ export function useCompanySettings() {
     mutationFn: async (settings: CompanySettings) => {
       if (!user) throw new Error("Not authenticated");
 
-      // Try update first, then insert
       const { data: existing } = await supabase
-        .from("company_settings" as any)
+        .from("company_settings")
         .select("id")
         .eq("user_id", user.id)
         .maybeSingle();
 
       if (existing) {
         const { error } = await supabase
-          .from("company_settings" as any)
+          .from("company_settings")
           .update({ ...settings, updated_at: new Date().toISOString() })
           .eq("user_id", user.id);
         if (error) throw error;
       } else {
         const { error } = await supabase
-          .from("company_settings" as any)
+          .from("company_settings")
           .insert({ ...settings, user_id: user.id });
         if (error) throw error;
       }
