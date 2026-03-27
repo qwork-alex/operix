@@ -1,52 +1,36 @@
-import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
+import { Component, ReactNode } from "react";
 
+// Static fallback replacing react-leaflet which crashes with React 18 ("render2 is not a function")
 const regions = [
-  { name: "Lyon", lat: 45.764, lng: 4.8357, count: 34, color: "hsl(43, 85%, 55%)" },
-  { name: "Geneva", lat: 46.2044, lng: 6.1432, count: 21, color: "hsl(210, 80%, 55%)" },
-  { name: "Paris", lat: 48.8566, lng: 2.3522, count: 48, color: "hsl(152, 60%, 45%)" },
-  { name: "Marseille", lat: 43.2965, lng: 5.3698, count: 18, color: "hsl(43, 85%, 55%)" },
-  { name: "Grenoble", lat: 45.1885, lng: 5.7245, count: 12, color: "hsl(280, 60%, 55%)" },
+  { name: "Lyon", count: 34 },
+  { name: "Geneva", count: 21 },
+  { name: "Paris", count: 48 },
+  { name: "Marseille", count: 18 },
+  { name: "Grenoble", count: 12 },
 ];
 
 export function ActiveMap() {
   return (
-    <div className="glass-panel rounded-xl p-5 animate-fade-in overflow-hidden">
+    <div className="glass-panel rounded-xl p-5 animate-fade-in">
       <div className="mb-4">
         <h3 className="text-sm font-semibold text-foreground">Active Regions</h3>
         <p className="text-xs text-muted-foreground">Live technician distribution</p>
       </div>
-      <div className="h-[280px] rounded-lg overflow-hidden">
-        <MapContainer
-          center={[46.2, 4.5]}
-          zoom={6}
-          className="h-full w-full"
-          zoomControl={false}
-          attributionControl={false}
-        >
-          <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
-          {regions.map((r) => (
-            <CircleMarker
-              key={r.name}
-              center={[r.lat, r.lng]}
-              radius={Math.max(8, r.count / 3)}
-              pathOptions={{
-                fillColor: r.color,
-                fillOpacity: 0.6,
-                stroke: true,
-                color: r.color,
-                weight: 1,
-              }}
-            >
-              <Popup>
-                <div className="text-xs font-medium">
-                  <strong>{r.name}</strong>
-                  <br />
-                  {r.count} active services
-                </div>
-              </Popup>
-            </CircleMarker>
-          ))}
-        </MapContainer>
+      <div className="h-[280px] rounded-lg overflow-hidden bg-muted/30 flex flex-col justify-center gap-3 px-6">
+        {regions.map((r) => (
+          <div key={r.name} className="flex items-center justify-between">
+            <span className="text-sm text-foreground">{r.name}</span>
+            <div className="flex items-center gap-2 flex-1 mx-4">
+              <div className="h-2 flex-1 rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-primary"
+                  style={{ width: `${(r.count / 48) * 100}%` }}
+                />
+              </div>
+            </div>
+            <span className="text-xs font-semibold text-primary tabular-nums">{r.count}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
