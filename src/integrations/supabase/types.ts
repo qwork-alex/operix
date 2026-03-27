@@ -80,6 +80,42 @@ export type Database = {
         }
         Relationships: []
       }
+      company_settings: {
+        Row: {
+          address: string
+          company_name: string
+          created_at: string
+          id: string
+          logo_url: string
+          siret: string
+          tva_number: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          address?: string
+          company_name?: string
+          created_at?: string
+          id?: string
+          logo_url?: string
+          siret?: string
+          tva_number?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          address?: string
+          company_name?: string
+          created_at?: string
+          id?: string
+          logo_url?: string
+          siret?: string
+          tva_number?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       discrepancies: {
         Row: {
           created_at: string
