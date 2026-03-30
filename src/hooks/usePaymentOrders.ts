@@ -72,7 +72,39 @@ export function usePaymentOrders(filters?: {
     },
   });
 
-  return { ...query, saveMutation };
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, ...updates }: Partial<PaymentOrder> & { id: string }) => {
+      const { data, error } = await supabase
+        .from("payment_orders")
+        .update(updates)
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["payment_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["financial-summary"] });
+      toast.success("Payment order updated");
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("payment_orders").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["payment_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["financial-summary"] });
+      toast.success("Payment order deleted");
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+
+  return { ...query, saveMutation, updateMutation, deleteMutation };
 }
 
 export function useExtractPaymentOrder() {
