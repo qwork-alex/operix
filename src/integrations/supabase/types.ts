@@ -84,10 +84,13 @@ export type Database = {
         Row: {
           address: string
           company_name: string
+          company_share: number
           created_at: string
           id: string
           logo_url: string
+          partner_share: number
           siret: string
+          tech_share: number
           tva_number: string
           updated_at: string
           user_id: string
@@ -95,10 +98,13 @@ export type Database = {
         Insert: {
           address?: string
           company_name?: string
+          company_share?: number
           created_at?: string
           id?: string
           logo_url?: string
+          partner_share?: number
           siret?: string
+          tech_share?: number
           tva_number?: string
           updated_at?: string
           user_id: string
@@ -106,10 +112,13 @@ export type Database = {
         Update: {
           address?: string
           company_name?: string
+          company_share?: number
           created_at?: string
           id?: string
           logo_url?: string
+          partner_share?: number
           siret?: string
+          tech_share?: number
           tva_number?: string
           updated_at?: string
           user_id?: string
