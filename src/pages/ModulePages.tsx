@@ -22,9 +22,66 @@ import {
 // ─── PROFIT DISTRIBUTION ───
 export function ProfitDistribution() {
   const { t, formatCurrency } = useLanguage();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [techShare, setTechShare] = useState(40);
   const [partnerShare, setPartnerShare] = useState(30);
   const companyShare = 100 - techShare - partnerShare;
+  const [loaded, setLoaded] = useState(false);
+
+  // Load persisted shares from company_settings
+  const { data: companySettings } = useQuery({
+    queryKey: ["company-settings-profit", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("company_settings")
+        .select("tech_share, partner_share, company_share")
+        .eq("user_id", user!.id)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  useEffect(() => {
+    if (companySettings && !loaded) {
+      setTechShare(Number(companySettings.tech_share ?? 40));
+      setPartnerShare(Number(companySettings.partner_share ?? 30));
+      setLoaded(true);
+    }
+  }, [companySettings, loaded]);
+
+  const saveProfitMutation = useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error("Not authenticated");
+      const shares = { tech_share: techShare, partner_share: partnerShare, company_share: Math.max(0, companyShare) };
+
+      const { data: existing } = await supabase
+        .from("company_settings")
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (existing) {
+        const { error } = await supabase
+          .from("company_settings")
+          .update({ ...shares, updated_at: new Date().toISOString() })
+          .eq("user_id", user.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("company_settings")
+          .insert({ user_id: user.id, ...shares });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["company-settings-profit"] });
+      toast.success(t("toast.updated"));
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
 
   const { data: summary } = useQuery({
     queryKey: ["profit-summary"],
@@ -65,6 +122,10 @@ export function ProfitDistribution() {
               <Input type="number" value={companyShare} disabled className="bg-muted/30" />
             </div>
             {companyShare < 0 && <p className="text-xs text-destructive">{t("profit.exceeds100")}</p>}
+            <Button size="sm" onClick={() => saveProfitMutation.mutate()} disabled={saveProfitMutation.isPending || companyShare < 0}>
+              {saveProfitMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+              {t("action.save")}
+            </Button>
           </CardContent>
         </Card>
 
