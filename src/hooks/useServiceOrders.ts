@@ -180,14 +180,15 @@ export function useExtractServiceOrder() {
   const extract = async (file: File): Promise<ExtractionResult> => {
     setIsExtracting(true);
     try {
-      // Upload file to storage
       const filePath = `service-orders/${Date.now()}_${file.name}`;
       const { error: uploadError } = await supabase.storage
         .from("uploads")
         .upload(filePath, file);
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error("[Extract] Upload failed:", uploadError);
+        throw new Error(`File upload failed: ${uploadError.message}. Please check the file and try again.`);
+      }
 
-      // Convert to base64 for AI
       const base64 = await fileToBase64(file);
 
       const { data, error } = await supabase.functions.invoke("extract-service-order", {
@@ -198,9 +199,18 @@ export function useExtractServiceOrder() {
         },
       });
 
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      if (error) {
+        console.error("[Extract] Edge function error:", error);
+        throw new Error(`OCR extraction failed: ${error.message}. Try re-uploading the document.`);
+      }
+      if (data?.error) {
+        console.error("[Extract] AI processing error:", data.error);
+        throw new Error(`AI could not process this document: ${data.error}`);
+      }
       return data as ExtractionResult;
+    } catch (err) {
+      console.error("[Extract] Service order extraction error:", err);
+      throw err;
     } finally {
       setIsExtracting(false);
     }
