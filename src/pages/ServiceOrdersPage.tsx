@@ -13,9 +13,11 @@ import {
   type ExtractionResult,
   type ServiceOrderInsert,
 } from "@/hooks/useServiceOrders";
+import { useLanguage } from "@/hooks/useLanguage";
 import { toast } from "sonner";
 
 export default function ServiceOrdersPage() {
+  const { t } = useLanguage();
   const [filters, setFilters] = useState<{
     client_id?: string;
     platform?: string;
@@ -97,9 +99,9 @@ export default function ServiceOrdersPage() {
           <FileText className="h-5 w-5 text-primary" />
         </div>
         <div>
-          <h1 className="text-lg font-semibold text-foreground">Service Orders</h1>
+          <h1 className="text-lg font-semibold text-foreground">{t("so.title")}</h1>
           <p className="text-xs text-muted-foreground">
-            Upload documents to extract service data automatically
+            {t("so.subtitle")}
           </p>
         </div>
       </div>
@@ -124,10 +126,10 @@ export default function ServiceOrdersPage() {
         <Filter className="h-4 w-4 text-muted-foreground" />
         <Select value={filters.client_id || "all"} onValueChange={(v) => setFilter("client_id", v)}>
           <SelectTrigger className="w-[160px] h-9 text-xs bg-secondary/30">
-            <SelectValue placeholder="All clients" />
+            <SelectValue placeholder={t("label.allClients")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All clients</SelectItem>
+            <SelectItem value="all">{t("label.allClients")}</SelectItem>
             {clients.map((c) => (
               <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
             ))}
@@ -136,10 +138,10 @@ export default function ServiceOrdersPage() {
 
         <Select value={filters.platform || "all"} onValueChange={(v) => setFilter("platform", v)}>
           <SelectTrigger className="w-[140px] h-9 text-xs bg-secondary/30">
-            <SelectValue placeholder="All platforms" />
+            <SelectValue placeholder={t("label.allPlatforms")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All platforms</SelectItem>
+            <SelectItem value="all">{t("label.allPlatforms")}</SelectItem>
             {platforms.map((p) => (
               <SelectItem key={p} value={p}>{p}</SelectItem>
             ))}
@@ -148,22 +150,22 @@ export default function ServiceOrdersPage() {
 
         <Select value={filters.technician_id || "all"} onValueChange={(v) => setFilter("technician_id", v)}>
           <SelectTrigger className="w-[160px] h-9 text-xs bg-secondary/30">
-            <SelectValue placeholder="All technicians" />
+            <SelectValue placeholder={t("label.allTechnicians")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All technicians</SelectItem>
-            {technicians.map((t) => (
-              <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+            <SelectItem value="all">{t("label.allTechnicians")}</SelectItem>
+            {technicians.map((t_) => (
+              <SelectItem key={t_.id} value={t_.id}>{t_.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>
 
         <Select value={filters.week || "all"} onValueChange={(v) => setFilter("week", v)}>
           <SelectTrigger className="w-[120px] h-9 text-xs bg-secondary/30">
-            <SelectValue placeholder="All weeks" />
+            <SelectValue placeholder={t("label.allWeeks")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All weeks</SelectItem>
+            <SelectItem value="all">{t("label.allWeeks")}</SelectItem>
             {weeks.map((w) => (
               <SelectItem key={w} value={w}>{w}</SelectItem>
             ))}

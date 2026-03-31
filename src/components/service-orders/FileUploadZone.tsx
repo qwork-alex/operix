@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { Upload, FileText, Image, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useLanguage } from "@/hooks/useLanguage";
 
 interface FileUploadZoneProps {
   onFilesSelected: (files: File[]) => void;
@@ -11,6 +12,7 @@ const ACCEPTED = ".pdf,.jpg,.jpeg,.png,.webp,.heic";
 
 export function FileUploadZone({ onFilesSelected, isProcessing }: FileUploadZoneProps) {
   const [isDragOver, setIsDragOver] = useState(false);
+  const { t } = useLanguage();
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -55,8 +57,8 @@ export function FileUploadZone({ onFilesSelected, isProcessing }: FileUploadZone
       {isProcessing ? (
         <>
           <Loader2 className="h-10 w-10 text-primary animate-spin" />
-          <p className="text-sm font-medium text-foreground">Extracting data with AI…</p>
-          <p className="text-xs text-muted-foreground">This may take a few seconds</p>
+          <p className="text-sm font-medium text-foreground">{t("upload.extracting")}</p>
+          <p className="text-xs text-muted-foreground">{t("upload.wait")}</p>
         </>
       ) : (
         <>
@@ -65,10 +67,10 @@ export function FileUploadZone({ onFilesSelected, isProcessing }: FileUploadZone
           </div>
           <div className="text-center">
             <p className="text-sm font-medium text-foreground">
-              Drop files here or click to upload
+              {t("upload.dropOrClick")}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              PDF, JPG, PNG — service order documents
+              {t("upload.formats")}
             </p>
           </div>
           <div className="flex gap-2 mt-1">
@@ -76,7 +78,7 @@ export function FileUploadZone({ onFilesSelected, isProcessing }: FileUploadZone
               <FileText className="h-3 w-3" /> PDF
             </span>
             <span className="flex items-center gap-1 text-xs text-muted-foreground bg-secondary/50 px-2 py-1 rounded">
-              <Image className="h-3 w-3" /> Images
+              <Image className="h-3 w-3" /> {t("upload.images")}
             </span>
           </div>
         </>

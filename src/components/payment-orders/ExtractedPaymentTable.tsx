@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Save, X, Trash2, AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { ExtractedPaymentOrder } from "@/hooks/usePaymentOrders";
+import { useLanguage } from "@/hooks/useLanguage";
 
 interface Props {
   orders: ExtractedPaymentOrder[];
@@ -24,6 +25,7 @@ const confidenceColors: Record<string, string> = {
 
 export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDiscard, isSaving }: Props) {
   const [rows, setRows] = useState<ExtractedPaymentOrder[]>(orders);
+  const { t, formatCurrency } = useLanguage();
 
   const update = (idx: number, field: keyof ExtractedPaymentOrder, value: any) => {
     setRows(prev => prev.map((r, i) => {
@@ -41,7 +43,7 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
   if (rows.length === 0) {
     return (
       <div className="rounded-lg border border-border/50 bg-card p-6 text-center text-muted-foreground text-sm">
-        No payment orders extracted. Try uploading a clearer document.
+        {t("extract.noPayments")}
       </div>
     );
   }
@@ -50,16 +52,16 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-medium text-foreground">Extracted Payment Data</h3>
+          <h3 className="text-sm font-medium text-foreground">{t("extract.paymentTitle")}</h3>
           <Badge variant="outline" className={confidenceColors[confidence]}>
-            {confidence} confidence
+            {confidence} {t("extract.confidence")}
           </Badge>
-          <span className="text-xs text-muted-foreground">{rows.length} entries</span>
+          <span className="text-xs text-muted-foreground">{rows.length} {t("extract.entries")}</span>
         </div>
         <div className="flex gap-2">
-          <Button variant="ghost" size="sm" onClick={onDiscard}><X className="h-4 w-4 mr-1" />Discard</Button>
+          <Button variant="ghost" size="sm" onClick={onDiscard}><X className="h-4 w-4 mr-1" />{t("action.discard")}</Button>
           <Button size="sm" onClick={() => onSave(rows)} disabled={isSaving}>
-            <Save className="h-4 w-4 mr-1" />{isSaving ? "Saving…" : "Save"}
+            <Save className="h-4 w-4 mr-1" />{isSaving ? t("extract.saving") : t("action.save")}
           </Button>
         </div>
       </div>
@@ -76,14 +78,14 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
           <TableHeader>
             <TableRow className="text-[11px]">
               <TableHead className="w-8">#</TableHead>
-              <TableHead>Client</TableHead>
-              <TableHead>Platform</TableHead>
-              <TableHead>List Name</TableHead>
-              <TableHead>Technician</TableHead>
-              <TableHead>Car</TableHead>
-              <TableHead>Plate</TableHead>
-              <TableHead>Services</TableHead>
-              <TableHead className="text-right">Total</TableHead>
+              <TableHead>{t("label.client")}</TableHead>
+              <TableHead>{t("label.platform")}</TableHead>
+              <TableHead>{t("extract.listName")}</TableHead>
+              <TableHead>{t("label.technician")}</TableHead>
+              <TableHead>{t("label.car")}</TableHead>
+              <TableHead>{t("label.plate")}</TableHead>
+              <TableHead>{t("label.services")}</TableHead>
+              <TableHead className="text-right">{t("label.total")}</TableHead>
               <TableHead className="w-8"></TableHead>
             </TableRow>
           </TableHeader>
@@ -104,6 +106,7 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
                         <Input
                           className="h-6 text-[11px] px-1 w-24"
                           value={s.name}
+                          placeholder={t("extract.serviceName")}
                           onChange={e => {
                             const newServices = [...(row.services || [])];
                             newServices[si] = { ...newServices[si], name: e.target.value };
@@ -126,7 +129,7 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
                   </div>
                 </TableCell>
                 <TableCell className="text-right font-medium tabular-nums">
-                  €{(row.total || 0).toFixed(2)}
+                  {formatCurrency(row.total || 0)}
                 </TableCell>
                 <TableCell>
                   <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeRow(i)}>

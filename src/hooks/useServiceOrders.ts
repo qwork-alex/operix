@@ -92,10 +92,25 @@ export function useServiceOrders(filters?: {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["service_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["financial-summary"] });
     },
   });
 
-  return { ...query, saveMutation, updateMutation };
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("service_orders").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["service_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["financial-summary"] });
+    },
+    onError: (err) => {
+      toast.error("Failed to delete: " + (err as Error).message);
+    },
+  });
+
+  return { ...query, saveMutation, updateMutation, deleteMutation };
 }
 
 export function useExtractServiceOrder() {
