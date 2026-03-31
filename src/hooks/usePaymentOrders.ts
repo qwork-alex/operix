@@ -83,13 +83,17 @@ export function usePaymentOrders(filters?: {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, ...updates }: Partial<PaymentOrder> & { id: string }) => {
+      console.log("[PaymentOrders] Update payload:", { id, ...updates });
       const { data, error } = await supabase
         .from("payment_orders")
-        .update(updates)
+        .update({ ...updates, updated_at: new Date().toISOString() })
         .eq("id", id)
         .select()
         .single();
-      if (error) throw error;
+      if (error) {
+        console.error("[PaymentOrders] Update error:", error);
+        throw error;
+      }
       return data;
     },
     onSuccess: () => {
