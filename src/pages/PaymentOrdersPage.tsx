@@ -4,6 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { FileUploadZone } from "@/components/service-orders/FileUploadZone";
 import { ExtractedPaymentTable } from "@/components/payment-orders/ExtractedPaymentTable";
+import { ExtractionStages } from "@/components/service-orders/ExtractionStages";
 import { PaymentOrdersTable } from "@/components/payment-orders/PaymentOrdersTable";
 import {
   usePaymentOrders,
@@ -103,6 +104,9 @@ export default function PaymentOrdersPage() {
           {t("po.runDetection")}
         </Button>
       </div>
+
+      {!extraction && !isExtracting && <ExtractionStages current="upload" />}
+      {isExtracting && <ExtractionStages current="upload" />}
 
       <FileUploadZone onFilesSelected={handleFiles} isProcessing={isExtracting} />
 

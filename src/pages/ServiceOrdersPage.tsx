@@ -3,6 +3,7 @@ import { FileText, Filter } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileUploadZone } from "@/components/service-orders/FileUploadZone";
 import { ExtractedDataTable } from "@/components/service-orders/ExtractedDataTable";
+import { ExtractionStages } from "@/components/service-orders/ExtractionStages";
 import { ServiceOrdersTable } from "@/components/service-orders/ServiceOrdersTable";
 import {
   useServiceOrders,
@@ -105,6 +106,10 @@ export default function ServiceOrdersPage() {
           </p>
         </div>
       </div>
+
+      {/* Stage indicator when no extraction yet */}
+      {!extraction && !isExtracting && <ExtractionStages current="upload" />}
+      {isExtracting && <ExtractionStages current="upload" />}
 
       {/* Upload */}
       <FileUploadZone onFilesSelected={handleFiles} isProcessing={isExtracting} />
