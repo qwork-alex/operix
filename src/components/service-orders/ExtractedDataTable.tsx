@@ -227,7 +227,8 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
             {rows.map((row, idx) => {
               const fc = row.field_confidence || {};
               return (
-                <TableRow key={idx} className={cn("group", row.total_mismatch && "bg-red-500/5")}>
+                <TableRow key={idx} className={cn("group", row.total_mismatch && "bg-red-500/5", errorRows.has(idx) && "bg-destructive/10 ring-1 ring-inset ring-destructive/30")}>
+               return (
                 <TableRow key={idx} className={cn("group", row.total_mismatch && "bg-red-500/5", errorRows.has(idx) && "bg-destructive/10 ring-1 ring-inset ring-destructive/30")}>
                   <TableCell className={cn("text-muted-foreground text-xs", errorRows.has(idx) && "text-destructive font-bold")}>{idx + 1}</TableCell>
                   <ConfidenceCell value={row.client} confidence={fc.client} onChange={(v) => update(idx, "client", v)} />
