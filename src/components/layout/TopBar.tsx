@@ -46,7 +46,7 @@ export function TopBar() {
       <div className="flex items-center gap-1">
         {role && (
           <span className="hidden sm:inline text-[10px] uppercase tracking-widest text-muted-foreground/60 mr-2 px-2 py-0.5 rounded bg-muted/30">
-            {role}
+            {t(`role.${role}`, role)}
           </span>
         )}
 
