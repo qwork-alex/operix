@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import type { Json } from "@/integrations/supabase/types";
 
 export default function PaymentOrdersPage() {
+  const { t } = useLanguage();
   const [filters, setFilters] = useState<{
     client_id?: string;
     platform?: string;
