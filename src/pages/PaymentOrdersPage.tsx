@@ -46,10 +46,17 @@ export default function PaymentOrdersPage() {
       onStatus("uploading" as QueueItemStatus);
       await new Promise(r => setTimeout(r, 200));
       onStatus("processing" as QueueItemStatus);
-      const result = await extract(file);
-      setExtractions(prev => [...prev, result]);
-      if (result.confidence === "low") {
-        toast.warning("Low confidence — please review carefully.");
+      try {
+        const result = await extract(file);
+        setExtractions(prev => [...prev, result]);
+        if (result.confidence === "low") {
+          toast.warning("Low confidence — please review carefully.");
+        }
+      } catch (err) {
+        const msg = (err as Error).message || "Unknown extraction error";
+        console.error("[PaymentOrders] File processing failed:", msg);
+        toast.error(msg, { duration: 8000 });
+        throw err;
       }
     });
   }, [addFiles, extract]);
