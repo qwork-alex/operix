@@ -223,8 +223,6 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
               const fc = row.field_confidence || {};
               return (
                 <TableRow key={i} className={cn("text-xs", row.total_mismatch && "bg-red-500/5", errorRows.has(i) && "bg-destructive/10 ring-1 ring-inset ring-destructive/30")}>
-               return (
-                <TableRow key={i} className={cn("text-xs", row.total_mismatch && "bg-red-500/5", errorRows.has(i) && "bg-destructive/10 ring-1 ring-inset ring-destructive/30")}>
                   <TableCell className={cn("text-muted-foreground", errorRows.has(i) && "text-destructive font-bold")}>{i + 1}</TableCell>
                   <TableCell><ConfEditCell value={row.client || ""} confidence={fc.client} onChange={v => update(i, "client", v)} /></TableCell>
                   <TableCell><ConfEditCell value={row.platform || ""} confidence={fc.platform} onChange={v => update(i, "platform", v)} /></TableCell>
