@@ -89,8 +89,8 @@ export default function PaymentOrdersPage() {
             <CreditCard className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <h1 className="text-lg font-semibold text-foreground">Payment Orders</h1>
-            <p className="text-xs text-muted-foreground">Upload payment lists and auto-detect discrepancies</p>
+            <h1 className="text-lg font-semibold text-foreground">{t("po.title")}</h1>
+            <p className="text-xs text-muted-foreground">{t("po.subtitle")}</p>
           </div>
         </div>
         <Button
@@ -100,7 +100,7 @@ export default function PaymentOrdersPage() {
           disabled={detectMutation.isPending}
         >
           <RefreshCw className={`h-4 w-4 mr-1 ${detectMutation.isPending ? "animate-spin" : ""}`} />
-          Run Detection
+          {t("po.runDetection")}
         </Button>
       </div>
 
