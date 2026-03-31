@@ -208,7 +208,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className={statusStyle[o.status] || statusStyle.draft}>
-                      {o.status}
+                      {t(`status.${o.status}`, o.status)}
                     </Badge>
                   </TableCell>
                   <TableCell>

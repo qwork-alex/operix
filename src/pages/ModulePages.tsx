@@ -304,7 +304,7 @@ export function Accounting() {
                   </TableCell>
                   <TableCell>{r.source}</TableCell>
                   <TableCell className="text-right font-medium tabular-nums">{formatCurrency(r.amount)}</TableCell>
-                  <TableCell><Badge variant="outline">{r.status}</Badge></TableCell>
+                  <TableCell><Badge variant="outline">{t(`status.${r.status}`, r.status)}</Badge></TableCell>
                   <TableCell className="max-w-[200px] truncate text-muted-foreground">{r.notes || "—"}</TableCell>
                   <TableCell className="text-muted-foreground">{formatDate(r.created_at)}</TableCell>
                   <TableCell>
