@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Trash2, Pencil, Save, X, Loader2 } from "lucide-react";
 import { useLanguage } from "@/hooks/useLanguage";
+import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
 interface ServiceOrderRow {
@@ -61,6 +62,7 @@ interface EditState {
 
 export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProps) {
   const { t, formatCurrency } = useLanguage();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditState | null>(null);
@@ -80,8 +82,25 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
   const updateMutation = useMutation({
     mutationFn: async (id: string) => {
       if (!editForm) return;
+
+      const { data: existing, error: existingError } = await supabase
+        .from("service_orders")
+        .select("created_by, created_at")
+        .eq("id", id)
+        .single();
+      if (existingError) throw existingError;
+
+      const created_by = existing.created_by ?? user?.id;
+      const created_at = existing.created_at ?? new Date().toISOString();
+      const updated_at = new Date().toISOString();
+
+      if (!id || !created_by || !created_at || !updated_at) {
+        throw new Error("Missing required audit fields (created_by, created_at, updated_at).");
+      }
+
       const total = (Number(editForm.service_1_price) || 0) + (Number(editForm.service_2_price) || 0) + (Number(editForm.service_3_price) || 0) + (Number(editForm.service_4_price) || 0);
-      const { error } = await supabase.from("service_orders").update({
+
+      const payload = {
         platform: editForm.platform || null,
         week: editForm.week || null,
         car_name: editForm.car_name || null,
@@ -95,8 +114,14 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
         service_4_name: editForm.service_4_name || null,
         service_4_price: Number(editForm.service_4_price) || 0,
         total,
-        updated_at: new Date().toISOString(),
-      }).eq("id", id);
+        created_by,
+        created_at,
+        updated_at,
+      };
+
+      console.log("Saving payload:", payload);
+
+      const { error } = await supabase.from("service_orders").update(payload).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {

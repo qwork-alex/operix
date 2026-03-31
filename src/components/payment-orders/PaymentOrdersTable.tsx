@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Trash2, Pencil, Save, X, Loader2, Plus } from "lucide-react";
 import { useLanguage } from "@/hooks/useLanguage";
+import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import type { Json } from "@/integrations/supabase/types";
 
@@ -40,6 +41,7 @@ interface EditState {
 
 export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrderRow[]; isLoading: boolean }) {
   const { t, formatCurrency } = useLanguage();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditState | null>(null);
@@ -59,17 +61,39 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
   const updateMutation = useMutation({
     mutationFn: async (id: string) => {
       if (!editForm) return;
+
+      const { data: existing, error: existingError } = await supabase
+        .from("payment_orders")
+        .select("created_by, created_at")
+        .eq("id", id)
+        .single();
+      if (existingError) throw existingError;
+
+      const created_by = existing.created_by ?? user?.id;
+      const created_at = existing.created_at ?? new Date().toISOString();
+      const updated_at = new Date().toISOString();
+
+      if (!id || !created_by || !created_at || !updated_at) {
+        throw new Error("Missing required audit fields (created_by, created_at, updated_at).");
+      }
+
       const services = editForm.services.filter(s => s.name);
       const total = services.reduce((sum, s) => sum + (Number(s.price) || 0), 0);
-      const { error } = await supabase.from("payment_orders").update({
+      const payload = {
         platform: editForm.platform || null,
         list_name: editForm.list_name || null,
         car_name: editForm.car_name || null,
         license_plate: editForm.license_plate || null,
         services: services as unknown as Json,
         total,
-        updated_at: new Date().toISOString(),
-      }).eq("id", id);
+        created_by,
+        created_at,
+        updated_at,
+      };
+
+      console.log("Saving payload:", payload);
+
+      const { error } = await supabase.from("payment_orders").update(payload).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
