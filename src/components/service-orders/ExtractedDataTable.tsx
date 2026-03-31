@@ -9,6 +9,16 @@ import type { ExtractedOrder, FieldConfidence } from "@/hooks/useServiceOrders";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/hooks/useLanguage";
 import { ExtractionStages, type Stage } from "./ExtractionStages";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface ExtractedDataTableProps {
   orders: ExtractedOrder[];
@@ -36,6 +46,8 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
   const [stage, setStage] = useState<Stage>("review");
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [validated, setValidated] = useState(false);
+  const [errorRows, setErrorRows] = useState<Set<number>>(new Set());
+  const [showOverrideDialog, setShowOverrideDialog] = useState(false);
   const { t, formatCurrency } = useLanguage();
 
   const update = (idx: number, field: keyof ExtractedOrder, value: string | number | null) => {
@@ -70,16 +82,19 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
 
   const runValidation = () => {
     const errors: string[] = [];
+    const badRows = new Set<number>();
     rows.forEach((row, i) => {
       const n = String(i + 1);
-      if (!row.client?.trim()) errors.push(t("validate.missingClient").replace("{n}", n));
+      if (!row.client?.trim()) { errors.push(t("validate.missingClient").replace("{n}", n)); badRows.add(i); }
+      if (!row.technician?.trim()) { errors.push(t("validate.missingTechnician").replace("{n}", n)); badRows.add(i); }
       const hasService = row.service_1_name?.trim() || row.service_2_name?.trim() || row.service_3_name?.trim() || row.service_4_name?.trim();
-      if (!hasService) errors.push(t("validate.missingService").replace("{n}", n));
+      if (!hasService) { errors.push(t("validate.missingService").replace("{n}", n)); badRows.add(i); }
       const computed = (Number(row.service_1_price) || 0) + (Number(row.service_2_price) || 0) + (Number(row.service_3_price) || 0) + (Number(row.service_4_price) || 0);
       if (row.total != null && Math.abs(computed - row.total) > 0.01) {
         errors.push(t("validate.totalMismatch").replace("{n}", n).replace("{expected}", String(computed)).replace("{actual}", String(row.total)));
+        badRows.add(i);
       }
-      if ((row.total ?? 0) === 0 && hasService) errors.push(t("validate.zeroTotal").replace("{n}", n));
+      if ((row.total ?? 0) === 0) { errors.push(t("validate.zeroTotal").replace("{n}", n)); badRows.add(i); }
       // Warn about low-confidence fields
       const lowFields = Object.entries(row.field_confidence || {}).filter(([, v]) => v === "low").map(([k]) => k);
       if (lowFields.length > 0) {
@@ -87,6 +102,7 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
       }
     });
     setValidationErrors(errors);
+    setErrorRows(badRows);
     // Allow saving even with warnings - only block on missing required fields
     const blocking = errors.filter(e => !e.includes(t("validate.lowConfidencePrefix")));
     if (blocking.length === 0) {
@@ -99,6 +115,15 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
   };
 
   const handleSave = () => {
+    if (errorRows.size > 0 && !validated) {
+      setShowOverrideDialog(true);
+      return;
+    }
+    doSave();
+  };
+
+  const doSave = () => {
+    setShowOverrideDialog(false);
     setStage("save");
     onSave(rows);
   };
@@ -202,8 +227,8 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
             {rows.map((row, idx) => {
               const fc = row.field_confidence || {};
               return (
-                <TableRow key={idx} className={cn("group", row.total_mismatch && "bg-red-500/5")}>
-                  <TableCell className="text-muted-foreground text-xs">{idx + 1}</TableCell>
+                <TableRow key={idx} className={cn("group", row.total_mismatch && "bg-red-500/5", errorRows.has(idx) && "bg-destructive/10 ring-1 ring-inset ring-destructive/30")}>
+                  <TableCell className={cn("text-muted-foreground text-xs", errorRows.has(idx) && "text-destructive font-bold")}>{idx + 1}</TableCell>
                   <ConfidenceCell value={row.client} confidence={fc.client} onChange={(v) => update(idx, "client", v)} />
                   <ConfidenceCell value={row.platform} confidence={fc.platform} onChange={(v) => update(idx, "platform", v)} />
                   <ConfidenceCell value={row.technician} confidence={fc.technician} onChange={(v) => update(idx, "technician", v)} />
@@ -248,6 +273,21 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
           </TableBody>
         </Table>
       </div>
+
+      <AlertDialog open={showOverrideDialog} onOpenChange={setShowOverrideDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("validate.inconsistentData")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("validate.overrideConfirm")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("action.discard")}</AlertDialogCancel>
+            <AlertDialogAction onClick={doSave} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {t("validate.forceOverride")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

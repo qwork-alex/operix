@@ -10,6 +10,16 @@ import type { ExtractedPaymentOrder, FieldConfidence } from "@/hooks/usePaymentO
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/hooks/useLanguage";
 import { ExtractionStages, type Stage } from "@/components/service-orders/ExtractionStages";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Props {
   orders: ExtractedPaymentOrder[];
@@ -37,6 +47,8 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
   const [stage, setStage] = useState<Stage>("review");
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [validated, setValidated] = useState(false);
+  const [errorRows, setErrorRows] = useState<Set<number>>(new Set());
+  const [showOverrideDialog, setShowOverrideDialog] = useState(false);
   const { t, formatCurrency } = useLanguage();
 
   const update = (idx: number, field: keyof ExtractedPaymentOrder, value: any) => {
@@ -67,22 +79,26 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
 
   const runValidation = () => {
     const errors: string[] = [];
+    const badRows = new Set<number>();
     rows.forEach((row, i) => {
       const n = String(i + 1);
-      if (!row.client?.trim()) errors.push(t("validate.missingClient").replace("{n}", n));
+      if (!row.client?.trim()) { errors.push(t("validate.missingClient").replace("{n}", n)); badRows.add(i); }
+      if (!row.technician?.trim()) { errors.push(t("validate.missingTechnician").replace("{n}", n)); badRows.add(i); }
       const hasService = (row.services || []).some(s => s.name?.trim());
-      if (!hasService) errors.push(t("validate.missingService").replace("{n}", n));
+      if (!hasService) { errors.push(t("validate.missingService").replace("{n}", n)); badRows.add(i); }
       const computed = (row.services || []).reduce((s, sv) => s + (sv.price || 0), 0);
       if (row.total != null && Math.abs(computed - (row.total || 0)) > 0.01) {
         errors.push(t("validate.totalMismatch").replace("{n}", n).replace("{expected}", String(computed)).replace("{actual}", String(row.total)));
+        badRows.add(i);
       }
-      if ((row.total ?? 0) === 0 && hasService) errors.push(t("validate.zeroTotal").replace("{n}", n));
+      if ((row.total ?? 0) === 0) { errors.push(t("validate.zeroTotal").replace("{n}", n)); badRows.add(i); }
       const lowFields = Object.entries(row.field_confidence || {}).filter(([, v]) => v === "low").map(([k]) => k);
       if (lowFields.length > 0) {
         errors.push(t("validate.lowConfidence").replace("{n}", n).replace("{fields}", lowFields.join(", ")));
       }
     });
     setValidationErrors(errors);
+    setErrorRows(badRows);
     const blocking = errors.filter(e => !e.includes(t("validate.lowConfidencePrefix")));
     if (blocking.length === 0) {
       setValidated(true);
@@ -94,6 +110,15 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
   };
 
   const handleSave = () => {
+    if (errorRows.size > 0 && !validated) {
+      setShowOverrideDialog(true);
+      return;
+    }
+    doSave();
+  };
+
+  const doSave = () => {
+    setShowOverrideDialog(false);
     setStage("save");
     onSave(rows);
   };
@@ -197,8 +222,8 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
             {rows.map((row, i) => {
               const fc = row.field_confidence || {};
               return (
-                <TableRow key={i} className={cn("text-xs", row.total_mismatch && "bg-red-500/5")}>
-                  <TableCell className="text-muted-foreground">{i + 1}</TableCell>
+                <TableRow key={i} className={cn("text-xs", row.total_mismatch && "bg-red-500/5", errorRows.has(i) && "bg-destructive/10 ring-1 ring-inset ring-destructive/30")}>
+                  <TableCell className={cn("text-muted-foreground", errorRows.has(i) && "text-destructive font-bold")}>{i + 1}</TableCell>
                   <TableCell><ConfEditCell value={row.client || ""} confidence={fc.client} onChange={v => update(i, "client", v)} /></TableCell>
                   <TableCell><ConfEditCell value={row.platform || ""} confidence={fc.platform} onChange={v => update(i, "platform", v)} /></TableCell>
                   <TableCell><ConfEditCell value={row.list_name || ""} confidence={fc.list_name} onChange={v => update(i, "list_name", v)} /></TableCell>
@@ -257,6 +282,21 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
           </TableBody>
         </Table>
       </div>
+
+      <AlertDialog open={showOverrideDialog} onOpenChange={setShowOverrideDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("validate.inconsistentData")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("validate.overrideConfirm")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("action.discard")}</AlertDialogCancel>
+            <AlertDialogAction onClick={doSave} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {t("validate.forceOverride")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
