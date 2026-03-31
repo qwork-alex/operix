@@ -126,10 +126,10 @@ export default function ServiceOrdersPage() {
         <Filter className="h-4 w-4 text-muted-foreground" />
         <Select value={filters.client_id || "all"} onValueChange={(v) => setFilter("client_id", v)}>
           <SelectTrigger className="w-[160px] h-9 text-xs bg-secondary/30">
-            <SelectValue placeholder="All clients" />
+            <SelectValue placeholder={t("label.allClients")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All clients</SelectItem>
+            <SelectItem value="all">{t("label.allClients")}</SelectItem>
             {clients.map((c) => (
               <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
             ))}
