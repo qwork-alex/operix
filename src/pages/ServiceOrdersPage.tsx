@@ -138,10 +138,10 @@ export default function ServiceOrdersPage() {
 
         <Select value={filters.platform || "all"} onValueChange={(v) => setFilter("platform", v)}>
           <SelectTrigger className="w-[140px] h-9 text-xs bg-secondary/30">
-            <SelectValue placeholder="All platforms" />
+            <SelectValue placeholder={t("label.allPlatforms")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All platforms</SelectItem>
+            <SelectItem value="all">{t("label.allPlatforms")}</SelectItem>
             {platforms.map((p) => (
               <SelectItem key={p} value={p}>{p}</SelectItem>
             ))}
