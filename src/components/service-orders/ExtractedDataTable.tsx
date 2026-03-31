@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Save, Trash2, AlertTriangle, Pencil } from "lucide-react";
 import type { ExtractedOrder } from "@/hooks/useServiceOrders";
 import { cn } from "@/lib/utils";
+import { useLanguage } from "@/hooks/useLanguage";
 
 interface ExtractedDataTableProps {
   orders: ExtractedOrder[];
@@ -24,13 +25,13 @@ const confidenceColors = {
 
 export function ExtractedDataTable({ orders: initial, confidence, notes, onSave, onDiscard, isSaving }: ExtractedDataTableProps) {
   const [rows, setRows] = useState<ExtractedOrder[]>(initial);
+  const { t, formatCurrency } = useLanguage();
 
   const update = (idx: number, field: keyof ExtractedOrder, value: string | number | null) => {
     setRows((prev) =>
       prev.map((r, i) => {
         if (i !== idx) return r;
         const updated = { ...r, [field]: value };
-        // Recalc total
         const p1 = Number(updated.service_1_price) || 0;
         const p2 = Number(updated.service_2_price) || 0;
         const p3 = Number(updated.service_3_price) || 0;
@@ -51,23 +52,23 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
-          <h3 className="text-sm font-semibold text-foreground">Extracted Data</h3>
+          <h3 className="text-sm font-semibold text-foreground">{t("extract.title")}</h3>
           <Badge variant="outline" className={cn("text-xs", confidenceColors[confidence])}>
-            {confidence} confidence
+            {confidence} {t("extract.confidence")}
           </Badge>
           {hasCorrections && (
             <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-400 border-amber-500/30">
               <Pencil className="h-3 w-3 mr-1" />
-              Handwritten corrections detected
+              {t("extract.corrections")}
             </Badge>
           )}
         </div>
         <div className="flex gap-2">
           <Button variant="ghost" size="sm" onClick={onDiscard} disabled={isSaving}>
-            <Trash2 className="h-4 w-4 mr-1" /> Discard
+            <Trash2 className="h-4 w-4 mr-1" /> {t("action.discard")}
           </Button>
           <Button size="sm" onClick={() => onSave(rows)} disabled={isSaving || rows.length === 0}>
-            <Save className="h-4 w-4 mr-1" /> Save {rows.length} order{rows.length !== 1 ? "s" : ""}
+            <Save className="h-4 w-4 mr-1" /> {t("extract.saveN").replace("{n}", String(rows.length))}
           </Button>
         </div>
       </div>
@@ -84,21 +85,21 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
           <TableHeader>
             <TableRow className="bg-secondary/30">
               <TableHead className="w-8">#</TableHead>
-              <TableHead>Client</TableHead>
-              <TableHead>Platform</TableHead>
-              <TableHead>Technician</TableHead>
-              <TableHead>Week</TableHead>
-              <TableHead>Car</TableHead>
-              <TableHead>Plate</TableHead>
+              <TableHead>{t("label.client")}</TableHead>
+              <TableHead>{t("label.platform")}</TableHead>
+              <TableHead>{t("label.technician")}</TableHead>
+              <TableHead>{t("label.week")}</TableHead>
+              <TableHead>{t("label.car")}</TableHead>
+              <TableHead>{t("label.plate")}</TableHead>
               <TableHead>Service 1</TableHead>
-              <TableHead className="w-20">Price</TableHead>
+              <TableHead className="w-20">{t("extract.price")}</TableHead>
               <TableHead>Service 2</TableHead>
-              <TableHead className="w-20">Price</TableHead>
+              <TableHead className="w-20">{t("extract.price")}</TableHead>
               <TableHead>Service 3</TableHead>
-              <TableHead className="w-20">Price</TableHead>
+              <TableHead className="w-20">{t("extract.price")}</TableHead>
               <TableHead>Service 4</TableHead>
-              <TableHead className="w-20">Price</TableHead>
-              <TableHead className="w-24">Total</TableHead>
+              <TableHead className="w-20">{t("extract.price")}</TableHead>
+              <TableHead className="w-24">{t("label.total")}</TableHead>
               <TableHead className="w-10"></TableHead>
             </TableRow>
           </TableHeader>
@@ -121,7 +122,7 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
                 <EditableCell value={row.service_4_name} onChange={(v) => update(idx, "service_4_name", v)} />
                 <EditableNumCell value={row.service_4_price} onChange={(v) => update(idx, "service_4_price", v)} />
                 <TableCell className="font-semibold text-primary tabular-nums">
-                  {row.total != null ? `€${row.total.toFixed(2)}` : "—"}
+                  {row.total != null ? formatCurrency(row.total) : "—"}
                 </TableCell>
                 <TableCell>
                   <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100" onClick={() => removeRow(idx)}>
@@ -133,7 +134,7 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
             {rows.length === 0 && (
               <TableRow>
                 <TableCell colSpan={17} className="text-center text-muted-foreground py-8">
-                  No orders extracted. Try uploading another document.
+                  {t("extract.noOrders")}
                 </TableCell>
               </TableRow>
             )}
