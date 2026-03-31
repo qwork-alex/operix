@@ -120,33 +120,33 @@ export default function PaymentOrdersPage() {
       <div className="flex items-center gap-3 flex-wrap">
         <Filter className="h-4 w-4 text-muted-foreground" />
         <Select value={filters.client_id || "all"} onValueChange={v => setFilter("client_id", v)}>
-          <SelectTrigger className="w-[160px] h-9 text-xs bg-secondary/30"><SelectValue placeholder="All clients" /></SelectTrigger>
+          <SelectTrigger className="w-[160px] h-9 text-xs bg-secondary/30"><SelectValue placeholder={t("label.allClients")} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All clients</SelectItem>
+            <SelectItem value="all">{t("label.allClients")}</SelectItem>
             {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
           </SelectContent>
         </Select>
 
         <Select value={filters.platform || "all"} onValueChange={v => setFilter("platform", v)}>
-          <SelectTrigger className="w-[140px] h-9 text-xs bg-secondary/30"><SelectValue placeholder="All platforms" /></SelectTrigger>
+          <SelectTrigger className="w-[140px] h-9 text-xs bg-secondary/30"><SelectValue placeholder={t("label.allPlatforms")} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All platforms</SelectItem>
+            <SelectItem value="all">{t("label.allPlatforms")}</SelectItem>
             {platforms.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
           </SelectContent>
         </Select>
 
         <Select value={filters.technician_id || "all"} onValueChange={v => setFilter("technician_id", v)}>
-          <SelectTrigger className="w-[160px] h-9 text-xs bg-secondary/30"><SelectValue placeholder="All technicians" /></SelectTrigger>
+          <SelectTrigger className="w-[160px] h-9 text-xs bg-secondary/30"><SelectValue placeholder={t("label.allTechnicians")} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All technicians</SelectItem>
-            {technicians.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+            <SelectItem value="all">{t("label.allTechnicians")}</SelectItem>
+            {technicians.map(t_ => <SelectItem key={t_.id} value={t_.id}>{t_.name}</SelectItem>)}
           </SelectContent>
         </Select>
 
         <Select value={filters.list_name || "all"} onValueChange={v => setFilter("list_name", v)}>
-          <SelectTrigger className="w-[140px] h-9 text-xs bg-secondary/30"><SelectValue placeholder="All lists" /></SelectTrigger>
+          <SelectTrigger className="w-[140px] h-9 text-xs bg-secondary/30"><SelectValue placeholder={t("label.allLists")} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All lists</SelectItem>
+            <SelectItem value="all">{t("label.allLists")}</SelectItem>
             {listNames.map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}
           </SelectContent>
         </Select>
