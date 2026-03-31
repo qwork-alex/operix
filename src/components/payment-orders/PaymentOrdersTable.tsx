@@ -133,7 +133,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
                     }} /></div>
                   </div>
                 ))}
-                <Button variant="outline" size="sm" onClick={() => setEditForm((p: any) => ({ ...p, services: [...p.services, { name: "", price: 0 }] }))}>+ Service</Button>
+                <Button variant="outline" size="sm" onClick={() => setEditForm((p: any) => ({ ...p, services: [...p.services, { name: "", price: 0 }] }))}>{t("extract.addService")}</Button>
               </div>
               <Button className="w-full" onClick={() => updateMutation.mutate()} disabled={updateMutation.isPending}>
                 {updateMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}

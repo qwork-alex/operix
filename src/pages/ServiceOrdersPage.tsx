@@ -17,6 +17,7 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { toast } from "sonner";
 
 export default function ServiceOrdersPage() {
+  const { t } = useLanguage();
   const [filters, setFilters] = useState<{
     client_id?: string;
     platform?: string;
