@@ -41,13 +41,19 @@ export default function ServiceOrdersPage() {
   const handleFiles = useCallback((files: File[]) => {
     addFiles(files, async (file, onStatus) => {
       onStatus("uploading" as QueueItemStatus);
-      // Small delay to show uploading state
       await new Promise(r => setTimeout(r, 200));
       onStatus("processing" as QueueItemStatus);
-      const result = await extract(file);
-      setExtractions(prev => [...prev, result]);
-      if (result.confidence === "low") {
-        toast.warning("Low confidence extraction — please review carefully.");
+      try {
+        const result = await extract(file);
+        setExtractions(prev => [...prev, result]);
+        if (result.confidence === "low") {
+          toast.warning("Low confidence extraction — please review carefully.");
+        }
+      } catch (err) {
+        const msg = (err as Error).message || "Unknown extraction error";
+        console.error("[ServiceOrders] File processing failed:", msg);
+        toast.error(msg, { duration: 8000 });
+        throw err;
       }
     });
   }, [addFiles, extract]);
