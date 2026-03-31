@@ -8,6 +8,8 @@ import { toast } from "sonner";
 export type ServiceOrder = Tables<"service_orders">;
 export type ServiceOrderInsert = TablesInsert<"service_orders">;
 
+export type FieldConfidence = "high" | "medium" | "low";
+
 export interface ExtractedOrder {
   client: string | null;
   platform: string | null;
@@ -24,7 +26,9 @@ export interface ExtractedOrder {
   service_4_name: string | null;
   service_4_price: number | null;
   total: number | null;
+  field_confidence?: Partial<Record<string, FieldConfidence>>;
   handwritten_corrections?: { field: string; original_value?: string; corrected_value: string }[];
+  total_mismatch?: boolean;
 }
 
 export interface ExtractionResult {
