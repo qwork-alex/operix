@@ -539,7 +539,7 @@ export function Documents() {
   };
 
   const navigateTo = (id: string | null, name: string) => {
-    if (id === null) { setParentId(null); setPath([{ id: null, name: "Root" }]); return; }
+    if (id === null) { setParentId(null); setPath([{ id: null, name: t("common.root") }]); return; }
     setParentId(id);
     const idx = path.findIndex(p => p.id === id);
     if (idx >= 0) setPath(path.slice(0, idx + 1));
