@@ -90,13 +90,17 @@ export function useServiceOrders(filters?: {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, ...updates }: Partial<ServiceOrder> & { id: string }) => {
+      console.log("[ServiceOrders] Update payload:", { id, ...updates });
       const { data, error } = await supabase
         .from("service_orders")
-        .update(updates)
+        .update({ ...updates, updated_at: new Date().toISOString() })
         .eq("id", id)
         .select()
         .single();
-      if (error) throw error;
+      if (error) {
+        console.error("[ServiceOrders] Update error:", error);
+        throw error;
+      }
       return data;
     },
     onSuccess: () => {
