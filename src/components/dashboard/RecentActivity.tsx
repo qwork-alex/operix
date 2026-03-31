@@ -1,49 +1,52 @@
 import { FileText, CreditCard, CheckCircle2, AlertTriangle } from "lucide-react";
-
-const activities = [
-  {
-    icon: <FileText className="h-4 w-4" />,
-    color: "text-accent",
-    title: "New service order #1247",
-    desc: "Marc Durand — Lyon",
-    time: "12 min ago",
-  },
-  {
-    icon: <CreditCard className="h-4 w-4" />,
-    color: "text-primary",
-    title: "Payment received €2,450",
-    desc: "Platform AutoFleet",
-    time: "34 min ago",
-  },
-  {
-    icon: <CheckCircle2 className="h-4 w-4" />,
-    color: "text-success",
-    title: "Service completed",
-    desc: "Vehicle AB-123-CD",
-    time: "1h ago",
-  },
-  {
-    icon: <AlertTriangle className="h-4 w-4" />,
-    color: "text-warning",
-    title: "Price mismatch detected",
-    desc: "Order #1239 — €85 difference",
-    time: "2h ago",
-  },
-  {
-    icon: <FileText className="h-4 w-4" />,
-    color: "text-accent",
-    title: "New service order #1246",
-    desc: "Sophie Laurent — Geneva",
-    time: "3h ago",
-  },
-];
+import { useLanguage } from "@/hooks/useLanguage";
 
 export function RecentActivity() {
+  const { t } = useLanguage();
+
+  const activities = [
+    {
+      icon: <FileText className="h-4 w-4" />,
+      color: "text-accent",
+      title: `${t("activity.newSO")} #1247`,
+      desc: "Marc Durand — Lyon",
+      time: `12 ${t("activity.minAgo")}`,
+    },
+    {
+      icon: <CreditCard className="h-4 w-4" />,
+      color: "text-primary",
+      title: `${t("activity.paymentReceived")} €2 450`,
+      desc: "AutoFleet",
+      time: `34 ${t("activity.minAgo")}`,
+    },
+    {
+      icon: <CheckCircle2 className="h-4 w-4" />,
+      color: "text-success",
+      title: t("activity.serviceCompleted"),
+      desc: `${t("activity.vehicle")} AB-123-CD`,
+      time: `1${t("activity.hAgo")}`,
+    },
+    {
+      icon: <AlertTriangle className="h-4 w-4" />,
+      color: "text-warning",
+      title: t("activity.priceMismatch"),
+      desc: `${t("activity.order")} #1239 — €85 ${t("activity.difference")}`,
+      time: `2${t("activity.hAgo")}`,
+    },
+    {
+      icon: <FileText className="h-4 w-4" />,
+      color: "text-accent",
+      title: `${t("activity.newSO")} #1246`,
+      desc: "Sophie Laurent — Geneva",
+      time: `3${t("activity.hAgo")}`,
+    },
+  ];
+
   return (
     <div className="glass-panel rounded-xl p-5 animate-fade-in">
       <div className="mb-4">
-        <h3 className="text-sm font-semibold text-foreground">Recent Activity</h3>
-        <p className="text-xs text-muted-foreground">Latest operations</p>
+        <h3 className="text-sm font-semibold text-foreground">{t("chart.recentActivity")}</h3>
+        <p className="text-xs text-muted-foreground">{t("chart.latestOps")}</p>
       </div>
       <div className="space-y-3">
         {activities.map((a, i) => (

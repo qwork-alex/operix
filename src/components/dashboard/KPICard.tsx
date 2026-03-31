@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
 import { TrendingUp, TrendingDown } from "lucide-react";
+import { useLanguage } from "@/hooks/useLanguage";
 
 interface KPICardProps {
   title: string;
@@ -10,6 +11,7 @@ interface KPICardProps {
 }
 
 export function KPICard({ title, value, change, icon, glowClass = "" }: KPICardProps) {
+  const { t } = useLanguage();
   const isPositive = change >= 0;
 
   return (
@@ -27,7 +29,7 @@ export function KPICard({ title, value, change, icon, glowClass = "" }: KPICardP
             <span className={`text-xs font-medium ${isPositive ? "text-success" : "text-destructive"}`}>
               {isPositive ? "+" : ""}{change}%
             </span>
-            <span className="text-xs text-muted-foreground">vs last month</span>
+            <span className="text-xs text-muted-foreground">{t("chart.vsLastMonth")}</span>
           </div>
         </div>
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-primary">

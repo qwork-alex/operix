@@ -1,6 +1,5 @@
-import { Component, ReactNode } from "react";
+import { useLanguage } from "@/hooks/useLanguage";
 
-// Static fallback replacing react-leaflet which crashes with React 18 ("render2 is not a function")
 const regions = [
   { name: "Lyon", count: 34 },
   { name: "Geneva", count: 21 },
@@ -10,11 +9,13 @@ const regions = [
 ];
 
 export function ActiveMap() {
+  const { t } = useLanguage();
+
   return (
     <div className="glass-panel rounded-xl p-5 animate-fade-in">
       <div className="mb-4">
-        <h3 className="text-sm font-semibold text-foreground">Active Regions</h3>
-        <p className="text-xs text-muted-foreground">Live technician distribution</p>
+        <h3 className="text-sm font-semibold text-foreground">{t("chart.activeRegions")}</h3>
+        <p className="text-xs text-muted-foreground">{t("chart.techDistribution")}</p>
       </div>
       <div className="h-[280px] rounded-lg overflow-hidden bg-muted/30 flex flex-col justify-center gap-3 px-6">
         {regions.map((r) => (

@@ -1,6 +1,4 @@
 import {
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -9,6 +7,7 @@ import {
   Area,
   AreaChart,
 } from "recharts";
+import { useLanguage } from "@/hooks/useLanguage";
 
 const data = [
   { month: "Jan", revenue: 42000, expenses: 28000 },
@@ -26,21 +25,23 @@ const data = [
 ];
 
 export function RevenueChart() {
+  const { t, formatCurrency } = useLanguage();
+
   return (
     <div className="glass-panel rounded-xl p-5 animate-fade-in">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-foreground">Revenue Overview</h3>
-          <p className="text-xs text-muted-foreground">Monthly revenue vs expenses</p>
+          <h3 className="text-sm font-semibold text-foreground">{t("chart.revenueOverview")}</h3>
+          <p className="text-xs text-muted-foreground">{t("chart.monthlyRevExp")}</p>
         </div>
         <div className="flex items-center gap-4 text-xs">
           <div className="flex items-center gap-1.5">
             <div className="h-2 w-2 rounded-full bg-primary" />
-            <span className="text-muted-foreground">Revenue</span>
+            <span className="text-muted-foreground">{t("chart.revenue")}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="h-2 w-2 rounded-full bg-accent" />
-            <span className="text-muted-foreground">Expenses</span>
+            <span className="text-muted-foreground">{t("chart.expenses")}</span>
           </div>
         </div>
       </div>
