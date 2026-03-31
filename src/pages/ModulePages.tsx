@@ -633,6 +633,10 @@ export function Documents() {
 export function UsersPage() {
   const { t, formatDate } = useLanguage();
   const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [form, setForm] = useState({ full_name: "", email: "", phone: "", role: "technician" });
 
   const { data: profiles = [], isLoading } = useQuery({
     queryKey: ["all-profiles"],
@@ -654,6 +658,69 @@ export function UsersPage() {
 
   const roleMap = new Map(roles.map((r: any) => [r.user_id, r.role]));
 
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      if (editId) {
+        const { error } = await supabase.from("profiles").update({
+          full_name: form.full_name,
+          email: form.email || null,
+          phone: form.phone || null,
+          updated_at: new Date().toISOString(),
+        }).eq("id", editId);
+        if (error) throw error;
+
+        const currentRole = roleMap.get(editId);
+        if (currentRole !== form.role) {
+          if (currentRole) {
+            const { error: re } = await supabase.from("user_roles").update({ role: form.role as any }).eq("user_id", editId);
+            if (re) throw re;
+          } else {
+            const { error: re } = await supabase.from("user_roles").insert({ user_id: editId, role: form.role as any });
+            if (re) throw re;
+          }
+        }
+      } else {
+        const { data: authData, error: authErr } = await supabase.auth.signUp({
+          email: form.email,
+          password: "TempPass123!",
+          options: { data: { full_name: form.full_name } },
+        });
+        if (authErr) throw authErr;
+        if (authData.user) {
+          await supabase.from("user_roles").insert({ user_id: authData.user.id, role: form.role as any });
+          if (form.phone) {
+            await supabase.from("profiles").update({ phone: form.phone }).eq("id", authData.user.id);
+          }
+        }
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["all-profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["all-roles"] });
+      setOpen(false);
+      setEditId(null);
+      setForm({ full_name: "", email: "", phone: "", role: "technician" });
+      toast.success(editId ? t("toast.updated") : t("users.userCreated"));
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error: re } = await supabase.from("user_roles").delete().eq("user_id", id);
+      if (re) throw re;
+      const { error } = await supabase.from("profiles").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["all-profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["all-roles"] });
+      setDeleteTarget(null);
+      toast.success(t("toast.deleted"));
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+
   const updateRole = useMutation({
     mutationFn: async ({ userId, newRole }: { userId: string; newRole: string }) => {
       const existingRole = roleMap.get(userId);
@@ -672,17 +739,78 @@ export function UsersPage() {
     onError: (err) => toast.error((err as Error).message),
   });
 
+  const startEdit = (p: any) => {
+    setEditId(p.id);
+    setForm({ full_name: p.full_name || "", email: p.email || "", phone: p.phone || "", role: roleMap.get(p.id) || "technician" });
+    setOpen(true);
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-          <Users className="h-5 w-5 text-primary" />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+            <Users className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-lg font-semibold text-foreground">{t("users.title")}</h1>
+            <p className="text-xs text-muted-foreground">{t("users.subtitle")}</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-lg font-semibold text-foreground">{t("users.title")}</h1>
-          <p className="text-xs text-muted-foreground">{t("users.subtitle")}</p>
-        </div>
+        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setEditId(null); setForm({ full_name: "", email: "", phone: "", role: "technician" }); } }}>
+          <DialogTrigger asChild>
+            <Button size="sm"><Plus className="h-4 w-4 mr-1" />{t("users.addUser")}</Button>
+          </DialogTrigger>
+          <DialogContent className="bg-card border-border">
+            <DialogHeader><DialogTitle>{editId ? t("users.editUser") : t("users.addUser")}</DialogTitle></DialogHeader>
+            <div className="space-y-4 pt-2">
+              <div className="space-y-2">
+                <Label className="text-xs">{t("label.name")}</Label>
+                <Input value={form.full_name} onChange={e => setForm(p => ({ ...p, full_name: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">{t("label.email")}</Label>
+                <Input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} disabled={!!editId} />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">{t("users.phone")}</Label>
+                <Input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">{t("label.role")}</Label>
+                <Select value={form.role} onValueChange={v => setForm(p => ({ ...p, role: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin">{t("role.admin")}</SelectItem>
+                    <SelectItem value="partner">{t("role.partner")}</SelectItem>
+                    <SelectItem value="technician">{t("role.technician")}</SelectItem>
+                    <SelectItem value="client">{t("role.client")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button className="w-full" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || !form.full_name || !form.email}>
+                {saveMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+                {t("action.save")}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={!!deleteTarget} onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}>
+        <DialogContent className="bg-card border-border">
+          <DialogHeader><DialogTitle>{t("users.deleteConfirm")}</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">{t("users.deleteWarning")}</p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" size="sm" onClick={() => setDeleteTarget(null)}>{t("action.cancel")}</Button>
+            <Button variant="destructive" size="sm" onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget)} disabled={deleteMutation.isPending}>
+              {deleteMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1" />}
+              {t("action.delete")}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {isLoading ? (
         <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
@@ -695,8 +823,10 @@ export function UsersPage() {
               <TableRow className="text-[11px]">
                 <TableHead>{t("label.name")}</TableHead>
                 <TableHead>{t("label.email")}</TableHead>
+                <TableHead>{t("users.phone")}</TableHead>
                 <TableHead>{t("label.role")}</TableHead>
                 <TableHead>{t("users.joined")}</TableHead>
+                <TableHead>{t("label.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -704,6 +834,7 @@ export function UsersPage() {
                 <TableRow key={p.id} className="text-xs">
                   <TableCell className="font-medium">{p.full_name || "—"}</TableCell>
                   <TableCell>{p.email || "—"}</TableCell>
+                  <TableCell>{p.phone || "—"}</TableCell>
                   <TableCell>
                     <Select value={roleMap.get(p.id) || ""} onValueChange={(v) => updateRole.mutate({ userId: p.id, newRole: v })}>
                       <SelectTrigger className="h-7 w-[120px] text-xs">
@@ -718,6 +849,16 @@ export function UsersPage() {
                     </Select>
                   </TableCell>
                   <TableCell className="text-muted-foreground">{formatDate(p.created_at)}</TableCell>
+                  <TableCell>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(p)}>
+                        <Pencil className="h-3 w-3" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget(p.id)}>
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
