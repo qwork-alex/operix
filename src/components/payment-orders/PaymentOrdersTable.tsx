@@ -10,6 +10,7 @@ import { Trash2, Pencil, Save, X, Loader2, Plus } from "lucide-react";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import type { Json } from "@/integrations/supabase/types";
 
 interface PaymentOrderRow {
@@ -62,6 +63,13 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
     mutationFn: async (id: string) => {
       if (!editForm) return;
 
+      // Inline validation
+      const svc = editForm.services.filter(s => s.name);
+      const computedTotal = svc.reduce((sum, s) => sum + (Number(s.price) || 0), 0);
+      if (computedTotal === 0) {
+        throw new Error(t("validate.inlineError") + ": " + t("validate.zeroTotal").replace("{n}", ""));
+      }
+
       const { data: existing, error: existingError } = await supabase
         .from("payment_orders")
         .select("created_by, created_at")
@@ -77,8 +85,8 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
         throw new Error("Missing required audit fields (created_by, created_at, updated_at).");
       }
 
-      const services = editForm.services.filter(s => s.name);
-      const total = services.reduce((sum, s) => sum + (Number(s.price) || 0), 0);
+      const services = svc;
+      const total = computedTotal;
       const payload = {
         platform: editForm.platform || null,
         list_name: editForm.list_name || null,

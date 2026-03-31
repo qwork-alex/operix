@@ -10,6 +10,7 @@ import { Trash2, Pencil, Save, X, Loader2 } from "lucide-react";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 interface ServiceOrderRow {
   id: string;
@@ -83,6 +84,12 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
     mutationFn: async (id: string) => {
       if (!editForm) return;
 
+      // Inline validation
+      const total = (Number(editForm.service_1_price) || 0) + (Number(editForm.service_2_price) || 0) + (Number(editForm.service_3_price) || 0) + (Number(editForm.service_4_price) || 0);
+      if (total === 0) {
+        throw new Error(t("validate.inlineError") + ": " + t("validate.zeroTotal").replace("{n}", ""));
+      }
+
       const { data: existing, error: existingError } = await supabase
         .from("service_orders")
         .select("created_by, created_at")
@@ -98,7 +105,6 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
         throw new Error("Missing required audit fields (created_by, created_at, updated_at).");
       }
 
-      const total = (Number(editForm.service_1_price) || 0) + (Number(editForm.service_2_price) || 0) + (Number(editForm.service_3_price) || 0) + (Number(editForm.service_4_price) || 0);
 
       const payload = {
         platform: editForm.platform || null,
