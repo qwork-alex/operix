@@ -3,6 +3,7 @@ import { FileText, Filter } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileUploadZone } from "@/components/service-orders/FileUploadZone";
 import { ExtractedDataTable } from "@/components/service-orders/ExtractedDataTable";
+import { ExtractionStages } from "@/components/service-orders/ExtractionStages";
 import { ServiceOrdersTable } from "@/components/service-orders/ServiceOrdersTable";
 import {
   useServiceOrders,
