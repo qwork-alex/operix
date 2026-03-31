@@ -710,10 +710,10 @@ export function UsersPage() {
                         <SelectValue placeholder={t("users.noRole")} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="admin">Admin</SelectItem>
-                        <SelectItem value="partner">Partner</SelectItem>
-                        <SelectItem value="technician">Technician</SelectItem>
-                        <SelectItem value="client">Client</SelectItem>
+                        <SelectItem value="admin">{t("role.admin")}</SelectItem>
+                        <SelectItem value="partner">{t("role.partner")}</SelectItem>
+                        <SelectItem value="technician">{t("role.technician")}</SelectItem>
+                        <SelectItem value="client">{t("role.client")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </TableCell>

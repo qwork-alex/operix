@@ -82,7 +82,7 @@ export function TopBar() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="bg-card border-border w-48">
             <div className="px-3 py-2">
-              <p className="text-sm font-medium text-foreground truncate">{profile?.full_name || "User"}</p>
+              <p className="text-sm font-medium text-foreground truncate">{profile?.full_name || t("common.user")}</p>
               <p className="text-xs text-muted-foreground truncate">{profile?.email}</p>
             </div>
             <DropdownMenuSeparator />

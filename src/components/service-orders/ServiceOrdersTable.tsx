@@ -153,8 +153,8 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
               </div>
               {[1, 2, 3, 4].map(i => (
                 <div key={i} className="grid grid-cols-3 gap-2">
-                  <div className="col-span-2 space-y-1"><Label className="text-xs">Service {i}</Label><Input value={editForm[`service_${i}_name`]} onChange={e => setEditForm((p: any) => ({ ...p, [`service_${i}_name`]: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label className="text-xs">€</Label><Input type="number" step="0.01" value={editForm[`service_${i}_price`]} onChange={e => setEditForm((p: any) => ({ ...p, [`service_${i}_price`]: e.target.value }))} /></div>
+                  <div className="col-span-2 space-y-1"><Label className="text-xs">{t("label.service")} {i}</Label><Input value={editForm[`service_${i}_name`]} onChange={e => setEditForm((p: any) => ({ ...p, [`service_${i}_name`]: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label className="text-xs">{t("label.total")}</Label><Input type="number" step="0.01" value={editForm[`service_${i}_price`]} onChange={e => setEditForm((p: any) => ({ ...p, [`service_${i}_price`]: e.target.value }))} /></div>
                 </div>
               ))}
               <Button className="w-full" onClick={() => updateMutation.mutate()} disabled={updateMutation.isPending}>
