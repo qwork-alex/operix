@@ -63,11 +63,20 @@ export function useServiceOrders(filters?: {
 
   const saveMutation = useMutation({
     mutationFn: async (orders: ServiceOrderInsert[]) => {
+      const payload = orders.map(o => ({
+        ...o,
+        created_by: user?.id ?? undefined,
+        status: o.status || "draft",
+      }));
+      console.log("[ServiceOrders] Insert payload:", JSON.stringify(payload, null, 2));
       const { data, error } = await supabase
         .from("service_orders")
-        .insert(orders.map(o => ({ ...o, created_by: user?.id })))
+        .insert(payload)
         .select();
-      if (error) throw error;
+      if (error) {
+        console.error("[ServiceOrders] Insert error:", error);
+        throw error;
+      }
       return data;
     },
     onSuccess: () => {
