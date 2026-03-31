@@ -99,9 +99,9 @@ export default function ServiceOrdersPage() {
           <FileText className="h-5 w-5 text-primary" />
         </div>
         <div>
-          <h1 className="text-lg font-semibold text-foreground">Service Orders</h1>
+          <h1 className="text-lg font-semibold text-foreground">{t("so.title")}</h1>
           <p className="text-xs text-muted-foreground">
-            Upload documents to extract service data automatically
+            {t("so.subtitle")}
           </p>
         </div>
       </div>
