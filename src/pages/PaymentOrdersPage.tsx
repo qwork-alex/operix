@@ -105,6 +105,9 @@ export default function PaymentOrdersPage() {
         </Button>
       </div>
 
+      {!extraction && !isExtracting && <ExtractionStages current="upload" />}
+      {isExtracting && <ExtractionStages current="upload" />}
+
       <FileUploadZone onFilesSelected={handleFiles} isProcessing={isExtracting} />
 
       {extraction && (
