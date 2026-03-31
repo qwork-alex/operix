@@ -229,9 +229,11 @@ export type Database = {
       financial_records: {
         Row: {
           amount: number
+          category: string | null
           created_at: string
           created_by: string | null
           id: string
+          label: string | null
           notes: string | null
           payment_order_id: string | null
           reference_id: string | null
@@ -242,9 +244,11 @@ export type Database = {
         }
         Insert: {
           amount?: number
+          category?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
+          label?: string | null
           notes?: string | null
           payment_order_id?: string | null
           reference_id?: string | null
@@ -255,9 +259,11 @@ export type Database = {
         }
         Update: {
           amount?: number
+          category?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
+          label?: string | null
           notes?: string | null
           payment_order_id?: string | null
           reference_id?: string | null

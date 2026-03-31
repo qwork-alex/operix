@@ -374,7 +374,21 @@ export function Accounting() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState({ type: "expense", category: "", amount: "", date: new Date().toISOString().split("T")[0], notes: "" });
+  const [form, setForm] = useState({ type: "expense", category: "other", amount: "", label: "", notes: "", status: "confirmed" });
+
+  // Filters
+  const [filterType, setFilterType] = useState("all");
+  const [filterCategory, setFilterCategory] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [search, setSearch] = useState("");
+
+  const categories = [
+    { value: "labor", label: "acc.catLabor" },
+    { value: "material", label: "acc.catMaterial" },
+    { value: "tax", label: "acc.catTax" },
+    { value: "services", label: "acc.catServices" },
+    { value: "other", label: "acc.catOther" },
+  ];
 
   const { data: records = [], isLoading } = useQuery({
     queryKey: ["financial_records"],
@@ -385,32 +399,62 @@ export function Accounting() {
     },
   });
 
+  // Filter records
+  const filtered = records.filter((r: any) => {
+    if (filterType !== "all" && r.type !== filterType) return false;
+    if (filterCategory !== "all" && (r.category || "other") !== filterCategory) return false;
+    if (filterStatus !== "all" && r.status !== filterStatus) return false;
+    if (search) {
+      const s = search.toLowerCase();
+      const match = [r.notes, r.source, r.label, r.category].some(v => v && String(v).toLowerCase().includes(s));
+      if (!match) return false;
+    }
+    return true;
+  });
+
+  // Summary calculations
+  const totalIncome = filtered.filter((r: any) => r.type === "revenue").reduce((s: number, r: any) => s + Number(r.amount || 0), 0);
+  const totalExpenses = filtered.filter((r: any) => r.type === "expense").reduce((s: number, r: any) => s + Number(r.amount || 0), 0);
+  const netResult = totalIncome - totalExpenses;
+
+  // Monthly data for chart
+  const monthlyData = (() => {
+    const months: Record<string, { month: string; revenue: number; expense: number }> = {};
+    records.forEach((r: any) => {
+      const d = new Date(r.created_at);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      if (!months[key]) months[key] = { month: key, revenue: 0, expense: 0 };
+      if (r.type === "revenue") months[key].revenue += Number(r.amount || 0);
+      else months[key].expense += Number(r.amount || 0);
+    });
+    return Object.values(months).sort((a, b) => a.month.localeCompare(b.month)).slice(-6);
+  })();
+
   const addMutation = useMutation({
     mutationFn: async () => {
+      const payload: any = {
+        type: form.type,
+        source: form.label ? "manual" : "manual",
+        category: form.category,
+        label: form.label || null,
+        amount: parseFloat(form.amount) || 0,
+        notes: form.notes || null,
+        status: form.status,
+      };
       if (editId) {
-        const { error } = await supabase.from("financial_records").update({
-          type: form.type,
-          source: form.category || "manual",
-          amount: parseFloat(form.amount) || 0,
-          notes: form.notes || null,
-        }).eq("id", editId);
+        const { error } = await supabase.from("financial_records").update(payload).eq("id", editId);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("financial_records").insert({
-          type: form.type,
-          source: form.category || "manual",
-          amount: parseFloat(form.amount) || 0,
-          notes: form.notes || null,
-          status: "confirmed",
-        });
+        const { error } = await supabase.from("financial_records").insert(payload);
         if (error) throw error;
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["financial_records"] });
+      queryClient.invalidateQueries({ queryKey: ["financial-summary"] });
       setOpen(false);
       setEditId(null);
-      setForm({ type: "expense", category: "", amount: "", date: new Date().toISOString().split("T")[0], notes: "" });
+      setForm({ type: "expense", category: "other", amount: "", label: "", notes: "", status: "confirmed" });
       toast.success(editId ? t("toast.updated") : t("acc.entryAdded"));
     },
     onError: (err) => toast.error((err as Error).message),
@@ -430,12 +474,22 @@ export function Accounting() {
 
   const startEdit = (r: any) => {
     setEditId(r.id);
-    setForm({ type: r.type, category: r.source, amount: String(r.amount), date: r.created_at?.split("T")[0] || "", notes: r.notes || "" });
+    setForm({
+      type: r.type,
+      category: r.category || "other",
+      amount: String(r.amount),
+      label: r.label || "",
+      notes: r.notes || "",
+      status: r.status || "confirmed",
+    });
     setOpen(true);
   };
 
+  const maxBar = Math.max(...monthlyData.map(m => Math.max(m.revenue, m.expense)), 1);
+
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
@@ -452,30 +506,54 @@ export function Accounting() {
           </DialogTrigger>
           <DialogContent className="bg-card border-border">
             <DialogHeader><DialogTitle>{editId ? t("action.edit") : t("acc.newEntry")}</DialogTitle></DialogHeader>
-            <div className="space-y-4 pt-2">
-              <div className="space-y-2">
-                <Label className="text-xs">{t("label.type")}</Label>
-                <Select value={form.type} onValueChange={v => setForm(p => ({ ...p, type: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="expense">{t("acc.expense")}</SelectItem>
-                    <SelectItem value="revenue">{t("acc.revenue")}</SelectItem>
-                  </SelectContent>
-                </Select>
+            <div className="space-y-3 pt-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">{t("label.type")}</Label>
+                  <Select value={form.type} onValueChange={v => setForm(p => ({ ...p, type: v }))}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="expense">{t("acc.expense")}</SelectItem>
+                      <SelectItem value="revenue">{t("acc.revenue")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">{t("label.category")}</Label>
+                  <Select value={form.category} onValueChange={v => setForm(p => ({ ...p, category: v }))}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {categories.map(c => <SelectItem key={c.value} value={c.value}>{t(c.label)}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label className="text-xs">{t("label.category")}</Label>
-                <Input value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))} placeholder={t("placeholder.categoryExample")} />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">{t("label.amount")} (€)</Label>
+                  <Input type="number" step="0.01" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} className="h-9" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">{t("label.status")}</Label>
+                  <Select value={form.status} onValueChange={v => setForm(p => ({ ...p, status: v }))}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="confirmed">{t("status.confirmed")}</SelectItem>
+                      <SelectItem value="pending">{t("status.pending")}</SelectItem>
+                      <SelectItem value="paid">{t("status.paid")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label className="text-xs">{t("label.amount")} (€)</Label>
-                <Input type="number" step="0.01" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} />
+              <div className="space-y-1">
+                <Label className="text-xs">{t("acc.label")}</Label>
+                <Input value={form.label} onChange={e => setForm(p => ({ ...p, label: e.target.value }))} placeholder="ex: Facture #123" className="h-9" />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label className="text-xs">{t("label.notes")}</Label>
-                <Input value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} />
+                <Input value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} className="h-9" />
               </div>
-              <Button className="w-full" onClick={() => addMutation.mutate()} disabled={addMutation.isPending}>
+              <Button className="w-full" onClick={() => addMutation.mutate()} disabled={addMutation.isPending || !form.amount}>
                 {addMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
                 {t("action.save")}
               </Button>
@@ -484,9 +562,87 @@ export function Accounting() {
         </Dialog>
       </div>
 
+      {/* Summary cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card className="border-border/50">
+          <CardContent className="pt-4 pb-3">
+            <p className="text-[11px] text-muted-foreground mb-1">{t("acc.totalIncome")}</p>
+            <p className="text-xl font-bold text-emerald-500 tabular-nums">{formatCurrency(totalIncome)}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-border/50">
+          <CardContent className="pt-4 pb-3">
+            <p className="text-[11px] text-muted-foreground mb-1">{t("acc.totalExpenses")}</p>
+            <p className="text-xl font-bold text-destructive tabular-nums">{formatCurrency(totalExpenses)}</p>
+          </CardContent>
+        </Card>
+        <Card className={`border-border/50 ${netResult >= 0 ? "bg-emerald-500/5" : "bg-destructive/5"}`}>
+          <CardContent className="pt-4 pb-3">
+            <p className="text-[11px] text-muted-foreground mb-1">{t("acc.netResult")}</p>
+            <p className={`text-xl font-bold tabular-nums ${netResult >= 0 ? "text-emerald-500" : "text-destructive"}`}>
+              {netResult >= 0 ? "+" : ""}{formatCurrency(netResult)}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Monthly chart */}
+      {monthlyData.length > 0 && (
+        <Card className="border-border/50">
+          <CardHeader className="pb-2"><CardTitle className="text-sm">{t("acc.monthlyChart")}</CardTitle></CardHeader>
+          <CardContent>
+            <div className="flex items-end gap-2 h-32">
+              {monthlyData.map(m => (
+                <div key={m.month} className="flex-1 flex flex-col items-center gap-1">
+                  <div className="w-full flex gap-0.5 items-end" style={{ height: "100px" }}>
+                    <div className="flex-1 bg-emerald-500/80 rounded-t" style={{ height: `${(m.revenue / maxBar) * 100}px` }} title={formatCurrency(m.revenue)} />
+                    <div className="flex-1 bg-destructive/80 rounded-t" style={{ height: `${(m.expense / maxBar) * 100}px` }} title={formatCurrency(m.expense)} />
+                  </div>
+                  <span className="text-[9px] text-muted-foreground">{m.month.slice(5)}</span>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-4 mt-2 justify-center">
+              <span className="flex items-center gap-1 text-[10px] text-muted-foreground"><span className="w-2 h-2 rounded-sm bg-emerald-500/80" />{t("acc.revenue")}</span>
+              <span className="flex items-center gap-1 text-[10px] text-muted-foreground"><span className="w-2 h-2 rounded-sm bg-destructive/80" />{t("acc.expense")}</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2">
+        <Input value={search} onChange={e => setSearch(e.target.value)} placeholder={t("action.search")} className="h-8 w-48 text-xs" />
+        <Select value={filterType} onValueChange={setFilterType}>
+          <SelectTrigger className="h-8 w-[130px] text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t("acc.allTypes")}</SelectItem>
+            <SelectItem value="revenue">{t("acc.revenue")}</SelectItem>
+            <SelectItem value="expense">{t("acc.expense")}</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={filterCategory} onValueChange={setFilterCategory}>
+          <SelectTrigger className="h-8 w-[140px] text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t("acc.allCategories")}</SelectItem>
+            {categories.map(c => <SelectItem key={c.value} value={c.value}>{t(c.label)}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={filterStatus} onValueChange={setFilterStatus}>
+          <SelectTrigger className="h-8 w-[130px] text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t("acc.allStatuses")}</SelectItem>
+            <SelectItem value="confirmed">{t("status.confirmed")}</SelectItem>
+            <SelectItem value="pending">{t("status.pending")}</SelectItem>
+            <SelectItem value="paid">{t("status.paid")}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Table */}
       {isLoading ? (
         <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
-      ) : records.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-sm text-muted-foreground">{t("acc.noEntries")}</div>
       ) : (
         <div className="rounded-lg border border-border/50 overflow-auto">
@@ -495,38 +651,59 @@ export function Accounting() {
               <TableRow className="text-[11px]">
                 <TableHead>{t("label.type")}</TableHead>
                 <TableHead>{t("label.category")}</TableHead>
+                <TableHead>{t("acc.label")}</TableHead>
                 <TableHead className="text-right">{t("label.amount")}</TableHead>
                 <TableHead>{t("label.status")}</TableHead>
+                <TableHead>{t("acc.source")}</TableHead>
                 <TableHead>{t("label.notes")}</TableHead>
                 <TableHead>{t("label.date")}</TableHead>
                 <TableHead>{t("label.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {records.map((r: any) => (
-                <TableRow key={r.id} className="text-xs">
-                  <TableCell>
-                    <Badge variant="outline" className={r.type === "revenue" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" : "bg-destructive/10 text-destructive border-destructive/30"}>
-                      {r.type === "revenue" ? t("acc.revenue") : t("acc.expense")}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{r.source}</TableCell>
-                  <TableCell className="text-right font-medium tabular-nums">{formatCurrency(r.amount)}</TableCell>
-                  <TableCell><Badge variant="outline">{t(`status.${r.status}`, r.status)}</Badge></TableCell>
-                  <TableCell className="max-w-[200px] truncate text-muted-foreground">{r.notes || "—"}</TableCell>
-                  <TableCell className="text-muted-foreground">{formatDate(r.created_at)}</TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(r)}>
-                        <Pencil className="h-3 w-3" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteMutation.mutate(r.id)}>
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {filtered.map((r: any) => {
+                const catKey = categories.find(c => c.value === (r.category || "other"));
+                return (
+                  <TableRow key={r.id} className="text-xs">
+                    <TableCell>
+                      <Badge variant="outline" className={r.type === "revenue" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" : "bg-destructive/10 text-destructive border-destructive/30"}>
+                        {r.type === "revenue" ? t("acc.revenue") : t("acc.expense")}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className="text-[10px]">
+                        {catKey ? t(catKey.label) : (r.category || r.source || "—")}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-medium">{r.label || "—"}</TableCell>
+                    <TableCell className={`text-right font-medium tabular-nums ${r.type === "revenue" ? "text-emerald-500" : "text-destructive"}`}>
+                      {r.type === "revenue" ? "+" : "-"}{formatCurrency(r.amount)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={
+                        r.status === "paid" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                          : r.status === "pending" ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/30"
+                          : ""
+                      }>
+                        {t(`status.${r.status}`, r.status)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-[10px]">{r.source || "manual"}</TableCell>
+                    <TableCell className="max-w-[150px] truncate text-muted-foreground">{r.notes || "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">{formatDate(r.created_at)}</TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(r)}>
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteMutation.mutate(r.id)}>
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>
@@ -534,7 +711,6 @@ export function Accounting() {
     </div>
   );
 }
-
 // ─── FLEET ───
 export function Fleet() {
   const { t, formatDate } = useLanguage();
