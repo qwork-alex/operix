@@ -107,6 +107,10 @@ export default function ServiceOrdersPage() {
         </div>
       </div>
 
+      {/* Stage indicator when no extraction yet */}
+      {!extraction && !isExtracting && <ExtractionStages current="upload" />}
+      {isExtracting && <ExtractionStages current="upload" />}
+
       {/* Upload */}
       <FileUploadZone onFilesSelected={handleFiles} isProcessing={isExtracting} />
 
