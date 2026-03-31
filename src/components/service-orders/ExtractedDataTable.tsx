@@ -3,8 +3,9 @@ import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from "@
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Save, Trash2, AlertTriangle, Pencil, CheckCircle2, XCircle } from "lucide-react";
-import type { ExtractedOrder } from "@/hooks/useServiceOrders";
+import type { ExtractedOrder, FieldConfidence } from "@/hooks/useServiceOrders";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/hooks/useLanguage";
 import { ExtractionStages, type Stage } from "./ExtractionStages";
@@ -22,6 +23,12 @@ const confidenceColors = {
   high: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
   medium: "bg-amber-500/10 text-amber-400 border-amber-500/30",
   low: "bg-red-500/10 text-red-400 border-red-500/30",
+};
+
+const fieldConfBorder: Record<FieldConfidence, string> = {
+  high: "border-transparent",
+  medium: "border-amber-500/50 bg-amber-500/5",
+  low: "border-red-500/50 bg-red-500/5",
 };
 
 export function ExtractedDataTable({ orders: initial, confidence, notes, onSave, onDiscard, isSaving }: ExtractedDataTableProps) {
@@ -43,6 +50,11 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
         const p3 = Number(updated.service_3_price) || 0;
         const p4 = Number(updated.service_4_price) || 0;
         updated.total = p1 + p2 + p3 + p4;
+        // When user edits a field, mark it as high confidence (user-verified)
+        if (updated.field_confidence) {
+          updated.field_confidence = { ...updated.field_confidence, [field]: "high" };
+        }
+        updated.total_mismatch = false;
         return updated;
       })
     );
@@ -68,9 +80,16 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
         errors.push(t("validate.totalMismatch").replace("{n}", n).replace("{expected}", String(computed)).replace("{actual}", String(row.total)));
       }
       if ((row.total ?? 0) === 0 && hasService) errors.push(t("validate.zeroTotal").replace("{n}", n));
+      // Warn about low-confidence fields
+      const lowFields = Object.entries(row.field_confidence || {}).filter(([, v]) => v === "low").map(([k]) => k);
+      if (lowFields.length > 0) {
+        errors.push(t("validate.lowConfidence").replace("{n}", n).replace("{fields}", lowFields.join(", ")));
+      }
     });
     setValidationErrors(errors);
-    if (errors.length === 0) {
+    // Allow saving even with warnings - only block on missing required fields
+    const blocking = errors.filter(e => !e.includes(t("validate.lowConfidencePrefix")));
+    if (blocking.length === 0) {
       setValidated(true);
       setStage("save");
     } else {
@@ -85,14 +104,15 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
   };
 
   const hasCorrections = rows.some((r) => r.handwritten_corrections?.length);
+  const hasMismatches = rows.some((r) => r.total_mismatch);
+  const uncertainCount = rows.reduce((c, r) => c + Object.values(r.field_confidence || {}).filter(v => v === "low" || v === "medium").length, 0);
 
   return (
     <div className="space-y-3">
-      {/* Stage indicator */}
       <ExtractionStages current={stage} />
 
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <h3 className="text-sm font-semibold text-foreground">{t("extract.title")}</h3>
           <Badge variant="outline" className={cn("text-xs", confidenceColors[confidence])}>
             {confidence} {t("extract.confidence")}
@@ -101,6 +121,17 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
             <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-400 border-amber-500/30">
               <Pencil className="h-3 w-3 mr-1" />
               {t("extract.corrections")}
+            </Badge>
+          )}
+          {hasMismatches && (
+            <Badge variant="outline" className="text-xs bg-red-500/10 text-red-400 border-red-500/30">
+              <AlertTriangle className="h-3 w-3 mr-1" />
+              {t("extract.totalMismatch")}
+            </Badge>
+          )}
+          {uncertainCount > 0 && (
+            <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-400 border-amber-500/30">
+              {uncertainCount} {t("extract.uncertainFields")}
             </Badge>
           )}
         </div>
@@ -119,7 +150,6 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
         </div>
       </div>
 
-      {/* Validation feedback */}
       {validationErrors.length > 0 && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 space-y-1">
           <div className="flex items-center gap-2 text-sm font-medium text-destructive">
@@ -169,33 +199,45 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.map((row, idx) => (
-              <TableRow key={idx} className="group">
-                <TableCell className="text-muted-foreground text-xs">{idx + 1}</TableCell>
-                <EditableCell value={row.client} onChange={(v) => update(idx, "client", v)} />
-                <EditableCell value={row.platform} onChange={(v) => update(idx, "platform", v)} />
-                <EditableCell value={row.technician} onChange={(v) => update(idx, "technician", v)} />
-                <EditableCell value={row.week} onChange={(v) => update(idx, "week", v)} />
-                <EditableCell value={row.car_name} onChange={(v) => update(idx, "car_name", v)} />
-                <EditableCell value={row.license_plate} onChange={(v) => update(idx, "license_plate", v)} />
-                <EditableCell value={row.service_1_name} onChange={(v) => update(idx, "service_1_name", v)} />
-                <EditableNumCell value={row.service_1_price} onChange={(v) => update(idx, "service_1_price", v)} />
-                <EditableCell value={row.service_2_name} onChange={(v) => update(idx, "service_2_name", v)} />
-                <EditableNumCell value={row.service_2_price} onChange={(v) => update(idx, "service_2_price", v)} />
-                <EditableCell value={row.service_3_name} onChange={(v) => update(idx, "service_3_name", v)} />
-                <EditableNumCell value={row.service_3_price} onChange={(v) => update(idx, "service_3_price", v)} />
-                <EditableCell value={row.service_4_name} onChange={(v) => update(idx, "service_4_name", v)} />
-                <EditableNumCell value={row.service_4_price} onChange={(v) => update(idx, "service_4_price", v)} />
-                <TableCell className="font-semibold text-primary tabular-nums">
-                  {row.total != null ? formatCurrency(row.total) : "—"}
-                </TableCell>
-                <TableCell>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100" onClick={() => removeRow(idx)}>
-                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
+            {rows.map((row, idx) => {
+              const fc = row.field_confidence || {};
+              return (
+                <TableRow key={idx} className={cn("group", row.total_mismatch && "bg-red-500/5")}>
+                  <TableCell className="text-muted-foreground text-xs">{idx + 1}</TableCell>
+                  <ConfidenceCell value={row.client} confidence={fc.client} onChange={(v) => update(idx, "client", v)} />
+                  <ConfidenceCell value={row.platform} confidence={fc.platform} onChange={(v) => update(idx, "platform", v)} />
+                  <ConfidenceCell value={row.technician} confidence={fc.technician} onChange={(v) => update(idx, "technician", v)} />
+                  <ConfidenceCell value={row.week} confidence={fc.week} onChange={(v) => update(idx, "week", v)} />
+                  <ConfidenceCell value={row.car_name} confidence={fc.car_name} onChange={(v) => update(idx, "car_name", v)} />
+                  <ConfidenceCell value={row.license_plate} confidence={fc.license_plate} onChange={(v) => update(idx, "license_plate", v)} />
+                  <ConfidenceCell value={row.service_1_name} confidence={fc.service_1_name} onChange={(v) => update(idx, "service_1_name", v)} />
+                  <ConfidenceNumCell value={row.service_1_price} confidence={fc.service_1_price} onChange={(v) => update(idx, "service_1_price", v)} />
+                  <ConfidenceCell value={row.service_2_name} confidence={fc.service_2_name} onChange={(v) => update(idx, "service_2_name", v)} />
+                  <ConfidenceNumCell value={row.service_2_price} confidence={fc.service_2_price} onChange={(v) => update(idx, "service_2_price", v)} />
+                  <ConfidenceCell value={row.service_3_name} confidence={fc.service_3_name} onChange={(v) => update(idx, "service_3_name", v)} />
+                  <ConfidenceNumCell value={row.service_3_price} confidence={fc.service_3_price} onChange={(v) => update(idx, "service_3_price", v)} />
+                  <ConfidenceCell value={row.service_4_name} confidence={fc.service_4_name} onChange={(v) => update(idx, "service_4_name", v)} />
+                  <ConfidenceNumCell value={row.service_4_price} confidence={fc.service_4_price} onChange={(v) => update(idx, "service_4_price", v)} />
+                  <TableCell className={cn("font-semibold tabular-nums", row.total_mismatch ? "text-destructive" : "text-primary")}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className={cn(row.total_mismatch && "cursor-help underline decoration-dashed")}>
+                          {row.total != null ? formatCurrency(row.total) : "—"}
+                        </span>
+                      </TooltipTrigger>
+                      {row.total_mismatch && (
+                        <TooltipContent>{t("extract.totalMismatchTip")}</TooltipContent>
+                      )}
+                    </Tooltip>
+                  </TableCell>
+                  <TableCell>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100" onClick={() => removeRow(idx)}>
+                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
             {rows.length === 0 && (
               <TableRow>
                 <TableCell colSpan={17} className="text-center text-muted-foreground py-8">
@@ -210,28 +252,50 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
   );
 }
 
-function EditableCell({ value, onChange }: { value: string | null; onChange: (v: string) => void }) {
+function ConfidenceCell({ value, confidence, onChange }: { value: string | null; confidence?: FieldConfidence; onChange: (v: string) => void }) {
+  const conf = confidence || "high";
+  const borderClass = fieldConfBorder[conf];
   return (
     <TableCell className="p-1">
-      <Input
-        value={value || ""}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-8 text-xs bg-transparent border-transparent hover:border-border focus:border-primary"
-      />
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Input
+            value={value || ""}
+            onChange={(e) => onChange(e.target.value)}
+            className={cn("h-8 text-xs bg-transparent hover:border-border focus:border-primary", borderClass)}
+          />
+        </TooltipTrigger>
+        {conf !== "high" && (
+          <TooltipContent className="text-xs">
+            {conf === "low" ? "⚠️ Low confidence — please verify" : "⚡ Medium confidence — review recommended"}
+          </TooltipContent>
+        )}
+      </Tooltip>
     </TableCell>
   );
 }
 
-function EditableNumCell({ value, onChange }: { value: number | null; onChange: (v: number | null) => void }) {
+function ConfidenceNumCell({ value, confidence, onChange }: { value: number | null; confidence?: FieldConfidence; onChange: (v: number | null) => void }) {
+  const conf = confidence || "high";
+  const borderClass = fieldConfBorder[conf];
   return (
     <TableCell className="p-1">
-      <Input
-        type="number"
-        step="0.01"
-        value={value ?? ""}
-        onChange={(e) => onChange(e.target.value ? parseFloat(e.target.value) : null)}
-        className="h-8 text-xs bg-transparent border-transparent hover:border-border focus:border-primary tabular-nums w-20"
-      />
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Input
+            type="number"
+            step="0.01"
+            value={value ?? ""}
+            onChange={(e) => onChange(e.target.value ? parseFloat(e.target.value) : null)}
+            className={cn("h-8 text-xs bg-transparent hover:border-border focus:border-primary tabular-nums w-20", borderClass)}
+          />
+        </TooltipTrigger>
+        {conf !== "high" && (
+          <TooltipContent className="text-xs">
+            {conf === "low" ? "⚠️ Low confidence — please verify" : "⚡ Medium confidence — review recommended"}
+          </TooltipContent>
+        )}
+      </Tooltip>
     </TableCell>
   );
 }

@@ -15,34 +15,41 @@ serve(async (req) => {
     const { imageBase64, mimeType, fileName } = await req.json();
     if (!imageBase64) throw new Error("No image data provided");
 
-    const systemPrompt = `You are a data extraction expert for an automotive service management system called QWork Nexus. 
+    const systemPrompt = `You are a data extraction expert for an automotive service management system called QWork Nexus.
 You extract structured data from service order documents (PDFs, photos of paper forms, screenshots).
 
-IMPORTANT RULES:
-- Extract ALL visible data accurately
-- If you see handwritten corrections or overwritten values, use the CORRECTED/latest value
-- If a field is not visible or unclear, return null for that field
-- Prices should be numbers without currency symbols
-- The total should be the sum of all service prices if visible, otherwise null
-- A document may contain MULTIPLE service orders (multiple rows). Extract ALL of them as an array.
-- Each row typically represents one vehicle/car service entry
+CRITICAL RULES FOR ACCURACY:
+1. HANDWRITTEN vs PRINTED: If you see handwritten corrections or overwritten values, ALWAYS use the CORRECTED/handwritten value. Mark the field confidence as "low" and record the correction.
+2. CROSSED-OUT VALUES: If a value is crossed out / struck through, IGNORE it. Use the replacement value written nearby. If no replacement exists, return null.
+3. FIELD CLASSIFICATION — NEVER confuse these:
+   - "client" = the COMPANY or PERSON who OWNS the vehicle / pays for service (e.g. Uber, Bolt, a fleet company)
+   - "technician" = the PERSON who PERFORMS the repair/service work
+   - These are DIFFERENT roles. A person's name next to "Technicien" or "Mécanicien" is a technician, NOT a client.
+4. If a field is not visible, unclear, or you are guessing, return null and set that field's confidence to "low".
+5. Prices must be numbers without currency symbols.
+6. The total should be the sum of all service prices if visible, otherwise null.
+7. A document may contain MULTIPLE service orders (multiple rows). Extract ALL of them.
+8. For each field, provide a confidence level: "high" (clearly readable), "medium" (partially readable/inferred), "low" (guessed/corrected/unclear).
 
-Return a JSON object with this exact structure using the tool provided.`;
+Return a JSON object using the tool provided.`;
 
     const userPrompt = `Extract all service order data from this document image. The file is named "${fileName}".
-    
+
 Look for:
-- Client name (company or person)
+- Client name (the COMPANY/OWNER, NOT the technician)
 - Platform (e.g. Uber, Bolt, Heetch, Free Now, etc.)
-- Technician name
+- Technician name (the PERSON doing the work)
 - Week reference (e.g. "S12", "Week 12", "Semaine 12")
 - Car/vehicle name
 - License plate number
 - Up to 4 services with names and prices
 - Total amount
 
-If there are multiple entries/rows, extract each one separately.
-If you see handwritten corrections (crossed out values with new ones written), use the corrected values.`;
+IMPORTANT:
+- If values are crossed out with new values written, use the NEW values and flag them as corrections.
+- Verify that line item prices sum to the total. If they don't match, flag it in notes.
+- Double-check: client ≠ technician. They are different fields.
+- For each field, assess confidence: high/medium/low.`;
 
     const messages: any[] = [
       { role: "system", content: systemPrompt },
@@ -72,7 +79,7 @@ If you see handwritten corrections (crossed out values with new ones written), u
             type: "function",
             function: {
               name: "extract_service_orders",
-              description: "Extract structured service order data from the document",
+              description: "Extract structured service order data from the document with per-field confidence",
               parameters: {
                 type: "object",
                 properties: {
@@ -81,9 +88,9 @@ If you see handwritten corrections (crossed out values with new ones written), u
                     items: {
                       type: "object",
                       properties: {
-                        client: { type: "string", description: "Client/company name" },
+                        client: { type: "string", description: "Client/company name (the owner, NOT the technician)" },
                         platform: { type: "string", description: "Platform (Uber, Bolt, etc.)" },
-                        technician: { type: "string", description: "Technician name" },
+                        technician: { type: "string", description: "Technician name (the person doing the work)" },
                         week: { type: "string", description: "Week reference" },
                         car_name: { type: "string", description: "Vehicle name/model" },
                         license_plate: { type: "string", description: "License plate number" },
@@ -96,6 +103,27 @@ If you see handwritten corrections (crossed out values with new ones written), u
                         service_4_name: { type: "string" },
                         service_4_price: { type: "number" },
                         total: { type: "number" },
+                        field_confidence: {
+                          type: "object",
+                          description: "Per-field confidence levels",
+                          properties: {
+                            client: { type: "string", enum: ["high", "medium", "low"] },
+                            platform: { type: "string", enum: ["high", "medium", "low"] },
+                            technician: { type: "string", enum: ["high", "medium", "low"] },
+                            week: { type: "string", enum: ["high", "medium", "low"] },
+                            car_name: { type: "string", enum: ["high", "medium", "low"] },
+                            license_plate: { type: "string", enum: ["high", "medium", "low"] },
+                            service_1_name: { type: "string", enum: ["high", "medium", "low"] },
+                            service_1_price: { type: "string", enum: ["high", "medium", "low"] },
+                            service_2_name: { type: "string", enum: ["high", "medium", "low"] },
+                            service_2_price: { type: "string", enum: ["high", "medium", "low"] },
+                            service_3_name: { type: "string", enum: ["high", "medium", "low"] },
+                            service_3_price: { type: "string", enum: ["high", "medium", "low"] },
+                            service_4_name: { type: "string", enum: ["high", "medium", "low"] },
+                            service_4_price: { type: "string", enum: ["high", "medium", "low"] },
+                            total: { type: "string", enum: ["high", "medium", "low"] },
+                          },
+                        },
                         handwritten_corrections: {
                           type: "array",
                           items: {
@@ -108,6 +136,10 @@ If you see handwritten corrections (crossed out values with new ones written), u
                             required: ["field", "corrected_value"],
                           },
                         },
+                        total_mismatch: {
+                          type: "boolean",
+                          description: "True if the sum of service prices does not match the stated total",
+                        },
                       },
                       required: ["client", "car_name"],
                     },
@@ -119,7 +151,7 @@ If you see handwritten corrections (crossed out values with new ones written), u
                   },
                   notes: {
                     type: "string",
-                    description: "Any notes about the extraction (unclear fields, quality issues, etc.)",
+                    description: "Any notes about the extraction (unclear fields, quality issues, crossed-out values, field classification issues, etc.)",
                   },
                 },
                 required: ["orders", "confidence"],
@@ -153,6 +185,26 @@ If you see handwritten corrections (crossed out values with new ones written), u
     if (!toolCall) throw new Error("No structured data returned from AI");
 
     const extracted = JSON.parse(toolCall.function.arguments);
+
+    // Post-processing: validate totals and flag mismatches
+    if (extracted.orders) {
+      for (const order of extracted.orders) {
+        const prices = [
+          order.service_1_price || 0,
+          order.service_2_price || 0,
+          order.service_3_price || 0,
+          order.service_4_price || 0,
+        ];
+        const computed = prices.reduce((a: number, b: number) => a + b, 0);
+        if (order.total != null && Math.abs(computed - order.total) > 0.01) {
+          order.total_mismatch = true;
+          if (!order.field_confidence) order.field_confidence = {};
+          order.field_confidence.total = "low";
+        }
+        // Ensure field_confidence exists
+        if (!order.field_confidence) order.field_confidence = {};
+      }
+    }
 
     return new Response(JSON.stringify(extracted), {
       status: 200,

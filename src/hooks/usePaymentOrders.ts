@@ -9,6 +9,8 @@ import type { Json } from "@/integrations/supabase/types";
 export type PaymentOrder = Tables<"payment_orders">;
 export type PaymentOrderInsert = TablesInsert<"payment_orders">;
 
+export type FieldConfidence = "high" | "medium" | "low";
+
 export interface ExtractedPaymentOrder {
   client: string | null;
   platform: string | null;
@@ -16,8 +18,11 @@ export interface ExtractedPaymentOrder {
   technician: string | null;
   car_name: string | null;
   license_plate: string | null;
-  services: { name: string; price: number }[];
+  services: { name: string; price: number; confidence?: FieldConfidence }[];
   total: number | null;
+  field_confidence?: Partial<Record<string, FieldConfidence>>;
+  handwritten_corrections?: { field: string; original_value?: string; corrected_value: string }[];
+  total_mismatch?: boolean;
 }
 
 export interface PaymentExtractionResult {
