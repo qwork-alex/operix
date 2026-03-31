@@ -257,7 +257,7 @@ export function Accounting() {
               </div>
               <div className="space-y-2">
                 <Label className="text-xs">{t("label.category")}</Label>
-                <Input value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))} placeholder="e.g. Fuel, Parts, Insurance" />
+                <Input value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))} placeholder={t("placeholder.categoryExample")} />
               </div>
               <div className="space-y-2">
                 <Label className="text-xs">{t("label.amount")} (€)</Label>
