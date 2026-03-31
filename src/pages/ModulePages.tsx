@@ -139,8 +139,8 @@ export function ProfitDistribution() {
             <div className="space-y-3">
               {[
                 { label: t("label.technician"), pct: techShare, color: "bg-primary" },
-                { label: "Partner", pct: partnerShare, color: "bg-accent" },
-                { label: "Company", pct: Math.max(0, companyShare), color: "bg-emerald-500" },
+                { label: t("profit.partner"), pct: partnerShare, color: "bg-accent" },
+                { label: t("profit.company"), pct: Math.max(0, companyShare), color: "bg-emerald-500" },
               ].map(item => (
                 <div key={item.label} className="space-y-1">
                   <div className="flex justify-between text-xs">
