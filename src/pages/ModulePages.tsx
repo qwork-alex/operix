@@ -611,7 +611,7 @@ export function Documents() {
                     {d.type === "folder" ? <FolderOpen className="h-4 w-4 text-primary" /> : <FolderOpen className="h-4 w-4 text-muted-foreground" />}
                     {d.name}
                   </TableCell>
-                  <TableCell><Badge variant="outline">{d.type}</Badge></TableCell>
+                  <TableCell><Badge variant="outline">{d.type === "folder" ? t("common.folder") : t("common.file")}</Badge></TableCell>
                   <TableCell>{d.size_bytes ? `${(d.size_bytes / 1024).toFixed(1)} KB` : "—"}</TableCell>
                   <TableCell className="text-muted-foreground">{formatDate(d.created_at)}</TableCell>
                   <TableCell>
