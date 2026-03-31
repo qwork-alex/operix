@@ -459,6 +459,45 @@ export type Database = {
         }
         Relationships: []
       }
+      profit_distributions: {
+        Row: {
+          company_share: number
+          created_at: string
+          created_by: string | null
+          id: string
+          partner_share: number
+          scope: string
+          target_order_id: string | null
+          target_user_id: string | null
+          tech_share: number
+          updated_at: string
+        }
+        Insert: {
+          company_share?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          partner_share?: number
+          scope?: string
+          target_order_id?: string | null
+          target_user_id?: string | null
+          tech_share?: number
+          updated_at?: string
+        }
+        Update: {
+          company_share?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          partner_share?: number
+          scope?: string
+          target_order_id?: string | null
+          target_user_id?: string | null
+          tech_share?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       service_orders: {
         Row: {
           car_name: string | null
