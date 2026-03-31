@@ -121,7 +121,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
                 <Label className="text-xs">{t("label.services")}</Label>
                 {editForm.services.map((s: any, i: number) => (
                   <div key={i} className="grid grid-cols-3 gap-2">
-                    <div className="col-span-2"><Input value={s.name} placeholder="Service name" onChange={e => {
+                    <div className="col-span-2"><Input value={s.name} placeholder={t("extract.serviceName")} onChange={e => {
                       const updated = [...editForm.services];
                       updated[i] = { ...updated[i], name: e.target.value };
                       setEditForm((p: any) => ({ ...p, services: updated }));
