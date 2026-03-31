@@ -1,18 +1,21 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
-
-const data = [
-  { name: "Completed", value: 847, color: "hsl(152, 60%, 45%)" },
-  { name: "In Progress", value: 234, color: "hsl(43, 85%, 55%)" },
-  { name: "Pending", value: 156, color: "hsl(210, 80%, 55%)" },
-  { name: "Cancelled", value: 42, color: "hsl(0, 72%, 55%)" },
-];
+import { useLanguage } from "@/hooks/useLanguage";
 
 export function ServicePieChart() {
+  const { t } = useLanguage();
+
+  const data = [
+    { name: t("chart.completed"), value: 847, color: "hsl(152, 60%, 45%)" },
+    { name: t("chart.inProgress"), value: 234, color: "hsl(43, 85%, 55%)" },
+    { name: t("chart.pending"), value: 156, color: "hsl(210, 80%, 55%)" },
+    { name: t("chart.cancelled"), value: 42, color: "hsl(0, 72%, 55%)" },
+  ];
+
   return (
     <div className="glass-panel rounded-xl p-5 animate-fade-in">
       <div className="mb-4">
-        <h3 className="text-sm font-semibold text-foreground">Service Status</h3>
-        <p className="text-xs text-muted-foreground">Current distribution</p>
+        <h3 className="text-sm font-semibold text-foreground">{t("chart.serviceStatus")}</h3>
+        <p className="text-xs text-muted-foreground">{t("chart.currentDistribution")}</p>
       </div>
       <div className="flex items-center gap-4">
         <ResponsiveContainer width={160} height={160}>

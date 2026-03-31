@@ -177,7 +177,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
                   <TableCell className="text-right font-medium tabular-nums">{formatCurrency(o.total || 0)}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className={statusStyle[o.status] || statusStyle.pending}>
-                      {o.status}
+                      {t(`status.${o.status}`, o.status)}
                     </Badge>
                   </TableCell>
                   <TableCell>

@@ -150,7 +150,7 @@ export default function FinancialPage() {
                             : "bg-warning/10 text-warning border-warning/30"
                           }>
                             {d.issue_type === "missing" ? <XCircle className="h-3 w-3 mr-1" /> : <AlertTriangle className="h-3 w-3 mr-1" />}
-                            {d.issue_type}
+                            {d.issue_type === "missing" ? t("fin.missing") : t("fin.mismatch")}
                           </Badge>
                         </TableCell>
                         <TableCell>

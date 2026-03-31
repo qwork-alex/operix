@@ -139,8 +139,8 @@ export function ProfitDistribution() {
             <div className="space-y-3">
               {[
                 { label: t("label.technician"), pct: techShare, color: "bg-primary" },
-                { label: "Partner", pct: partnerShare, color: "bg-accent" },
-                { label: "Company", pct: Math.max(0, companyShare), color: "bg-emerald-500" },
+                { label: t("profit.partner"), pct: partnerShare, color: "bg-accent" },
+                { label: t("profit.company"), pct: Math.max(0, companyShare), color: "bg-emerald-500" },
               ].map(item => (
                 <div key={item.label} className="space-y-1">
                   <div className="flex justify-between text-xs">
@@ -257,7 +257,7 @@ export function Accounting() {
               </div>
               <div className="space-y-2">
                 <Label className="text-xs">{t("label.category")}</Label>
-                <Input value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))} placeholder="e.g. Fuel, Parts, Insurance" />
+                <Input value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))} placeholder={t("placeholder.categoryExample")} />
               </div>
               <div className="space-y-2">
                 <Label className="text-xs">{t("label.amount")} (€)</Label>
@@ -304,7 +304,7 @@ export function Accounting() {
                   </TableCell>
                   <TableCell>{r.source}</TableCell>
                   <TableCell className="text-right font-medium tabular-nums">{formatCurrency(r.amount)}</TableCell>
-                  <TableCell><Badge variant="outline">{r.status}</Badge></TableCell>
+                  <TableCell><Badge variant="outline">{t(`status.${r.status}`, r.status)}</Badge></TableCell>
                   <TableCell className="max-w-[200px] truncate text-muted-foreground">{r.notes || "—"}</TableCell>
                   <TableCell className="text-muted-foreground">{formatDate(r.created_at)}</TableCell>
                   <TableCell>
@@ -408,7 +408,7 @@ export function Fleet() {
           <DialogContent className="bg-card border-border">
             <DialogHeader><DialogTitle>{editId ? t("action.edit") : t("fleet.newVehicle")}</DialogTitle></DialogHeader>
             <div className="space-y-4 pt-2">
-              <div className="space-y-2"><Label className="text-xs">{t("label.name")}</Label><Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Peugeot 308" /></div>
+              <div className="space-y-2"><Label className="text-xs">{t("label.name")}</Label><Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder={t("placeholder.vehicleName")} /></div>
               <div className="space-y-2"><Label className="text-xs">{t("label.plate")}</Label><Input value={form.license_plate} onChange={e => setForm(p => ({ ...p, license_plate: e.target.value }))} placeholder="AB-123-CD" /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2"><Label className="text-xs">{t("fleet.brand")}</Label><Input value={form.brand} onChange={e => setForm(p => ({ ...p, brand: e.target.value }))} /></div>
@@ -476,7 +476,7 @@ export function Documents() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const [parentId, setParentId] = useState<string | null>(null);
-  const [path, setPath] = useState<{ id: string | null; name: string }[]>([{ id: null, name: "Root" }]);
+  const [path, setPath] = useState<{ id: string | null; name: string }[]>([{ id: null, name: t("common.root") }]);
   const [folderName, setFolderName] = useState("");
   const [showFolderDialog, setShowFolderDialog] = useState(false);
 
@@ -539,7 +539,7 @@ export function Documents() {
   };
 
   const navigateTo = (id: string | null, name: string) => {
-    if (id === null) { setParentId(null); setPath([{ id: null, name: "Root" }]); return; }
+    if (id === null) { setParentId(null); setPath([{ id: null, name: t("common.root") }]); return; }
     setParentId(id);
     const idx = path.findIndex(p => p.id === id);
     if (idx >= 0) setPath(path.slice(0, idx + 1));
@@ -611,7 +611,7 @@ export function Documents() {
                     {d.type === "folder" ? <FolderOpen className="h-4 w-4 text-primary" /> : <FolderOpen className="h-4 w-4 text-muted-foreground" />}
                     {d.name}
                   </TableCell>
-                  <TableCell><Badge variant="outline">{d.type}</Badge></TableCell>
+                  <TableCell><Badge variant="outline">{d.type === "folder" ? t("common.folder") : t("common.file")}</Badge></TableCell>
                   <TableCell>{d.size_bytes ? `${(d.size_bytes / 1024).toFixed(1)} KB` : "—"}</TableCell>
                   <TableCell className="text-muted-foreground">{formatDate(d.created_at)}</TableCell>
                   <TableCell>
@@ -710,10 +710,10 @@ export function UsersPage() {
                         <SelectValue placeholder={t("users.noRole")} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="admin">Admin</SelectItem>
-                        <SelectItem value="partner">Partner</SelectItem>
-                        <SelectItem value="technician">Technician</SelectItem>
-                        <SelectItem value="client">Client</SelectItem>
+                        <SelectItem value="admin">{t("role.admin")}</SelectItem>
+                        <SelectItem value="partner">{t("role.partner")}</SelectItem>
+                        <SelectItem value="technician">{t("role.technician")}</SelectItem>
+                        <SelectItem value="client">{t("role.client")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </TableCell>

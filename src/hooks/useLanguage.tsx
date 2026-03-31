@@ -193,6 +193,79 @@ const translations: Record<string, Record<LangCode, string>> = {
   "toast.deleted": { fr: "Supprimé avec succès", en: "Deleted successfully", pt: "Excluído com sucesso", de: "Erfolgreich gelöscht", es: "Eliminado con éxito", it: "Eliminato con successo", ar: "تم الحذف بنجاح", zh: "删除成功", ja: "削除しました", hi: "सफलतापूर्वक हटाया गया", pl: "Usunięto pomyślnie", ru: "Удалено успешно" },
   "toast.updated": { fr: "Mis à jour avec succès", en: "Updated successfully", pt: "Atualizado com sucesso", de: "Erfolgreich aktualisiert", es: "Actualizado con éxito", it: "Aggiornato con successo", ar: "تم التحديث بنجاح", zh: "更新成功", ja: "更新しました", hi: "सफलतापूर्वक अपडेट किया गया", pl: "Zaktualizowano pomyślnie", ru: "Обновлено успешно" },
   "toast.error": { fr: "Une erreur est survenue", en: "An error occurred", pt: "Ocorreu um erro", de: "Ein Fehler ist aufgetreten", es: "Ocurrió un error", it: "Si è verificato un errore", ar: "حدث خطأ", zh: "发生错误", ja: "エラーが発生しました", hi: "एक त्रुटि हुई", pl: "Wystąpił błąd", ru: "Произошла ошибка" },
+
+  // Auth
+  "auth.signInTitle": { fr: "Connectez-vous à votre compte", en: "Sign in to your account", pt: "Entre na sua conta", de: "Melden Sie sich an", es: "Inicie sesión en su cuenta", it: "Accedi al tuo account", ar: "سجّل الدخول إلى حسابك", zh: "登录您的账户", ja: "アカウントにログイン", hi: "अपने खाते में साइन इन करें", pl: "Zaloguj się na konto", ru: "Войдите в аккаунт" },
+  "auth.signUpTitle": { fr: "Créez votre compte", en: "Create your account", pt: "Crie sua conta", de: "Erstellen Sie Ihr Konto", es: "Cree su cuenta", it: "Crea il tuo account", ar: "أنشئ حسابك", zh: "创建您的账户", ja: "アカウントを作成", hi: "अपना खाता बनाएँ", pl: "Utwórz konto", ru: "Создайте аккаунт" },
+  "auth.fullName": { fr: "Nom complet", en: "Full Name", pt: "Nome completo", de: "Vollständiger Name", es: "Nombre completo", it: "Nome completo", ar: "الاسم الكامل", zh: "全名", ja: "フルネーム", hi: "पूरा नाम", pl: "Pełne imię", ru: "Полное имя" },
+  "auth.email": { fr: "E-mail", en: "Email", pt: "E-mail", de: "E-Mail", es: "Correo", it: "Email", ar: "البريد الإلكتروني", zh: "电子邮件", ja: "メール", hi: "ईमेल", pl: "E-mail", ru: "Эл. почта" },
+  "auth.password": { fr: "Mot de passe", en: "Password", pt: "Senha", de: "Passwort", es: "Contraseña", it: "Password", ar: "كلمة المرور", zh: "密码", ja: "パスワード", hi: "पासवर्ड", pl: "Hasło", ru: "Пароль" },
+  "auth.signIn": { fr: "Se connecter", en: "Sign In", pt: "Entrar", de: "Anmelden", es: "Iniciar sesión", it: "Accedi", ar: "تسجيل الدخول", zh: "登录", ja: "ログイン", hi: "साइन इन", pl: "Zaloguj się", ru: "Войти" },
+  "auth.createAccount": { fr: "Créer un compte", en: "Create Account", pt: "Criar conta", de: "Konto erstellen", es: "Crear cuenta", it: "Crea account", ar: "إنشاء حساب", zh: "创建账户", ja: "アカウント作成", hi: "खाता बनाएँ", pl: "Utwórz konto", ru: "Создать аккаунт" },
+  "auth.noAccount": { fr: "Vous n'avez pas de compte ?", en: "Don't have an account?", pt: "Não tem uma conta?", de: "Kein Konto?", es: "¿No tiene cuenta?", it: "Non hai un account?", ar: "ليس لديك حساب؟", zh: "没有账户？", ja: "アカウントをお持ちでない方", hi: "खाता नहीं है?", pl: "Nie masz konta?", ru: "Нет аккаунта?" },
+  "auth.hasAccount": { fr: "Vous avez déjà un compte ?", en: "Already have an account?", pt: "Já tem uma conta?", de: "Bereits ein Konto?", es: "¿Ya tiene cuenta?", it: "Hai già un account?", ar: "لديك حساب بالفعل؟", zh: "已有账户？", ja: "アカウントをお持ちの方", hi: "पहले से खाता है?", pl: "Masz już konto?", ru: "Уже есть аккаунт?" },
+  "auth.signUpLink": { fr: "S'inscrire", en: "Sign up", pt: "Cadastrar-se", de: "Registrieren", es: "Registrarse", it: "Registrati", ar: "سجّل", zh: "注册", ja: "登録", hi: "साइन अप", pl: "Zarejestruj się", ru: "Зарегистрироваться" },
+  "auth.signInLink": { fr: "Se connecter", en: "Sign in", pt: "Entrar", de: "Anmelden", es: "Iniciar sesión", it: "Accedi", ar: "تسجيل الدخول", zh: "登录", ja: "ログイン", hi: "साइन इन", pl: "Zaloguj się", ru: "Войти" },
+  "auth.enterName": { fr: "Veuillez entrer votre nom complet", en: "Please enter your full name", pt: "Por favor, insira seu nome completo", de: "Bitte geben Sie Ihren vollständigen Namen ein", es: "Por favor, ingrese su nombre completo", it: "Inserisci il tuo nome completo", ar: "يرجى إدخال اسمك الكامل", zh: "请输入您的全名", ja: "フルネームを入力してください", hi: "कृपया अपना पूरा नाम दर्ज करें", pl: "Proszę wpisać pełne imię", ru: "Пожалуйста, введите полное имя" },
+  "auth.checkEmail": { fr: "Vérifiez votre e-mail pour le lien de vérification", en: "Check your email for verification link", pt: "Verifique seu e-mail para o link de verificação", de: "Überprüfen Sie Ihre E-Mail für den Bestätigungslink", es: "Revise su correo para el enlace de verificación", it: "Controlla la tua email per il link di verifica", ar: "تحقق من بريدك الإلكتروني لرابط التحقق", zh: "请检查您的电子邮件以获取验证链接", ja: "確認メールをご確認ください", hi: "सत्यापन लिंक के लिए अपना ईमेल जांचें", pl: "Sprawdź e-mail z linkiem weryfikacyjnym", ru: "Проверьте почту для подтверждения" },
+
+  // Dashboard charts
+  "chart.revenueOverview": { fr: "Aperçu des revenus", en: "Revenue Overview", pt: "Visão geral da receita", de: "Umsatzübersicht", es: "Resumen de ingresos", it: "Panoramica ricavi", ar: "نظرة عامة على الإيرادات", zh: "收入概览", ja: "収益概要", hi: "राजस्व अवलोकन", pl: "Przegląd przychodów", ru: "Обзор выручки" },
+  "chart.monthlyRevExp": { fr: "Revenus vs dépenses mensuels", en: "Monthly revenue vs expenses", pt: "Receitas vs despesas mensais", de: "Monatlicher Umsatz vs Ausgaben", es: "Ingresos vs gastos mensuales", it: "Ricavi vs spese mensili", ar: "الإيرادات مقابل المصاريف الشهرية", zh: "月度收入与支出", ja: "月間収益vs支出", hi: "मासिक राजस्व बनाम व्यय", pl: "Przychody vs wydatki miesięcznie", ru: "Ежемесячная выручка vs расходы" },
+  "chart.revenue": { fr: "Revenus", en: "Revenue", pt: "Receita", de: "Umsatz", es: "Ingresos", it: "Ricavi", ar: "الإيرادات", zh: "收入", ja: "収益", hi: "राजस्व", pl: "Przychody", ru: "Выручка" },
+  "chart.expenses": { fr: "Dépenses", en: "Expenses", pt: "Despesas", de: "Ausgaben", es: "Gastos", it: "Spese", ar: "المصاريف", zh: "支出", ja: "経費", hi: "व्यय", pl: "Wydatki", ru: "Расходы" },
+  "chart.serviceStatus": { fr: "Statut des services", en: "Service Status", pt: "Status dos serviços", de: "Servicestatus", es: "Estado del servicio", it: "Stato servizi", ar: "حالة الخدمات", zh: "服务状态", ja: "サービスステータス", hi: "सेवा स्थिति", pl: "Status usług", ru: "Статус услуг" },
+  "chart.currentDistribution": { fr: "Répartition actuelle", en: "Current distribution", pt: "Distribuição atual", de: "Aktuelle Verteilung", es: "Distribución actual", it: "Distribuzione attuale", ar: "التوزيع الحالي", zh: "当前分布", ja: "現在の分布", hi: "वर्तमान वितरण", pl: "Bieżący rozkład", ru: "Текущее распределение" },
+  "chart.completed": { fr: "Terminé", en: "Completed", pt: "Concluído", de: "Abgeschlossen", es: "Completado", it: "Completato", ar: "مكتمل", zh: "已完成", ja: "完了", hi: "पूर्ण", pl: "Ukończone", ru: "Завершено" },
+  "chart.inProgress": { fr: "En cours", en: "In Progress", pt: "Em andamento", de: "In Bearbeitung", es: "En progreso", it: "In corso", ar: "قيد التقدم", zh: "进行中", ja: "進行中", hi: "प्रगति में", pl: "W toku", ru: "В процессе" },
+  "chart.pending": { fr: "En attente", en: "Pending", pt: "Pendente", de: "Ausstehend", es: "Pendiente", it: "In sospeso", ar: "معلّق", zh: "待处理", ja: "保留中", hi: "लंबित", pl: "Oczekujące", ru: "Ожидание" },
+  "chart.cancelled": { fr: "Annulé", en: "Cancelled", pt: "Cancelado", de: "Storniert", es: "Cancelado", it: "Annullato", ar: "ملغى", zh: "已取消", ja: "キャンセル", hi: "रद्द", pl: "Anulowane", ru: "Отменено" },
+  "chart.activeRegions": { fr: "Régions actives", en: "Active Regions", pt: "Regiões ativas", de: "Aktive Regionen", es: "Regiones activas", it: "Regioni attive", ar: "المناطق النشطة", zh: "活跃区域", ja: "アクティブ地域", hi: "सक्रिय क्षेत्र", pl: "Aktywne regiony", ru: "Активные регионы" },
+  "chart.techDistribution": { fr: "Répartition des techniciens", en: "Live technician distribution", pt: "Distribuição de técnicos", de: "Techniker-Verteilung", es: "Distribución de técnicos", it: "Distribuzione tecnici", ar: "توزيع الفنيين", zh: "技术员分布", ja: "技術者分布", hi: "तकनीशियन वितरण", pl: "Rozkład techników", ru: "Распределение техников" },
+  "chart.recentActivity": { fr: "Activité récente", en: "Recent Activity", pt: "Atividade recente", de: "Letzte Aktivität", es: "Actividad reciente", it: "Attività recente", ar: "النشاط الأخير", zh: "近期活动", ja: "最近のアクティビティ", hi: "हालिया गतिविधि", pl: "Ostatnia aktywność", ru: "Последняя активность" },
+  "chart.latestOps": { fr: "Dernières opérations", en: "Latest operations", pt: "Últimas operações", de: "Neueste Vorgänge", es: "Últimas operaciones", it: "Ultime operazioni", ar: "أحدث العمليات", zh: "最新操作", ja: "最新の操作", hi: "नवीनतम संचालन", pl: "Ostatnie operacje", ru: "Последние операции" },
+  "chart.vsLastMonth": { fr: "vs mois dernier", en: "vs last month", pt: "vs mês passado", de: "vs letzten Monat", es: "vs mes pasado", it: "vs mese scorso", ar: "مقابل الشهر الماضي", zh: "与上月相比", ja: "先月比", hi: "पिछले महीने बनाम", pl: "vs ostatni miesiąc", ru: "по сравнению с прошлым месяцем" },
+
+  // Activity items (dashboard)
+  "activity.newSO": { fr: "Nouvel ordre de service", en: "New service order", pt: "Nova ordem de serviço", de: "Neuer Serviceauftrag", es: "Nueva orden de servicio", it: "Nuovo ordine di servizio", ar: "أمر خدمة جديد", zh: "新服务订单", ja: "新規サービスオーダー", hi: "नया सेवा आदेश", pl: "Nowe zlecenie serwisowe", ru: "Новый заказ-наряд" },
+  "activity.paymentReceived": { fr: "Paiement reçu", en: "Payment received", pt: "Pagamento recebido", de: "Zahlung erhalten", es: "Pago recibido", it: "Pagamento ricevuto", ar: "تم استلام الدفع", zh: "收到付款", ja: "支払い受領", hi: "भुगतान प्राप्त", pl: "Płatność otrzymana", ru: "Платёж получен" },
+  "activity.serviceCompleted": { fr: "Service terminé", en: "Service completed", pt: "Serviço concluído", de: "Service abgeschlossen", es: "Servicio completado", it: "Servizio completato", ar: "اكتملت الخدمة", zh: "服务完成", ja: "サービス完了", hi: "सेवा पूर्ण", pl: "Usługa ukończona", ru: "Услуга завершена" },
+  "activity.priceMismatch": { fr: "Écart de prix détecté", en: "Price mismatch detected", pt: "Divergência de preço detectada", de: "Preisabweichung erkannt", es: "Discrepancia de precio detectada", it: "Discrepanza di prezzo rilevata", ar: "تم اكتشاف تباين في الأسعار", zh: "检测到价格不匹配", ja: "価格不一致を検出", hi: "मूल्य बेमेल पाया गया", pl: "Wykryto rozbieżność cenową", ru: "Обнаружено несоответствие цен" },
+  "activity.minAgo": { fr: "min", en: "min ago", pt: "min atrás", de: "Min.", es: "min", it: "min fa", ar: "دقيقة مضت", zh: "分钟前", ja: "分前", hi: "मिनट पहले", pl: "min temu", ru: "мин. назад" },
+  "activity.hAgo": { fr: "h", en: "h ago", pt: "h atrás", de: "Std.", es: "h", it: "h fa", ar: "ساعة مضت", zh: "小时前", ja: "時間前", hi: "घंटे पहले", pl: "godz. temu", ru: "ч. назад" },
+  "activity.vehicle": { fr: "Véhicule", en: "Vehicle", pt: "Veículo", de: "Fahrzeug", es: "Vehículo", it: "Veicolo", ar: "مركبة", zh: "车辆", ja: "車両", hi: "वाहन", pl: "Pojazd", ru: "Транспорт" },
+  "activity.order": { fr: "Ordre", en: "Order", pt: "Ordem", de: "Auftrag", es: "Orden", it: "Ordine", ar: "أمر", zh: "订单", ja: "注文", hi: "आदेश", pl: "Zlecenie", ru: "Заказ" },
+  "activity.difference": { fr: "différence", en: "difference", pt: "diferença", de: "Differenz", es: "diferencia", it: "differenza", ar: "فرق", zh: "差额", ja: "差額", hi: "अंतर", pl: "różnica", ru: "разница" },
+
+  // Profit distribution labels
+  "profit.partner": { fr: "Partenaire", en: "Partner", pt: "Parceiro", de: "Partner", es: "Socio", it: "Partner", ar: "شريك", zh: "合作伙伴", ja: "パートナー", hi: "साझेदार", pl: "Partner", ru: "Партнёр" },
+  "profit.company": { fr: "Entreprise", en: "Company", pt: "Empresa", de: "Unternehmen", es: "Empresa", it: "Azienda", ar: "شركة", zh: "公司", ja: "会社", hi: "कंपनी", pl: "Firma", ru: "Компания" },
+
+  // Statuses
+  "status.draft": { fr: "Brouillon", en: "Draft", pt: "Rascunho", de: "Entwurf", es: "Borrador", it: "Bozza", ar: "مسودة", zh: "草稿", ja: "下書き", hi: "ड्राफ्ट", pl: "Szkic", ru: "Черновик" },
+  "status.confirmed": { fr: "Confirmé", en: "Confirmed", pt: "Confirmado", de: "Bestätigt", es: "Confirmado", it: "Confermato", ar: "مؤكد", zh: "已确认", ja: "確認済み", hi: "पुष्ट", pl: "Potwierdzone", ru: "Подтверждено" },
+  "status.invoiced": { fr: "Facturé", en: "Invoiced", pt: "Faturado", de: "Fakturiert", es: "Facturado", it: "Fatturato", ar: "تمت الفوترة", zh: "已开票", ja: "請求済み", hi: "चालान किया", pl: "Zafakturowane", ru: "Выставлен счёт" },
+  "status.pending": { fr: "En attente", en: "Pending", pt: "Pendente", de: "Ausstehend", es: "Pendiente", it: "In sospeso", ar: "معلّق", zh: "待处理", ja: "保留中", hi: "लंबित", pl: "Oczekujące", ru: "Ожидание" },
+  "status.paid": { fr: "Payé", en: "Paid", pt: "Pago", de: "Bezahlt", es: "Pagado", it: "Pagato", ar: "مدفوع", zh: "已支付", ja: "支払済み", hi: "भुगतान किया", pl: "Opłacone", ru: "Оплачено" },
+
+  // Roles
+  "role.admin": { fr: "Administrateur", en: "Admin", pt: "Administrador", de: "Administrator", es: "Administrador", it: "Amministratore", ar: "مسؤول", zh: "管理员", ja: "管理者", hi: "व्यवस्थापक", pl: "Administrator", ru: "Администратор" },
+  "role.partner": { fr: "Partenaire", en: "Partner", pt: "Parceiro", de: "Partner", es: "Socio", it: "Partner", ar: "شريك", zh: "合作伙伴", ja: "パートナー", hi: "साझेदार", pl: "Partner", ru: "Партнёр" },
+  "role.technician": { fr: "Technicien", en: "Technician", pt: "Técnico", de: "Techniker", es: "Técnico", it: "Tecnico", ar: "فني", zh: "技术员", ja: "技術者", hi: "तकनीशियन", pl: "Technik", ru: "Техник" },
+  "role.client": { fr: "Client", en: "Client", pt: "Cliente", de: "Kunde", es: "Cliente", it: "Cliente", ar: "عميل", zh: "客户", ja: "クライアント", hi: "ग्राहक", pl: "Klient", ru: "Клиент" },
+
+  // Service edit
+  "label.service": { fr: "Service", en: "Service", pt: "Serviço", de: "Dienst", es: "Servicio", it: "Servizio", ar: "خدمة", zh: "服务", ja: "サービス", hi: "सेवा", pl: "Usługa", ru: "Услуга" },
+
+  // Misc
+  "common.user": { fr: "Utilisateur", en: "User", pt: "Usuário", de: "Benutzer", es: "Usuario", it: "Utente", ar: "مستخدم", zh: "用户", ja: "ユーザー", hi: "उपयोगकर्ता", pl: "Użytkownik", ru: "Пользователь" },
+  "common.root": { fr: "Racine", en: "Root", pt: "Raiz", de: "Stammverzeichnis", es: "Raíz", it: "Radice", ar: "الجذر", zh: "根目录", ja: "ルート", hi: "रूट", pl: "Główny", ru: "Корень" },
+  "common.file": { fr: "Fichier", en: "File", pt: "Arquivo", de: "Datei", es: "Archivo", it: "File", ar: "ملف", zh: "文件", ja: "ファイル", hi: "फ़ाइल", pl: "Plik", ru: "Файл" },
+  "common.folder": { fr: "Dossier", en: "Folder", pt: "Pasta", de: "Ordner", es: "Carpeta", it: "Cartella", ar: "مجلد", zh: "文件夹", ja: "フォルダ", hi: "फ़ोल्डर", pl: "Folder", ru: "Папка" },
+
+  // Placeholders
+  "placeholder.categoryExample": { fr: "ex. Carburant, Pièces, Assurance", en: "e.g. Fuel, Parts, Insurance", pt: "ex. Combustível, Peças, Seguro", de: "z.B. Kraftstoff, Teile, Versicherung", es: "ej. Combustible, Piezas, Seguro", it: "es. Carburante, Ricambi, Assicurazione", ar: "مثال: وقود، قطع غيار، تأمين", zh: "如：燃油、配件、保险", ja: "例：燃料、部品、保険", hi: "उदा. ईंधन, पार्ट्स, बीमा", pl: "np. Paliwo, Części, Ubezpieczenie", ru: "напр. Топливо, Запчасти, Страховка" },
+  "placeholder.vehicleName": { fr: "ex. Peugeot 308", en: "e.g. Peugeot 308", pt: "ex. Peugeot 308", de: "z.B. Peugeot 308", es: "ej. Peugeot 308", it: "es. Peugeot 308", ar: "مثال: Peugeot 308", zh: "如：Peugeot 308", ja: "例：Peugeot 308", hi: "उदा. Peugeot 308", pl: "np. Peugeot 308", ru: "напр. Peugeot 308" },
 };
 
 interface LanguageContextType {

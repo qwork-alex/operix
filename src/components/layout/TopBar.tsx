@@ -46,7 +46,7 @@ export function TopBar() {
       <div className="flex items-center gap-1">
         {role && (
           <span className="hidden sm:inline text-[10px] uppercase tracking-widest text-muted-foreground/60 mr-2 px-2 py-0.5 rounded bg-muted/30">
-            {role}
+            {t(`role.${role}`, role)}
           </span>
         )}
 
@@ -82,7 +82,7 @@ export function TopBar() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="bg-card border-border w-48">
             <div className="px-3 py-2">
-              <p className="text-sm font-medium text-foreground truncate">{profile?.full_name || "User"}</p>
+              <p className="text-sm font-medium text-foreground truncate">{profile?.full_name || t("common.user")}</p>
               <p className="text-xs text-muted-foreground truncate">{profile?.email}</p>
             </div>
             <DropdownMenuSeparator />

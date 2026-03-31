@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useLanguage } from "@/hooks/useLanguage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +10,7 @@ import { Loader2 } from "lucide-react";
 
 export default function Auth() {
   const { session, loading } = useAuth();
+  const { t } = useLanguage();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -35,13 +37,13 @@ export default function Auth() {
       if (error) toast.error(error.message);
     } else {
       if (!fullName.trim()) {
-        toast.error("Please enter your full name");
+        toast.error(t("auth.enterName"));
         setSubmitting(false);
         return;
       }
       const { error } = await signUp(email, password, fullName);
       if (error) toast.error(error.message);
-      else toast.success("Check your email for verification link");
+      else toast.success(t("auth.checkEmail"));
     }
 
     setSubmitting(false);
@@ -57,7 +59,7 @@ export default function Auth() {
           </div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">QWork Nexus</h1>
           <p className="text-sm text-muted-foreground">
-            {isLogin ? "Sign in to your account" : "Create your account"}
+            {isLogin ? t("auth.signInTitle") : t("auth.signUpTitle")}
           </p>
         </div>
 
@@ -65,7 +67,7 @@ export default function Auth() {
         <form onSubmit={handleSubmit} className="glass-panel rounded-xl p-6 space-y-4">
           {!isLogin && (
             <div className="space-y-2">
-              <Label htmlFor="name" className="text-foreground">Full Name</Label>
+              <Label htmlFor="name" className="text-foreground">{t("auth.fullName")}</Label>
               <Input
                 id="name"
                 value={fullName}
@@ -77,7 +79,7 @@ export default function Auth() {
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="email" className="text-foreground">Email</Label>
+            <Label htmlFor="email" className="text-foreground">{t("auth.email")}</Label>
             <Input
               id="email"
               type="email"
@@ -90,7 +92,7 @@ export default function Auth() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password" className="text-foreground">Password</Label>
+            <Label htmlFor="password" className="text-foreground">{t("auth.password")}</Label>
             <Input
               id="password"
               type="password"
@@ -105,18 +107,18 @@ export default function Auth() {
 
           <Button type="submit" className="w-full" disabled={submitting}>
             {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isLogin ? "Sign In" : "Create Account"}
+            {isLogin ? t("auth.signIn") : t("auth.createAccount")}
           </Button>
         </form>
 
         <p className="text-center text-sm text-muted-foreground">
-          {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
+          {isLogin ? t("auth.noAccount") : t("auth.hasAccount")}{" "}
           <button
             type="button"
             onClick={() => setIsLogin(!isLogin)}
             className="text-primary hover:underline font-medium"
           >
-            {isLogin ? "Sign up" : "Sign in"}
+            {isLogin ? t("auth.signUpLink") : t("auth.signInLink")}
           </button>
         </p>
       </div>
