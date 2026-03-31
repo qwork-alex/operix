@@ -3,10 +3,11 @@ import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from "@
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Save, Trash2, AlertTriangle, Pencil } from "lucide-react";
+import { Save, Trash2, AlertTriangle, Pencil, CheckCircle2, XCircle } from "lucide-react";
 import type { ExtractedOrder } from "@/hooks/useServiceOrders";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/hooks/useLanguage";
+import { ExtractionStages, type Stage } from "./ExtractionStages";
 
 interface ExtractedDataTableProps {
   orders: ExtractedOrder[];
@@ -25,9 +26,14 @@ const confidenceColors = {
 
 export function ExtractedDataTable({ orders: initial, confidence, notes, onSave, onDiscard, isSaving }: ExtractedDataTableProps) {
   const [rows, setRows] = useState<ExtractedOrder[]>(initial);
+  const [stage, setStage] = useState<Stage>("review");
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [validated, setValidated] = useState(false);
   const { t, formatCurrency } = useLanguage();
 
   const update = (idx: number, field: keyof ExtractedOrder, value: string | number | null) => {
+    setValidated(false);
+    setValidationErrors([]);
     setRows((prev) =>
       prev.map((r, i) => {
         if (i !== idx) return r;
@@ -40,16 +46,51 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
         return updated;
       })
     );
+    if (stage !== "review") setStage("review");
   };
 
   const removeRow = (idx: number) => {
     setRows((prev) => prev.filter((_, i) => i !== idx));
+    setValidated(false);
+    setValidationErrors([]);
+    if (stage !== "review") setStage("review");
+  };
+
+  const runValidation = () => {
+    const errors: string[] = [];
+    rows.forEach((row, i) => {
+      const n = String(i + 1);
+      if (!row.client?.trim()) errors.push(t("validate.missingClient").replace("{n}", n));
+      const hasService = row.service_1_name?.trim() || row.service_2_name?.trim() || row.service_3_name?.trim() || row.service_4_name?.trim();
+      if (!hasService) errors.push(t("validate.missingService").replace("{n}", n));
+      const computed = (Number(row.service_1_price) || 0) + (Number(row.service_2_price) || 0) + (Number(row.service_3_price) || 0) + (Number(row.service_4_price) || 0);
+      if (row.total != null && Math.abs(computed - row.total) > 0.01) {
+        errors.push(t("validate.totalMismatch").replace("{n}", n).replace("{expected}", String(computed)).replace("{actual}", String(row.total)));
+      }
+      if ((row.total ?? 0) === 0 && hasService) errors.push(t("validate.zeroTotal").replace("{n}", n));
+    });
+    setValidationErrors(errors);
+    if (errors.length === 0) {
+      setValidated(true);
+      setStage("save");
+    } else {
+      setValidated(false);
+      setStage("validate");
+    }
+  };
+
+  const handleSave = () => {
+    setStage("save");
+    onSave(rows);
   };
 
   const hasCorrections = rows.some((r) => r.handwritten_corrections?.length);
 
   return (
     <div className="space-y-3">
+      {/* Stage indicator */}
+      <ExtractionStages current={stage} />
+
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
           <h3 className="text-sm font-semibold text-foreground">{t("extract.title")}</h3>
@@ -67,11 +108,35 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
           <Button variant="ghost" size="sm" onClick={onDiscard} disabled={isSaving}>
             <Trash2 className="h-4 w-4 mr-1" /> {t("action.discard")}
           </Button>
-          <Button size="sm" onClick={() => onSave(rows)} disabled={isSaving || rows.length === 0}>
+          {!validated && (
+            <Button size="sm" variant="outline" onClick={runValidation} disabled={rows.length === 0}>
+              <CheckCircle2 className="h-4 w-4 mr-1" /> {t("validate.run")}
+            </Button>
+          )}
+          <Button size="sm" onClick={handleSave} disabled={isSaving || rows.length === 0 || !validated}>
             <Save className="h-4 w-4 mr-1" /> {t("extract.saveN").replace("{n}", String(rows.length))}
           </Button>
         </div>
       </div>
+
+      {/* Validation feedback */}
+      {validationErrors.length > 0 && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 space-y-1">
+          <div className="flex items-center gap-2 text-sm font-medium text-destructive">
+            <XCircle className="h-4 w-4" />
+            {t("validate.failed")}
+          </div>
+          <ul className="list-disc list-inside text-xs text-destructive/80 space-y-0.5">
+            {validationErrors.map((e, i) => <li key={i}>{e}</li>)}
+          </ul>
+        </div>
+      )}
+      {validated && validationErrors.length === 0 && (
+        <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm text-emerald-400">
+          <CheckCircle2 className="h-4 w-4" />
+          {t("validate.passed")}
+        </div>
+      )}
 
       {notes && (
         <div className="flex items-start gap-2 text-xs text-amber-400 bg-amber-500/5 border border-amber-500/20 rounded-lg p-2">

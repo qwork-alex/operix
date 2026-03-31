@@ -3,10 +3,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Save, X, Trash2, AlertTriangle } from "lucide-react";
+import { Save, X, Trash2, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { ExtractedPaymentOrder } from "@/hooks/usePaymentOrders";
 import { useLanguage } from "@/hooks/useLanguage";
+import { ExtractionStages, type Stage } from "@/components/service-orders/ExtractionStages";
 
 interface Props {
   orders: ExtractedPaymentOrder[];
@@ -25,9 +26,15 @@ const confidenceColors: Record<string, string> = {
 
 export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDiscard, isSaving }: Props) {
   const [rows, setRows] = useState<ExtractedPaymentOrder[]>(orders);
+  const [stage, setStage] = useState<Stage>("review");
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [validated, setValidated] = useState(false);
   const { t, formatCurrency } = useLanguage();
 
   const update = (idx: number, field: keyof ExtractedPaymentOrder, value: any) => {
+    setValidated(false);
+    setValidationErrors([]);
+    if (stage !== "review") setStage("review");
     setRows(prev => prev.map((r, i) => {
       if (i !== idx) return r;
       const updated = { ...r, [field]: value };
@@ -38,7 +45,40 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
     }));
   };
 
-  const removeRow = (idx: number) => setRows(prev => prev.filter((_, i) => i !== idx));
+  const removeRow = (idx: number) => {
+    setRows(prev => prev.filter((_, i) => i !== idx));
+    setValidated(false);
+    setValidationErrors([]);
+    if (stage !== "review") setStage("review");
+  };
+
+  const runValidation = () => {
+    const errors: string[] = [];
+    rows.forEach((row, i) => {
+      const n = String(i + 1);
+      if (!row.client?.trim()) errors.push(t("validate.missingClient").replace("{n}", n));
+      const hasService = (row.services || []).some(s => s.name?.trim());
+      if (!hasService) errors.push(t("validate.missingService").replace("{n}", n));
+      const computed = (row.services || []).reduce((s, sv) => s + (sv.price || 0), 0);
+      if (row.total != null && Math.abs(computed - (row.total || 0)) > 0.01) {
+        errors.push(t("validate.totalMismatch").replace("{n}", n).replace("{expected}", String(computed)).replace("{actual}", String(row.total)));
+      }
+      if ((row.total ?? 0) === 0 && hasService) errors.push(t("validate.zeroTotal").replace("{n}", n));
+    });
+    setValidationErrors(errors);
+    if (errors.length === 0) {
+      setValidated(true);
+      setStage("save");
+    } else {
+      setValidated(false);
+      setStage("validate");
+    }
+  };
+
+  const handleSave = () => {
+    setStage("save");
+    onSave(rows);
+  };
 
   if (rows.length === 0) {
     return (
@@ -50,6 +90,9 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
 
   return (
     <div className="space-y-3">
+      {/* Stage indicator */}
+      <ExtractionStages current={stage} />
+
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-medium text-foreground">{t("extract.paymentTitle")}</h3>
@@ -60,11 +103,35 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
         </div>
         <div className="flex gap-2">
           <Button variant="ghost" size="sm" onClick={onDiscard}><X className="h-4 w-4 mr-1" />{t("action.discard")}</Button>
-          <Button size="sm" onClick={() => onSave(rows)} disabled={isSaving}>
+          {!validated && (
+            <Button size="sm" variant="outline" onClick={runValidation} disabled={rows.length === 0}>
+              <CheckCircle2 className="h-4 w-4 mr-1" /> {t("validate.run")}
+            </Button>
+          )}
+          <Button size="sm" onClick={handleSave} disabled={isSaving || !validated}>
             <Save className="h-4 w-4 mr-1" />{isSaving ? t("extract.saving") : t("action.save")}
           </Button>
         </div>
       </div>
+
+      {/* Validation feedback */}
+      {validationErrors.length > 0 && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 space-y-1">
+          <div className="flex items-center gap-2 text-sm font-medium text-destructive">
+            <XCircle className="h-4 w-4" />
+            {t("validate.failed")}
+          </div>
+          <ul className="list-disc list-inside text-xs text-destructive/80 space-y-0.5">
+            {validationErrors.map((e, i) => <li key={i}>{e}</li>)}
+          </ul>
+        </div>
+      )}
+      {validated && validationErrors.length === 0 && (
+        <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm text-emerald-400">
+          <CheckCircle2 className="h-4 w-4" />
+          {t("validate.passed")}
+        </div>
+      )}
 
       {notes && (
         <Alert variant="destructive" className="bg-amber-500/5 border-amber-500/20">
