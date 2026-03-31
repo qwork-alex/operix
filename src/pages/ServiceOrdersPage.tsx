@@ -13,6 +13,7 @@ import {
   type ExtractionResult,
   type ServiceOrderInsert,
 } from "@/hooks/useServiceOrders";
+import { useLanguage } from "@/hooks/useLanguage";
 import { toast } from "sonner";
 
 export default function ServiceOrdersPage() {
