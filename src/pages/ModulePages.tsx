@@ -476,7 +476,7 @@ export function Documents() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const [parentId, setParentId] = useState<string | null>(null);
-  const [path, setPath] = useState<{ id: string | null; name: string }[]>([{ id: null, name: "Root" }]);
+  const [path, setPath] = useState<{ id: string | null; name: string }[]>([{ id: null, name: t("common.root") }]);
   const [folderName, setFolderName] = useState("");
   const [showFolderDialog, setShowFolderDialog] = useState(false);
 
