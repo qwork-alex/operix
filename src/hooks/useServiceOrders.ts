@@ -46,6 +46,13 @@ export function useServiceOrders(filters?: {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
+  const hasRequiredAuditFields = (payload: {
+    id?: string;
+    created_by?: string | null;
+    created_at?: string;
+    updated_at?: string;
+  }) => Boolean(payload.id && payload.created_by && payload.created_at && payload.updated_at);
+
   const query = useQuery({
     queryKey: ["service_orders", filters],
     queryFn: async () => {
@@ -67,12 +74,22 @@ export function useServiceOrders(filters?: {
 
   const saveMutation = useMutation({
     mutationFn: async (orders: ServiceOrderInsert[]) => {
+      if (!user?.id) throw new Error("You must be authenticated to save service orders.");
+
       const payload = orders.map(o => ({
+        id: o.id ?? crypto.randomUUID(),
         ...o,
-        created_by: user?.id ?? undefined,
+        created_by: o.created_by ?? user.id,
+        created_at: o.created_at ?? new Date().toISOString(),
+        updated_at: new Date().toISOString(),
         status: o.status || "draft",
       }));
-      console.log("[ServiceOrders] Insert payload:", JSON.stringify(payload, null, 2));
+
+      const invalid = payload.find((p) => !hasRequiredAuditFields(p));
+      if (invalid) throw new Error("Missing required audit fields (id, created_by, created_at, updated_at).");
+
+      console.log("Saving payload:", payload);
+
       const { data, error } = await supabase
         .from("service_orders")
         .insert(payload)
@@ -94,10 +111,33 @@ export function useServiceOrders(filters?: {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, ...updates }: Partial<ServiceOrder> & { id: string }) => {
-      console.log("[ServiceOrders] Update payload:", { id, ...updates });
+      if (!id) throw new Error("Service order id is required for update.");
+
+      const { data: existing, error: existingError } = await supabase
+        .from("service_orders")
+        .select("id, created_by, created_at")
+        .eq("id", id)
+        .single();
+
+      if (existingError) throw existingError;
+
+      const payload = {
+        ...updates,
+        id,
+        created_by: updates.created_by ?? existing.created_by ?? user?.id,
+        created_at: updates.created_at ?? existing.created_at ?? new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      if (!hasRequiredAuditFields(payload)) {
+        throw new Error("Missing required audit fields (id, created_by, created_at, updated_at).");
+      }
+
+      console.log("Saving payload:", payload);
+
       const { data, error } = await supabase
         .from("service_orders")
-        .update({ ...updates, updated_at: new Date().toISOString() })
+        .update(payload)
         .eq("id", id)
         .select()
         .single();
@@ -110,6 +150,10 @@ export function useServiceOrders(filters?: {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["service_orders"] });
       queryClient.invalidateQueries({ queryKey: ["financial-summary"] });
+    },
+    onError: (err) => {
+      console.error("[ServiceOrders] Update error:", err);
+      toast.error("Failed to update: " + (err as Error).message);
     },
   });
 
