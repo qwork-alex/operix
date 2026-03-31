@@ -133,11 +133,31 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
 
   const hasCorrections = rows.some(r => r.handwritten_corrections?.length);
   const hasMismatches = rows.some(r => r.total_mismatch);
-  const uncertainCount = rows.reduce((c, r) => c + Object.values(r.field_confidence || {}).filter(v => v === "low" || v === "medium").length, 0);
+  const lowCount = rows.reduce((c, r) => c + Object.values(r.field_confidence || {}).filter(v => v === "low").length, 0);
+  const medCount = rows.reduce((c, r) => c + Object.values(r.field_confidence || {}).filter(v => v === "medium").length, 0);
+
+  const rowsNeedingReview = rows.filter(r => Object.values(r.field_confidence || {}).some(v => v === "low")).length;
 
   return (
     <div className="space-y-3">
       <ExtractionStages current={stage} />
+
+      {/* Review banner */}
+      {(lowCount > 0 || hasMismatches) && (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+          <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+          <div className="text-sm space-y-1">
+            <p className="font-medium text-amber-300">{t("extract.reviewNeeded")}</p>
+            <p className="text-xs text-muted-foreground">
+              {lowCount > 0 && <span className="text-red-400 font-medium">{lowCount} {t("extract.lowConfFields")}</span>}
+              {lowCount > 0 && medCount > 0 && " · "}
+              {medCount > 0 && <span className="text-amber-400">{medCount} {t("extract.medConfFields")}</span>}
+              {hasMismatches && <span className="text-red-400 ml-2">· {t("extract.totalMismatch")}</span>}
+              {rowsNeedingReview > 0 && <span className="text-muted-foreground ml-2">({rowsNeedingReview} {t("extract.rowsToReview")})</span>}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2 flex-wrap">
@@ -150,17 +170,6 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
             <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-400 border-amber-500/30">
               <Pencil className="h-3 w-3 mr-1" />
               {t("extract.corrections")}
-            </Badge>
-          )}
-          {hasMismatches && (
-            <Badge variant="outline" className="text-xs bg-red-500/10 text-red-400 border-red-500/30">
-              <AlertTriangle className="h-3 w-3 mr-1" />
-              {t("extract.totalMismatch")}
-            </Badge>
-          )}
-          {uncertainCount > 0 && (
-            <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-400 border-amber-500/30">
-              {uncertainCount} {t("extract.uncertainFields")}
             </Badge>
           )}
         </div>

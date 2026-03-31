@@ -15,41 +15,41 @@ serve(async (req) => {
     const { imageBase64, mimeType, fileName } = await req.json();
     if (!imageBase64) throw new Error("No image data provided");
 
-    const systemPrompt = `You are a data extraction expert for an automotive service management system called QWork Nexus.
-You extract structured data from service order documents (PDFs, photos of paper forms, screenshots).
+    const systemPrompt = `You are a pragmatic data extraction assistant for QWork Nexus, an automotive service management system.
+Your job: extract structured data from service order documents (PDFs, photos of paper forms, screenshots).
 
-CRITICAL RULES FOR ACCURACY:
-1. HANDWRITTEN vs PRINTED: If you see handwritten corrections or overwritten values, ALWAYS use the CORRECTED/handwritten value. Mark the field confidence as "low" and record the correction.
-2. CROSSED-OUT VALUES: If a value is crossed out / struck through, IGNORE it. Use the replacement value written nearby. If no replacement exists, return null.
-3. FIELD CLASSIFICATION — NEVER confuse these:
-   - "client" = the COMPANY or PERSON who OWNS the vehicle / pays for service (e.g. Uber, Bolt, a fleet company)
-   - "technician" = the PERSON who PERFORMS the repair/service work
-   - These are DIFFERENT roles. A person's name next to "Technicien" or "Mécanicien" is a technician, NOT a client.
-4. If a field is not visible, unclear, or you are guessing, return null and set that field's confidence to "low".
-5. Prices must be numbers without currency symbols.
-6. The total should be the sum of all service prices if visible, otherwise null.
-7. A document may contain MULTIPLE service orders (multiple rows). Extract ALL of them.
-8. For each field, provide a confidence level: "high" (clearly readable), "medium" (partially readable/inferred), "low" (guessed/corrected/unclear).
+PRIORITIES (in order):
+1. STRUCTURE FIRST: Identify rows and columns. Each row = one service order entry.
+2. NUMBERS MATTER MOST: Get prices and totals right. Numbers are the hardest to correct manually.
+3. TEXT IS SECONDARY: Client names, technician names, etc. can be corrected by the user. Do your best but don't guess.
 
-Return a JSON object using the tool provided.`;
+CONFIDENCE SCORING — be honest:
+- "high": clearly printed/typed, no ambiguity
+- "medium": readable but could be misread (poor scan, small font, partial occlusion)
+- "low": handwritten, blurry, overlapping, or you're guessing. User MUST verify.
 
-    const userPrompt = `Extract all service order data from this document image. The file is named "${fileName}".
+HANDWRITTEN vs PRINTED:
+- If handwritten corrections exist over printed values → use the HANDWRITTEN value, set confidence to "medium" or "low", and record the correction.
+- If a value is crossed out with no replacement → return null for that field.
 
-Look for:
-- Client name (the COMPANY/OWNER, NOT the technician)
-- Platform (e.g. Uber, Bolt, Heetch, Free Now, etc.)
-- Technician name (the PERSON doing the work)
-- Week reference (e.g. "S12", "Week 12", "Semaine 12")
-- Car/vehicle name
-- License plate number
-- Up to 4 services with names and prices
-- Total amount
+FIELD RULES:
+- "client" = COMPANY or PERSON who OWNS the vehicle (e.g. Uber, Bolt, a fleet company)
+- "technician" = PERSON who PERFORMS the work. These are NEVER the same.
+- If unsure about a text field → return null. Never fabricate data.
+- Prices must be numbers (no currency symbols). If you can't read a price → return null.
+- Total should match sum of services. If it doesn't, still report what you see — flag the mismatch.
 
-IMPORTANT:
-- If values are crossed out with new values written, use the NEW values and flag them as corrections.
-- Verify that line item prices sum to the total. If they don't match, flag it in notes.
-- Double-check: client ≠ technician. They are different fields.
-- For each field, assess confidence: high/medium/low.`;
+A document may have MULTIPLE rows. Extract ALL of them.`;
+
+    const userPrompt = `Extract service order data from this document. File: "${fileName}".
+
+Focus on:
+1. How many distinct service entries/rows exist?
+2. For each row, extract: client, platform, technician, week, car_name, license_plate, up to 4 services (name + price), total
+3. For EVERY field, honestly assess confidence (high/medium/low)
+4. Flag any crossed-out values or handwritten corrections
+
+Remember: it's better to return null with low confidence than to guess wrong. The user will review and correct.`;
 
     const messages: any[] = [
       { role: "system", content: systemPrompt },
@@ -57,10 +57,7 @@ IMPORTANT:
         role: "user",
         content: [
           { type: "text", text: userPrompt },
-          {
-            type: "image_url",
-            image_url: { url: `data:${mimeType};base64,${imageBase64}` },
-          },
+          { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
         ],
       },
     ];
@@ -79,7 +76,7 @@ IMPORTANT:
             type: "function",
             function: {
               name: "extract_service_orders",
-              description: "Extract structured service order data from the document with per-field confidence",
+              description: "Extract structured service order data with per-field confidence",
               parameters: {
                 type: "object",
                 properties: {
@@ -88,12 +85,12 @@ IMPORTANT:
                     items: {
                       type: "object",
                       properties: {
-                        client: { type: "string", description: "Client/company name (the owner, NOT the technician)" },
-                        platform: { type: "string", description: "Platform (Uber, Bolt, etc.)" },
-                        technician: { type: "string", description: "Technician name (the person doing the work)" },
-                        week: { type: "string", description: "Week reference" },
-                        car_name: { type: "string", description: "Vehicle name/model" },
-                        license_plate: { type: "string", description: "License plate number" },
+                        client: { type: "string", description: "Client/owner name — NOT the technician" },
+                        platform: { type: "string" },
+                        technician: { type: "string", description: "Person doing the work" },
+                        week: { type: "string" },
+                        car_name: { type: "string" },
+                        license_plate: { type: "string" },
                         service_1_name: { type: "string" },
                         service_1_price: { type: "number" },
                         service_2_name: { type: "string" },
@@ -105,7 +102,6 @@ IMPORTANT:
                         total: { type: "number" },
                         field_confidence: {
                           type: "object",
-                          description: "Per-field confidence levels",
                           properties: {
                             client: { type: "string", enum: ["high", "medium", "low"] },
                             platform: { type: "string", enum: ["high", "medium", "low"] },
@@ -136,23 +132,13 @@ IMPORTANT:
                             required: ["field", "corrected_value"],
                           },
                         },
-                        total_mismatch: {
-                          type: "boolean",
-                          description: "True if the sum of service prices does not match the stated total",
-                        },
+                        total_mismatch: { type: "boolean" },
                       },
                       required: ["client", "car_name"],
                     },
                   },
-                  confidence: {
-                    type: "string",
-                    enum: ["high", "medium", "low"],
-                    description: "Overall confidence in the extraction quality",
-                  },
-                  notes: {
-                    type: "string",
-                    description: "Any notes about the extraction (unclear fields, quality issues, crossed-out values, field classification issues, etc.)",
-                  },
+                  confidence: { type: "string", enum: ["high", "medium", "low"] },
+                  notes: { type: "string", description: "Issues found: unclear fields, quality problems, crossed-out values" },
                 },
                 required: ["orders", "confidence"],
                 additionalProperties: false,
@@ -186,9 +172,12 @@ IMPORTANT:
 
     const extracted = JSON.parse(toolCall.function.arguments);
 
-    // Post-processing: validate totals and flag mismatches
+    // Post-processing
     if (extracted.orders) {
       for (const order of extracted.orders) {
+        if (!order.field_confidence) order.field_confidence = {};
+
+        // Validate totals
         const prices = [
           order.service_1_price || 0,
           order.service_2_price || 0,
@@ -198,11 +187,20 @@ IMPORTANT:
         const computed = prices.reduce((a: number, b: number) => a + b, 0);
         if (order.total != null && Math.abs(computed - order.total) > 0.01) {
           order.total_mismatch = true;
-          if (!order.field_confidence) order.field_confidence = {};
           order.field_confidence.total = "low";
         }
-        // Ensure field_confidence exists
-        if (!order.field_confidence) order.field_confidence = {};
+
+        // Count fields with actual values vs null — flag sparse rows
+        const textFields = ["client", "platform", "technician", "week", "car_name", "license_plate"];
+        const filledCount = textFields.filter(f => order[f]?.trim()).length;
+        if (filledCount <= 2) {
+          // Very sparse extraction — lower overall confidence for missing fields
+          for (const f of textFields) {
+            if (!order[f]?.trim() && !order.field_confidence[f]) {
+              order.field_confidence[f] = "low";
+            }
+          }
+        }
       }
     }
 

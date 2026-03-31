@@ -15,42 +15,42 @@ serve(async (req) => {
     const { imageBase64, mimeType, fileName } = await req.json();
     if (!imageBase64) throw new Error("No image data provided");
 
-    const systemPrompt = `You are a data extraction expert for QWork Nexus, an automotive service management system.
-You extract structured data from PAYMENT ORDER documents (payment lists, invoices, payment summaries).
+    const systemPrompt = `You are a pragmatic data extraction assistant for QWork Nexus, an automotive service management system.
+Your job: extract structured data from PAYMENT ORDER documents (payment lists, invoices, payment summaries).
 
-CRITICAL RULES FOR ACCURACY:
-1. HANDWRITTEN vs PRINTED: If you see handwritten corrections or overwritten values, ALWAYS use the CORRECTED/handwritten value. Mark the field confidence as "low" and record the correction.
-2. CROSSED-OUT VALUES: If a value is crossed out / struck through, IGNORE it. Use the replacement value written nearby. If no replacement exists, return null.
-3. FIELD CLASSIFICATION — NEVER confuse these:
-   - "client" = the COMPANY or PERSON who OWNS the vehicle / pays for service
-   - "technician" = the PERSON who PERFORMS the repair/service work
-   - These are DIFFERENT roles.
-4. If a field is not visible, unclear, or you are guessing, return null and set that field's confidence to "low".
-5. Prices should be numbers without currency symbols.
-6. A document may contain MULTIPLE payment entries. Extract ALL as an array.
-7. Services should be extracted as a JSON array of objects with name and price.
-8. For each field, provide a confidence level: "high" (clearly readable), "medium" (partially readable/inferred), "low" (guessed/corrected/unclear).
-9. The list_name is the name/title of the payment list or document.`;
+PRIORITIES (in order):
+1. STRUCTURE FIRST: Identify rows and columns. Each row = one payment entry.
+2. NUMBERS MATTER MOST: Get prices and totals right. Numbers are the hardest to correct manually.
+3. TEXT IS SECONDARY: Names can be corrected by the user. Do your best but don't guess.
 
-    const userPrompt = `Extract all payment order data from this document. File: "${fileName}".
+CONFIDENCE SCORING — be honest:
+- "high": clearly printed/typed, no ambiguity
+- "medium": readable but could be misread (poor scan, small font)
+- "low": handwritten, blurry, overlapping, or you're guessing. User MUST verify.
 
-Look for:
-- Client name (company or person — the OWNER, not the technician)
-- Platform (Uber, Bolt, Heetch, Free Now, etc.)
-- List name (payment list title/reference)
-- Technician name (the person who did the work)
-- Car/vehicle name
-- License plate number
-- Services performed (name + price each)
-- Total amount
+HANDWRITTEN vs PRINTED:
+- If handwritten corrections exist over printed values → use the HANDWRITTEN value, set confidence to "medium" or "low", and record the correction.
+- If a value is crossed out with no replacement → return null.
 
-IMPORTANT:
-- If values are crossed out with new values written, use the NEW values and flag them.
-- Verify that service prices sum to the total. If mismatch, flag it.
-- Double-check: client ≠ technician.
-- For each field, assess confidence: high/medium/low.
+FIELD RULES:
+- "client" = COMPANY or PERSON who OWNS the vehicle (NOT the technician)
+- "technician" = PERSON who did the work
+- If unsure about a text field → return null. Never fabricate data.
+- Prices must be numbers (no currency symbols). Can't read? → null.
+- list_name = title/reference of the payment list or document.
 
-Extract each entry/row separately.`;
+A document may have MULTIPLE entries. Extract ALL of them.`;
+
+    const userPrompt = `Extract payment order data from this document. File: "${fileName}".
+
+Focus on:
+1. How many distinct payment entries exist?
+2. For each: client, platform, list_name, technician, car_name, license_plate, services (name+price each), total
+3. For EVERY field, honestly assess confidence (high/medium/low)
+4. Flag crossed-out values or handwritten corrections
+5. Verify service prices sum to total — flag if they don't
+
+Remember: null with low confidence > wrong guess. The user will review everything.`;
 
     const messages: any[] = [
       { role: "system", content: systemPrompt },
@@ -58,10 +58,7 @@ Extract each entry/row separately.`;
         role: "user",
         content: [
           { type: "text", text: userPrompt },
-          {
-            type: "image_url",
-            image_url: { url: `data:${mimeType};base64,${imageBase64}` },
-          },
+          { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
         ],
       },
     ];
@@ -80,7 +77,7 @@ Extract each entry/row separately.`;
             type: "function",
             function: {
               name: "extract_payment_orders",
-              description: "Extract structured payment order data from the document with per-field confidence",
+              description: "Extract structured payment order data with per-field confidence",
               parameters: {
                 type: "object",
                 properties: {
@@ -110,7 +107,6 @@ Extract each entry/row separately.`;
                         total: { type: "number" },
                         field_confidence: {
                           type: "object",
-                          description: "Per-field confidence levels",
                           properties: {
                             client: { type: "string", enum: ["high", "medium", "low"] },
                             platform: { type: "string", enum: ["high", "medium", "low"] },
@@ -133,10 +129,7 @@ Extract each entry/row separately.`;
                             required: ["field", "corrected_value"],
                           },
                         },
-                        total_mismatch: {
-                          type: "boolean",
-                          description: "True if service prices don't sum to total",
-                        },
+                        total_mismatch: { type: "boolean" },
                       },
                       required: ["client", "car_name"],
                     },
@@ -176,16 +169,27 @@ Extract each entry/row separately.`;
 
     const extracted = JSON.parse(toolCall.function.arguments);
 
-    // Post-processing: validate totals
+    // Post-processing
     if (extracted.orders) {
       for (const order of extracted.orders) {
+        if (!order.field_confidence) order.field_confidence = {};
+
         const computed = (order.services || []).reduce((s: number, sv: any) => s + (sv.price || 0), 0);
         if (order.total != null && Math.abs(computed - order.total) > 0.01) {
           order.total_mismatch = true;
-          if (!order.field_confidence) order.field_confidence = {};
           order.field_confidence.total = "low";
         }
-        if (!order.field_confidence) order.field_confidence = {};
+
+        // Flag sparse rows
+        const textFields = ["client", "platform", "technician", "car_name", "license_plate"];
+        const filledCount = textFields.filter(f => order[f]?.trim()).length;
+        if (filledCount <= 2) {
+          for (const f of textFields) {
+            if (!order[f]?.trim() && !order.field_confidence[f]) {
+              order.field_confidence[f] = "low";
+            }
+          }
+        }
       }
     }
 
