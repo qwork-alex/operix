@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { CreditCard, Filter, RefreshCw } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { FileUploadZone } from "@/components/service-orders/FileUploadZone";
 import { ExtractedPaymentTable } from "@/components/payment-orders/ExtractedPaymentTable";
 import { ExtractionStages } from "@/components/service-orders/ExtractionStages";
+import { UploadQueue } from "@/components/service-orders/UploadQueue";
 import { PaymentOrdersTable } from "@/components/payment-orders/PaymentOrdersTable";
 import {
   usePaymentOrders,
@@ -15,6 +16,7 @@ import {
   type PaymentOrderInsert,
 } from "@/hooks/usePaymentOrders";
 import { useClients, useTechnicians } from "@/hooks/useServiceOrders";
+import { useFileQueue, type QueueItemStatus } from "@/hooks/useFileQueue";
 import { useLanguage } from "@/hooks/useLanguage";
 import { toast } from "sonner";
 import type { Json } from "@/integrations/supabase/types";
@@ -28,31 +30,31 @@ export default function PaymentOrdersPage() {
     list_name?: string;
   }>({});
 
-  const [extraction, setExtraction] = useState<PaymentExtractionResult | null>(null);
+  const [extractions, setExtractions] = useState<PaymentExtractionResult[]>([]);
   const { data: orders = [], isLoading, saveMutation } = usePaymentOrders(filters);
-  const { extract, isExtracting } = useExtractPaymentOrder();
+  const { extract } = useExtractPaymentOrder();
   const { data: clients = [] } = useClients();
   const { data: technicians = [] } = useTechnicians();
   const detectMutation = useDiscrepancyDetection();
+  const { queue, isProcessing, addFiles, clearCompleted } = useFileQueue();
 
   const platforms = [...new Set((orders as any[]).map(o => o.platform).filter(Boolean))];
   const listNames = [...new Set((orders as any[]).map(o => o.list_name).filter(Boolean))];
 
-  const handleFiles = async (files: File[]) => {
-    for (const file of files) {
-      try {
-        const result = await extract(file);
-        setExtraction(result);
-        if (result.confidence === "low") {
-          toast.warning("Low confidence — please review carefully.");
-        }
-      } catch (err) {
-        toast.error("Extraction failed: " + (err as Error).message);
+  const handleFiles = useCallback((files: File[]) => {
+    addFiles(files, async (file, onStatus) => {
+      onStatus("uploading" as QueueItemStatus);
+      await new Promise(r => setTimeout(r, 200));
+      onStatus("processing" as QueueItemStatus);
+      const result = await extract(file);
+      setExtractions(prev => [...prev, result]);
+      if (result.confidence === "low") {
+        toast.warning("Low confidence — please review carefully.");
       }
-    }
-  };
+    });
+  }, [addFiles, extract]);
 
-  const handleSave = (rows: ExtractedPaymentOrder[]) => {
+  const handleSave = (extractionIdx: number, rows: ExtractedPaymentOrder[]) => {
     const inserts: PaymentOrderInsert[] = rows.map(r => {
       const clientMatch = clients.find(c => c.name.toLowerCase() === r.client?.toLowerCase());
       const techMatch = technicians.find(t => t.name.toLowerCase() === r.technician?.toLowerCase());
@@ -71,11 +73,14 @@ export default function PaymentOrdersPage() {
 
     saveMutation.mutate(inserts, {
       onSuccess: () => {
-        setExtraction(null);
-        // Auto-trigger discrepancy detection after saving
+        setExtractions(prev => prev.filter((_, i) => i !== extractionIdx));
         detectMutation.mutate();
       },
     });
+  };
+
+  const handleDiscard = (extractionIdx: number) => {
+    setExtractions(prev => prev.filter((_, i) => i !== extractionIdx));
   };
 
   const setFilter = (key: string, value: string) => {
@@ -105,21 +110,23 @@ export default function PaymentOrdersPage() {
         </Button>
       </div>
 
-      {!extraction && !isExtracting && <ExtractionStages current="upload" />}
-      {isExtracting && <ExtractionStages current="upload" />}
+      {extractions.length === 0 && <ExtractionStages current="upload" />}
 
-      <FileUploadZone onFilesSelected={handleFiles} isProcessing={isExtracting} />
+      <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} />
 
-      {extraction && (
+      <UploadQueue queue={queue} onClearCompleted={clearCompleted} />
+
+      {extractions.map((extraction, idx) => (
         <ExtractedPaymentTable
+          key={idx}
           orders={extraction.orders}
           confidence={extraction.confidence}
           notes={extraction.notes}
-          onSave={handleSave}
-          onDiscard={() => setExtraction(null)}
+          onSave={(rows) => handleSave(idx, rows)}
+          onDiscard={() => handleDiscard(idx)}
           isSaving={saveMutation.isPending}
         />
-      )}
+      ))}
 
       <div className="flex items-center gap-3 flex-wrap">
         <Filter className="h-4 w-4 text-muted-foreground" />

@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { FileText, Filter } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileUploadZone } from "@/components/service-orders/FileUploadZone";
 import { ExtractedDataTable } from "@/components/service-orders/ExtractedDataTable";
 import { ExtractionStages } from "@/components/service-orders/ExtractionStages";
+import { UploadQueue } from "@/components/service-orders/UploadQueue";
 import { ServiceOrdersTable } from "@/components/service-orders/ServiceOrdersTable";
 import {
   useServiceOrders,
@@ -14,6 +15,7 @@ import {
   type ExtractionResult,
   type ServiceOrderInsert,
 } from "@/hooks/useServiceOrders";
+import { useFileQueue, type QueueItemStatus } from "@/hooks/useFileQueue";
 import { useLanguage } from "@/hooks/useLanguage";
 import { toast } from "sonner";
 
@@ -26,33 +28,31 @@ export default function ServiceOrdersPage() {
     week?: string;
   }>({});
 
-  const [extraction, setExtraction] = useState<ExtractionResult | null>(null);
+  const [extractions, setExtractions] = useState<ExtractionResult[]>([]);
   const { data: orders = [], isLoading, saveMutation } = useServiceOrders(filters);
-  const { extract, isExtracting } = useExtractServiceOrder();
+  const { extract } = useExtractServiceOrder();
   const { data: clients = [] } = useClients();
   const { data: technicians = [] } = useTechnicians();
+  const { queue, isProcessing, addFiles, clearCompleted } = useFileQueue();
 
-  // Derive unique platforms and weeks from existing orders
   const platforms = [...new Set((orders as any[]).map((o) => o.platform).filter(Boolean))];
   const weeks = [...new Set((orders as any[]).map((o) => o.week).filter(Boolean))];
 
-  const handleFiles = async (files: File[]) => {
-    for (const file of files) {
-      try {
-        const result = await extract(file);
-        setExtraction(result);
-        if (result.confidence === "low") {
-          toast.warning("Low confidence extraction — please review carefully.");
-        }
-      } catch (err) {
-        toast.error("Extraction failed: " + (err as Error).message);
+  const handleFiles = useCallback((files: File[]) => {
+    addFiles(files, async (file, onStatus) => {
+      onStatus("uploading" as QueueItemStatus);
+      // Small delay to show uploading state
+      await new Promise(r => setTimeout(r, 200));
+      onStatus("processing" as QueueItemStatus);
+      const result = await extract(file);
+      setExtractions(prev => [...prev, result]);
+      if (result.confidence === "low") {
+        toast.warning("Low confidence extraction — please review carefully.");
       }
-    }
-  };
+    });
+  }, [addFiles, extract]);
 
-  const handleSave = (rows: ExtractedOrder[]) => {
-    // Map extracted data → service_orders inserts
-    // We need to resolve client/technician names to IDs
+  const handleSave = (extractionIdx: number, rows: ExtractedOrder[]) => {
     const inserts: ServiceOrderInsert[] = rows.map((r) => {
       const clientMatch = clients.find(
         (c) => c.name.toLowerCase() === r.client?.toLowerCase()
@@ -81,8 +81,14 @@ export default function ServiceOrdersPage() {
     });
 
     saveMutation.mutate(inserts, {
-      onSuccess: () => setExtraction(null),
+      onSuccess: () => {
+        setExtractions(prev => prev.filter((_, i) => i !== extractionIdx));
+      },
     });
+  };
+
+  const handleDiscard = (extractionIdx: number) => {
+    setExtractions(prev => prev.filter((_, i) => i !== extractionIdx));
   };
 
   const setFilter = (key: string, value: string) => {
@@ -107,24 +113,27 @@ export default function ServiceOrdersPage() {
         </div>
       </div>
 
-      {/* Stage indicator when no extraction yet */}
-      {!extraction && !isExtracting && <ExtractionStages current="upload" />}
-      {isExtracting && <ExtractionStages current="upload" />}
+      {/* Stage indicator */}
+      {extractions.length === 0 && <ExtractionStages current="upload" />}
 
       {/* Upload */}
-      <FileUploadZone onFilesSelected={handleFiles} isProcessing={isExtracting} />
+      <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} />
 
-      {/* Extraction preview */}
-      {extraction && (
+      {/* Upload queue */}
+      <UploadQueue queue={queue} onClearCompleted={clearCompleted} />
+
+      {/* Extraction previews — one per file */}
+      {extractions.map((extraction, idx) => (
         <ExtractedDataTable
+          key={idx}
           orders={extraction.orders}
           confidence={extraction.confidence}
           notes={extraction.notes}
-          onSave={handleSave}
-          onDiscard={() => setExtraction(null)}
+          onSave={(rows) => handleSave(idx, rows)}
+          onDiscard={() => handleDiscard(idx)}
           isSaving={saveMutation.isPending}
         />
-      )}
+      ))}
 
       {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
