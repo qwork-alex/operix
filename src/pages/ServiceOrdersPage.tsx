@@ -162,10 +162,10 @@ export default function ServiceOrdersPage() {
 
         <Select value={filters.week || "all"} onValueChange={(v) => setFilter("week", v)}>
           <SelectTrigger className="w-[120px] h-9 text-xs bg-secondary/30">
-            <SelectValue placeholder="All weeks" />
+            <SelectValue placeholder={t("label.allWeeks")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All weeks</SelectItem>
+            <SelectItem value="all">{t("label.allWeeks")}</SelectItem>
             {weeks.map((w) => (
               <SelectItem key={w} value={w}>{w}</SelectItem>
             ))}
