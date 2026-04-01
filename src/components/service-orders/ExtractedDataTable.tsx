@@ -132,33 +132,29 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
   const lowCount = rows.reduce((c, r) => c + Object.values(r.field_confidence || {}).filter(v => v === "low").length, 0);
   const medCount = rows.reduce((c, r) => c + Object.values(r.field_confidence || {}).filter(v => v === "medium").length, 0);
   const uncertainCount = lowCount + medCount;
-
-  // Per-row review summary
-  const rowSummaries = rows.map((r) => {
-    const fc = r.field_confidence || {};
-    const low = Object.entries(fc).filter(([, v]) => v === "low").map(([k]) => k);
-    const med = Object.entries(fc).filter(([, v]) => v === "medium").map(([k]) => k);
-    return { low, med, needsReview: low.length > 0 };
-  });
-  const rowsNeedingReview = rowSummaries.filter(s => s.needsReview).length;
+  const rowsNeedingReview = rows.filter(r => Object.values(r.field_confidence || {}).some(v => v === "low" || v === "medium")).length;
 
   return (
     <div className="space-y-3">
       <ExtractionStages current={stage} />
 
-      {/* Review banner */}
-      {(lowCount > 0 || hasMismatches) && (
-        <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
-          <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+      {/* Review summary banner — shown whenever uncertain fields exist */}
+      {(uncertainCount > 0 || hasMismatches) && (
+        <div className={cn(
+          "flex items-start gap-3 rounded-lg border p-3",
+          lowCount > 0 ? "border-destructive/30 bg-destructive/5" : "border-amber-500/30 bg-amber-500/5"
+        )}>
+          <AlertTriangle className={cn("h-5 w-5 shrink-0 mt-0.5", lowCount > 0 ? "text-destructive" : "text-amber-400")} />
           <div className="text-sm space-y-1">
-            <p className="font-medium text-amber-300">{t("extract.reviewNeeded")}</p>
-            <p className="text-xs text-muted-foreground">
-              {lowCount > 0 && <span className="text-red-400 font-medium">{lowCount} {t("extract.lowConfFields")}</span>}
-              {lowCount > 0 && medCount > 0 && " · "}
-              {medCount > 0 && <span className="text-amber-400">{medCount} {t("extract.medConfFields")}</span>}
-              {hasMismatches && <span className="text-red-400 ml-2">· {t("extract.totalMismatch")}</span>}
-              {rowsNeedingReview > 0 && <span className="text-muted-foreground ml-2">({rowsNeedingReview} {t("extract.rowsToReview")})</span>}
+            <p className={cn("font-medium", lowCount > 0 ? "text-destructive" : "text-amber-400")}>
+              {uncertainCount} {t("extract.fieldsNeedReview")} · {rowsNeedingReview} {t("extract.rowsToReview")}
             </p>
+            <p className="text-xs text-muted-foreground flex flex-wrap gap-x-3 gap-y-0.5">
+              {lowCount > 0 && <span className="text-destructive font-medium">● {lowCount} {t("extract.lowConfFields")}</span>}
+              {medCount > 0 && <span className="text-amber-400">● {medCount} {t("extract.medConfFields")}</span>}
+              {hasMismatches && <span className="text-destructive">● {t("extract.totalMismatch")}</span>}
+            </p>
+            <p className="text-[11px] text-muted-foreground/70">{t("extract.clickToFix")}</p>
           </div>
         </div>
       )}
