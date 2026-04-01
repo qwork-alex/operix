@@ -871,6 +871,8 @@ export function Documents() {
   const [moveDestination, setMoveDestination] = useState<string>("__root__");
   const [newFolderInMove, setNewFolderInMove] = useState("");
   const [previewDoc, setPreviewDoc] = useState<any>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
 
   const { data: docs = [], isLoading } = useQuery({
     queryKey: ["documents", parentId],
