@@ -113,21 +113,28 @@ export function useServiceOrders(filters?: {
     mutationFn: async ({ id, ...updates }: Partial<ServiceOrder> & { id: string }) => {
       if (!id) throw new Error("Service order id is required for update.");
 
+      // Fetch FULL existing record to merge — prevents data loss
       const { data: existing, error: existingError } = await supabase
         .from("service_orders")
-        .select("id, created_by, created_at")
+        .select("*")
         .eq("id", id)
         .single();
 
       if (existingError) throw existingError;
 
+      // Merge: existing record + caller updates
       const payload = {
+        ...existing,
         ...updates,
         id,
         created_by: updates.created_by ?? existing.created_by ?? user?.id,
         created_at: updates.created_at ?? existing.created_at ?? new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
+
+      // Remove joined relations that come from select("*, clients(...)")
+      delete (payload as any).clients;
+      delete (payload as any).technicians;
 
       if (!hasRequiredAuditFields(payload)) {
         throw new Error("Missing required audit fields (id, created_by, created_at, updated_at).");
