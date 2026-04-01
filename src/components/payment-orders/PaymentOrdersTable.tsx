@@ -70,34 +70,39 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
         throw new Error(t("validate.inlineError") + ": " + t("validate.zeroTotal").replace("{n}", ""));
       }
 
+      // Fetch FULL existing record to merge
       const { data: existing, error: existingError } = await supabase
         .from("payment_orders")
-        .select("created_by, created_at")
+        .select("*")
         .eq("id", id)
         .single();
       if (existingError) throw existingError;
 
-      const created_by = existing.created_by ?? user?.id;
-      const created_at = existing.created_at ?? new Date().toISOString();
-      const updated_at = new Date().toISOString();
-
-      if (!id || !created_by || !created_at || !updated_at) {
-        throw new Error("Missing required audit fields (created_by, created_at, updated_at).");
+      // Block save if client or technician would be lost
+      if (!existing.client_id) {
+        throw new Error("Cannot save: client is missing on this record.");
+      }
+      if (!existing.technician_id) {
+        throw new Error("Cannot save: technician is missing on this record.");
       }
 
-      const services = svc;
-      const total = computedTotal;
+      // Merge existing data + edited fields — no field disappears
       const payload = {
-        platform: editForm.platform || null,
-        list_name: editForm.list_name || null,
-        car_name: editForm.car_name || null,
-        license_plate: editForm.license_plate || null,
-        services: services as unknown as Json,
-        total,
-        created_by,
-        created_at,
-        updated_at,
+        ...existing,
+        platform: editForm.platform || existing.platform,
+        list_name: editForm.list_name || existing.list_name,
+        car_name: editForm.car_name || existing.car_name,
+        license_plate: editForm.license_plate || existing.license_plate,
+        services: svc as unknown as Json,
+        total: computedTotal,
+        created_by: existing.created_by ?? user?.id,
+        created_at: existing.created_at ?? new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       };
+
+      // Remove joined relations before sending to DB
+      delete (payload as any).clients;
+      delete (payload as any).technicians;
 
       console.log("Saving payload:", payload);
 

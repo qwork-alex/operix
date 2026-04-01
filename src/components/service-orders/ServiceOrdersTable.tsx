@@ -90,40 +90,46 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
         throw new Error(t("validate.inlineError") + ": " + t("validate.zeroTotal").replace("{n}", ""));
       }
 
+      // Fetch FULL existing record to merge
       const { data: existing, error: existingError } = await supabase
         .from("service_orders")
-        .select("created_by, created_at")
+        .select("*")
         .eq("id", id)
         .single();
       if (existingError) throw existingError;
 
-      const created_by = existing.created_by ?? user?.id;
-      const created_at = existing.created_at ?? new Date().toISOString();
-      const updated_at = new Date().toISOString();
-
-      if (!id || !created_by || !created_at || !updated_at) {
-        throw new Error("Missing required audit fields (created_by, created_at, updated_at).");
+      // Block save if client or technician would be lost
+      if (!existing.client_id) {
+        throw new Error("Cannot save: client is missing on this record.");
+      }
+      if (!existing.technician_id) {
+        throw new Error("Cannot save: technician is missing on this record.");
       }
 
-
+      // Merge existing data + edited fields — no field disappears
       const payload = {
-        platform: editForm.platform || null,
-        week: editForm.week || null,
-        car_name: editForm.car_name || null,
-        license_plate: editForm.license_plate || null,
-        service_1_name: editForm.service_1_name || null,
+        ...existing,
+        platform: editForm.platform || existing.platform,
+        week: editForm.week || existing.week,
+        car_name: editForm.car_name || existing.car_name,
+        license_plate: editForm.license_plate || existing.license_plate,
+        service_1_name: editForm.service_1_name || existing.service_1_name,
         service_1_price: Number(editForm.service_1_price) || 0,
-        service_2_name: editForm.service_2_name || null,
+        service_2_name: editForm.service_2_name || existing.service_2_name,
         service_2_price: Number(editForm.service_2_price) || 0,
-        service_3_name: editForm.service_3_name || null,
+        service_3_name: editForm.service_3_name || existing.service_3_name,
         service_3_price: Number(editForm.service_3_price) || 0,
-        service_4_name: editForm.service_4_name || null,
+        service_4_name: editForm.service_4_name || existing.service_4_name,
         service_4_price: Number(editForm.service_4_price) || 0,
         total,
-        created_by,
-        created_at,
-        updated_at,
+        created_by: existing.created_by ?? user?.id,
+        created_at: existing.created_at ?? new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       };
+
+      // Remove joined relations before sending to DB
+      delete (payload as any).clients;
+      delete (payload as any).technicians;
 
       console.log("Saving payload:", payload);
 
