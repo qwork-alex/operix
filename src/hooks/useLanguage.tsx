@@ -358,6 +358,7 @@ const translations: Record<string, Record<LangCode, string>> = {
   "fm.selected": { fr: "sélectionné(s)", en: "selected", pt: "selecionado(s)", de: "ausgewählt", es: "seleccionado(s)", it: "selezionato/i", ar: "محدد", zh: "已选择", ja: "選択中", hi: "चयनित", pl: "zaznaczono", ru: "выбрано" },
   "fm.selectAll": { fr: "Tout sélectionner", en: "Select all", pt: "Selecionar tudo", de: "Alle auswählen", es: "Seleccionar todo", it: "Seleziona tutto", ar: "تحديد الكل", zh: "全选", ja: "すべて選択", hi: "सभी चुनें", pl: "Zaznacz wszystko", ru: "Выбрать все" },
   "fm.newFolderName": { fr: "Nom du nouveau dossier", en: "New folder name", pt: "Nome da nova pasta", de: "Neuer Ordnername", es: "Nombre de nueva carpeta", it: "Nome nuova cartella", ar: "اسم المجلد الجديد", zh: "新文件夹名", ja: "新しいフォルダ名", hi: "नए फ़ोल्डर का नाम", pl: "Nazwa nowego folderu", ru: "Имя новой папки" },
+  "fm.rename": { fr: "Renommer", en: "Rename", pt: "Renomear", de: "Umbenennen", es: "Renombrar", it: "Rinomina", ar: "إعادة تسمية", zh: "重命名", ja: "名前を変更", hi: "नाम बदलें", pl: "Zmień nazwę", ru: "Переименовать" },
 };
 
 interface LanguageContextType {
