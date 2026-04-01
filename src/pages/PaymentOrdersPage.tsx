@@ -135,6 +135,9 @@ export default function PaymentOrdersPage() {
 
       <UploadQueue queue={queue} onClearCompleted={clearCompleted} />
 
+      {/* Embedded file manager */}
+      <EmbeddedFileManager entityType="payment_order" sessionFileNames={sessionFiles} />
+
       {extractions.map((extraction, idx) => (
         <ExtractedPaymentTable
           key={idx}
