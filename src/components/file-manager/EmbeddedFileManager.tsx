@@ -476,6 +476,8 @@ export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props
             </TableBody>
           </Table>
         </div>
+      )}
+
       {/* Move dialog */}
       <Dialog open={showMoveDialog} onOpenChange={setShowMoveDialog}>
         <DialogContent className="bg-card border-border">
