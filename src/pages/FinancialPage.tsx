@@ -416,7 +416,7 @@ export default function FinancialPage() {
                </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-xs text-muted-foreground">Select one service order and one payment order to merge them.</p>
+              <p className="text-xs text-muted-foreground">{t("fin.selectToMerge")}</p>
 
               {selectedSO && selectedPO && (
                 <div className="flex items-center gap-2">
