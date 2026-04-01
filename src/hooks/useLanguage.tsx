@@ -355,6 +355,9 @@ const translations: Record<string, Record<LangCode, string>> = {
   "fm.moveTo": { fr: "Déplacer vers", en: "Move to", pt: "Mover para", de: "Verschieben nach", es: "Mover a", it: "Sposta in", ar: "نقل إلى", zh: "移动到", ja: "移動先", hi: "यहाँ ले जाएँ", pl: "Przenieś do", ru: "Переместить в" },
   "fm.moveFile": { fr: "Déplacer le fichier", en: "Move file", pt: "Mover arquivo", de: "Datei verschieben", es: "Mover archivo", it: "Sposta file", ar: "نقل الملف", zh: "移动文件", ja: "ファイルを移動", hi: "फ़ाइल स्थानांतरित करें", pl: "Przenieś plik", ru: "Переместить файл" },
   "fm.selectFolder": { fr: "Sélectionner un dossier", en: "Select folder", pt: "Selecionar pasta", de: "Ordner auswählen", es: "Seleccionar carpeta", it: "Seleziona cartella", ar: "اختر مجلد", zh: "选择文件夹", ja: "フォルダを選択", hi: "फ़ोल्डर चुनें", pl: "Wybierz folder", ru: "Выбрать папку" },
+  "fm.selected": { fr: "sélectionné(s)", en: "selected", pt: "selecionado(s)", de: "ausgewählt", es: "seleccionado(s)", it: "selezionato/i", ar: "محدد", zh: "已选择", ja: "選択中", hi: "चयनित", pl: "zaznaczono", ru: "выбрано" },
+  "fm.selectAll": { fr: "Tout sélectionner", en: "Select all", pt: "Selecionar tudo", de: "Alle auswählen", es: "Seleccionar todo", it: "Seleziona tutto", ar: "تحديد الكل", zh: "全选", ja: "すべて選択", hi: "सभी चुनें", pl: "Zaznacz wszystko", ru: "Выбрать все" },
+  "fm.newFolderName": { fr: "Nom du nouveau dossier", en: "New folder name", pt: "Nome da nova pasta", de: "Neuer Ordnername", es: "Nombre de nueva carpeta", it: "Nome nuova cartella", ar: "اسم المجلد الجديد", zh: "新文件夹名", ja: "新しいフォルダ名", hi: "नए फ़ोल्डर का नाम", pl: "Nazwa nowego folderu", ru: "Имя новой папки" },
 };
 
 interface LanguageContextType {
