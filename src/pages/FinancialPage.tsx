@@ -205,8 +205,8 @@ export default function FinancialPage() {
         <TabsList className="bg-muted">
           <TabsTrigger value="overview">{t("dashboard.revenueOverview")}</TabsTrigger>
           <TabsTrigger value="reconciliations">{t("fin.discrepancyDetails")}</TabsTrigger>
-          <TabsTrigger value="breakdown">Breakdown</TabsTrigger>
-          <TabsTrigger value="merge">Manual Match</TabsTrigger>
+          <TabsTrigger value="breakdown">{t("fin.breakdown")}</TabsTrigger>
+          <TabsTrigger value="merge">{t("fin.manualMatch")}</TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
