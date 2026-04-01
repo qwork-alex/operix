@@ -1181,6 +1181,9 @@ export function Documents() {
                           </Button>
                         </>
                       )}
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setRenamingId(d.id); setRenameValue(d.name); }} title={t("fm.rename")}>
+                        <Pencil className="h-3 w-3" />
+                      </Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => {
                         setMoveTarget(d);
                         setMoveDestination("__root__");
