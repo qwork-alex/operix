@@ -915,7 +915,7 @@ export function Documents() {
 
     const { error } = await supabase.from("documents").insert({
       name: file.name, type: "file", parent_id: parentId, uploaded_by: user?.id,
-      storage_path: storagePath, mime_type: file.type, size_bytes: file.size,
+      storage_path: storagePath, mime_type: file.type, size_bytes: file.size, entity_type: "documents",
     });
     if (error) toast.error(error.message);
     else {
