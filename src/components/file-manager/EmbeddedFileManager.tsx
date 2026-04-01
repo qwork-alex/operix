@@ -385,14 +385,32 @@ export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props
                   </TableCell>
                   <TableCell
                     className="font-medium flex items-center gap-2 cursor-pointer"
-                    onClick={() => d.type === "folder" && navigateTo(d.id, d.name)}
+                    onClick={() => renamingId !== d.id && d.type === "folder" && navigateTo(d.id, d.name)}
                   >
                     {d.type === "folder" ? (
-                      <FolderOpen className="h-3.5 w-3.5 text-primary" />
+                      <FolderOpen className="h-3.5 w-3.5 text-primary shrink-0" />
                     ) : (
-                      <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                      <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                     )}
-                    <span className="truncate max-w-[200px]">{d.name}</span>
+                    {renamingId === d.id ? (
+                      <form className="flex items-center gap-1" onSubmit={(e) => { e.preventDefault(); if (renameValue.trim()) renameMutation.mutate({ id: d.id, name: renameValue.trim() }); }}>
+                        <Input
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          className="h-6 text-[11px] w-[160px]"
+                          autoFocus
+                          onKeyDown={(e) => { if (e.key === "Escape") setRenamingId(null); }}
+                        />
+                        <Button type="submit" variant="ghost" size="icon" className="h-5 w-5" disabled={!renameValue.trim()}>
+                          <Check className="h-3 w-3 text-primary" />
+                        </Button>
+                        <Button type="button" variant="ghost" size="icon" className="h-5 w-5" onClick={() => setRenamingId(null)}>
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </form>
+                    ) : (
+                      <span className="truncate max-w-[200px]">{d.name}</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className="text-[9px]">
