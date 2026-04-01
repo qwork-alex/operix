@@ -26,6 +26,8 @@ import type { Json } from "@/integrations/supabase/types";
 
 export default function PaymentOrdersPage() {
   const { t } = useLanguage();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [filters, setFilters] = useState<{
     client_id?: string;
     platform?: string;
@@ -34,6 +36,7 @@ export default function PaymentOrdersPage() {
   }>({});
 
   const [extractions, setExtractions] = useState<PaymentExtractionResult[]>([]);
+  const [sessionFiles, setSessionFiles] = useState<string[]>([]);
   const { data: orders = [], isLoading, saveMutation } = usePaymentOrders(filters);
   const { extract } = useExtractPaymentOrder();
   const { data: clients = [] } = useClients();
@@ -45,7 +48,13 @@ export default function PaymentOrdersPage() {
   const listNames = [...new Set((orders as any[]).map(o => o.list_name).filter(Boolean))];
 
   const handleFiles = useCallback((files: File[]) => {
+    setSessionFiles(prev => [...prev, ...files.map(f => f.name)]);
+
     addFiles(files, async (file, onStatus) => {
+      storeFileInDocuments(file, "payment_order", user?.id).then(() => {
+        queryClient.invalidateQueries({ queryKey: ["embedded-docs", "payment_order"] });
+      });
+
       onStatus("uploading" as QueueItemStatus);
       await new Promise(r => setTimeout(r, 200));
       onStatus("processing" as QueueItemStatus);
@@ -62,7 +71,7 @@ export default function PaymentOrdersPage() {
         throw err;
       }
     });
-  }, [addFiles, extract]);
+  }, [addFiles, extract, user?.id, queryClient]);
 
   const handleSave = (extractionIdx: number, rows: ExtractedPaymentOrder[]) => {
     const inserts: PaymentOrderInsert[] = rows.map(r => {
