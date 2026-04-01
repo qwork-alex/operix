@@ -422,7 +422,7 @@ export default function FinancialPage() {
                 <div className="flex items-center gap-2">
                   <Button size="sm" onClick={handleMerge} disabled={mergeMutation.isPending}>
                     <Link2 className="h-4 w-4 mr-1" />
-                    Merge Records
+                    {t("fin.mergeRecords")}
                   </Button>
                   <Button size="sm" variant="ghost" onClick={() => { setSelectedSO(null); setSelectedPO(null); }}>
                     {t("action.cancel")}
