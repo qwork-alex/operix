@@ -359,6 +359,8 @@ const translations: Record<string, Record<LangCode, string>> = {
   "fm.selectAll": { fr: "Tout sélectionner", en: "Select all", pt: "Selecionar tudo", de: "Alle auswählen", es: "Seleccionar todo", it: "Seleziona tutto", ar: "تحديد الكل", zh: "全选", ja: "すべて選択", hi: "सभी चुनें", pl: "Zaznacz wszystko", ru: "Выбрать все" },
   "fm.newFolderName": { fr: "Nom du nouveau dossier", en: "New folder name", pt: "Nome da nova pasta", de: "Neuer Ordnername", es: "Nombre de nueva carpeta", it: "Nome nuova cartella", ar: "اسم المجلد الجديد", zh: "新文件夹名", ja: "新しいフォルダ名", hi: "नए फ़ोल्डर का नाम", pl: "Nazwa nowego folderu", ru: "Имя новой папки" },
   "fm.rename": { fr: "Renommer", en: "Rename", pt: "Renomear", de: "Umbenennen", es: "Renombrar", it: "Rinomina", ar: "إعادة تسمية", zh: "重命名", ja: "名前を変更", hi: "नाम बदलें", pl: "Zmień nazwę", ru: "Переименовать" },
+  "fm.openInNewTab": { fr: "Ouvrir dans un nouvel onglet", en: "Open in new tab", pt: "Abrir em nova aba", de: "In neuem Tab öffnen", es: "Abrir en nueva pestaña", it: "Apri in nuova scheda", ar: "فتح في علامة تبويب جديدة", zh: "在新标签页中打开", ja: "新しいタブで開く", hi: "नई टैब में खोलें", pl: "Otwórz w nowej karcie", ru: "Открыть в новой вкладке" },
+  "fm.previewError": { fr: "Impossible de charger l'aperçu", en: "Unable to load preview", pt: "Não foi possível carregar a pré-visualização", de: "Vorschau konnte nicht geladen werden", es: "No se pudo cargar la vista previa", it: "Impossibile caricare l'anteprima", ar: "تعذر تحميل المعاينة", zh: "无法加载预览", ja: "プレビューを読み込めません", hi: "पूर्वावलोकन लोड नहीं हो सका", pl: "Nie można załadować podglądu", ru: "Не удалось загрузить предварительный просмотр" },
 };
 
 interface LanguageContextType {
