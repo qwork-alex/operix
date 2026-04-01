@@ -173,7 +173,20 @@ export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props
     onError: (err) => toast.error((err as Error).message),
   });
 
-  const createFolderInMove = useMutation({
+  const renameMutation = useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      const { error } = await supabase.from("documents").update({ name }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["embedded-docs", entityType] });
+      setRenamingId(null);
+      toast.success(t("toast.updated"));
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+
+
     mutationFn: async (name: string) => {
       const { data, error } = await supabase.from("documents").insert({
         name,
