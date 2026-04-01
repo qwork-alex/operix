@@ -100,7 +100,8 @@ export function ProfitDistribution() {
   const { data: totalRevenue = 0 } = useQuery({
     queryKey: ["profit-summary"],
     queryFn: async () => {
-      const { data } = await supabase.from("service_orders").select("total");
+      // Use REAL revenue (payment orders) instead of expected (service orders)
+      const { data } = await supabase.from("payment_orders").select("total");
       return (data ?? []).reduce((s, o) => s + Number(o.total || 0), 0);
     },
   });
