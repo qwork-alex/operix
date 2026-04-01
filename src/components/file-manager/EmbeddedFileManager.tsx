@@ -6,7 +6,7 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { toast } from "sonner";
 import {
   FolderOpen, FolderPlus, ChevronRight, Trash2, Download,
-  Eye, Printer, FileText, MoveRight, Filter, CheckSquare,
+  Eye, Printer, FileText, MoveRight, Filter, CheckSquare, Pencil, Check, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +40,8 @@ export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [newFolderInMove, setNewFolderInMove] = useState("");
   const [moveDestination, setMoveDestination] = useState<string>("__root__");
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
 
   const queryKey = ["embedded-docs", entityType, parentId];
 
@@ -171,6 +173,18 @@ export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props
     onError: (err) => toast.error((err as Error).message),
   });
 
+  const renameMutation = useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      const { error } = await supabase.from("documents").update({ name }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["embedded-docs", entityType] });
+      setRenamingId(null);
+      toast.success(t("toast.updated"));
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
   const createFolderInMove = useMutation({
     mutationFn: async (name: string) => {
       const { data, error } = await supabase.from("documents").insert({
@@ -371,14 +385,32 @@ export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props
                   </TableCell>
                   <TableCell
                     className="font-medium flex items-center gap-2 cursor-pointer"
-                    onClick={() => d.type === "folder" && navigateTo(d.id, d.name)}
+                    onClick={() => renamingId !== d.id && d.type === "folder" && navigateTo(d.id, d.name)}
                   >
                     {d.type === "folder" ? (
-                      <FolderOpen className="h-3.5 w-3.5 text-primary" />
+                      <FolderOpen className="h-3.5 w-3.5 text-primary shrink-0" />
                     ) : (
-                      <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                      <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                     )}
-                    <span className="truncate max-w-[200px]">{d.name}</span>
+                    {renamingId === d.id ? (
+                      <form className="flex items-center gap-1" onSubmit={(e) => { e.preventDefault(); if (renameValue.trim()) renameMutation.mutate({ id: d.id, name: renameValue.trim() }); }}>
+                        <Input
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          className="h-6 text-[11px] w-[160px]"
+                          autoFocus
+                          onKeyDown={(e) => { if (e.key === "Escape") setRenamingId(null); }}
+                        />
+                        <Button type="submit" variant="ghost" size="icon" className="h-5 w-5" disabled={!renameValue.trim()}>
+                          <Check className="h-3 w-3 text-primary" />
+                        </Button>
+                        <Button type="button" variant="ghost" size="icon" className="h-5 w-5" onClick={() => setRenamingId(null)}>
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </form>
+                    ) : (
+                      <span className="truncate max-w-[200px]">{d.name}</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className="text-[9px]">
@@ -406,6 +438,15 @@ export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props
                           </Button>
                         </>
                       )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => { setRenamingId(d.id); setRenameValue(d.name); }}
+                        title={t("fm.rename")}
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"
