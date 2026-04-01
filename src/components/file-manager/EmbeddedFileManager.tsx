@@ -40,6 +40,8 @@ export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [newFolderInMove, setNewFolderInMove] = useState("");
   const [moveDestination, setMoveDestination] = useState<string>("__root__");
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
 
   const queryKey = ["embedded-docs", entityType, parentId];
 
