@@ -6,18 +6,16 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { toast } from "sonner";
 import {
   FolderOpen, FolderPlus, ChevronRight, Trash2, Download,
-  Eye, Printer, FileText, MoveRight, Filter,
+  Eye, Printer, FileText, MoveRight, Filter, CheckSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 
 interface Props {
   entityType: "service_order" | "payment_order";
@@ -39,6 +37,9 @@ export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props
   const [moveTarget, setMoveTarget] = useState<any>(null);
   const [previewDoc, setPreviewDoc] = useState<any>(null);
   const [filterMode, setFilterMode] = useState<"all" | "session">("all");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [newFolderInMove, setNewFolderInMove] = useState("");
+  const [moveDestination, setMoveDestination] = useState<string>("__root__");
 
   const queryKey = ["embedded-docs", entityType, parentId];
 
@@ -58,7 +59,6 @@ export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props
     },
   });
 
-  // Folders for move dialog
   const { data: allFolders = [] } = useQuery({
     queryKey: ["embedded-folders", entityType],
     queryFn: async () => {
@@ -77,6 +77,26 @@ export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props
   const filteredDocs = filterMode === "session" && sessionFileNames.length > 0
     ? docs.filter((d: any) => d.type === "folder" || sessionFileNames.includes(d.name))
     : docs;
+
+  const allSelected = filteredDocs.length > 0 && filteredDocs.every((d: any) => selectedIds.has(d.id));
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredDocs.map((d: any) => d.id)));
+    }
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
 
   const createFolder = useMutation({
     mutationFn: async () => {
@@ -113,24 +133,67 @@ export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props
     onError: (err) => toast.error((err as Error).message),
   });
 
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const docsToDelete = docs.filter((d: any) => ids.includes(d.id));
+      const storagePaths = docsToDelete
+        .filter((d: any) => d.storage_path)
+        .map((d: any) => d.storage_path);
+      if (storagePaths.length > 0) {
+        await supabase.storage.from("uploads").remove(storagePaths);
+      }
+      const { error } = await supabase.from("documents").delete().in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["embedded-docs", entityType] });
+      clearSelection();
+      toast.success(t("toast.deleted"));
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+
   const moveMutation = useMutation({
-    mutationFn: async ({ docId, newParentId }: { docId: string; newParentId: string | null }) => {
+    mutationFn: async ({ docIds, newParentId }: { docIds: string[]; newParentId: string | null }) => {
       const { error } = await supabase
         .from("documents")
         .update({ parent_id: newParentId })
-        .eq("id", docId);
+        .in("id", docIds);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["embedded-docs", entityType] });
       setShowMoveDialog(false);
       setMoveTarget(null);
+      clearSelection();
       toast.success(t("toast.updated"));
     },
     onError: (err) => toast.error((err as Error).message),
   });
 
+  const createFolderInMove = useMutation({
+    mutationFn: async (name: string) => {
+      const { data, error } = await supabase.from("documents").insert({
+        name,
+        type: "folder",
+        parent_id: null,
+        uploaded_by: user?.id,
+        entity_type: entityType,
+      }).select("id").single();
+      if (error) throw error;
+      return data.id;
+    },
+    onSuccess: (id) => {
+      queryClient.invalidateQueries({ queryKey: ["embedded-folders", entityType] });
+      setMoveDestination(id);
+      setNewFolderInMove("");
+      toast.success(t("docs.folderCreated"));
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+
   const navigateTo = (id: string | null, name: string) => {
+    clearSelection();
     if (id === null) {
       setParentId(null);
       setPath([{ id: null, name: t("common.root") }]);
@@ -170,7 +233,15 @@ export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props
     }
   };
 
-  const [moveDestination, setMoveDestination] = useState<string>("__root__");
+  const selectedArray = Array.from(selectedIds);
+  const isBulkMode = selectedArray.length > 0;
+
+  const openBulkMove = () => {
+    setMoveTarget(null);
+    setMoveDestination("__root__");
+    setNewFolderInMove("");
+    setShowMoveDialog(true);
+  };
 
   return (
     <div className="space-y-3 rounded-lg border border-border/50 bg-card/50 p-4">
@@ -184,7 +255,6 @@ export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props
           </Badge>
         </div>
         <div className="flex items-center gap-2">
-          {/* Filter */}
           <Select value={filterMode} onValueChange={(v) => setFilterMode(v as any)}>
             <SelectTrigger className="h-7 w-[130px] text-[11px]">
               <Filter className="h-3 w-3 mr-1" />
@@ -195,8 +265,6 @@ export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props
               <SelectItem value="session">{t("fm.sessionFiles")}</SelectItem>
             </SelectContent>
           </Select>
-
-          {/* New folder */}
           <Dialog open={showFolderDialog} onOpenChange={setShowFolderDialog}>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm" className="h-7 text-[11px]">
@@ -223,6 +291,32 @@ export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props
           </Dialog>
         </div>
       </div>
+
+      {/* Bulk action bar */}
+      {isBulkMode && (
+        <div className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2">
+          <CheckSquare className="h-4 w-4 text-primary" />
+          <span className="text-xs font-medium text-foreground">
+            {selectedArray.length} {t("fm.selected")}
+          </span>
+          <div className="ml-auto flex items-center gap-1">
+            <Button variant="outline" size="sm" className="h-7 text-[11px]" onClick={openBulkMove}>
+              <MoveRight className="h-3 w-3 mr-1" />{t("fm.move")}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-[11px] text-destructive border-destructive/30"
+              onClick={() => bulkDeleteMutation.mutate(selectedArray)}
+            >
+              <Trash2 className="h-3 w-3 mr-1" />{t("action.delete")}
+            </Button>
+            <Button variant="ghost" size="sm" className="h-7 text-[11px]" onClick={clearSelection}>
+              {t("action.cancel")}
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Breadcrumb */}
       <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
@@ -252,6 +346,13 @@ export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props
           <Table>
             <TableHeader>
               <TableRow className="text-[10px]">
+                <TableHead className="w-8">
+                  <Checkbox
+                    checked={allSelected}
+                    onCheckedChange={toggleAll}
+                    aria-label={t("fm.selectAll")}
+                  />
+                </TableHead>
                 <TableHead>{t("label.name")}</TableHead>
                 <TableHead>{t("label.type")}</TableHead>
                 <TableHead>{t("docs.size")}</TableHead>
@@ -261,7 +362,13 @@ export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props
             </TableHeader>
             <TableBody>
               {filteredDocs.map((d: any) => (
-                <TableRow key={d.id} className="text-[11px]">
+                <TableRow key={d.id} className={`text-[11px] ${selectedIds.has(d.id) ? "bg-primary/5" : ""}`}>
+                  <TableCell className="w-8">
+                    <Checkbox
+                      checked={selectedIds.has(d.id)}
+                      onCheckedChange={() => toggleSelect(d.id)}
+                    />
+                  </TableCell>
                   <TableCell
                     className="font-medium flex items-center gap-2 cursor-pointer"
                     onClick={() => d.type === "folder" && navigateTo(d.id, d.name)}
@@ -288,31 +395,13 @@ export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props
                     <div className="flex items-center gap-1">
                       {d.type === "file" && (
                         <>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={() => handlePreview(d)}
-                            title={t("fm.preview")}
-                          >
+                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handlePreview(d)} title={t("fm.preview")}>
                             <Eye className="h-3 w-3" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={() => handleDownload(d)}
-                            title={t("fm.download")}
-                          >
+                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDownload(d)} title={t("fm.download")}>
                             <Download className="h-3 w-3" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={() => handlePrint(d)}
-                            title={t("fm.print")}
-                          >
+                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handlePrint(d)} title={t("fm.print")}>
                             <Printer className="h-3 w-3" />
                           </Button>
                         </>
@@ -324,6 +413,7 @@ export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props
                         onClick={() => {
                           setMoveTarget(d);
                           setMoveDestination("__root__");
+                          setNewFolderInMove("");
                           setShowMoveDialog(true);
                         }}
                         title={t("fm.move")}
@@ -355,7 +445,10 @@ export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <p className="text-xs text-muted-foreground">
-              {t("fm.moveFile")}: <strong>{moveTarget?.name}</strong>
+              {moveTarget
+                ? <>{t("fm.moveFile")}: <strong>{moveTarget.name}</strong></>
+                : <>{selectedArray.length} {t("fm.selected")}</>
+              }
             </p>
             <Select value={moveDestination} onValueChange={setMoveDestination}>
               <SelectTrigger className="h-9 text-xs">
@@ -364,7 +457,7 @@ export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props
               <SelectContent>
                 <SelectItem value="__root__">{t("common.root")}</SelectItem>
                 {allFolders
-                  .filter((f: any) => f.id !== moveTarget?.id)
+                  .filter((f: any) => f.id !== moveTarget?.id && !selectedIds.has(f.id))
                   .map((f: any) => (
                     <SelectItem key={f.id} value={f.id}>
                       {f.name}
@@ -372,15 +465,31 @@ export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props
                   ))}
               </SelectContent>
             </Select>
+            {/* Create new folder inline */}
+            <div className="flex gap-2">
+              <Input
+                value={newFolderInMove}
+                onChange={(e) => setNewFolderInMove(e.target.value)}
+                placeholder={t("fm.newFolderName")}
+                className="h-8 text-xs"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs shrink-0"
+                disabled={!newFolderInMove.trim()}
+                onClick={() => createFolderInMove.mutate(newFolderInMove.trim())}
+              >
+                <FolderPlus className="h-3 w-3 mr-1" />{t("action.add")}
+              </Button>
+            </div>
             <Button
               className="w-full"
-              onClick={() =>
-                moveTarget &&
-                moveMutation.mutate({
-                  docId: moveTarget.id,
-                  newParentId: moveDestination === "__root__" ? null : moveDestination,
-                })
-              }
+              onClick={() => {
+                const ids = moveTarget ? [moveTarget.id] : selectedArray;
+                const dest = moveDestination === "__root__" ? null : moveDestination;
+                moveMutation.mutate({ docIds: ids, newParentId: dest });
+              }}
             >
               {t("fm.move")}
             </Button>
@@ -401,12 +510,7 @@ export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props
               <iframe src={previewDoc.url} className="w-full h-[60vh] rounded" />
             ) : (
               <div className="text-center py-8 text-sm text-muted-foreground">
-                <a
-                  href={previewDoc?.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary underline"
-                >
+                <a href={previewDoc?.url} target="_blank" rel="noopener noreferrer" className="text-primary underline">
                   {t("fm.download")}
                 </a>
               </div>
