@@ -74,22 +74,27 @@ export default function PaymentOrdersPage() {
   }, [addFiles, extract, user?.id, queryClient]);
 
   const handleSave = (extractionId: string, rows: ExtractedPaymentOrder[]) => {
-    // Use EXACTLY what the user sees — rows come from the component's edited state
+    // rows = EXACTLY what the user sees in the edited table (source of truth)
+    console.log("SAVING DATA (raw edited rows):", JSON.stringify(rows, null, 2));
+
     const inserts: PaymentOrderInsert[] = rows.map(r => {
       const clientMatch = clients.find(c => c.name.toLowerCase() === r.client?.toLowerCase());
       const techMatch = technicians.find(t => t.name.toLowerCase() === r.technician?.toLowerCase());
-      return {
+      const payload: PaymentOrderInsert = {
         client_id: clientMatch?.id || null,
         technician_id: techMatch?.id || null,
-        platform: r.platform,
-        list_name: r.list_name,
-        car_name: r.car_name,
-        license_plate: r.license_plate,
+        platform: r.platform ?? null,
+        list_name: r.list_name ?? null,
+        car_name: r.car_name ?? null,
+        license_plate: r.license_plate ?? null,
         services: (r.services || []) as unknown as Json,
-        total: r.total,
+        total: r.total ?? null,
         status: "pending",
       };
+      return payload;
     });
+
+    console.log("SAVING DATA (mapped inserts):", JSON.stringify(inserts, null, 2));
 
     saveMutation.mutate(inserts, {
       onSuccess: () => {
