@@ -411,9 +411,9 @@ export default function FinancialPage() {
         <TabsContent value="merge">
           <Card className="border-border/50">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Link2 className="h-4 w-4" /> Manual Match
-              </CardTitle>
+               <CardTitle className="text-sm font-medium flex items-center gap-2">
+                 <Link2 className="h-4 w-4" /> {t("fin.manualMatch")}
+               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-xs text-muted-foreground">Select one service order and one payment order to merge them.</p>
