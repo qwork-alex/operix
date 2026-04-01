@@ -867,7 +867,9 @@ export function Documents() {
   const { data: docs = [], isLoading } = useQuery({
     queryKey: ["documents", parentId],
     queryFn: async () => {
-      let q = supabase.from("documents").select("*").order("type", { ascending: true }).order("name");
+      let q = supabase.from("documents").select("*")
+        .or("entity_type.is.null,entity_type.eq.documents")
+        .order("type", { ascending: true }).order("name");
       q = parentId ? q.eq("parent_id", parentId) : q.is("parent_id", null);
       const { data, error } = await q;
       if (error) throw error;
