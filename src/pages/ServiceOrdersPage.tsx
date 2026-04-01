@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { FileText, Filter } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileUploadZone } from "@/components/service-orders/FileUploadZone";
@@ -6,6 +6,7 @@ import { ExtractedDataTable } from "@/components/service-orders/ExtractedDataTab
 import { ExtractionStages } from "@/components/service-orders/ExtractionStages";
 import { UploadQueue } from "@/components/service-orders/UploadQueue";
 import { ServiceOrdersTable } from "@/components/service-orders/ServiceOrdersTable";
+import { EmbeddedFileManager, storeFileInDocuments } from "@/components/file-manager/EmbeddedFileManager";
 import {
   useServiceOrders,
   useExtractServiceOrder,
@@ -17,10 +18,14 @@ import {
 } from "@/hooks/useServiceOrders";
 import { useFileQueue, type QueueItemStatus } from "@/hooks/useFileQueue";
 import { useLanguage } from "@/hooks/useLanguage";
+import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function ServiceOrdersPage() {
   const { t } = useLanguage();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [filters, setFilters] = useState<{
     client_id?: string;
     platform?: string;
@@ -29,6 +34,7 @@ export default function ServiceOrdersPage() {
   }>({});
 
   const [extractions, setExtractions] = useState<ExtractionResult[]>([]);
+  const [sessionFiles, setSessionFiles] = useState<string[]>([]);
   const { data: orders = [], isLoading, saveMutation } = useServiceOrders(filters);
   const { extract } = useExtractServiceOrder();
   const { data: clients = [] } = useClients();
@@ -39,7 +45,15 @@ export default function ServiceOrdersPage() {
   const weeks = [...new Set((orders as any[]).map((o) => o.week).filter(Boolean))];
 
   const handleFiles = useCallback((files: File[]) => {
+    // Track session files for filter
+    setSessionFiles(prev => [...prev, ...files.map(f => f.name)]);
+
     addFiles(files, async (file, onStatus) => {
+      // Store file in document system (non-blocking)
+      storeFileInDocuments(file, "service_order", user?.id).then(() => {
+        queryClient.invalidateQueries({ queryKey: ["embedded-docs", "service_order"] });
+      });
+
       onStatus("uploading" as QueueItemStatus);
       await new Promise(r => setTimeout(r, 200));
       onStatus("processing" as QueueItemStatus);
@@ -56,7 +70,7 @@ export default function ServiceOrdersPage() {
         throw err;
       }
     });
-  }, [addFiles, extract]);
+  }, [addFiles, extract, user?.id, queryClient]);
 
   const handleSave = (extractionIdx: number, rows: ExtractedOrder[]) => {
     const inserts: ServiceOrderInsert[] = rows.map((r) => {
@@ -125,8 +139,8 @@ export default function ServiceOrdersPage() {
       {/* Upload */}
       <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} />
 
-      {/* Upload queue */}
-      <UploadQueue queue={queue} onClearCompleted={clearCompleted} />
+      {/* Embedded file manager */}
+      <EmbeddedFileManager entityType="service_order" sessionFileNames={sessionFiles} />
 
       {/* Extraction previews — one per file */}
       {extractions.map((extraction, idx) => (

@@ -343,6 +343,18 @@ const translations: Record<string, Record<LangCode, string>> = {
   "validate.lowConfidencePrefix": { fr: "⚠", en: "⚠", pt: "⚠", de: "⚠", es: "⚠", it: "⚠", ar: "⚠", zh: "⚠", ja: "⚠", hi: "⚠", pl: "⚠", ru: "⚠" },
   "extract.fieldsNeedReview": { fr: "champs à vérifier", en: "fields need review", pt: "campos precisam de revisão", de: "Felder zu prüfen", es: "campos necesitan revisión", it: "campi da verificare", ar: "حقول تحتاج مراجعة", zh: "个字段需要审查", ja: "フィールドの確認が必要", hi: "फ़ील्ड की समीक्षा आवश्यक", pl: "pola do weryfikacji", ru: "полей требуют проверки" },
   "extract.clickToFix": { fr: "Cliquez sur un champ pour le corriger directement", en: "Click any highlighted field to fix it instantly", pt: "Clique em qualquer campo destacado para corrigi-lo", de: "Klicken Sie auf ein markiertes Feld, um es zu korrigieren", es: "Haga clic en cualquier campo resaltado para corregirlo", it: "Clicca su un campo evidenziato per correggerlo", ar: "انقر على أي حقل مميز لتصحيحه", zh: "点击任何高亮字段即可修正", ja: "ハイライトされたフィールドをクリックして修正", hi: "किसी भी हाइलाइट फ़ील्ड पर क्लिक करके ठीक करें", pl: "Kliknij podświetlone pole, aby je poprawić", ru: "Нажмите на выделенное поле, чтобы исправить" },
+
+  // File manager
+  "fm.title": { fr: "Fichiers téléchargés", en: "Uploaded Files", pt: "Arquivos enviados", de: "Hochgeladene Dateien", es: "Archivos subidos", it: "File caricati", ar: "الملفات المرفوعة", zh: "已上传文件", ja: "アップロードファイル", hi: "अपलोड की गई फ़ाइलें", pl: "Przesłane pliki", ru: "Загруженные файлы" },
+  "fm.allFiles": { fr: "Tous les fichiers", en: "All files", pt: "Todos os arquivos", de: "Alle Dateien", es: "Todos los archivos", it: "Tutti i file", ar: "جميع الملفات", zh: "所有文件", ja: "全ファイル", hi: "सभी फ़ाइलें", pl: "Wszystkie pliki", ru: "Все файлы" },
+  "fm.sessionFiles": { fr: "Session actuelle", en: "Current session", pt: "Sessão atual", de: "Aktuelle Sitzung", es: "Sesión actual", it: "Sessione corrente", ar: "الجلسة الحالية", zh: "当前会话", ja: "現在のセッション", hi: "वर्तमान सत्र", pl: "Bieżąca sesja", ru: "Текущая сессия" },
+  "fm.preview": { fr: "Aperçu", en: "Preview", pt: "Visualizar", de: "Vorschau", es: "Vista previa", it: "Anteprima", ar: "معاينة", zh: "预览", ja: "プレビュー", hi: "पूर्वावलोकन", pl: "Podgląd", ru: "Предпросмотр" },
+  "fm.download": { fr: "Télécharger", en: "Download", pt: "Baixar", de: "Herunterladen", es: "Descargar", it: "Scarica", ar: "تحميل", zh: "下载", ja: "ダウンロード", hi: "डाउनलोड", pl: "Pobierz", ru: "Скачать" },
+  "fm.print": { fr: "Imprimer", en: "Print", pt: "Imprimir", de: "Drucken", es: "Imprimir", it: "Stampa", ar: "طباعة", zh: "打印", ja: "印刷", hi: "प्रिंट", pl: "Drukuj", ru: "Печать" },
+  "fm.move": { fr: "Déplacer", en: "Move", pt: "Mover", de: "Verschieben", es: "Mover", it: "Sposta", ar: "نقل", zh: "移动", ja: "移動", hi: "स्थानांतरित करें", pl: "Przenieś", ru: "Переместить" },
+  "fm.moveTo": { fr: "Déplacer vers", en: "Move to", pt: "Mover para", de: "Verschieben nach", es: "Mover a", it: "Sposta in", ar: "نقل إلى", zh: "移动到", ja: "移動先", hi: "यहाँ ले जाएँ", pl: "Przenieś do", ru: "Переместить в" },
+  "fm.moveFile": { fr: "Déplacer le fichier", en: "Move file", pt: "Mover arquivo", de: "Datei verschieben", es: "Mover archivo", it: "Sposta file", ar: "نقل الملف", zh: "移动文件", ja: "ファイルを移動", hi: "फ़ाइल स्थानांतरित करें", pl: "Przenieś plik", ru: "Переместить файл" },
+  "fm.selectFolder": { fr: "Sélectionner un dossier", en: "Select folder", pt: "Selecionar pasta", de: "Ordner auswählen", es: "Seleccionar carpeta", it: "Seleziona cartella", ar: "اختر مجلد", zh: "选择文件夹", ja: "フォルダを選択", hi: "फ़ोल्डर चुनें", pl: "Wybierz folder", ru: "Выбрать папку" },
 };
 
 interface LanguageContextType {

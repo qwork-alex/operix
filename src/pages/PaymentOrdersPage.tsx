@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { CreditCard, Filter, RefreshCw } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import { ExtractedPaymentTable } from "@/components/payment-orders/ExtractedPaym
 import { ExtractionStages } from "@/components/service-orders/ExtractionStages";
 import { UploadQueue } from "@/components/service-orders/UploadQueue";
 import { PaymentOrdersTable } from "@/components/payment-orders/PaymentOrdersTable";
+import { EmbeddedFileManager, storeFileInDocuments } from "@/components/file-manager/EmbeddedFileManager";
 import {
   usePaymentOrders,
   useExtractPaymentOrder,
@@ -18,11 +19,15 @@ import {
 import { useClients, useTechnicians } from "@/hooks/useServiceOrders";
 import { useFileQueue, type QueueItemStatus } from "@/hooks/useFileQueue";
 import { useLanguage } from "@/hooks/useLanguage";
+import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import type { Json } from "@/integrations/supabase/types";
 
 export default function PaymentOrdersPage() {
   const { t } = useLanguage();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [filters, setFilters] = useState<{
     client_id?: string;
     platform?: string;
@@ -31,6 +36,7 @@ export default function PaymentOrdersPage() {
   }>({});
 
   const [extractions, setExtractions] = useState<PaymentExtractionResult[]>([]);
+  const [sessionFiles, setSessionFiles] = useState<string[]>([]);
   const { data: orders = [], isLoading, saveMutation } = usePaymentOrders(filters);
   const { extract } = useExtractPaymentOrder();
   const { data: clients = [] } = useClients();
@@ -42,7 +48,13 @@ export default function PaymentOrdersPage() {
   const listNames = [...new Set((orders as any[]).map(o => o.list_name).filter(Boolean))];
 
   const handleFiles = useCallback((files: File[]) => {
+    setSessionFiles(prev => [...prev, ...files.map(f => f.name)]);
+
     addFiles(files, async (file, onStatus) => {
+      storeFileInDocuments(file, "payment_order", user?.id).then(() => {
+        queryClient.invalidateQueries({ queryKey: ["embedded-docs", "payment_order"] });
+      });
+
       onStatus("uploading" as QueueItemStatus);
       await new Promise(r => setTimeout(r, 200));
       onStatus("processing" as QueueItemStatus);
@@ -59,7 +71,7 @@ export default function PaymentOrdersPage() {
         throw err;
       }
     });
-  }, [addFiles, extract]);
+  }, [addFiles, extract, user?.id, queryClient]);
 
   const handleSave = (extractionIdx: number, rows: ExtractedPaymentOrder[]) => {
     const inserts: PaymentOrderInsert[] = rows.map(r => {
@@ -122,6 +134,9 @@ export default function PaymentOrdersPage() {
       <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} />
 
       <UploadQueue queue={queue} onClearCompleted={clearCompleted} />
+
+      {/* Embedded file manager */}
+      <EmbeddedFileManager entityType="payment_order" sessionFileNames={sessionFiles} />
 
       {extractions.map((extraction, idx) => (
         <ExtractedPaymentTable
