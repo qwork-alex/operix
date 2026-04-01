@@ -289,6 +289,44 @@ export type Database = {
           },
         ]
       }
+      fuel_receipts: {
+        Row: {
+          amount: number
+          created_at: string
+          file_name: string
+          file_url: string
+          id: string
+          storage_path: string | null
+          usage_log_id: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          file_name?: string
+          file_url: string
+          id?: string
+          storage_path?: string | null
+          usage_log_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          file_name?: string
+          file_url?: string
+          id?: string
+          storage_path?: string | null
+          usage_log_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fuel_receipts_usage_log_id_fkey"
+            columns: ["usage_log_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_usage_logs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mileage_logs: {
         Row: {
           created_at: string
@@ -756,18 +794,149 @@ export type Database = {
         }
         Relationships: []
       }
+      vehicle_assignments: {
+        Row: {
+          created_at: string
+          driver_name: string
+          end_date: string | null
+          id: string
+          start_date: string
+          status: string
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          driver_name: string
+          end_date?: string | null
+          id?: string
+          start_date?: string
+          status?: string
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          driver_name?: string
+          end_date?: string | null
+          id?: string
+          start_date?: string
+          status?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_assignments_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vehicle_documents: {
+        Row: {
+          created_at: string
+          doc_type: string
+          file_name: string
+          file_url: string
+          id: string
+          storage_path: string | null
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          doc_type?: string
+          file_name?: string
+          file_url: string
+          id?: string
+          storage_path?: string | null
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          doc_type?: string
+          file_name?: string
+          file_url?: string
+          id?: string
+          storage_path?: string | null
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_documents_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vehicle_usage_logs: {
+        Row: {
+          created_at: string
+          date: string
+          distance: number | null
+          driver_name: string
+          end_location: string | null
+          fuel_cost: number | null
+          id: string
+          km_end: number
+          km_start: number
+          liters: number | null
+          start_location: string | null
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          date?: string
+          distance?: number | null
+          driver_name?: string
+          end_location?: string | null
+          fuel_cost?: number | null
+          id?: string
+          km_end: number
+          km_start: number
+          liters?: number | null
+          start_location?: string | null
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          distance?: number | null
+          driver_name?: string
+          end_location?: string | null
+          fuel_cost?: number | null
+          id?: string
+          km_end?: number
+          km_start?: number
+          liters?: number | null
+          start_location?: string | null
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_usage_logs_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vehicles: {
         Row: {
           assigned_technician_id: string | null
           brand: string | null
           created_at: string
           created_by: string | null
+          fuel_type: string | null
           id: string
           insurance_expiry: string | null
           license_plate: string
           model: string | null
           name: string
           notes: string | null
+          power: string | null
           year: number | null
         }
         Insert: {
@@ -775,12 +944,14 @@ export type Database = {
           brand?: string | null
           created_at?: string
           created_by?: string | null
+          fuel_type?: string | null
           id?: string
           insurance_expiry?: string | null
           license_plate: string
           model?: string | null
           name: string
           notes?: string | null
+          power?: string | null
           year?: number | null
         }
         Update: {
@@ -788,12 +959,14 @@ export type Database = {
           brand?: string | null
           created_at?: string
           created_by?: string | null
+          fuel_type?: string | null
           id?: string
           insurance_expiry?: string | null
           license_plate?: string
           model?: string | null
           name?: string
           notes?: string | null
+          power?: string | null
           year?: number | null
         }
         Relationships: [
