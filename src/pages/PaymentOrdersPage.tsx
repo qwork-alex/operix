@@ -73,7 +73,8 @@ export default function PaymentOrdersPage() {
     });
   }, [addFiles, extract, user?.id, queryClient]);
 
-  const handleSave = (extractionIdx: number, rows: ExtractedPaymentOrder[]) => {
+  const handleSave = (extractionId: string, rows: ExtractedPaymentOrder[]) => {
+    // Use EXACTLY what the user sees — rows come from the component's edited state
     const inserts: PaymentOrderInsert[] = rows.map(r => {
       const clientMatch = clients.find(c => c.name.toLowerCase() === r.client?.toLowerCase());
       const techMatch = technicians.find(t => t.name.toLowerCase() === r.technician?.toLowerCase());
@@ -92,14 +93,14 @@ export default function PaymentOrdersPage() {
 
     saveMutation.mutate(inserts, {
       onSuccess: () => {
-        setExtractions(prev => prev.filter((_, i) => i !== extractionIdx));
+        setExtractions(prev => prev.filter((e) => e._id !== extractionId));
         detectMutation.mutate();
       },
     });
   };
 
-  const handleDiscard = (extractionIdx: number) => {
-    setExtractions(prev => prev.filter((_, i) => i !== extractionIdx));
+  const handleDiscard = (extractionId: string) => {
+    setExtractions(prev => prev.filter((e) => e._id !== extractionId));
   };
 
   const setFilter = (key: string, value: string) => {
