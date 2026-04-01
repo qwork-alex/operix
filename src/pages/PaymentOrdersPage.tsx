@@ -35,7 +35,7 @@ export default function PaymentOrdersPage() {
     list_name?: string;
   }>({});
 
-  const [extractions, setExtractions] = useState<PaymentExtractionResult[]>([]);
+  const [extractions, setExtractions] = useState<(PaymentExtractionResult & { _id: string })[]>([]);
   const [sessionFiles, setSessionFiles] = useState<string[]>([]);
   const { data: orders = [], isLoading, saveMutation } = usePaymentOrders(filters);
   const { extract } = useExtractPaymentOrder();
@@ -60,7 +60,7 @@ export default function PaymentOrdersPage() {
       onStatus("processing" as QueueItemStatus);
       try {
         const result = await extract(file);
-        setExtractions(prev => [...prev, result]);
+        setExtractions(prev => [...prev, { ...result, _id: crypto.randomUUID() }]);
         if (result.confidence === "low") {
           toast.warning("Low confidence — please review carefully.");
         }
@@ -73,7 +73,8 @@ export default function PaymentOrdersPage() {
     });
   }, [addFiles, extract, user?.id, queryClient]);
 
-  const handleSave = (extractionIdx: number, rows: ExtractedPaymentOrder[]) => {
+  const handleSave = (extractionId: string, rows: ExtractedPaymentOrder[]) => {
+    // Use EXACTLY what the user sees — rows come from the component's edited state
     const inserts: PaymentOrderInsert[] = rows.map(r => {
       const clientMatch = clients.find(c => c.name.toLowerCase() === r.client?.toLowerCase());
       const techMatch = technicians.find(t => t.name.toLowerCase() === r.technician?.toLowerCase());
@@ -92,14 +93,14 @@ export default function PaymentOrdersPage() {
 
     saveMutation.mutate(inserts, {
       onSuccess: () => {
-        setExtractions(prev => prev.filter((_, i) => i !== extractionIdx));
+        setExtractions(prev => prev.filter((e) => e._id !== extractionId));
         detectMutation.mutate();
       },
     });
   };
 
-  const handleDiscard = (extractionIdx: number) => {
-    setExtractions(prev => prev.filter((_, i) => i !== extractionIdx));
+  const handleDiscard = (extractionId: string) => {
+    setExtractions(prev => prev.filter((e) => e._id !== extractionId));
   };
 
   const setFilter = (key: string, value: string) => {
@@ -138,14 +139,14 @@ export default function PaymentOrdersPage() {
       {/* Embedded file manager */}
       <EmbeddedFileManager entityType="payment_order" sessionFileNames={sessionFiles} />
 
-      {extractions.map((extraction, idx) => (
+      {extractions.map((extraction) => (
         <ExtractedPaymentTable
-          key={idx}
+          key={extraction._id}
           orders={extraction.orders}
           confidence={extraction.confidence}
           notes={extraction.notes}
-          onSave={(rows) => handleSave(idx, rows)}
-          onDiscard={() => handleDiscard(idx)}
+          onSave={(rows) => handleSave(extraction._id, rows)}
+          onDiscard={() => handleDiscard(extraction._id)}
           isSaving={saveMutation.isPending}
         />
       ))}

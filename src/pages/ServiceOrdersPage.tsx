@@ -33,7 +33,7 @@ export default function ServiceOrdersPage() {
     week?: string;
   }>({});
 
-  const [extractions, setExtractions] = useState<ExtractionResult[]>([]);
+  const [extractions, setExtractions] = useState<(ExtractionResult & { _id: string })[]>([]);
   const [sessionFiles, setSessionFiles] = useState<string[]>([]);
   const { data: orders = [], isLoading, saveMutation } = useServiceOrders(filters);
   const { extract } = useExtractServiceOrder();
@@ -59,7 +59,7 @@ export default function ServiceOrdersPage() {
       onStatus("processing" as QueueItemStatus);
       try {
         const result = await extract(file);
-        setExtractions(prev => [...prev, result]);
+        setExtractions(prev => [...prev, { ...result, _id: crypto.randomUUID() }]);
         if (result.confidence === "low") {
           toast.warning("Low confidence extraction — please review carefully.");
         }
@@ -72,7 +72,8 @@ export default function ServiceOrdersPage() {
     });
   }, [addFiles, extract, user?.id, queryClient]);
 
-  const handleSave = (extractionIdx: number, rows: ExtractedOrder[]) => {
+  const handleSave = (extractionId: string, rows: ExtractedOrder[]) => {
+    // Use EXACTLY what the user sees — rows come from the component's edited state
     const inserts: ServiceOrderInsert[] = rows.map((r) => {
       const clientMatch = clients.find(
         (c) => c.name.toLowerCase() === r.client?.toLowerCase()
@@ -102,13 +103,13 @@ export default function ServiceOrdersPage() {
 
     saveMutation.mutate(inserts, {
       onSuccess: () => {
-        setExtractions(prev => prev.filter((_, i) => i !== extractionIdx));
+        setExtractions(prev => prev.filter((e) => e._id !== extractionId));
       },
     });
   };
 
-  const handleDiscard = (extractionIdx: number) => {
-    setExtractions(prev => prev.filter((_, i) => i !== extractionIdx));
+  const handleDiscard = (extractionId: string) => {
+    setExtractions(prev => prev.filter((e) => e._id !== extractionId));
   };
 
   const setFilter = (key: string, value: string) => {
@@ -143,14 +144,14 @@ export default function ServiceOrdersPage() {
       <EmbeddedFileManager entityType="service_order" sessionFileNames={sessionFiles} />
 
       {/* Extraction previews — one per file */}
-      {extractions.map((extraction, idx) => (
+      {extractions.map((extraction) => (
         <ExtractedDataTable
-          key={idx}
+          key={extraction._id}
           orders={extraction.orders}
           confidence={extraction.confidence}
           notes={extraction.notes}
-          onSave={(rows) => handleSave(idx, rows)}
-          onDiscard={() => handleDiscard(idx)}
+          onSave={(rows) => handleSave(extraction._id, rows)}
+          onDiscard={() => handleDiscard(extraction._id)}
           isSaving={saveMutation.isPending}
         />
       ))}
