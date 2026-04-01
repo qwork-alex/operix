@@ -388,7 +388,9 @@ export function Accounting() {
   const categories = [
     { value: "labor", label: "acc.catLabor" },
     { value: "material", label: "acc.catMaterial" },
+    { value: "fuel", label: "acc.catFuel" },
     { value: "tax", label: "acc.catTax" },
+    { value: "salary", label: "acc.catSalary" },
     { value: "services", label: "acc.catServices" },
     { value: "other", label: "acc.catOther" },
   ];
