@@ -357,7 +357,7 @@ export default function FinancialPage() {
                       <Bar dataKey="received" name={t("fin.received")} fill="hsl(var(--chart-2))" radius={[0, 4, 4, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
-                ) : <p className="text-xs text-muted-foreground text-center py-4">No data</p>}
+                ) : <p className="text-xs text-muted-foreground text-center py-4">{t("fin.noData")}</p>}
               </CardContent>
             </Card>
 
