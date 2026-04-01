@@ -35,7 +35,7 @@ export default function PaymentOrdersPage() {
     list_name?: string;
   }>({});
 
-  const [extractions, setExtractions] = useState<PaymentExtractionResult[]>([]);
+  const [extractions, setExtractions] = useState<(PaymentExtractionResult & { _id: string })[]>([]);
   const [sessionFiles, setSessionFiles] = useState<string[]>([]);
   const { data: orders = [], isLoading, saveMutation } = usePaymentOrders(filters);
   const { extract } = useExtractPaymentOrder();
