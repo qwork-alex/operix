@@ -193,7 +193,10 @@ export function ProfitDistribution() {
       queryClient.invalidateQueries({ queryKey: ["profit-distributions"] });
       toast.success("Regras de distribuição salvas com sucesso");
     },
-    onError: (err) => toast.error("Erro ao salvar configuração"),
+    onError: (err: any) => {
+      console.error("Profit distribution save error:", err);
+      toast.error(err?.message || "Erro ao salvar configuração");
+    },
   });
 
   // ── Automatic Distribution Calculation ──
