@@ -1151,9 +1151,17 @@ export function Documents() {
                   <TableCell className="w-8">
                     <Checkbox checked={selectedIds.has(d.id)} onCheckedChange={() => toggleSelect(d.id)} />
                   </TableCell>
-                  <TableCell className="font-medium flex items-center gap-2 cursor-pointer" onClick={() => d.type === "folder" && navigateTo(d.id, d.name)}>
-                    {d.type === "folder" ? <FolderOpen className="h-4 w-4 text-primary" /> : <FileText className="h-4 w-4 text-muted-foreground" />}
-                    {d.name}
+                  <TableCell className="font-medium flex items-center gap-2 cursor-pointer" onClick={() => renamingId !== d.id && d.type === "folder" && navigateTo(d.id, d.name)}>
+                    {d.type === "folder" ? <FolderOpen className="h-4 w-4 text-primary shrink-0" /> : <FileText className="h-4 w-4 text-muted-foreground shrink-0" />}
+                    {renamingId === d.id ? (
+                      <form className="flex items-center gap-1" onSubmit={(e) => { e.preventDefault(); if (renameValue.trim()) renameMutation.mutate({ id: d.id, name: renameValue.trim() }); }}>
+                        <Input value={renameValue} onChange={(e) => setRenameValue(e.target.value)} className="h-6 text-xs w-[180px]" autoFocus onKeyDown={(e) => { if (e.key === "Escape") setRenamingId(null); }} />
+                        <Button type="submit" variant="ghost" size="icon" className="h-5 w-5" disabled={!renameValue.trim()}><Check className="h-3 w-3 text-primary" /></Button>
+                        <Button type="button" variant="ghost" size="icon" className="h-5 w-5" onClick={() => setRenamingId(null)}><X className="h-3 w-3" /></Button>
+                      </form>
+                    ) : (
+                      <span className="truncate max-w-[200px]">{d.name}</span>
+                    )}
                   </TableCell>
                   <TableCell><Badge variant="outline">{d.type === "folder" ? t("common.folder") : t("common.file")}</Badge></TableCell>
                   <TableCell>{d.size_bytes ? `${(d.size_bytes / 1024).toFixed(1)} KB` : "—"}</TableCell>
