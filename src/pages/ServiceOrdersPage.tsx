@@ -45,7 +45,15 @@ export default function ServiceOrdersPage() {
   const weeks = [...new Set((orders as any[]).map((o) => o.week).filter(Boolean))];
 
   const handleFiles = useCallback((files: File[]) => {
+    // Track session files for filter
+    setSessionFiles(prev => [...prev, ...files.map(f => f.name)]);
+
     addFiles(files, async (file, onStatus) => {
+      // Store file in document system (non-blocking)
+      storeFileInDocuments(file, "service_order", user?.id).then(() => {
+        queryClient.invalidateQueries({ queryKey: ["embedded-docs", "service_order"] });
+      });
+
       onStatus("uploading" as QueueItemStatus);
       await new Promise(r => setTimeout(r, 200));
       onStatus("processing" as QueueItemStatus);
@@ -62,7 +70,7 @@ export default function ServiceOrdersPage() {
         throw err;
       }
     });
-  }, [addFiles, extract]);
+  }, [addFiles, extract, user?.id, queryClient]);
 
   const handleSave = (extractionIdx: number, rows: ExtractedOrder[]) => {
     const inserts: ServiceOrderInsert[] = rows.map((r) => {
