@@ -880,7 +880,7 @@ export function Documents() {
   const createFolder = useMutation({
     mutationFn: async () => {
       const { error } = await supabase.from("documents").insert({
-        name: folderName, type: "folder", parent_id: parentId, uploaded_by: user?.id,
+        name: folderName, type: "folder", parent_id: parentId, uploaded_by: user?.id, entity_type: "documents",
       });
       if (error) throw error;
     },
