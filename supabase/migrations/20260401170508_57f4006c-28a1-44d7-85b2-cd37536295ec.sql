@@ -1,0 +1,1 @@
+ALTER TABLE public.profit_distributions DROP CONSTRAINT profit_distributions_scope_check;
