@@ -236,7 +236,7 @@ export default function FinancialPage() {
             {/* Reconciliation status pie */}
             <Card className="border-border/50">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Reconciliation Status</CardTitle>
+                <CardTitle className="text-sm font-medium">{t("fin.reconciliationStatus")}</CardTitle>
               </CardHeader>
               <CardContent className="flex items-center justify-center">
                 {pieData.length > 0 ? (
