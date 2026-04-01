@@ -998,6 +998,19 @@ export function Documents() {
     onError: (err) => toast.error((err as Error).message),
   });
 
+  const renameMutation = useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      const { error } = await supabase.from("documents").update({ name }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["documents"] });
+      setRenamingId(null);
+      toast.success(t("toast.updated"));
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+
   const uploadFile = async (file: File) => {
     const storagePath = `documents/${Date.now()}_${file.name}`;
     const { error: uploadErr } = await supabase.storage.from("uploads").upload(storagePath, file);
