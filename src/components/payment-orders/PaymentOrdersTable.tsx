@@ -6,18 +6,21 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Trash2, Pencil, Save, X, Loader2, Plus } from "lucide-react";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useAuth } from "@/hooks/useAuth";
+import { useClients, useTechnicians } from "@/hooks/useServiceOrders";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 import type { Json } from "@/integrations/supabase/types";
 
 interface PaymentOrderRow {
   id: string;
+  client_id: string | null;
   clients?: { name: string } | null;
   platform: string | null;
   list_name: string | null;
+  technician_id: string | null;
   technicians?: { name: string } | null;
   car_name: string | null;
   license_plate: string | null;
@@ -33,16 +36,27 @@ const statusStyle: Record<string, string> = {
 };
 
 interface EditState {
+  client_id: string;
   platform: string;
   list_name: string;
+  technician_id: string;
   car_name: string;
   license_plate: string;
   services: { name: string; price: number }[];
 }
 
+const EMPTY_RELATION_VALUE = "__none__";
+
+const toNullableText = (value: string) => {
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+};
+
 export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrderRow[]; isLoading: boolean }) {
   const { t, formatCurrency } = useLanguage();
   const { user } = useAuth();
+  const { data: clients = [] } = useClients();
+  const { data: technicians = [] } = useTechnicians();
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditState | null>(null);
@@ -63,14 +77,17 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
     mutationFn: async (id: string) => {
       if (!editForm) return;
 
-      // Inline validation
-      const svc = editForm.services.filter(s => s.name);
-      const computedTotal = svc.reduce((sum, s) => sum + (Number(s.price) || 0), 0);
+      const services = editForm.services.map((service) => ({
+        name: service.name.trim(),
+        price: Number(service.price) || 0,
+      }));
+      const filledServices = services.filter((service) => service.name);
+      const computedTotal = filledServices.reduce((sum, service) => sum + service.price, 0);
+
       if (computedTotal === 0) {
         throw new Error(t("validate.inlineError") + ": " + t("validate.zeroTotal").replace("{n}", ""));
       }
 
-      // Fetch FULL existing record to merge
       const { data: existing, error: existingError } = await supabase
         .from("payment_orders")
         .select("*")
@@ -78,33 +95,25 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
         .single();
       if (existingError) throw existingError;
 
-      // Block save if client or technician would be lost
-      if (!existing.client_id) {
-        throw new Error("Cannot save: client is missing on this record.");
-      }
-      if (!existing.technician_id) {
-        throw new Error("Cannot save: technician is missing on this record.");
-      }
-
-      // Merge existing data + edited fields — no field disappears
       const payload = {
         ...existing,
-        platform: editForm.platform || existing.platform,
-        list_name: editForm.list_name || existing.list_name,
-        car_name: editForm.car_name || existing.car_name,
-        license_plate: editForm.license_plate || existing.license_plate,
-        services: svc as unknown as Json,
+        client_id: editForm.client_id === EMPTY_RELATION_VALUE ? null : editForm.client_id,
+        technician_id: editForm.technician_id === EMPTY_RELATION_VALUE ? null : editForm.technician_id,
+        platform: toNullableText(editForm.platform),
+        list_name: toNullableText(editForm.list_name),
+        car_name: toNullableText(editForm.car_name),
+        license_plate: toNullableText(editForm.license_plate),
+        services: filledServices as unknown as Json,
         total: computedTotal,
-        created_by: existing.created_by ?? user?.id,
+        created_by: existing.created_by ?? user?.id ?? null,
         created_at: existing.created_at ?? new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
 
-      // Remove joined relations before sending to DB
       delete (payload as any).clients;
       delete (payload as any).technicians;
 
-      console.log("Saving payload:", payload);
+      console.log("SAVING DATA:", { id, formData: editForm, payload });
 
       const { error } = await supabase.from("payment_orders").update(payload).eq("id", id);
       if (error) throw error;
@@ -123,8 +132,10 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
     const services = Array.isArray(o.services) ? (o.services as { name: string; price: number }[]) : [];
     setEditingId(o.id);
     setEditForm({
+      client_id: o.client_id || EMPTY_RELATION_VALUE,
       platform: o.platform || "",
       list_name: o.list_name || "",
+      technician_id: o.technician_id || EMPTY_RELATION_VALUE,
       car_name: o.car_name || "",
       license_plate: o.license_plate || "",
       services: services.length > 0 ? [...services] : [{ name: "", price: 0 }],
@@ -137,7 +148,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
   };
 
   const updateService = (idx: number, field: "name" | "price", value: string | number) => {
-    setEditForm(prev => {
+    setEditForm((prev) => {
       if (!prev) return prev;
       const updated = [...prev.services];
       updated[idx] = { ...updated[idx], [field]: value };
@@ -146,7 +157,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
   };
 
   const addService = () => {
-    setEditForm(prev => prev ? { ...prev, services: [...prev.services, { name: "", price: 0 }] } : prev);
+    setEditForm((prev) => (prev ? { ...prev, services: [...prev.services, { name: "", price: 0 }] } : prev));
   };
 
   if (isLoading) {
@@ -183,42 +194,69 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
             const isEditing = editingId === o.id && editForm;
 
             if (isEditing) {
-              const computedTotal = editForm.services.reduce((sum, s) => sum + (Number(s.price) || 0), 0);
+              const computedTotal = editForm.services.reduce((sum, service) => sum + (Number(service.price) || 0), 0);
               return (
                 <TableRow key={o.id} className="bg-primary/5 text-xs relative">
-                  {/* Editing mode indicator */}
                   <TableCell colSpan={0} className="absolute -left-0 top-0 bottom-0 w-1 bg-primary rounded-l p-0" />
 
-                  <TableCell className="font-medium">{(o.clients as any)?.name || "—"}</TableCell>
-                  <TableCell className="p-1">
-                    <Input className="h-7 text-xs" value={editForm.platform} onChange={e => setEditForm(p => p ? { ...p, platform: e.target.value } : p)} />
+                  <TableCell className="p-1 min-w-[170px]">
+                    <Select value={editForm.client_id} onValueChange={(value) => setEditForm((prev) => (prev ? { ...prev, client_id: value } : prev))}>
+                      <SelectTrigger className="h-7 text-xs bg-background">
+                        <SelectValue placeholder={t("label.client")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={EMPTY_RELATION_VALUE}>—</SelectItem>
+                        {clients.map((client) => (
+                          <SelectItem key={client.id} value={client.id}>
+                            {client.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </TableCell>
                   <TableCell className="p-1">
-                    <Input className="h-7 text-xs" value={editForm.list_name} onChange={e => setEditForm(p => p ? { ...p, list_name: e.target.value } : p)} />
-                  </TableCell>
-                  <TableCell>{(o.technicians as any)?.name || "—"}</TableCell>
-                  <TableCell className="p-1">
-                    <Input className="h-7 text-xs" value={editForm.car_name} onChange={e => setEditForm(p => p ? { ...p, car_name: e.target.value } : p)} />
+                    <Input className="h-7 text-xs" value={editForm.platform} onChange={(e) => setEditForm((prev) => (prev ? { ...prev, platform: e.target.value } : prev))} />
                   </TableCell>
                   <TableCell className="p-1">
-                    <Input className="h-7 text-xs w-24 font-mono" value={editForm.license_plate} onChange={e => setEditForm(p => p ? { ...p, license_plate: e.target.value } : p)} />
+                    <Input className="h-7 text-xs" value={editForm.list_name} onChange={(e) => setEditForm((prev) => (prev ? { ...prev, list_name: e.target.value } : prev))} />
+                  </TableCell>
+                  <TableCell className="p-1 min-w-[170px]">
+                    <Select value={editForm.technician_id} onValueChange={(value) => setEditForm((prev) => (prev ? { ...prev, technician_id: value } : prev))}>
+                      <SelectTrigger className="h-7 text-xs bg-background">
+                        <SelectValue placeholder={t("label.technician")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={EMPTY_RELATION_VALUE}>—</SelectItem>
+                        {technicians.map((technician) => (
+                          <SelectItem key={technician.id} value={technician.id}>
+                            {technician.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell className="p-1">
+                    <Input className="h-7 text-xs" value={editForm.car_name} onChange={(e) => setEditForm((prev) => (prev ? { ...prev, car_name: e.target.value } : prev))} />
+                  </TableCell>
+                  <TableCell className="p-1">
+                    <Input className="h-7 text-xs w-24 font-mono" value={editForm.license_plate} onChange={(e) => setEditForm((prev) => (prev ? { ...prev, license_plate: e.target.value } : prev))} />
                   </TableCell>
                   <TableCell className="p-1">
                     <div className="space-y-1">
-                      {editForm.services.map((s, si) => (
-                        <div key={si} className="flex gap-1">
+                      {editForm.services.map((service, serviceIndex) => (
+                        <div key={serviceIndex} className="flex gap-1">
                           <Input
                             className="h-6 text-[11px] px-1 w-20"
-                            value={s.name}
+                            value={service.name}
                             placeholder={t("extract.serviceName")}
-                            onChange={e => updateService(si, "name", e.target.value)}
+                            onChange={(e) => updateService(serviceIndex, "name", e.target.value)}
                           />
                           <Input
                             className="h-6 text-[11px] px-1 w-14 text-right tabular-nums"
                             type="number"
                             step="0.01"
-                            value={s.price}
-                            onChange={e => updateService(si, "price", Number(e.target.value) || 0)}
+                            value={service.price}
+                            onChange={(e) => updateService(serviceIndex, "price", Number(e.target.value) || 0)}
                           />
                         </div>
                       ))}
@@ -255,18 +293,16 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
               );
             }
 
-            const services = Array.isArray(o.services) ? o.services as { name: string; price: number }[] : [];
+            const services = Array.isArray(o.services) ? (o.services as { name: string; price: number }[]) : [];
             return (
               <TableRow key={o.id} className="text-xs">
-                <TableCell className="font-medium">{(o.clients as any)?.name || "—"}</TableCell>
+                <TableCell className="font-medium">{o.clients?.name || "—"}</TableCell>
                 <TableCell>{o.platform || "—"}</TableCell>
                 <TableCell>{o.list_name || "—"}</TableCell>
-                <TableCell>{(o.technicians as any)?.name || "—"}</TableCell>
+                <TableCell>{o.technicians?.name || "—"}</TableCell>
                 <TableCell>{o.car_name || "—"}</TableCell>
                 <TableCell className="font-mono text-[11px]">{o.license_plate || "—"}</TableCell>
-                <TableCell className="max-w-[180px] truncate">
-                  {services.map(s => s.name).join(", ") || "—"}
-                </TableCell>
+                <TableCell className="max-w-[180px] truncate">{services.map((service) => service.name).join(", ") || "—"}</TableCell>
                 <TableCell className="text-right font-medium tabular-nums">{formatCurrency(o.total || 0)}</TableCell>
                 <TableCell>
                   <Badge variant="outline" className={statusStyle[o.status] || statusStyle.pending}>
