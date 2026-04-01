@@ -17,11 +17,11 @@ import FinancialPage from "./pages/FinancialPage";
 import {
   ProfitDistribution,
   Accounting,
-  Fleet,
   Documents,
   UsersPage,
   SettingsPage,
 } from "./pages/ModulePages";
+import FleetPage from "./pages/FleetPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
