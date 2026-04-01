@@ -54,7 +54,7 @@ export function useManualMerge() {
       const diff = soTotal - poTotal;
       const status = Math.abs(diff) < 0.01 ? "matched" : "mismatch";
 
-      const { data, error } = await supabase.from("reconciliations").upsert({
+      const { data, error } = await (supabase as any).from("reconciliations").upsert({
         service_order_id: serviceOrderId,
         payment_order_id: paymentOrderId,
         matched_by: "manual",
