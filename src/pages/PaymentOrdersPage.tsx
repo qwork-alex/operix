@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { CreditCard, Filter, RefreshCw } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import { ExtractedPaymentTable } from "@/components/payment-orders/ExtractedPaym
 import { ExtractionStages } from "@/components/service-orders/ExtractionStages";
 import { UploadQueue } from "@/components/service-orders/UploadQueue";
 import { PaymentOrdersTable } from "@/components/payment-orders/PaymentOrdersTable";
+import { EmbeddedFileManager, storeFileInDocuments } from "@/components/file-manager/EmbeddedFileManager";
 import {
   usePaymentOrders,
   useExtractPaymentOrder,
@@ -18,7 +19,9 @@ import {
 import { useClients, useTechnicians } from "@/hooks/useServiceOrders";
 import { useFileQueue, type QueueItemStatus } from "@/hooks/useFileQueue";
 import { useLanguage } from "@/hooks/useLanguage";
+import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import type { Json } from "@/integrations/supabase/types";
 
 export default function PaymentOrdersPage() {

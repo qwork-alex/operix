@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { FileText, Filter } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileUploadZone } from "@/components/service-orders/FileUploadZone";
@@ -6,6 +6,7 @@ import { ExtractedDataTable } from "@/components/service-orders/ExtractedDataTab
 import { ExtractionStages } from "@/components/service-orders/ExtractionStages";
 import { UploadQueue } from "@/components/service-orders/UploadQueue";
 import { ServiceOrdersTable } from "@/components/service-orders/ServiceOrdersTable";
+import { EmbeddedFileManager, storeFileInDocuments } from "@/components/file-manager/EmbeddedFileManager";
 import {
   useServiceOrders,
   useExtractServiceOrder,
@@ -17,7 +18,9 @@ import {
 } from "@/hooks/useServiceOrders";
 import { useFileQueue, type QueueItemStatus } from "@/hooks/useFileQueue";
 import { useLanguage } from "@/hooks/useLanguage";
+import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function ServiceOrdersPage() {
   const { t } = useLanguage();
