@@ -24,6 +24,8 @@ import { useQueryClient } from "@tanstack/react-query";
 
 export default function ServiceOrdersPage() {
   const { t } = useLanguage();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [filters, setFilters] = useState<{
     client_id?: string;
     platform?: string;
@@ -32,6 +34,7 @@ export default function ServiceOrdersPage() {
   }>({});
 
   const [extractions, setExtractions] = useState<ExtractionResult[]>([]);
+  const [sessionFiles, setSessionFiles] = useState<string[]>([]);
   const { data: orders = [], isLoading, saveMutation } = useServiceOrders(filters);
   const { extract } = useExtractServiceOrder();
   const { data: clients = [] } = useClients();
