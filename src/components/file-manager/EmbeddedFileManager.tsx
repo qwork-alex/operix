@@ -185,8 +185,7 @@ export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props
     },
     onError: (err) => toast.error((err as Error).message),
   });
-
-
+  const createFolderInMove = useMutation({
     mutationFn: async (name: string) => {
       const { data, error } = await supabase.from("documents").insert({
         name,
