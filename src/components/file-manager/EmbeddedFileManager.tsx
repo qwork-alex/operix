@@ -442,6 +442,15 @@ export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props
                         variant="ghost"
                         size="icon"
                         className="h-6 w-6"
+                        onClick={() => { setRenamingId(d.id); setRenameValue(d.name); }}
+                        title={t("fm.rename")}
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
                         onClick={() => {
                           setMoveTarget(d);
                           setMoveDestination("__root__");
