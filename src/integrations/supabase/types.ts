@@ -540,6 +540,60 @@ export type Database = {
         }
         Relationships: []
       }
+      reconciliations: {
+        Row: {
+          confidence_score: number
+          created_at: string
+          difference_amount: number
+          id: string
+          matched_by: string
+          notes: string | null
+          payment_order_id: string | null
+          service_order_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          confidence_score?: number
+          created_at?: string
+          difference_amount?: number
+          id?: string
+          matched_by?: string
+          notes?: string | null
+          payment_order_id?: string | null
+          service_order_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          confidence_score?: number
+          created_at?: string
+          difference_amount?: number
+          id?: string
+          matched_by?: string
+          notes?: string | null
+          payment_order_id?: string | null
+          service_order_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reconciliations_payment_order_id_fkey"
+            columns: ["payment_order_id"]
+            isOneToOne: false
+            referencedRelation: "payment_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reconciliations_service_order_id_fkey"
+            columns: ["service_order_id"]
+            isOneToOne: false
+            referencedRelation: "service_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       service_orders: {
         Row: {
           car_name: string | null
