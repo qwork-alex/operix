@@ -6,7 +6,7 @@ export function useReconciliations() {
   return useQuery({
     queryKey: ["reconciliations"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("reconciliations")
         .select("*, service_orders(id, license_plate, car_name, total, platform, week, client_id, technician_id, clients(name), technicians(name)), payment_orders(id, license_plate, car_name, total, platform, client_id, technician_id, clients(name), technicians(name))")
         .order("created_at", { ascending: false });
