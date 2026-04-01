@@ -6,7 +6,7 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { toast } from "sonner";
 import {
   FolderOpen, FolderPlus, ChevronRight, Trash2, Download,
-  Eye, Printer, FileText, MoveRight, Filter, CheckSquare,
+  Eye, Printer, FileText, MoveRight, Filter, CheckSquare, Pencil, Check, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
