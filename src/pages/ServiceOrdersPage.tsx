@@ -73,7 +73,9 @@ export default function ServiceOrdersPage() {
   }, [addFiles, extract, user?.id, queryClient]);
 
   const handleSave = (extractionId: string, rows: ExtractedOrder[]) => {
-    // Use EXACTLY what the user sees — rows come from the component's edited state
+    // rows = EXACTLY what the user sees in the edited table (source of truth)
+    console.log("SAVING DATA (raw edited rows):", JSON.stringify(rows, null, 2));
+
     const inserts: ServiceOrderInsert[] = rows.map((r) => {
       const clientMatch = clients.find(
         (c) => c.name.toLowerCase() === r.client?.toLowerCase()
@@ -81,25 +83,28 @@ export default function ServiceOrdersPage() {
       const techMatch = technicians.find(
         (t) => t.name.toLowerCase() === r.technician?.toLowerCase()
       );
-      return {
+      const payload: ServiceOrderInsert = {
         client_id: clientMatch?.id || null,
         technician_id: techMatch?.id || null,
-        platform: r.platform,
-        week: r.week,
-        car_name: r.car_name,
-        license_plate: r.license_plate,
-        service_1_name: r.service_1_name,
-        service_1_price: r.service_1_price,
-        service_2_name: r.service_2_name,
-        service_2_price: r.service_2_price,
-        service_3_name: r.service_3_name,
-        service_3_price: r.service_3_price,
-        service_4_name: r.service_4_name,
-        service_4_price: r.service_4_price,
-        total: r.total,
+        platform: r.platform ?? null,
+        week: r.week ?? null,
+        car_name: r.car_name ?? null,
+        license_plate: r.license_plate ?? null,
+        service_1_name: r.service_1_name ?? null,
+        service_1_price: r.service_1_price ?? null,
+        service_2_name: r.service_2_name ?? null,
+        service_2_price: r.service_2_price ?? null,
+        service_3_name: r.service_3_name ?? null,
+        service_3_price: r.service_3_price ?? null,
+        service_4_name: r.service_4_name ?? null,
+        service_4_price: r.service_4_price ?? null,
+        total: r.total ?? null,
         status: "draft",
       };
+      return payload;
     });
+
+    console.log("SAVING DATA (mapped inserts):", JSON.stringify(inserts, null, 2));
 
     saveMutation.mutate(inserts, {
       onSuccess: () => {
