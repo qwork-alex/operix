@@ -33,7 +33,7 @@ export default function ServiceOrdersPage() {
     week?: string;
   }>({});
 
-  const [extractions, setExtractions] = useState<ExtractionResult[]>([]);
+  const [extractions, setExtractions] = useState<(ExtractionResult & { _id: string })[]>([]);
   const [sessionFiles, setSessionFiles] = useState<string[]>([]);
   const { data: orders = [], isLoading, saveMutation } = useServiceOrders(filters);
   const { extract } = useExtractServiceOrder();
