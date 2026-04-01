@@ -64,7 +64,7 @@ serve(async (req) => {
         const poTotal = Number(po.total || 0);
         score += similarity(soTotal, poTotal) * 15;
 
-        // Week (10%) - compare via platform as proxy if no week on PO
+        // Platform & client (10%)
         if (so.platform && po.platform && normalize(so.platform) === normalize(po.platform)) score += 5;
         if (so.client_id && po.client_id && so.client_id === po.client_id) score += 5;
 
@@ -97,7 +97,6 @@ serve(async (req) => {
         });
         matchedPOIds.add(bestMatch.id);
       } else {
-        // No match found — missing payment
         results.push({
           service_order_id: so.id,
           payment_order_id: null,
@@ -126,16 +125,12 @@ serve(async (req) => {
       }
     }
 
+    // Insert results one by one to avoid constraint issues
     if (results.length > 0) {
-      const { error } = await supabase.from("reconciliations").upsert(results, {
-        onConflict: "service_order_id,payment_order_id",
-        ignoreDuplicates: false,
-      });
-      if (error) {
-        console.error("Upsert error, inserting individually:", error);
-        // Fallback: insert one by one, skip conflicts
-        for (const r of results) {
-          await supabase.from("reconciliations").insert(r).select();
+      for (const r of results) {
+        const { error } = await supabase.from("reconciliations").insert(r);
+        if (error) {
+          console.warn("Insert skip:", error.message, r);
         }
       }
     }

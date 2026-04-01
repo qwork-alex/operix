@@ -43,7 +43,6 @@ export function useManualMerge() {
 
   return useMutation({
     mutationFn: async ({ serviceOrderId, paymentOrderId }: { serviceOrderId: string; paymentOrderId: string }) => {
-      // Fetch both orders to calculate difference
       const [soRes, poRes] = await Promise.all([
         supabase.from("service_orders").select("total").eq("id", serviceOrderId).single(),
         supabase.from("payment_orders").select("total").eq("id", paymentOrderId).single(),
@@ -54,17 +53,43 @@ export function useManualMerge() {
       const diff = soTotal - poTotal;
       const status = Math.abs(diff) < 0.01 ? "matched" : "mismatch";
 
-      const { data, error } = await (supabase as any).from("reconciliations").upsert({
+      // Try insert first, if conflict update
+      const { data, error } = await (supabase as any).from("reconciliations").insert({
         service_order_id: serviceOrderId,
         payment_order_id: paymentOrderId,
         matched_by: "manual",
         confidence_score: 100,
         difference_amount: diff,
         status,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "service_order_id,payment_order_id" }).select().single();
+      }).select().single();
 
-      if (error) throw error;
+      if (error) {
+        // If duplicate, update existing
+        const { data: existing } = await (supabase as any)
+          .from("reconciliations")
+          .select("id")
+          .eq("service_order_id", serviceOrderId)
+          .eq("payment_order_id", paymentOrderId)
+          .single();
+
+        if (existing) {
+          const { data: updated, error: updateError } = await (supabase as any)
+            .from("reconciliations")
+            .update({
+              matched_by: "manual",
+              confidence_score: 100,
+              difference_amount: diff,
+              status,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", existing.id)
+            .select()
+            .single();
+          if (updateError) throw updateError;
+          return updated;
+        }
+        throw error;
+      }
       return data;
     },
     onSuccess: () => {
@@ -92,21 +117,27 @@ export function useReconciliationSummary() {
       const reconciliations = recRes.data ?? [];
       const financialRecords = frRes.data ?? [];
 
-      const expectedRevenue = serviceOrders.reduce((s, o) => s + Number(o.total || 0), 0);
-      const receivedRevenue = paymentOrders.reduce((s, o) => s + Number(o.total || 0), 0);
+      const expectedRevenue = serviceOrders.reduce((s: number, o: any) => s + Number(o.total || 0), 0);
+      const receivedRevenue = paymentOrders.reduce((s: number, o: any) => s + Number(o.total || 0), 0);
       const totalDifference = expectedRevenue - receivedRevenue;
       const discrepancyPct = expectedRevenue > 0 ? (Math.abs(totalDifference) / expectedRevenue) * 100 : 0;
 
-      const matched = reconciliations.filter(r => r.status === "matched").length;
-      const mismatched = reconciliations.filter(r => r.status === "mismatch").length;
-      const missing = reconciliations.filter(r => r.status === "missing").length;
-      const pending = reconciliations.filter(r => r.status === "pending").length;
+      const matched = reconciliations.filter((r: any) => r.status === "matched").length;
+      const mismatched = reconciliations.filter((r: any) => r.status === "mismatch").length;
+      const missing = reconciliations.filter((r: any) => r.status === "missing").length;
+      const pending = reconciliations.filter((r: any) => r.status === "pending").length;
 
       // Expenses from financial_records
-      const expenses = financialRecords
-        .filter(r => r.type === "expense")
-        .reduce((s, r) => s + Number(r.amount || 0), 0);
+      const allExpenses = financialRecords.filter((r: any) => r.type === "expense");
+      const expenses = allExpenses.reduce((s: number, r: any) => s + Number(r.amount || 0), 0);
       const profit = receivedRevenue - expenses;
+
+      // Expense breakdown by category
+      const expenseByCategory: Record<string, number> = {};
+      for (const r of allExpenses) {
+        const cat = r.category || "other";
+        expenseByCategory[cat] = (expenseByCategory[cat] || 0) + Number(r.amount || 0);
+      }
 
       // Monthly data for charts
       const monthlyData: Record<string, { so: number; po: number; expenses: number }> = {};
@@ -192,6 +223,7 @@ export function useReconciliationSummary() {
         pending,
         expenses,
         profit,
+        expenseByCategory,
         monthly,
         byClient: Object.values(byClient).sort((a, b) => b.expected - a.expected),
         byTechnician: Object.values(byTechnician).sort((a, b) => b.expected - a.expected),
