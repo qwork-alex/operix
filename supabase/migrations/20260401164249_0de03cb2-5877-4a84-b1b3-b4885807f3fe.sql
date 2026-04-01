@@ -1,0 +1,1 @@
+ALTER TABLE public.profit_distributions ADD COLUMN IF NOT EXISTS notes text;

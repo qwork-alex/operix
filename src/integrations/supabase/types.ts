@@ -545,6 +545,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          notes: string | null
           partner_share: number
           scope: string
           target_order_id: string | null
@@ -557,6 +558,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          notes?: string | null
           partner_share?: number
           scope?: string
           target_order_id?: string | null
@@ -569,6 +571,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          notes?: string | null
           partner_share?: number
           scope?: string
           target_order_id?: string | null
