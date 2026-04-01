@@ -139,14 +139,14 @@ export default function PaymentOrdersPage() {
       {/* Embedded file manager */}
       <EmbeddedFileManager entityType="payment_order" sessionFileNames={sessionFiles} />
 
-      {extractions.map((extraction, idx) => (
+      {extractions.map((extraction) => (
         <ExtractedPaymentTable
-          key={idx}
+          key={extraction._id}
           orders={extraction.orders}
           confidence={extraction.confidence}
           notes={extraction.notes}
-          onSave={(rows) => handleSave(idx, rows)}
-          onDiscard={() => handleDiscard(idx)}
+          onSave={(rows) => handleSave(extraction._id, rows)}
+          onDiscard={() => handleDiscard(extraction._id)}
           isSaving={saveMutation.isPending}
         />
       ))}

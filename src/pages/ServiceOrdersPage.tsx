@@ -144,14 +144,14 @@ export default function ServiceOrdersPage() {
       <EmbeddedFileManager entityType="service_order" sessionFileNames={sessionFiles} />
 
       {/* Extraction previews — one per file */}
-      {extractions.map((extraction, idx) => (
+      {extractions.map((extraction) => (
         <ExtractedDataTable
-          key={idx}
+          key={extraction._id}
           orders={extraction.orders}
           confidence={extraction.confidence}
           notes={extraction.notes}
-          onSave={(rows) => handleSave(idx, rows)}
-          onDiscard={() => handleDiscard(idx)}
+          onSave={(rows) => handleSave(extraction._id, rows)}
+          onDiscard={() => handleDiscard(extraction._id)}
           isSaving={saveMutation.isPending}
         />
       ))}
