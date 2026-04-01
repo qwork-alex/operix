@@ -72,7 +72,8 @@ export default function ServiceOrdersPage() {
     });
   }, [addFiles, extract, user?.id, queryClient]);
 
-  const handleSave = (extractionIdx: number, rows: ExtractedOrder[]) => {
+  const handleSave = (extractionId: string, rows: ExtractedOrder[]) => {
+    // Use EXACTLY what the user sees — rows come from the component's edited state
     const inserts: ServiceOrderInsert[] = rows.map((r) => {
       const clientMatch = clients.find(
         (c) => c.name.toLowerCase() === r.client?.toLowerCase()
@@ -102,13 +103,13 @@ export default function ServiceOrdersPage() {
 
     saveMutation.mutate(inserts, {
       onSuccess: () => {
-        setExtractions(prev => prev.filter((_, i) => i !== extractionIdx));
+        setExtractions(prev => prev.filter((e) => e._id !== extractionId));
       },
     });
   };
 
-  const handleDiscard = (extractionIdx: number) => {
-    setExtractions(prev => prev.filter((_, i) => i !== extractionIdx));
+  const handleDiscard = (extractionId: string) => {
+    setExtractions(prev => prev.filter((e) => e._id !== extractionId));
   };
 
   const setFilter = (key: string, value: string) => {
