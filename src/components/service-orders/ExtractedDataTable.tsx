@@ -45,14 +45,14 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
   const [rows, setRows] = useState<ExtractedOrder[]>(initial);
   const [stage, setStage] = useState<Stage>("review");
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
-  const [validated, setValidated] = useState(false);
   const [errorRows, setErrorRows] = useState<Set<number>>(new Set());
   const [showOverrideDialog, setShowOverrideDialog] = useState(false);
   const { t, formatCurrency } = useLanguage();
 
   const update = (idx: number, field: keyof ExtractedOrder, value: string | number | null) => {
-    setValidated(false);
+    // Clear previous validation when user edits — fields always editable
     setValidationErrors([]);
+    setErrorRows(new Set());
     setRows((prev) =>
       prev.map((r, i) => {
         if (i !== idx) return r;
@@ -62,7 +62,6 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
         const p3 = Number(updated.service_3_price) || 0;
         const p4 = Number(updated.service_4_price) || 0;
         updated.total = p1 + p2 + p3 + p4;
-        // When user edits a field, mark it as high confidence (user-verified)
         if (updated.field_confidence) {
           updated.field_confidence = { ...updated.field_confidence, [field]: "high" };
         }
@@ -75,12 +74,12 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
 
   const removeRow = (idx: number) => {
     setRows((prev) => prev.filter((_, i) => i !== idx));
-    setValidated(false);
     setValidationErrors([]);
+    setErrorRows(new Set());
     if (stage !== "review") setStage("review");
   };
 
-  const runValidation = () => {
+  const runValidation = (): boolean => {
     const errors: string[] = [];
     const badRows = new Set<number>();
     rows.forEach((row, i) => {
@@ -95,7 +94,6 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
         badRows.add(i);
       }
       if ((row.total ?? 0) === 0) { errors.push(t("validate.zeroTotal").replace("{n}", n)); badRows.add(i); }
-      // Warn about low-confidence fields
       const lowFields = Object.entries(row.field_confidence || {}).filter(([, v]) => v === "low").map(([k]) => k);
       if (lowFields.length > 0) {
         errors.push(t("validate.lowConfidence").replace("{n}", n).replace("{fields}", lowFields.join(", ")));
@@ -103,19 +101,20 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
     });
     setValidationErrors(errors);
     setErrorRows(badRows);
-    // Allow saving even with warnings - only block on missing required fields
     const blocking = errors.filter(e => !e.includes(t("validate.lowConfidencePrefix")));
     if (blocking.length === 0) {
-      setValidated(true);
       setStage("save");
+      return true;
     } else {
-      setValidated(false);
       setStage("validate");
+      return false;
     }
   };
 
   const handleSave = () => {
-    if (errorRows.size > 0 && !validated) {
+    const passed = runValidation();
+    if (!passed) {
+      // Show override dialog — user can still force save
       setShowOverrideDialog(true);
       return;
     }
@@ -176,17 +175,20 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
               {t("extract.corrections")}
             </Badge>
           )}
+          {/* Editing mode indicator — always active */}
+          <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/30">
+            <Pencil className="h-3 w-3 mr-1" />
+            {t("edit.modeActive")}
+          </Badge>
         </div>
         <div className="flex gap-2">
           <Button variant="ghost" size="sm" onClick={onDiscard} disabled={isSaving}>
             <Trash2 className="h-4 w-4 mr-1" /> {t("action.discard")}
           </Button>
-          {!validated && (
-            <Button size="sm" variant="outline" onClick={runValidation} disabled={rows.length === 0}>
-              <CheckCircle2 className="h-4 w-4 mr-1" /> {t("validate.run")}
-            </Button>
-          )}
-          <Button size="sm" onClick={handleSave} disabled={isSaving || rows.length === 0 || !validated}>
+          <Button size="sm" variant="outline" onClick={() => runValidation()} disabled={rows.length === 0}>
+            <CheckCircle2 className="h-4 w-4 mr-1" /> {t("validate.run")}
+          </Button>
+          <Button size="sm" onClick={handleSave} disabled={isSaving || rows.length === 0}>
             <Save className="h-4 w-4 mr-1" /> {t("extract.saveN").replace("{n}", String(rows.length))}
           </Button>
         </div>
@@ -201,12 +203,6 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
           <ul className="list-disc list-inside text-xs text-destructive/80 space-y-0.5">
             {validationErrors.map((e, i) => <li key={i}>{e}</li>)}
           </ul>
-        </div>
-      )}
-      {validated && validationErrors.length === 0 && (
-        <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm text-emerald-400">
-          <CheckCircle2 className="h-4 w-4" />
-          {t("validate.passed")}
         </div>
       )}
 

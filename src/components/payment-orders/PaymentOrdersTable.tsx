@@ -185,7 +185,10 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
             if (isEditing) {
               const computedTotal = editForm.services.reduce((sum, s) => sum + (Number(s.price) || 0), 0);
               return (
-                <TableRow key={o.id} className="bg-primary/5 text-xs">
+                <TableRow key={o.id} className="bg-primary/5 text-xs relative">
+                  {/* Editing mode indicator */}
+                  <TableCell colSpan={0} className="absolute -left-0 top-0 bottom-0 w-1 bg-primary rounded-l p-0" />
+
                   <TableCell className="font-medium">{(o.clients as any)?.name || "—"}</TableCell>
                   <TableCell className="p-1">
                     <Input className="h-7 text-xs" value={editForm.platform} onChange={e => setEditForm(p => p ? { ...p, platform: e.target.value } : p)} />

@@ -46,14 +46,13 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
   const [rows, setRows] = useState<ExtractedPaymentOrder[]>(orders);
   const [stage, setStage] = useState<Stage>("review");
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
-  const [validated, setValidated] = useState(false);
   const [errorRows, setErrorRows] = useState<Set<number>>(new Set());
   const [showOverrideDialog, setShowOverrideDialog] = useState(false);
   const { t, formatCurrency } = useLanguage();
 
   const update = (idx: number, field: keyof ExtractedPaymentOrder, value: any) => {
-    setValidated(false);
     setValidationErrors([]);
+    setErrorRows(new Set());
     if (stage !== "review") setStage("review");
     setRows(prev => prev.map((r, i) => {
       if (i !== idx) return r;
@@ -61,7 +60,6 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
       if (field === "services") {
         updated.total = (value as { name: string; price: number }[]).reduce((s, sv) => s + (sv.price || 0), 0);
       }
-      // Mark edited field as high confidence
       if (updated.field_confidence) {
         updated.field_confidence = { ...updated.field_confidence, [field]: "high" };
       }
@@ -72,12 +70,12 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
 
   const removeRow = (idx: number) => {
     setRows(prev => prev.filter((_, i) => i !== idx));
-    setValidated(false);
     setValidationErrors([]);
+    setErrorRows(new Set());
     if (stage !== "review") setStage("review");
   };
 
-  const runValidation = () => {
+  const runValidation = (): boolean => {
     const errors: string[] = [];
     const badRows = new Set<number>();
     rows.forEach((row, i) => {
@@ -101,16 +99,17 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
     setErrorRows(badRows);
     const blocking = errors.filter(e => !e.includes(t("validate.lowConfidencePrefix")));
     if (blocking.length === 0) {
-      setValidated(true);
       setStage("save");
+      return true;
     } else {
-      setValidated(false);
       setStage("validate");
+      return false;
     }
   };
 
   const handleSave = () => {
-    if (errorRows.size > 0 && !validated) {
+    const passed = runValidation();
+    if (!passed) {
       setShowOverrideDialog(true);
       return;
     }
@@ -172,15 +171,17 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
               {t("extract.corrections")}
             </Badge>
           )}
+          <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/30">
+            <Pencil className="h-3 w-3 mr-1" />
+            {t("edit.modeActive")}
+          </Badge>
         </div>
         <div className="flex gap-2">
           <Button variant="ghost" size="sm" onClick={onDiscard}><X className="h-4 w-4 mr-1" />{t("action.discard")}</Button>
-          {!validated && (
-            <Button size="sm" variant="outline" onClick={runValidation} disabled={rows.length === 0}>
-              <CheckCircle2 className="h-4 w-4 mr-1" /> {t("validate.run")}
-            </Button>
-          )}
-          <Button size="sm" onClick={handleSave} disabled={isSaving || !validated}>
+          <Button size="sm" variant="outline" onClick={() => runValidation()} disabled={rows.length === 0}>
+            <CheckCircle2 className="h-4 w-4 mr-1" /> {t("validate.run")}
+          </Button>
+          <Button size="sm" onClick={handleSave} disabled={isSaving || rows.length === 0}>
             <Save className="h-4 w-4 mr-1" />{isSaving ? t("extract.saving") : t("action.save")}
           </Button>
         </div>
@@ -195,12 +196,6 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
           <ul className="list-disc list-inside text-xs text-destructive/80 space-y-0.5">
             {validationErrors.map((e, i) => <li key={i}>{e}</li>)}
           </ul>
-        </div>
-      )}
-      {validated && validationErrors.length === 0 && (
-        <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm text-emerald-400">
-          <CheckCircle2 className="h-4 w-4" />
-          {t("validate.passed")}
         </div>
       )}
 

@@ -216,7 +216,10 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
             if (isEditing) {
               const computedTotal = (Number(editForm.service_1_price) || 0) + (Number(editForm.service_2_price) || 0) + (Number(editForm.service_3_price) || 0) + (Number(editForm.service_4_price) || 0);
               return (
-                <TableRow key={o.id} className="bg-primary/5">
+                <TableRow key={o.id} className="bg-primary/5 relative">
+                  {/* Editing mode indicator */}
+                  <TableCell colSpan={0} className="absolute -left-0 top-0 bottom-0 w-1 bg-primary rounded-l" />
+
                   <TableCell className="font-medium text-xs">{(o as any).clients?.name || "—"}</TableCell>
                   <TableCell className="p-1">
                     <Input className="h-7 text-xs" value={editForm.platform} onChange={e => updateField("platform", e.target.value)} />
