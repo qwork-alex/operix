@@ -139,8 +139,8 @@ export default function ServiceOrdersPage() {
       {/* Upload */}
       <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} />
 
-      {/* Upload queue */}
-      <UploadQueue queue={queue} onClearCompleted={clearCompleted} />
+      {/* Embedded file manager */}
+      <EmbeddedFileManager entityType="service_order" sessionFileNames={sessionFiles} />
 
       {/* Extraction previews — one per file */}
       {extractions.map((extraction, idx) => (
