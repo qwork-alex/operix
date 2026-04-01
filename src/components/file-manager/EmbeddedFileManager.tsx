@@ -542,15 +542,53 @@ export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props
       <Dialog open={!!previewDoc} onOpenChange={() => setPreviewDoc(null)}>
         <DialogContent className="bg-card border-border max-w-3xl max-h-[80vh]">
           <DialogHeader>
-            <DialogTitle>{previewDoc?.name}</DialogTitle>
+            <DialogTitle className="flex items-center justify-between gap-2">
+              <span className="truncate">{previewDoc?.name}</span>
+              {previewDoc?.url && (
+                <a
+                  href={previewDoc.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-primary underline shrink-0"
+                >
+                  {t("fm.openInNewTab")}
+                </a>
+              )}
+            </DialogTitle>
           </DialogHeader>
           <div className="overflow-auto max-h-[65vh]">
             {previewDoc?.mime_type?.startsWith("image/") ? (
-              <img src={previewDoc.url} alt={previewDoc.name} className="max-w-full rounded" />
+              <img
+                src={previewDoc.url}
+                alt={previewDoc.name}
+                className="max-w-full rounded"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = "none";
+                  (e.target as HTMLImageElement).parentElement!.innerHTML =
+                    `<div class="text-center py-8 text-sm text-muted-foreground"><p>${t("fm.previewError")}</p><a href="${previewDoc.url}" target="_blank" rel="noopener noreferrer" class="text-primary underline mt-2 inline-block">${t("fm.openInNewTab")}</a></div>`;
+                }}
+              />
             ) : previewDoc?.mime_type === "application/pdf" ? (
-              <iframe src={previewDoc.url} className="w-full h-[60vh] rounded" />
+              <div className="relative">
+                <iframe
+                  src={previewDoc.url + "#toolbar=1"}
+                  className="w-full h-[60vh] rounded border-0"
+                  title={previewDoc.name}
+                />
+                <div className="mt-2 text-center">
+                  <a
+                    href={previewDoc.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-primary underline"
+                  >
+                    {t("fm.openInNewTab")}
+                  </a>
+                </div>
+              </div>
             ) : (
               <div className="text-center py-8 text-sm text-muted-foreground">
+                <p className="mb-2">{t("fm.previewError")}</p>
                 <a href={previewDoc?.url} target="_blank" rel="noopener noreferrer" className="text-primary underline">
                   {t("fm.download")}
                 </a>
