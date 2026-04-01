@@ -251,7 +251,7 @@ export default function FinancialPage() {
                 ) : (
                   <div className="text-center py-8 text-sm text-muted-foreground">
                     <CheckCircle className="h-8 w-8 mx-auto mb-2 text-emerald-400" />
-                    No data yet
+                    {t("fin.noDiscrepancies")}
                   </div>
                 )}
               </CardContent>
