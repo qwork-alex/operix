@@ -100,7 +100,8 @@ export function ProfitDistribution() {
   const { data: totalRevenue = 0 } = useQuery({
     queryKey: ["profit-summary"],
     queryFn: async () => {
-      const { data } = await supabase.from("service_orders").select("total");
+      // Use REAL revenue (payment orders) instead of expected (service orders)
+      const { data } = await supabase.from("payment_orders").select("total");
       return (data ?? []).reduce((s, o) => s + Number(o.total || 0), 0);
     },
   });
@@ -387,7 +388,9 @@ export function Accounting() {
   const categories = [
     { value: "labor", label: "acc.catLabor" },
     { value: "material", label: "acc.catMaterial" },
+    { value: "fuel", label: "acc.catFuel" },
     { value: "tax", label: "acc.catTax" },
+    { value: "salary", label: "acc.catSalary" },
     { value: "services", label: "acc.catServices" },
     { value: "other", label: "acc.catOther" },
   ];
@@ -715,16 +718,28 @@ export function Accounting() {
 }
 // ─── FLEET ───
 export function Fleet() {
-  const { t, formatDate } = useLanguage();
+  const { t, formatDate, formatCurrency } = useLanguage();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", license_plate: "", brand: "", model: "", year: "" });
+  const [logOpen, setLogOpen] = useState(false);
+  const [logVehicleId, setLogVehicleId] = useState<string | null>(null);
+  const [logForm, setLogForm] = useState({ start_km: "", end_km: "", fuel_litres: "", fuel_cost: "", notes: "" });
 
   const { data: vehicles = [], isLoading } = useQuery({
     queryKey: ["vehicles"],
     queryFn: async () => {
       const { data, error } = await supabase.from("vehicles").select("*, technicians(name)").order("created_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: mileageLogs = [] } = useQuery({
+    queryKey: ["mileage_logs"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("mileage_logs").select("*, vehicles(name, license_plate)").order("date", { ascending: false }).limit(100);
       if (error) throw error;
       return data;
     },
@@ -769,11 +784,66 @@ export function Fleet() {
     onError: (err) => toast.error((err as Error).message),
   });
 
+  const logMutation = useMutation({
+    mutationFn: async () => {
+      if (!logVehicleId) throw new Error("No vehicle selected");
+      const startKm = parseFloat(logForm.start_km) || 0;
+      const endKm = parseFloat(logForm.end_km) || 0;
+      const fuelCost = parseFloat(logForm.fuel_cost) || 0;
+      const fuelLitres = parseFloat(logForm.fuel_litres) || 0;
+
+      const { error } = await supabase.from("mileage_logs").insert({
+        vehicle_id: logVehicleId,
+        start_km: startKm,
+        end_km: endKm,
+        fuel_litres: fuelLitres || null,
+        fuel_cost: fuelCost || null,
+        notes: logForm.notes || null,
+      });
+      if (error) throw error;
+
+      // Auto-create fuel expense in accounting
+      if (fuelCost > 0) {
+        const vehicle = vehicles.find((v: any) => v.id === logVehicleId);
+        await supabase.from("financial_records").insert({
+          type: "expense",
+          source: "fleet",
+          category: "fuel",
+          amount: fuelCost,
+          label: `${t("fleet.fuel")} — ${vehicle?.name || vehicle?.license_plate || ""}`,
+          notes: `${endKm - startKm} km, ${fuelLitres}L`,
+          status: "confirmed",
+        });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["mileage_logs"] });
+      queryClient.invalidateQueries({ queryKey: ["financial_records"] });
+      queryClient.invalidateQueries({ queryKey: ["reconciliation-summary"] });
+      setLogOpen(false);
+      setLogVehicleId(null);
+      setLogForm({ start_km: "", end_km: "", fuel_litres: "", fuel_cost: "", notes: "" });
+      toast.success(t("fleet.logAdded"));
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+
   const startEdit = (v: any) => {
     setEditId(v.id);
     setForm({ name: v.name, license_plate: v.license_plate, brand: v.brand || "", model: v.model || "", year: v.year ? String(v.year) : "" });
     setOpen(true);
   };
+
+  const openLogFor = (vehicleId: string) => {
+    setLogVehicleId(vehicleId);
+    setLogOpen(true);
+  };
+
+  // Fleet KPIs
+  const totalDistance = mileageLogs.reduce((s: number, l: any) => s + Math.max(0, Number(l.end_km || 0) - Number(l.start_km || 0)), 0);
+  const totalFuelCost = mileageLogs.reduce((s: number, l: any) => s + Number(l.fuel_cost || 0), 0);
+  const totalFuelLitres = mileageLogs.reduce((s: number, l: any) => s + Number(l.fuel_litres || 0), 0);
+  const costPerKm = totalDistance > 0 ? totalFuelCost / totalDistance : 0;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -809,6 +879,35 @@ export function Fleet() {
         </Dialog>
       </div>
 
+      {/* Fleet KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <Card className="border-border/50">
+          <CardContent className="pt-4 pb-3">
+            <p className="text-[11px] text-muted-foreground mb-1">{t("fleet.totalVehicles")}</p>
+            <p className="text-xl font-bold text-foreground tabular-nums">{vehicles.length}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-border/50">
+          <CardContent className="pt-4 pb-3">
+            <p className="text-[11px] text-muted-foreground mb-1">{t("fleet.totalKm")}</p>
+            <p className="text-xl font-bold text-foreground tabular-nums">{totalDistance.toLocaleString()} km</p>
+          </CardContent>
+        </Card>
+        <Card className="border-border/50">
+          <CardContent className="pt-4 pb-3">
+            <p className="text-[11px] text-muted-foreground mb-1">{t("fleet.fuelCost")}</p>
+            <p className="text-xl font-bold text-destructive tabular-nums">{formatCurrency(totalFuelCost)}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-border/50">
+          <CardContent className="pt-4 pb-3">
+            <p className="text-[11px] text-muted-foreground mb-1">{t("fleet.costPerKm")}</p>
+            <p className="text-xl font-bold text-foreground tabular-nums">{formatCurrency(costPerKm)}/km</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Vehicles table */}
       {isLoading ? (
         <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
       ) : vehicles.length === 0 ? (
@@ -838,6 +937,9 @@ export function Fleet() {
                   <TableCell>{v.technicians?.name || "—"}</TableCell>
                   <TableCell>
                     <div className="flex gap-1">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openLogFor(v.id)} title={t("fleet.addLog")}>
+                        <Plus className="h-3 w-3" />
+                      </Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(v)}>
                         <Pencil className="h-3 w-3" />
                       </Button>
@@ -851,6 +953,86 @@ export function Fleet() {
             </TableBody>
           </Table>
         </div>
+      )}
+
+      {/* Mileage log dialog */}
+      <Dialog open={logOpen} onOpenChange={setLogOpen}>
+        <DialogContent className="bg-card border-border">
+          <DialogHeader><DialogTitle>{t("fleet.newLog")}</DialogTitle></DialogHeader>
+          <div className="space-y-3 pt-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">{t("fleet.startKm")}</Label>
+                <Input type="number" value={logForm.start_km} onChange={e => setLogForm(p => ({ ...p, start_km: e.target.value }))} className="h-9" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">{t("fleet.endKm")}</Label>
+                <Input type="number" value={logForm.end_km} onChange={e => setLogForm(p => ({ ...p, end_km: e.target.value }))} className="h-9" />
+              </div>
+            </div>
+            {logForm.start_km && logForm.end_km && (
+              <p className="text-xs text-muted-foreground">
+                {t("fleet.distance")}: <span className="font-medium text-foreground">{Math.max(0, parseFloat(logForm.end_km) - parseFloat(logForm.start_km))} km</span>
+              </p>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">{t("fleet.fuelLitres")}</Label>
+                <Input type="number" step="0.1" value={logForm.fuel_litres} onChange={e => setLogForm(p => ({ ...p, fuel_litres: e.target.value }))} className="h-9" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">{t("fleet.fuelCost")} (€)</Label>
+                <Input type="number" step="0.01" value={logForm.fuel_cost} onChange={e => setLogForm(p => ({ ...p, fuel_cost: e.target.value }))} className="h-9" />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">{t("label.notes")}</Label>
+              <Input value={logForm.notes} onChange={e => setLogForm(p => ({ ...p, notes: e.target.value }))} className="h-9" />
+            </div>
+            <Button className="w-full" onClick={() => logMutation.mutate()} disabled={logMutation.isPending || !logForm.start_km || !logForm.end_km}>
+              {logMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}{t("action.save")}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Mileage logs table */}
+      {mileageLogs.length > 0 && (
+        <Card className="border-border/50">
+          <CardHeader className="pb-2"><CardTitle className="text-sm">{t("fleet.mileageLogs")}</CardTitle></CardHeader>
+          <CardContent>
+            <div className="rounded-lg border border-border/50 overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="text-[11px]">
+                    <TableHead>{t("label.date")}</TableHead>
+                    <TableHead>{t("label.car")}</TableHead>
+                    <TableHead className="text-right">{t("fleet.startKm")}</TableHead>
+                    <TableHead className="text-right">{t("fleet.endKm")}</TableHead>
+                    <TableHead className="text-right">{t("fleet.distance")}</TableHead>
+                    <TableHead className="text-right">{t("fleet.fuelLitres")}</TableHead>
+                    <TableHead className="text-right">{t("fleet.fuelCost")}</TableHead>
+                    <TableHead>{t("label.notes")}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {mileageLogs.slice(0, 20).map((l: any) => (
+                    <TableRow key={l.id} className="text-xs">
+                      <TableCell>{formatDate(l.date)}</TableCell>
+                      <TableCell>{l.vehicles?.name || l.vehicles?.license_plate || "—"}</TableCell>
+                      <TableCell className="text-right tabular-nums">{Number(l.start_km).toLocaleString()}</TableCell>
+                      <TableCell className="text-right tabular-nums">{Number(l.end_km).toLocaleString()}</TableCell>
+                      <TableCell className="text-right tabular-nums font-medium">{Math.max(0, Number(l.end_km) - Number(l.start_km)).toLocaleString()} km</TableCell>
+                      <TableCell className="text-right tabular-nums">{l.fuel_litres ? `${l.fuel_litres}L` : "—"}</TableCell>
+                      <TableCell className="text-right tabular-nums">{l.fuel_cost ? formatCurrency(Number(l.fuel_cost)) : "—"}</TableCell>
+                      <TableCell className="max-w-[100px] truncate text-muted-foreground">{l.notes || "—"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

@@ -205,8 +205,8 @@ export default function FinancialPage() {
         <TabsList className="bg-muted">
           <TabsTrigger value="overview">{t("dashboard.revenueOverview")}</TabsTrigger>
           <TabsTrigger value="reconciliations">{t("fin.discrepancyDetails")}</TabsTrigger>
-          <TabsTrigger value="breakdown">Breakdown</TabsTrigger>
-          <TabsTrigger value="merge">Manual Match</TabsTrigger>
+          <TabsTrigger value="breakdown">{t("fin.breakdown")}</TabsTrigger>
+          <TabsTrigger value="merge">{t("fin.manualMatch")}</TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
@@ -236,7 +236,7 @@ export default function FinancialPage() {
             {/* Reconciliation status pie */}
             <Card className="border-border/50">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Reconciliation Status</CardTitle>
+                <CardTitle className="text-sm font-medium">{t("fin.reconciliationStatus")}</CardTitle>
               </CardHeader>
               <CardContent className="flex items-center justify-center">
                 {pieData.length > 0 ? (
@@ -251,7 +251,7 @@ export default function FinancialPage() {
                 ) : (
                   <div className="text-center py-8 text-sm text-muted-foreground">
                     <CheckCircle className="h-8 w-8 mx-auto mb-2 text-emerald-400" />
-                    No data yet
+                    {t("fin.noDiscrepancies")}
                   </div>
                 )}
               </CardContent>
@@ -357,7 +357,7 @@ export default function FinancialPage() {
                       <Bar dataKey="received" name={t("fin.received")} fill="hsl(var(--chart-2))" radius={[0, 4, 4, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
-                ) : <p className="text-xs text-muted-foreground text-center py-4">No data</p>}
+                ) : <p className="text-xs text-muted-foreground text-center py-4">{t("fin.noData")}</p>}
               </CardContent>
             </Card>
 
@@ -379,7 +379,7 @@ export default function FinancialPage() {
                       <Bar dataKey="received" name={t("fin.received")} fill="hsl(var(--chart-2))" radius={[0, 4, 4, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
-                ) : <p className="text-xs text-muted-foreground text-center py-4">No data</p>}
+                ) : <p className="text-xs text-muted-foreground text-center py-4">{t("fin.noData")}</p>}
               </CardContent>
             </Card>
 
@@ -401,7 +401,7 @@ export default function FinancialPage() {
                       <Bar dataKey="received" name={t("fin.received")} fill="hsl(var(--chart-2))" radius={[0, 4, 4, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
-                ) : <p className="text-xs text-muted-foreground text-center py-4">No data</p>}
+                ) : <p className="text-xs text-muted-foreground text-center py-4">{t("fin.noData")}</p>}
               </CardContent>
             </Card>
           </div>
@@ -411,18 +411,18 @@ export default function FinancialPage() {
         <TabsContent value="merge">
           <Card className="border-border/50">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Link2 className="h-4 w-4" /> Manual Match
-              </CardTitle>
+               <CardTitle className="text-sm font-medium flex items-center gap-2">
+                 <Link2 className="h-4 w-4" /> {t("fin.manualMatch")}
+               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-xs text-muted-foreground">Select one service order and one payment order to merge them.</p>
+              <p className="text-xs text-muted-foreground">{t("fin.selectToMerge")}</p>
 
               {selectedSO && selectedPO && (
                 <div className="flex items-center gap-2">
                   <Button size="sm" onClick={handleMerge} disabled={mergeMutation.isPending}>
                     <Link2 className="h-4 w-4 mr-1" />
-                    Merge Records
+                    {t("fin.mergeRecords")}
                   </Button>
                   <Button size="sm" variant="ghost" onClick={() => { setSelectedSO(null); setSelectedPO(null); }}>
                     {t("action.cancel")}
