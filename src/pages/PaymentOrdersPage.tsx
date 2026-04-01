@@ -60,7 +60,7 @@ export default function PaymentOrdersPage() {
       onStatus("processing" as QueueItemStatus);
       try {
         const result = await extract(file);
-        setExtractions(prev => [...prev, result]);
+        setExtractions(prev => [...prev, { ...result, _id: crypto.randomUUID() }]);
         if (result.confidence === "low") {
           toast.warning("Low confidence — please review carefully.");
         }
