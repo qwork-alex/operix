@@ -59,7 +59,7 @@ export default function ServiceOrdersPage() {
       onStatus("processing" as QueueItemStatus);
       try {
         const result = await extract(file);
-        setExtractions(prev => [...prev, result]);
+        setExtractions(prev => [...prev, { ...result, _id: crypto.randomUUID() }]);
         if (result.confidence === "low") {
           toast.warning("Low confidence extraction — please review carefully.");
         }
