@@ -115,10 +115,17 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
         .single();
       if (existingError) throw existingError;
 
+      const resolvedClientId = editForm.client_id === EMPTY_RELATION_VALUE ? null : editForm.client_id;
+      const resolvedTechId = editForm.technician_id === EMPTY_RELATION_VALUE ? null : editForm.technician_id;
+      const clientName = resolvedClientId ? (clients.find(c => c.id === resolvedClientId)?.name || "") : "";
+      const techName = resolvedTechId ? (technicians.find(t => t.id === resolvedTechId)?.name || "") : "";
+
       const payload = {
         ...existing,
-        client_id: editForm.client_id === EMPTY_RELATION_VALUE ? null : editForm.client_id,
-        technician_id: editForm.technician_id === EMPTY_RELATION_VALUE ? null : editForm.technician_id,
+        client_id: resolvedClientId,
+        client_name: clientName,
+        technician_id: resolvedTechId,
+        technician_name: techName,
         platform: toNullableText(editForm.platform),
         week: toNullableText(editForm.week),
         car_name: toNullableText(editForm.car_name),
