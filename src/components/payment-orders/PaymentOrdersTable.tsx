@@ -97,10 +97,17 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
         .single();
       if (existingError) throw existingError;
 
+      const resolvedClientId = editForm.client_id === EMPTY_RELATION_VALUE ? null : editForm.client_id;
+      const resolvedTechId = editForm.technician_id === EMPTY_RELATION_VALUE ? null : editForm.technician_id;
+      const clientName = resolvedClientId ? (clients.find(c => c.id === resolvedClientId)?.name || null) : null;
+      const techName = resolvedTechId ? (technicians.find(t => t.id === resolvedTechId)?.name || null) : null;
+
       const payload = {
         ...existing,
-        client_id: editForm.client_id === EMPTY_RELATION_VALUE ? null : editForm.client_id,
-        technician_id: editForm.technician_id === EMPTY_RELATION_VALUE ? null : editForm.technician_id,
+        client_id: resolvedClientId,
+        client_name: clientName,
+        technician_id: resolvedTechId,
+        technician_name: techName,
         platform: toNullableText(editForm.platform),
         list_name: toNullableText(editForm.list_name),
         car_name: toNullableText(editForm.car_name),
