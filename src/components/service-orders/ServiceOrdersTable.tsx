@@ -16,8 +16,10 @@ import { toast } from "sonner";
 interface ServiceOrderRow {
   id: string;
   client_id: string | null;
+  client_name?: string | null;
   platform: string | null;
   technician_id: string | null;
+  technician_name?: string | null;
   week: string | null;
   car_name: string | null;
   license_plate: string | null;
