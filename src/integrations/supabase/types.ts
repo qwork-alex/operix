@@ -440,6 +440,7 @@ export type Database = {
         Row: {
           car_name: string | null
           client_id: string | null
+          client_name: string | null
           created_at: string
           created_by: string | null
           id: string
@@ -450,12 +451,14 @@ export type Database = {
           services: Json | null
           status: string
           technician_id: string | null
+          technician_name: string | null
           total: number | null
           updated_at: string
         }
         Insert: {
           car_name?: string | null
           client_id?: string | null
+          client_name?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -466,12 +469,14 @@ export type Database = {
           services?: Json | null
           status?: string
           technician_id?: string | null
+          technician_name?: string | null
           total?: number | null
           updated_at?: string
         }
         Update: {
           car_name?: string | null
           client_id?: string | null
+          client_name?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -482,6 +487,7 @@ export type Database = {
           services?: Json | null
           status?: string
           technician_id?: string | null
+          technician_name?: string | null
           total?: number | null
           updated_at?: string
         }
@@ -639,6 +645,7 @@ export type Database = {
         Row: {
           car_name: string | null
           client_id: string | null
+          client_name: string
           created_at: string
           created_by: string | null
           id: string
@@ -654,6 +661,7 @@ export type Database = {
           service_4_price: number | null
           status: string
           technician_id: string | null
+          technician_name: string
           total: number | null
           updated_at: string
           week: string | null
@@ -661,6 +669,7 @@ export type Database = {
         Insert: {
           car_name?: string | null
           client_id?: string | null
+          client_name?: string
           created_at?: string
           created_by?: string | null
           id?: string
@@ -676,6 +685,7 @@ export type Database = {
           service_4_price?: number | null
           status?: string
           technician_id?: string | null
+          technician_name?: string
           total?: number | null
           updated_at?: string
           week?: string | null
@@ -683,6 +693,7 @@ export type Database = {
         Update: {
           car_name?: string | null
           client_id?: string | null
+          client_name?: string
           created_at?: string
           created_by?: string | null
           id?: string
@@ -698,6 +709,7 @@ export type Database = {
           service_4_price?: number | null
           status?: string
           technician_id?: string | null
+          technician_name?: string
           total?: number | null
           updated_at?: string
           week?: string | null
