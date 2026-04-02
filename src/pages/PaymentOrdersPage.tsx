@@ -80,9 +80,11 @@ export default function PaymentOrdersPage() {
     const inserts: PaymentOrderInsert[] = rows.map(r => {
       const clientMatch = clients.find(c => c.name.toLowerCase() === r.client?.toLowerCase());
       const techMatch = technicians.find(t => t.name.toLowerCase() === r.technician?.toLowerCase());
-      const payload: PaymentOrderInsert = {
+      const payload: Record<string, any> = {
         client_id: clientMatch?.id || null,
+        client_name: r.client?.trim() || clientMatch?.name || null,
         technician_id: techMatch?.id || null,
+        technician_name: r.technician?.trim() || techMatch?.name || null,
         platform: r.platform ?? null,
         list_name: r.list_name ?? null,
         car_name: r.car_name ?? null,
@@ -91,7 +93,7 @@ export default function PaymentOrdersPage() {
         total: r.total ?? null,
         status: "pending",
       };
-      return payload;
+      return payload as PaymentOrderInsert;
     });
 
     console.log("SAVING DATA (mapped inserts):", JSON.stringify(inserts, null, 2));

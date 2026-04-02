@@ -83,9 +83,11 @@ export default function ServiceOrdersPage() {
       const techMatch = technicians.find(
         (t) => t.name.toLowerCase() === r.technician?.toLowerCase()
       );
-      const payload: ServiceOrderInsert = {
+      const payload: Record<string, any> = {
         client_id: clientMatch?.id || null,
+        client_name: r.client?.trim() || clientMatch?.name || "",
         technician_id: techMatch?.id || null,
+        technician_name: r.technician?.trim() || techMatch?.name || "",
         platform: r.platform ?? null,
         week: r.week ?? null,
         car_name: r.car_name ?? null,
@@ -101,7 +103,7 @@ export default function ServiceOrdersPage() {
         total: r.total ?? null,
         status: "draft",
       };
-      return payload;
+      return payload as ServiceOrderInsert;
     });
 
     console.log("SAVING DATA (mapped inserts):", JSON.stringify(inserts, null, 2));

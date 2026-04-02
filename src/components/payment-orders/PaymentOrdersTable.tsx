@@ -305,10 +305,10 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
             const services = Array.isArray(o.services) ? (o.services as { name: string; price: number }[]) : [];
             return (
               <TableRow key={o.id} className="text-xs">
-                <TableCell className="font-medium">{o.clients?.name || "—"}</TableCell>
+                <TableCell className="font-medium">{o.client_name || o.clients?.name || "—"}</TableCell>
                 <TableCell>{o.platform || "—"}</TableCell>
                 <TableCell>{o.list_name || "—"}</TableCell>
-                <TableCell>{o.technicians?.name || "—"}</TableCell>
+                <TableCell>{o.technician_name || o.technicians?.name || "—"}</TableCell>
                 <TableCell>{o.car_name || "—"}</TableCell>
                 <TableCell className="font-mono text-[11px]">{o.license_plate || "—"}</TableCell>
                 <TableCell className="max-w-[180px] truncate">{services.map((service) => service.name).join(", ") || "—"}</TableCell>
