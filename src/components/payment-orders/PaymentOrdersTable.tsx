@@ -17,10 +17,12 @@ import type { Json } from "@/integrations/supabase/types";
 interface PaymentOrderRow {
   id: string;
   client_id: string | null;
+  client_name?: string | null;
   clients?: { name: string } | null;
   platform: string | null;
   list_name: string | null;
   technician_id: string | null;
+  technician_name?: string | null;
   technicians?: { name: string } | null;
   car_name: string | null;
   license_plate: string | null;
