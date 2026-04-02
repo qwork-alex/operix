@@ -11,15 +11,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PieChart as PieChartIcon, Plus, Save, Trash2, Loader2, AlertTriangle, Check, Users } from "lucide-react";
+import { PieChart as PieChartIcon, Plus, Save, Trash2, Loader2, AlertTriangle, Check, Users, FolderPlus } from "lucide-react";
 
 // ─── Types ───
 
-interface DistributionRule {
+interface RuleUser {
   id: string;
   name: string;
   percentage: number;
   type: "technician" | "partner" | "company" | "client" | "custom";
+}
+
+interface RuleGroup {
+  id: string;
+  name: string;
+  users: RuleUser[];
 }
 
 interface CalculatedShare {
@@ -29,12 +35,20 @@ interface CalculatedShare {
   amount: number;
 }
 
+interface CorrectionEntry {
+  orderId: string;
+  car_name: string;
+  license_plate: string;
+  client_name: string;
+  total: number;
+}
+
 const RULE_TYPES = [
   { value: "technician", label: "Técnico" },
   { value: "partner", label: "Sócio" },
   { value: "company", label: "Empresa" },
   { value: "client", label: "Cliente" },
-  { value: "custom", label: "Personalizado" },
+  { value: "custom", label: "Outros" },
 ] as const;
 
 const TYPE_COLORS: Record<string, string> = {
@@ -53,9 +67,8 @@ export function ProfitDistribution() {
   const queryClient = useQueryClient();
 
   // ── State ──
-  const [rules, setRules] = useState<DistributionRule[]>([]);
+  const [ruleGroups, setRuleGroups] = useState<RuleGroup[]>([]);
   const [initialized, setInitialized] = useState(false);
-  const [saving, setSaving] = useState(false);
 
   // ── Queries ──
   const { data: distributions = [], isLoading: distLoading } = useQuery({
@@ -97,94 +110,131 @@ export function ProfitDistribution() {
     },
   });
 
-  // ── Initialize rules from DB ──
+  // ── Initialize rule groups from DB ──
   useEffect(() => {
     if (initialized || distLoading) return;
 
-    if (distributions.length > 0) {
-      // Load existing rules from the "default" scope distributions
-      // We store rules as individual rows with scope='rule'
-      const ruleRows = distributions.filter((d: any) => d.scope === "rule");
-      if (ruleRows.length > 0) {
-        setRules(ruleRows.map((r: any) => ({
-          id: r.id,
-          name: r.notes || "Sem nome",
-          percentage: Number(r.tech_share), // We repurpose tech_share as the percentage field
-          type: (r.partner_share === 1 ? "partner" : r.partner_share === 2 ? "company" : r.partner_share === 3 ? "client" : r.partner_share === 4 ? "custom" : "technician") as DistributionRule["type"],
-        })));
-      } else {
-        // Migrate from old format: create default rules from the default distribution
-        const def = distributions.find((d: any) => d.scope === "default");
-        if (def) {
-          setRules([
-            { id: crypto.randomUUID(), name: "Técnico", percentage: Number(def.tech_share), type: "technician" },
-            { id: crypto.randomUUID(), name: "Sócio", percentage: Number(def.partner_share), type: "partner" },
-            { id: crypto.randomUUID(), name: "Empresa", percentage: Number(def.company_share), type: "company" },
-          ]);
-        } else {
-          setRules([
-            { id: crypto.randomUUID(), name: "Técnico", percentage: 40, type: "technician" },
-            { id: crypto.randomUUID(), name: "Sócio", percentage: 30, type: "partner" },
-            { id: crypto.randomUUID(), name: "Empresa", percentage: 30, type: "company" },
-          ]);
+    const ruleRows = distributions.filter((d: any) => d.scope === "rule");
+    if (ruleRows.length > 0) {
+      // Group by notes field which stores "groupId::groupName"
+      const groupMap = new Map<string, { name: string; users: RuleUser[] }>();
+      ruleRows.forEach((r: any) => {
+        const notesStr = r.notes || "";
+        const [groupId, groupName, userName, userType] = notesStr.split("::");
+        const gid = groupId || crypto.randomUUID();
+        if (!groupMap.has(gid)) {
+          groupMap.set(gid, { name: groupName || "Regra", users: [] });
         }
-      }
+        groupMap.get(gid)!.users.push({
+          id: r.id,
+          name: userName || "Sem nome",
+          percentage: Number(r.tech_share),
+          type: (userType as RuleUser["type"]) || "custom",
+        });
+      });
+      const groups: RuleGroup[] = [];
+      groupMap.forEach((val, key) => {
+        groups.push({ id: key, name: val.name, users: val.users });
+      });
+      setRuleGroups(groups);
     } else {
-      // No distributions exist — create defaults
-      setRules([
+      // Migrate from old format or create defaults
+      const def = distributions.find((d: any) => d.scope === "default");
+      const defaultUsers: RuleUser[] = [
         { id: crypto.randomUUID(), name: "Técnico", percentage: 40, type: "technician" },
         { id: crypto.randomUUID(), name: "Sócio", percentage: 30, type: "partner" },
         { id: crypto.randomUUID(), name: "Empresa", percentage: 30, type: "company" },
-      ]);
+      ];
+      if (def) {
+        defaultUsers[0].percentage = Number(def.tech_share);
+        defaultUsers[1].percentage = Number(def.partner_share);
+        defaultUsers[2].percentage = Number(def.company_share);
+      }
+      setRuleGroups([{ id: crypto.randomUUID(), name: "Regra Principal", users: defaultUsers }]);
     }
     setInitialized(true);
   }, [distributions, distLoading, initialized]);
 
   // ── Derived values ──
-  const totalPercentage = useMemo(() => rules.reduce((s, r) => s + r.percentage, 0), [rules]);
-  const isValid = totalPercentage === 100;
   const totalRevenue = useMemo(() => (paymentOrders ?? []).reduce((s, o: any) => s + Number(o.total || 0), 0), [paymentOrders]);
 
-  // ── Rule CRUD ──
-  const addRule = () => {
-    setRules(prev => [...prev, {
+  const getGroupTotal = (group: RuleGroup) => group.users.reduce((s, u) => s + u.percentage, 0);
+  const isGroupValid = (group: RuleGroup) => getGroupTotal(group) === 100;
+  const allValid = ruleGroups.length > 0 && ruleGroups.every(isGroupValid);
+
+  // ── Rule Group CRUD ──
+  const addRuleGroup = () => {
+    setRuleGroups(prev => [...prev, {
       id: crypto.randomUUID(),
-      name: "",
-      percentage: Math.max(0, 100 - totalPercentage),
-      type: "custom",
+      name: `Regra ${prev.length + 1}`,
+      users: [
+        { id: crypto.randomUUID(), name: "", percentage: 100, type: "custom" },
+      ],
     }]);
   };
 
-  const updateRule = (id: string, field: keyof DistributionRule, value: string | number) => {
-    setRules(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
+  const deleteRuleGroup = (groupId: string) => {
+    setRuleGroups(prev => prev.filter(g => g.id !== groupId));
   };
 
-  const deleteRule = (id: string) => {
-    setRules(prev => prev.filter(r => r.id !== id));
+  const updateGroupName = (groupId: string, name: string) => {
+    setRuleGroups(prev => prev.map(g => g.id === groupId ? { ...g, name } : g));
   };
 
-  // ── Save rules to DB ──
+  const addUserToGroup = (groupId: string) => {
+    setRuleGroups(prev => prev.map(g => {
+      if (g.id !== groupId) return g;
+      const remaining = Math.max(0, 100 - getGroupTotal(g));
+      return {
+        ...g,
+        users: [...g.users, {
+          id: crypto.randomUUID(),
+          name: "",
+          percentage: remaining,
+          type: "custom" as const,
+        }],
+      };
+    }));
+  };
+
+  const updateUser = (groupId: string, userId: string, field: keyof RuleUser, value: string | number) => {
+    setRuleGroups(prev => prev.map(g => {
+      if (g.id !== groupId) return g;
+      return {
+        ...g,
+        users: g.users.map(u => u.id === userId ? { ...u, [field]: value } : u),
+      };
+    }));
+  };
+
+  const deleteUser = (groupId: string, userId: string) => {
+    setRuleGroups(prev => prev.map(g => {
+      if (g.id !== groupId) return g;
+      if (g.users.length <= 1) return g; // keep at least 1
+      return { ...g, users: g.users.filter(u => u.id !== userId) };
+    }));
+  };
+
+  // ── Save to DB ──
   const saveMutation = useMutation({
     mutationFn: async () => {
-      if (!isValid) throw new Error("O total deve ser exatamente 100%");
+      if (!allValid) throw new Error("Todas as regras devem totalizar 100%");
 
-      // Delete all existing rule-scope rows
+      // Delete all existing rule rows
       await supabase.from("profit_distributions").delete().eq("scope", "rule");
-      // Also clean up old default/user/order scopes
       await supabase.from("profit_distributions").delete().in("scope", ["default", "user", "order"]);
 
-      // Map type to a numeric code stored in partner_share for type encoding
-      const typeCode = (t: string) =>
-        t === "partner" ? 1 : t === "company" ? 2 : t === "client" ? 3 : t === "custom" ? 4 : 0;
-
-      const payload = rules.map(r => ({
-        scope: "rule" as string,
-        tech_share: r.percentage, // repurpose as percentage
-        partner_share: typeCode(r.type), // repurpose as type code
-        company_share: 0,
-        notes: r.name,
-        updated_at: new Date().toISOString(),
-      }));
+      // Insert one row per user per group
+      const payload = ruleGroups.flatMap(group =>
+        group.users.map(u => ({
+          scope: "rule" as string,
+          tech_share: u.percentage,
+          partner_share: 0,
+          company_share: 0,
+          notes: `${group.id}::${group.name}::${u.name}::${u.type}`,
+          updated_at: new Date().toISOString(),
+        }))
+      );
 
       const { error } = await supabase.from("profit_distributions").insert(payload);
       if (error) throw error;
@@ -199,11 +249,10 @@ export function ProfitDistribution() {
     },
   });
 
-  // ── Automatic Distribution Calculation ──
-  const calculatedDistributions = useMemo(() => {
-    if (!isValid || serviceOrders.length === 0) return [];
+  // ── Automatic Distribution per Rule Group ──
+  const getGroupDistributions = (group: RuleGroup): CalculatedShare[] => {
+    if (!isGroupValid(group) || serviceOrders.length === 0) return [];
 
-    // Count unique technicians across all orders
     const technicianIds = new Set<string>();
     serviceOrders.forEach((so: any) => {
       if (so.technician_id) technicianIds.add(so.technician_id);
@@ -212,51 +261,95 @@ export function ProfitDistribution() {
 
     const results: CalculatedShare[] = [];
 
-    rules.forEach(rule => {
-      if (rule.type === "technician" && techCount > 1) {
-        // Split technician share equally among all technicians
-        technicianIds.forEach(techId => {
-          const tech = technicians.find((t: any) => t.id === techId);
+    group.users.forEach(u => {
+      if (u.type === "technician" && techCount > 1) {
+        // Match technician by name if possible, otherwise split equally
+        const matchedTech = technicians.find((t: any) => t.name?.toLowerCase() === u.name?.toLowerCase());
+        if (matchedTech) {
+          // Get revenue from service orders for this specific technician
+          const techRevenue = serviceOrders
+            .filter((so: any) => so.technician_id === matchedTech.id)
+            .reduce((s: number, so: any) => s + Number(so.total || 0), 0);
           results.push({
-            name: tech?.name || techId.slice(0, 8),
+            name: u.name,
             type: "technician",
-            percentage: Number((rule.percentage / techCount).toFixed(2)),
-            amount: totalRevenue * (rule.percentage / 100) / techCount,
+            percentage: u.percentage,
+            amount: techRevenue * u.percentage / 100,
           });
-        });
+        } else {
+          // Split among all technicians
+          technicianIds.forEach(techId => {
+            const tech = technicians.find((t: any) => t.id === techId);
+            results.push({
+              name: tech?.name || techId.slice(0, 8),
+              type: "technician",
+              percentage: Number((u.percentage / techCount).toFixed(2)),
+              amount: totalRevenue * (u.percentage / 100) / techCount,
+            });
+          });
+        }
       } else {
         results.push({
-          name: rule.name,
-          type: rule.type,
-          percentage: rule.percentage,
-          amount: totalRevenue * rule.percentage / 100,
+          name: u.name,
+          type: u.type,
+          percentage: u.percentage,
+          amount: totalRevenue * u.percentage / 100,
         });
       }
     });
 
     return results;
-  }, [rules, serviceOrders, technicians, totalRevenue, isValid]);
+  };
 
-  // ── Per-order breakdown ──
-  const orderBreakdown = useMemo(() => {
-    if (!isValid) return [];
-
-    return serviceOrders.slice(0, 20).map((so: any) => {
-      const orderTotal = Number(so.total || 0);
-      const shares = rules.map(rule => ({
-        name: rule.name,
-        type: rule.type,
-        amount: orderTotal * rule.percentage / 100,
+  // ── Correction entries: orders missing technician ──
+  const correctionEntries = useMemo<CorrectionEntry[]>(() => {
+    return serviceOrders
+      .filter((so: any) => !so.technician_id && Number(so.total || 0) > 0)
+      .map((so: any) => ({
+        orderId: so.id,
+        car_name: so.car_name || "—",
+        license_plate: so.license_plate || "—",
+        client_name: (so as any).clients?.name || "—",
+        total: Number(so.total || 0),
       }));
-      return {
-        id: so.id,
-        car: `${so.car_name || ""} ${so.license_plate || ""}`.trim() || so.id.slice(0, 8),
-        total: orderTotal,
-        technician: (so as any).technicians?.name || "—",
-        shares,
-      };
+  }, [serviceOrders]);
+
+  const [correctionTechNames, setCorrectionTechNames] = useState<Record<string, string>>({});
+
+  const assignTechnician = async (orderId: string) => {
+    const techName = correctionTechNames[orderId]?.trim();
+    if (!techName) {
+      toast.error("Informe o nome do técnico");
+      return;
+    }
+    // Find or match technician
+    const matchedTech = technicians.find((t: any) => t.name?.toLowerCase() === techName.toLowerCase());
+    const techId = matchedTech?.id;
+
+    if (!techId) {
+      toast.error("Técnico não encontrado. Cadastre-o primeiro.");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("service_orders")
+      .update({ technician_id: techId, updated_at: new Date().toISOString() })
+      .eq("id", orderId);
+
+    if (error) {
+      console.error("Assign technician error:", error);
+      toast.error("Erro ao atribuir técnico");
+      return;
+    }
+
+    setCorrectionTechNames(prev => {
+      const next = { ...prev };
+      delete next[orderId];
+      return next;
     });
-  }, [serviceOrders, rules, isValid]);
+    queryClient.invalidateQueries({ queryKey: ["service_orders"] });
+    toast.success("Técnico atribuído com sucesso");
+  };
 
   // ── Loading ──
   if (distLoading || soLoading) {
@@ -282,263 +375,210 @@ export function ProfitDistribution() {
             <p className="text-xs text-muted-foreground">Configure as regras e veja a distribuição automática</p>
           </div>
         </div>
-        {saveMutation.isPending && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={addRuleGroup}>
+            <FolderPlus className="h-4 w-4 mr-1" /> Criar Nova Regra
+          </Button>
+          <Button
+            size="sm"
+            disabled={!allValid || saveMutation.isPending}
+            onClick={() => saveMutation.mutate()}
+          >
+            {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
+            Salvar
+          </Button>
+        </div>
       </div>
 
       {/* ══════════════════════════════════════════ */}
-      {/* SECTION 1: Regras de Distribuição          */}
+      {/* RULE GROUPS                                */}
       {/* ══════════════════════════════════════════ */}
-      <Card className="border-border/50">
-        <CardHeader className="flex flex-row items-center justify-between pb-3">
-          <CardTitle className="text-sm font-semibold">Regras de Distribuição</CardTitle>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={addRule}>
-              <Plus className="h-4 w-4 mr-1" /> Adicionar regra
-            </Button>
-            <Button
-              size="sm"
-              disabled={!isValid || saveMutation.isPending}
-              onClick={() => saveMutation.mutate()}
-            >
-              <Save className="h-4 w-4 mr-1" /> Salvar
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Validation banner */}
-          {!isValid && (
-            <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3">
-              <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
-              <p className="text-xs text-destructive font-medium">
-                O total deve ser exatamente 100%. Atual: {totalPercentage}%
-              </p>
-            </div>
-          )}
-          {isValid && (
-            <div className="flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3">
-              <Check className="h-4 w-4 text-emerald-600 shrink-0" />
-              <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">
-                Total: 100% — Regras válidas
-              </p>
-            </div>
-          )}
+      {ruleGroups.map((group) => {
+        const groupTotal = getGroupTotal(group);
+        const valid = groupTotal === 100;
+        const groupDistributions = getGroupDistributions(group);
 
-          {/* Rules table */}
-          <div className="rounded-lg border border-border/50 overflow-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="text-[11px]">
-                  <TableHead className="w-[200px]">Nome</TableHead>
-                  <TableHead className="w-[100px]">Percentagem</TableHead>
-                  <TableHead className="w-[160px]">Tipo</TableHead>
-                  <TableHead className="w-[80px] text-right">Valor (€)</TableHead>
-                  <TableHead className="w-[60px]" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rules.map((rule) => (
-                  <TableRow key={rule.id} className="text-xs">
-                    <TableCell>
-                      <Input
-                        value={rule.name}
-                        onChange={(e) => updateRule(rule.id, "name", e.target.value)}
-                        placeholder="Nome do participante"
-                        className="h-8 text-xs"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Input
-                          type="number"
-                          min={0}
-                          max={100}
-                          value={rule.percentage}
-                          onChange={(e) => updateRule(rule.id, "percentage", Number(e.target.value))}
-                          className="h-8 w-20 text-xs"
-                        />
-                        <span className="text-muted-foreground">%</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Select
-                        value={rule.type}
-                        onValueChange={(v) => updateRule(rule.id, "type", v)}
-                      >
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {RULE_TYPES.map(t => (
-                            <SelectItem key={t.value} value={t.value} className="text-xs">
-                              {t.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      {formatCurrency(totalRevenue * rule.percentage / 100)}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-destructive hover:text-destructive"
-                        onClick={() => deleteRule(rule.id)}
-                        disabled={rules.length <= 1}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-
-          {/* Progress bar */}
-          <div className="space-y-1">
-            <div className="flex justify-between text-[10px] text-muted-foreground">
-              <span>Distribuição total</span>
-              <span className={totalPercentage === 100 ? "text-emerald-600" : "text-destructive"}>
-                {totalPercentage}%
-              </span>
-            </div>
-            <div className="h-3 rounded-full bg-muted flex overflow-hidden">
-              {rules.map((rule, i) => (
-                <div
-                  key={rule.id}
-                  className={`h-full transition-all ${
-                    rule.type === "technician" ? "bg-primary" :
-                    rule.type === "partner" ? "bg-accent" :
-                    rule.type === "company" ? "bg-emerald-500" :
-                    rule.type === "client" ? "bg-amber-500" :
-                    "bg-muted-foreground/40"
-                  }`}
-                  style={{ width: `${Math.min(rule.percentage, 100)}%` }}
-                  title={`${rule.name}: ${rule.percentage}%`}
+        return (
+          <Card key={group.id} className="border-border/50">
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <Input
+                  value={group.name}
+                  onChange={(e) => updateGroupName(group.id, e.target.value)}
+                  className="h-8 text-sm font-semibold max-w-[250px]"
                 />
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-3 mt-2">
-              {rules.map(rule => (
-                <div key={rule.id} className="flex items-center gap-1.5 text-[10px]">
-                  <div className={`h-2 w-2 rounded-full ${
-                    rule.type === "technician" ? "bg-primary" :
-                    rule.type === "partner" ? "bg-accent" :
-                    rule.type === "company" ? "bg-emerald-500" :
-                    rule.type === "client" ? "bg-amber-500" :
-                    "bg-muted-foreground/40"
-                  }`} />
-                  <span className="text-muted-foreground">{rule.name} ({rule.percentage}%)</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ══════════════════════════════════════════ */}
-      {/* SECTION 2: Distribuição Automática          */}
-      {/* ══════════════════════════════════════════ */}
-      <Card className="border-border/50">
-        <CardHeader>
-          <CardTitle className="text-sm font-semibold">Distribuição Automática</CardTitle>
-          <p className="text-[11px] text-muted-foreground">
-            Calculada automaticamente com base na receita real ({formatCurrency(totalRevenue)}) e nas ordens de serviço
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {!isValid ? (
-            <p className="text-xs text-muted-foreground text-center py-6">
-              Corrija as regras (total = 100%) para ver a distribuição automática.
-            </p>
-          ) : (
-            <>
-              {/* Summary cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="rounded-lg border border-border/50 p-3 text-center">
-                  <p className="text-[10px] text-muted-foreground">Receita Real</p>
-                  <p className="text-lg font-bold text-foreground">{formatCurrency(totalRevenue)}</p>
-                </div>
-                <div className="rounded-lg border border-border/50 p-3 text-center">
-                  <p className="text-[10px] text-muted-foreground">Ordens de Serviço</p>
-                  <p className="text-lg font-bold text-foreground">{serviceOrders.length}</p>
-                </div>
-                <div className="rounded-lg border border-border/50 p-3 text-center">
-                  <p className="text-[10px] text-muted-foreground">Técnicos Ativos</p>
-                  <p className="text-lg font-bold text-foreground">
-                    {new Set(serviceOrders.map((so: any) => so.technician_id).filter(Boolean)).size}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button variant="outline" size="sm" onClick={() => addUserToGroup(group.id)}>
+                  <Plus className="h-4 w-4 mr-1" /> Adicionar usuário
+                </Button>
+                {ruleGroups.length > 1 && (
+                  <Button variant="destructive" size="sm" onClick={() => deleteRuleGroup(group.id)}>
+                    <Trash2 className="h-4 w-4 mr-1" /> Excluir regra
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Validation banner */}
+              {!valid && (
+                <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3">
+                  <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+                  <p className="text-xs text-destructive font-medium">
+                    O total deve ser exatamente 100%. Atual: {groupTotal}%
                   </p>
                 </div>
-                <div className="rounded-lg border border-border/50 p-3 text-center">
-                  <p className="text-[10px] text-muted-foreground">Participantes</p>
-                  <p className="text-lg font-bold text-foreground">{calculatedDistributions.length}</p>
+              )}
+              {valid && (
+                <div className="flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3">
+                  <Check className="h-4 w-4 text-emerald-600 shrink-0" />
+                  <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">
+                    Total: 100% — Regra válida
+                  </p>
                 </div>
-              </div>
+              )}
 
-              {/* Calculated shares */}
+              {/* Users table */}
               <div className="rounded-lg border border-border/50 overflow-auto">
                 <Table>
                   <TableHeader>
                     <TableRow className="text-[11px]">
-                      <TableHead>Participante</TableHead>
-                      <TableHead>Tipo</TableHead>
-                      <TableHead className="text-right">%</TableHead>
-                      <TableHead className="text-right">Valor (€)</TableHead>
+                      <TableHead className="w-[200px]">Nome</TableHead>
+                      <TableHead className="w-[100px]">Percentagem</TableHead>
+                      <TableHead className="w-[160px]">Tipo</TableHead>
+                      <TableHead className="w-[80px] text-right">Valor (€)</TableHead>
+                      <TableHead className="w-[60px]" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {calculatedDistributions.map((share, i) => (
-                      <TableRow key={i} className="text-xs">
-                        <TableCell className="font-medium">{share.name || "—"}</TableCell>
+                    {group.users.map((u) => (
+                      <TableRow key={u.id} className="text-xs">
                         <TableCell>
-                          <Badge variant="secondary" className={`text-[10px] ${TYPE_COLORS[share.type] || ""}`}>
-                            {RULE_TYPES.find(t => t.value === share.type)?.label || share.type}
-                          </Badge>
+                          <Input
+                            value={u.name}
+                            onChange={(e) => updateUser(group.id, u.id, "name", e.target.value)}
+                            placeholder="Nome do participante"
+                            className="h-8 text-xs"
+                          />
                         </TableCell>
-                        <TableCell className="text-right">{share.percentage.toFixed(2)}%</TableCell>
-                        <TableCell className="text-right font-semibold">{formatCurrency(share.amount)}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <Input
+                              type="number"
+                              min={0}
+                              max={100}
+                              value={u.percentage}
+                              onChange={(e) => updateUser(group.id, u.id, "percentage", Number(e.target.value))}
+                              className="h-8 w-20 text-xs"
+                            />
+                            <span className="text-muted-foreground">%</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Select
+                            value={u.type}
+                            onValueChange={(v) => updateUser(group.id, u.id, "type", v)}
+                          >
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {RULE_TYPES.map(t => (
+                                <SelectItem key={t.value} value={t.value} className="text-xs">
+                                  {t.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell className="text-right font-medium">
+                          {formatCurrency(totalRevenue * u.percentage / 100)}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive hover:text-destructive"
+                            onClick={() => deleteUser(group.id, u.id)}
+                            disabled={group.users.length <= 1}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
-                    {calculatedDistributions.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={4} className="text-center text-muted-foreground py-6 text-xs">
-                          Nenhuma ordem de serviço encontrada
-                        </TableCell>
-                      </TableRow>
-                    )}
                   </TableBody>
                 </Table>
               </div>
 
-              {/* Per-order breakdown */}
-              {orderBreakdown.length > 0 && (
-                <div>
-                  <h3 className="text-xs font-semibold text-foreground mb-2">Distribuição por Ordem</h3>
-                  <div className="rounded-lg border border-border/50 overflow-auto max-h-[400px]">
+              {/* Progress bar */}
+              <div className="space-y-1">
+                <div className="flex justify-between text-[10px] text-muted-foreground">
+                  <span>Distribuição total</span>
+                  <span className={groupTotal === 100 ? "text-emerald-600" : "text-destructive"}>
+                    {groupTotal}%
+                  </span>
+                </div>
+                <div className="h-3 rounded-full bg-muted flex overflow-hidden">
+                  {group.users.map((u) => (
+                    <div
+                      key={u.id}
+                      className={`h-full transition-all ${
+                        u.type === "technician" ? "bg-primary" :
+                        u.type === "partner" ? "bg-accent" :
+                        u.type === "company" ? "bg-emerald-500" :
+                        u.type === "client" ? "bg-amber-500" :
+                        "bg-muted-foreground/40"
+                      }`}
+                      style={{ width: `${Math.min(u.percentage, 100)}%` }}
+                      title={`${u.name}: ${u.percentage}%`}
+                    />
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-3 mt-2">
+                  {group.users.map(u => (
+                    <div key={u.id} className="flex items-center gap-1.5 text-[10px]">
+                      <div className={`h-2 w-2 rounded-full ${
+                        u.type === "technician" ? "bg-primary" :
+                        u.type === "partner" ? "bg-accent" :
+                        u.type === "company" ? "bg-emerald-500" :
+                        u.type === "client" ? "bg-amber-500" :
+                        "bg-muted-foreground/40"
+                      }`} />
+                      <span className="text-muted-foreground">{u.name || "—"} ({u.percentage}%)</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* ── Distribuição Automática for this rule group ── */}
+              {valid && groupDistributions.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-border/30">
+                  <h3 className="text-xs font-semibold text-foreground mb-2 flex items-center gap-2">
+                    <Users className="h-3.5 w-3.5" />
+                    Distribuição Automática — {group.name}
+                  </h3>
+                  <div className="rounded-lg border border-border/50 overflow-auto">
                     <Table>
                       <TableHeader>
                         <TableRow className="text-[11px]">
-                          <TableHead>Veículo</TableHead>
-                          <TableHead>Técnico</TableHead>
-                          <TableHead className="text-right">Total</TableHead>
-                          {rules.map(r => (
-                            <TableHead key={r.id} className="text-right">{r.name} ({r.percentage}%)</TableHead>
-                          ))}
+                          <TableHead>Participante</TableHead>
+                          <TableHead>Tipo</TableHead>
+                          <TableHead className="text-right">%</TableHead>
+                          <TableHead className="text-right">Valor (€)</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {orderBreakdown.map(ob => (
-                          <TableRow key={ob.id} className="text-xs">
-                            <TableCell className="font-medium">{ob.car}</TableCell>
-                            <TableCell>{ob.technician}</TableCell>
-                            <TableCell className="text-right">{formatCurrency(ob.total)}</TableCell>
-                            {ob.shares.map((s, i) => (
-                              <TableCell key={i} className="text-right text-muted-foreground">
-                                {formatCurrency(s.amount)}
-                              </TableCell>
-                            ))}
+                        {groupDistributions.map((share, i) => (
+                          <TableRow key={i} className="text-xs">
+                            <TableCell className="font-medium">{share.name || "—"}</TableCell>
+                            <TableCell>
+                              <Badge variant="secondary" className={`text-[10px] ${TYPE_COLORS[share.type] || ""}`}>
+                                {RULE_TYPES.find(t => t.value === share.type)?.label || share.type}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">{share.percentage.toFixed(2)}%</TableCell>
+                            <TableCell className="text-right font-semibold">{formatCurrency(share.amount)}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -546,10 +586,112 @@ export function ProfitDistribution() {
                   </div>
                 </div>
               )}
-            </>
-          )}
+            </CardContent>
+          </Card>
+        );
+      })}
+
+      {/* ══════════════════════════════════════════ */}
+      {/* SUMMARY                                    */}
+      {/* ══════════════════════════════════════════ */}
+      <Card className="border-border/50">
+        <CardHeader>
+          <CardTitle className="text-sm font-semibold">Resumo Geral</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="rounded-lg border border-border/50 p-3 text-center">
+              <p className="text-[10px] text-muted-foreground">Receita Real</p>
+              <p className="text-lg font-bold text-foreground">{formatCurrency(totalRevenue)}</p>
+            </div>
+            <div className="rounded-lg border border-border/50 p-3 text-center">
+              <p className="text-[10px] text-muted-foreground">Ordens de Serviço</p>
+              <p className="text-lg font-bold text-foreground">{serviceOrders.length}</p>
+            </div>
+            <div className="rounded-lg border border-border/50 p-3 text-center">
+              <p className="text-[10px] text-muted-foreground">Técnicos Ativos</p>
+              <p className="text-lg font-bold text-foreground">
+                {new Set(serviceOrders.map((so: any) => so.technician_id).filter(Boolean)).size}
+              </p>
+            </div>
+            <div className="rounded-lg border border-border/50 p-3 text-center">
+              <p className="text-[10px] text-muted-foreground">Regras Criadas</p>
+              <p className="text-lg font-bold text-foreground">{ruleGroups.length}</p>
+            </div>
+          </div>
         </CardContent>
       </Card>
+
+      {/* ══════════════════════════════════════════ */}
+      {/* CORREÇÃO DE DISTRIBUIÇÃO                   */}
+      {/* ══════════════════════════════════════════ */}
+      {correctionEntries.length > 0 && (
+        <Card className="border-destructive/30">
+          <CardHeader>
+            <CardTitle className="text-sm font-semibold text-destructive flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" />
+              Correção de Distribuição
+            </CardTitle>
+            <p className="text-[11px] text-muted-foreground">
+              As ordens abaixo não possuem técnico atribuído. Atribua para incluir na distribuição.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-lg border border-border/50 overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="text-[11px]">
+                    <TableHead>Veículo</TableHead>
+                    <TableHead>Placa</TableHead>
+                    <TableHead>Cliente</TableHead>
+                    <TableHead className="text-right">Valor</TableHead>
+                    <TableHead className="w-[200px]">Técnico</TableHead>
+                    <TableHead className="w-[100px]" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {correctionEntries.map(entry => (
+                    <TableRow key={entry.orderId} className="text-xs">
+                      <TableCell>{entry.car_name}</TableCell>
+                      <TableCell className="font-mono">{entry.license_plate}</TableCell>
+                      <TableCell>{entry.client_name}</TableCell>
+                      <TableCell className="text-right font-medium">{formatCurrency(entry.total)}</TableCell>
+                      <TableCell>
+                        <Select
+                          value={correctionTechNames[entry.orderId] || ""}
+                          onValueChange={(v) => setCorrectionTechNames(prev => ({ ...prev, [entry.orderId]: v }))}
+                        >
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue placeholder="Selecionar técnico" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {technicians.map((t: any) => (
+                              <SelectItem key={t.id} value={t.name} className="text-xs">
+                                {t.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          disabled={!correctionTechNames[entry.orderId]}
+                          onClick={() => assignTechnician(entry.orderId)}
+                        >
+                          Atribuir
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
