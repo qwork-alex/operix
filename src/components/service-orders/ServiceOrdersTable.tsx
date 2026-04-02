@@ -16,8 +16,10 @@ import { toast } from "sonner";
 interface ServiceOrderRow {
   id: string;
   client_id: string | null;
+  client_name?: string | null;
   platform: string | null;
   technician_id: string | null;
+  technician_name?: string | null;
   week: string | null;
   car_name: string | null;
   license_plate: string | null;
@@ -113,10 +115,17 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
         .single();
       if (existingError) throw existingError;
 
+      const resolvedClientId = editForm.client_id === EMPTY_RELATION_VALUE ? null : editForm.client_id;
+      const resolvedTechId = editForm.technician_id === EMPTY_RELATION_VALUE ? null : editForm.technician_id;
+      const clientName = resolvedClientId ? (clients.find(c => c.id === resolvedClientId)?.name || "") : "";
+      const techName = resolvedTechId ? (technicians.find(t => t.id === resolvedTechId)?.name || "") : "";
+
       const payload = {
         ...existing,
-        client_id: editForm.client_id === EMPTY_RELATION_VALUE ? null : editForm.client_id,
-        technician_id: editForm.technician_id === EMPTY_RELATION_VALUE ? null : editForm.technician_id,
+        client_id: resolvedClientId,
+        client_name: clientName,
+        technician_id: resolvedTechId,
+        technician_name: techName,
         platform: toNullableText(editForm.platform),
         week: toNullableText(editForm.week),
         car_name: toNullableText(editForm.car_name),
@@ -327,9 +336,9 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
             const services = [o.service_1_name, o.service_2_name, o.service_3_name, o.service_4_name].filter(Boolean);
             return (
               <TableRow key={o.id}>
-                <TableCell className="font-medium">{o.clients?.name || "—"}</TableCell>
+                <TableCell className="font-medium">{o.client_name || o.clients?.name || "—"}</TableCell>
                 <TableCell>{o.platform || "—"}</TableCell>
-                <TableCell>{o.technicians?.name || "—"}</TableCell>
+                <TableCell>{o.technician_name || o.technicians?.name || "—"}</TableCell>
                 <TableCell>{o.week || "—"}</TableCell>
                 <TableCell>{o.car_name || "—"}</TableCell>
                 <TableCell className="font-mono text-xs">{o.license_plate || "—"}</TableCell>

@@ -130,6 +130,8 @@ export function useServiceOrders(filters?: {
         created_by: updates.created_by ?? existing.created_by ?? user?.id,
         created_at: updates.created_at ?? existing.created_at ?? new Date().toISOString(),
         updated_at: new Date().toISOString(),
+        client_name: (updates as any).client_name ?? (existing as any).client_name ?? "",
+        technician_name: (updates as any).technician_name ?? (existing as any).technician_name ?? "",
       };
 
       // Remove joined relations that come from select("*, clients(...)")

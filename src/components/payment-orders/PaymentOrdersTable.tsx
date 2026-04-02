@@ -17,10 +17,12 @@ import type { Json } from "@/integrations/supabase/types";
 interface PaymentOrderRow {
   id: string;
   client_id: string | null;
+  client_name?: string | null;
   clients?: { name: string } | null;
   platform: string | null;
   list_name: string | null;
   technician_id: string | null;
+  technician_name?: string | null;
   technicians?: { name: string } | null;
   car_name: string | null;
   license_plate: string | null;
@@ -95,10 +97,17 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
         .single();
       if (existingError) throw existingError;
 
+      const resolvedClientId = editForm.client_id === EMPTY_RELATION_VALUE ? null : editForm.client_id;
+      const resolvedTechId = editForm.technician_id === EMPTY_RELATION_VALUE ? null : editForm.technician_id;
+      const clientName = resolvedClientId ? (clients.find(c => c.id === resolvedClientId)?.name || null) : null;
+      const techName = resolvedTechId ? (technicians.find(t => t.id === resolvedTechId)?.name || null) : null;
+
       const payload = {
         ...existing,
-        client_id: editForm.client_id === EMPTY_RELATION_VALUE ? null : editForm.client_id,
-        technician_id: editForm.technician_id === EMPTY_RELATION_VALUE ? null : editForm.technician_id,
+        client_id: resolvedClientId,
+        client_name: clientName,
+        technician_id: resolvedTechId,
+        technician_name: techName,
         platform: toNullableText(editForm.platform),
         list_name: toNullableText(editForm.list_name),
         car_name: toNullableText(editForm.car_name),
@@ -296,10 +305,10 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
             const services = Array.isArray(o.services) ? (o.services as { name: string; price: number }[]) : [];
             return (
               <TableRow key={o.id} className="text-xs">
-                <TableCell className="font-medium">{o.clients?.name || "—"}</TableCell>
+                <TableCell className="font-medium">{o.client_name || o.clients?.name || "—"}</TableCell>
                 <TableCell>{o.platform || "—"}</TableCell>
                 <TableCell>{o.list_name || "—"}</TableCell>
-                <TableCell>{o.technicians?.name || "—"}</TableCell>
+                <TableCell>{o.technician_name || o.technicians?.name || "—"}</TableCell>
                 <TableCell>{o.car_name || "—"}</TableCell>
                 <TableCell className="font-mono text-[11px]">{o.license_plate || "—"}</TableCell>
                 <TableCell className="max-w-[180px] truncate">{services.map((service) => service.name).join(", ") || "—"}</TableCell>
