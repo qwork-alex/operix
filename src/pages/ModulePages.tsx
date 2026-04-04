@@ -26,7 +26,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 export { ProfitDistribution } from "@/components/profit/ProfitDistribution";
 
 // ─── ACCOUNTING ───
+import { AccountingControlCenter } from "@/components/accounting/AccountingControlCenter";
+
 export function Accounting() {
+  return <AccountingControlCenter />;
+}
+
+export function AccountingLegacy() {
   const { t, formatCurrency, formatDate } = useLanguage();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
