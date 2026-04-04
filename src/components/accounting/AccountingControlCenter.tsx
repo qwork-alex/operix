@@ -50,7 +50,8 @@ export function AccountingControlCenter() {
 
   const centerX = dimensions.w / 2;
   const centerY = dimensions.h / 2;
-  const orbitRadius = Math.min(dimensions.w, dimensions.h) * 0.34;
+  const globeSize = Math.min(dimensions.w, dimensions.h) * 0.48;
+  const orbitRadius = Math.min(dimensions.w, dimensions.h) * 0.42;
 
   return (
     <div className="h-full flex flex-col">
@@ -71,11 +72,11 @@ export function AccountingControlCenter() {
         <div
           className="absolute z-10"
           style={{
-            left: centerX - 110,
-            top: centerY - 110,
+            left: centerX - globeSize / 2,
+            top: centerY - globeSize / 2,
           }}
         >
-          <Globe size={220} />
+          <Globe size={globeSize} />
         </div>
 
         {/* Orbital modules */}

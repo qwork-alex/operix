@@ -1,157 +1,167 @@
-import { useRef, useState, useCallback, useEffect } from "react";
+import { useRef, useMemo, Suspense } from "react";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { OrbitControls, Sphere } from "@react-three/drei";
+import * as THREE from "three";
 
+/* ------------------------------------------------------------------ */
+/*  Procedural Earth-like texture (lightweight, no image downloads)    */
+/* ------------------------------------------------------------------ */
+function createEarthTexture(size = 512): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size / 2;
+  const ctx = canvas.getContext("2d")!;
+
+  // Ocean base
+  const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  grad.addColorStop(0, "#0a1628");
+  grad.addColorStop(0.5, "#0d1f3c");
+  grad.addColorStop(1, "#0a1628");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Simplenoise-free continent blobs
+  const continents = [
+    { x: 0.25, y: 0.35, rx: 0.08, ry: 0.15, rot: -0.2 },
+    { x: 0.28, y: 0.55, rx: 0.05, ry: 0.12, rot: 0.3 },
+    { x: 0.48, y: 0.3, rx: 0.06, ry: 0.1, rot: 0.1 },
+    { x: 0.5, y: 0.45, rx: 0.04, ry: 0.08, rot: -0.1 },
+    { x: 0.52, y: 0.6, rx: 0.03, ry: 0.06, rot: 0.2 },
+    { x: 0.7, y: 0.4, rx: 0.1, ry: 0.12, rot: -0.3 },
+    { x: 0.75, y: 0.55, rx: 0.04, ry: 0.05, rot: 0.1 },
+    { x: 0.85, y: 0.7, rx: 0.05, ry: 0.04, rot: 0.4 },
+    { x: 0.15, y: 0.25, rx: 0.04, ry: 0.03, rot: 0 },
+  ];
+
+  continents.forEach((c) => {
+    ctx.save();
+    ctx.translate(c.x * canvas.width, c.y * canvas.height);
+    ctx.rotate(c.rot);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, c.rx * canvas.width, c.ry * canvas.height, 0, 0, Math.PI * 2);
+    const cGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, c.rx * canvas.width);
+    cGrad.addColorStop(0, "rgba(34, 80, 50, 0.7)");
+    cGrad.addColorStop(0.6, "rgba(28, 65, 42, 0.5)");
+    cGrad.addColorStop(1, "rgba(18, 45, 30, 0)");
+    ctx.fillStyle = cGrad;
+    ctx.fill();
+    ctx.restore();
+  });
+
+  // Subtle grid lines (lat/lon)
+  ctx.strokeStyle = "rgba(60,180,220,0.06)";
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i < 12; i++) {
+    const px = (i / 12) * canvas.width;
+    ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, canvas.height); ctx.stroke();
+  }
+  for (let i = 0; i < 6; i++) {
+    const py = (i / 6) * canvas.height;
+    ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(canvas.width, py); ctx.stroke();
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  return tex;
+}
+
+function createGlowTexture(size = 256): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  const grad = ctx.createRadialGradient(size / 2, size / 2, size * 0.25, size / 2, size / 2, size / 2);
+  grad.addColorStop(0, "rgba(60,180,255,0.15)");
+  grad.addColorStop(0.5, "rgba(40,120,200,0.05)");
+  grad.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+  return new THREE.CanvasTexture(canvas);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Atmosphere ring                                                    */
+/* ------------------------------------------------------------------ */
+function Atmosphere() {
+  const glowTex = useMemo(() => createGlowTexture(), []);
+  return (
+    <sprite scale={[3.6, 3.6, 1]}>
+      <spriteMaterial map={glowTex} transparent depthWrite={false} />
+    </sprite>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Planet mesh                                                        */
+/* ------------------------------------------------------------------ */
+function Planet() {
+  const meshRef = useRef<THREE.Mesh>(null);
+  const texture = useMemo(() => createEarthTexture(1024), []);
+
+  useFrame((_, delta) => {
+    if (meshRef.current) {
+      meshRef.current.rotation.y += delta * 0.08;
+    }
+  });
+
+  return (
+    <group>
+      <Sphere ref={meshRef} args={[1.5, 64, 64]}>
+        <meshStandardMaterial
+          map={texture}
+          roughness={0.85}
+          metalness={0.1}
+          emissive={new THREE.Color("#0a2040")}
+          emissiveIntensity={0.15}
+        />
+      </Sphere>
+      <Atmosphere />
+    </group>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Exported Globe wrapper                                             */
+/* ------------------------------------------------------------------ */
 interface GlobeProps {
   size?: number;
 }
 
-export function Globe({ size = 220 }: GlobeProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [rotation, setRotation] = useState({ x: -20, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const lastPos = useRef({ x: 0, y: 0 });
-  const autoRotate = useRef(true);
-  const animFrame = useRef<number>();
-
-  // Auto-rotate
-  useEffect(() => {
-    let last = performance.now();
-    const tick = (now: number) => {
-      if (autoRotate.current && !isDragging) {
-        const dt = (now - last) / 1000;
-        setRotation((r) => ({ ...r, y: r.y + dt * 12 }));
-      }
-      last = now;
-      animFrame.current = requestAnimationFrame(tick);
-    };
-    animFrame.current = requestAnimationFrame(tick);
-    return () => {
-      if (animFrame.current) cancelAnimationFrame(animFrame.current);
-    };
-  }, [isDragging]);
-
-  const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    setIsDragging(true);
-    autoRotate.current = false;
-    lastPos.current = { x: e.clientX, y: e.clientY };
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  }, []);
-
-  const handlePointerMove = useCallback(
-    (e: React.PointerEvent) => {
-      if (!isDragging) return;
-      const dx = e.clientX - lastPos.current.x;
-      const dy = e.clientY - lastPos.current.y;
-      setRotation((r) => ({ x: r.x - dy * 0.4, y: r.y + dx * 0.4 }));
-      lastPos.current = { x: e.clientX, y: e.clientY };
-    },
-    [isDragging]
-  );
-
-  const handlePointerUp = useCallback(() => {
-    setIsDragging(false);
-    setTimeout(() => { autoRotate.current = true; }, 2000);
-  }, []);
-
-  // Generate grid lines
-  const meridians = Array.from({ length: 8 }, (_, i) => i * 22.5);
-  const parallels = [-60, -30, 0, 30, 60];
-
+export function Globe({ size = 400 }: GlobeProps) {
   return (
     <div
-      ref={containerRef}
-      className="relative select-none cursor-grab active:cursor-grabbing"
-      style={{ width: size, height: size, perspective: 800 }}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
+      className="relative select-none"
+      style={{ width: size, height: size }}
     >
-      {/* Glow backdrop */}
-      <div
-        className="absolute inset-0 rounded-full"
-        style={{
-          background: "radial-gradient(circle, hsl(43 85% 55% / 0.08) 0%, transparent 70%)",
-          filter: "blur(20px)",
-          transform: "scale(1.4)",
-        }}
-      />
-
-      {/* Globe sphere */}
-      <div
-        className="absolute inset-0 rounded-full border border-primary/20"
-        style={{
-          transformStyle: "preserve-3d",
-          transform: `rotateX(${rotation.x}deg) rotateY(${rotation.y}deg)`,
-          transition: isDragging ? "none" : "transform 0.1s ease-out",
-        }}
+      <Canvas
+        camera={{ position: [0, 0, 4.2], fov: 45 }}
+        dpr={[1, 1.5]}
+        gl={{ antialias: true, alpha: true, powerPreference: "low-power" }}
+        style={{ background: "transparent" }}
       >
-        {/* Surface */}
-        <div
-          className="absolute inset-0 rounded-full"
-          style={{
-            background: `
-              radial-gradient(circle at 35% 35%, hsl(43 85% 55% / 0.12) 0%, transparent 50%),
-              radial-gradient(circle at 65% 65%, hsl(210 80% 55% / 0.08) 0%, transparent 50%),
-              radial-gradient(circle, hsl(220 15% 12%) 0%, hsl(220 15% 6%) 100%)
-            `,
-            boxShadow: "inset -4px -4px 20px hsl(0 0% 0% / 0.5), inset 4px 4px 20px hsl(43 85% 55% / 0.05)",
-          }}
+        <ambientLight intensity={0.35} />
+        <directionalLight position={[5, 3, 5]} intensity={0.9} color="#ffe8c0" />
+        <directionalLight position={[-3, -2, -3]} intensity={0.15} color="#6090ff" />
+
+        <Suspense fallback={null}>
+          <Planet />
+        </Suspense>
+
+        <OrbitControls
+          enableZoom={false}
+          enablePan={false}
+          rotateSpeed={0.5}
+          dampingFactor={0.08}
+          enableDamping
         />
-
-        {/* Grid lines — meridians */}
-        {meridians.map((deg) => (
-          <div
-            key={`m-${deg}`}
-            className="absolute inset-0"
-            style={{
-              transformStyle: "preserve-3d",
-              transform: `rotateY(${deg}deg)`,
-            }}
-          >
-            <div
-              className="absolute rounded-full border border-primary/10"
-              style={{
-                left: "50%",
-                top: 0,
-                width: 1,
-                height: "100%",
-                transform: "translateX(-50%)",
-              }}
-            />
-          </div>
-        ))}
-
-        {/* Grid lines — parallels */}
-        {parallels.map((deg) => {
-          const scale = Math.cos((deg * Math.PI) / 180);
-          const offset = Math.sin((deg * Math.PI) / 180) * (size / 2);
-          return (
-            <div
-              key={`p-${deg}`}
-              className="absolute border border-primary/8 rounded-full"
-              style={{
-                width: size * scale,
-                height: size * scale * 0.15,
-                left: (size - size * scale) / 2,
-                top: size / 2 - (size * scale * 0.15) / 2 - offset,
-                transformStyle: "preserve-3d",
-                transform: `rotateX(90deg) translateZ(${offset}px)`,
-              }}
-            />
-          );
-        })}
-
-        {/* Highlight rim */}
-        <div
-          className="absolute inset-0 rounded-full"
-          style={{
-            background: "linear-gradient(135deg, hsl(43 85% 55% / 0.1) 0%, transparent 40%, transparent 60%, hsl(210 80% 55% / 0.05) 100%)",
-          }}
-        />
-      </div>
+      </Canvas>
 
       {/* Center label */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-        <span className="text-xs font-medium text-primary/60 tracking-widest uppercase">Contabilidade</span>
+        <span className="text-xs font-medium text-primary/50 tracking-widest uppercase drop-shadow-lg">
+          Contabilidade
+        </span>
       </div>
     </div>
   );
