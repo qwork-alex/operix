@@ -35,14 +35,27 @@ export default function DocumentCapture({ onFileReady, disabled, extracting, lab
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: useFacing, width: { ideal: 1920 }, height: { ideal: 1080 } },
-        audio: false,
-      });
+      // Use exact constraint for environment to force back camera; fallback if unavailable
+      const videoConstraint = useFacing === "environment"
+        ? { facingMode: { exact: "environment" as const }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+        : { facingMode: "user" as const, width: { ideal: 1920 }, height: { ideal: 1080 } };
+
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraint, audio: false });
+      } catch (exactErr) {
+        // Fallback: if exact environment fails, use default camera
+        console.warn("[DocumentCapture] Exact facingMode failed, using fallback:", exactErr);
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1920 }, height: { ideal: 1080 } },
+          audio: false,
+        });
+      }
+
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
+        await videoRef.current.play();
       }
     } catch (err) {
       console.error("[DocumentCapture] Camera error:", err);
