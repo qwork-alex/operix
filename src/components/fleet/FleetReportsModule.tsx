@@ -48,6 +48,7 @@ interface CalcResult {
   costPerKm: number;
   consumption: number; // L/100km
   avgKmPerTrip: number;
+  totalDuration: number; // minutes
 }
 
 function computeKPIs(trips: any[], fuel: any[]): CalcResult {
@@ -55,11 +56,13 @@ function computeKPIs(trips: any[], fuel: any[]): CalcResult {
   const totalKm = trips.reduce((s, t) => s + Number(t.total_distance || 0), 0);
   const totalFuelCost = fuel.reduce((s, f) => s + Number(f.total_cost || 0), 0);
   const totalLiters = fuel.reduce((s, f) => s + Number(f.liters || 0), 0);
+  const totalDuration = trips.reduce((s, t) => s + Number(t.total_duration || 0), 0);
   return {
     totalTrips,
     totalKm,
     totalFuelCost,
     totalLiters,
+    totalDuration,
     costPerKm: totalKm > 0 ? totalFuelCost / totalKm : 0,
     consumption: totalKm > 0 ? (totalLiters / totalKm) * 100 : 0,
     avgKmPerTrip: totalTrips > 0 ? totalKm / totalTrips : 0,
@@ -130,6 +133,7 @@ function generateReportHTML(
       <td style="padding:3px 8px">${getVehicleLabel(t.vehicle_id)}</td>
       <td style="padding:3px 8px">${getDriverName(t.driver_id)}</td>
       <td style="padding:3px 8px;text-align:right">${t.total_distance ? `${Number(t.total_distance).toLocaleString()} km` : "—"}</td>
+      <td style="padding:3px 8px;text-align:right">${t.total_duration ? `${Math.round(Number(t.total_duration))} min` : "—"}</td>
     </tr>
   `).join("");
 
@@ -176,7 +180,7 @@ function generateReportHTML(
 
 <h2>Detalhe de Trajetos</h2>
 <table>
-  <thead><tr><th>Data</th><th>Veículo</th><th>Condutor</th><th style="text-align:right">Distância</th></tr></thead>
+  <thead><tr><th>Data</th><th>Veículo</th><th>Condutor</th><th style="text-align:right">Distância</th><th style="text-align:right">Duração</th></tr></thead>
   <tbody>${tripRows}</tbody>
 </table>
 
@@ -603,28 +607,28 @@ export default function FleetReportsModule() {
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Data</TableHead>
-                    <TableHead>Veículo</TableHead>
-                    <TableHead>Condutor</TableHead>
-                    <TableHead className="text-right">Distância</TableHead>
-                    <TableHead className="text-right">KM Início</TableHead>
-                    <TableHead className="text-right">KM Fim</TableHead>
-                  </TableRow>
+                   <TableRow>
+                     <TableHead>Data</TableHead>
+                     <TableHead>Veículo</TableHead>
+                     <TableHead>Condutor</TableHead>
+                     <TableHead className="text-right">Distância</TableHead>
+                     <TableHead className="text-right">Duração</TableHead>
+                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filtered.trips.length === 0 ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-4 text-muted-foreground">Sem trajetos</TableCell></TableRow>
+                     <TableRow><TableCell colSpan={5} className="text-center py-4 text-muted-foreground">Sem trajetos</TableCell></TableRow>
                   ) : filtered.trips.slice(0, 100).map((t: any) => (
                     <TableRow key={t.id}>
                       <TableCell>{t.date}</TableCell>
                       <TableCell>{getVehicleLabel(t.vehicle_id)}</TableCell>
                       <TableCell>{getDriverName(t.driver_id)}</TableCell>
-                      <TableCell className="text-right tabular-nums font-semibold">
-                        {t.total_distance ? `${Number(t.total_distance).toLocaleString()} km` : "—"}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{t.km_start ? Number(t.km_start).toLocaleString() : "—"}</TableCell>
-                      <TableCell className="text-right tabular-nums">{t.km_end ? Number(t.km_end).toLocaleString() : "—"}</TableCell>
+                       <TableCell className="text-right tabular-nums font-semibold">
+                         {t.total_distance ? `${Number(t.total_distance).toLocaleString()} km` : "—"}
+                       </TableCell>
+                       <TableCell className="text-right tabular-nums text-muted-foreground">
+                         {t.total_duration ? `${Math.round(Number(t.total_duration))} min` : "—"}
+                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

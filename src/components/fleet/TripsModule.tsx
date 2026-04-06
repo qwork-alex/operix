@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Save, Trash2, MapPin, Navigation, Loader2, CheckCircle, Locate, Plus, ArrowRight, Minus } from "lucide-react";
+import { Save, Trash2, MapPin, Navigation, Loader2, CheckCircle, Locate, Plus, ArrowRight, Minus, Clock } from "lucide-react";
 
 /* ─── Types ─── */
 interface TripPoint {
@@ -23,6 +23,8 @@ interface TripPoint {
   country: string;
   latitude: string;
   longitude: string;
+  distance_from_previous: number;
+  duration_from_previous: number;
 }
 
 interface TripForm {
@@ -37,21 +39,13 @@ interface TripForm {
 const STORAGE_KEY = "fleet_active_trips";
 
 const makePoint = (label: string): TripPoint => ({
-  label, number: "", street: "", postal_code: "", city: "", country: "Portugal", latitude: "", longitude: "",
+  label, number: "", street: "", postal_code: "", city: "", country: "Portugal",
+  latitude: "", longitude: "", distance_from_previous: 0, duration_from_previous: 0,
 });
 
 const defaultForm = (): TripForm => ({
   vehicle_id: "", driver_id: "", date: new Date().toISOString().slice(0, 10), km_start: "", km_end: "", notes: "",
 });
-
-/* ─── Haversine distance (km) ─── */
-function haversine(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
 
 /* ─── Session storage helpers (multi-trip) ─── */
 interface TripSession {
@@ -63,10 +57,7 @@ interface TripSession {
 }
 
 function loadSessions(): TripSession[] {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch { return []; }
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); } catch { return []; }
 }
 
 function saveSessionToStorage(sessions: TripSession[]) {
@@ -77,14 +68,27 @@ function upsertSession(tripId: string, vehicleId: string, form: TripForm, points
   const sessions = loadSessions();
   const idx = sessions.findIndex(s => s.tripId === tripId);
   const entry: TripSession = { tripId, vehicleId, form, points, ts: Date.now() };
-  if (idx >= 0) sessions[idx] = entry;
-  else sessions.push(entry);
+  if (idx >= 0) sessions[idx] = entry; else sessions.push(entry);
   saveSessionToStorage(sessions);
 }
 
 function removeSession(tripId: string) {
-  const sessions = loadSessions().filter(s => s.tripId !== tripId);
-  saveSessionToStorage(sessions);
+  saveSessionToStorage(loadSessions().filter(s => s.tripId !== tripId));
+}
+
+/* ─── Route calculation via edge function ─── */
+async function calculateRouteAPI(
+  origin: { lat: number; lng: number },
+  destination: { lat: number; lng: number },
+  tripId?: string,
+  pointIndex?: number,
+): Promise<{ distance_km: number; duration_min: number }> {
+  const { data, error } = await supabase.functions.invoke("calculate-route", {
+    body: { origin, destination, trip_id: tripId, point_index: pointIndex },
+  });
+  if (error) throw new Error(`Erro ao calcular rota: ${error.message}`);
+  if (data?.error) throw new Error(data.error);
+  return { distance_km: data.distance_km, duration_min: data.duration_min };
 }
 
 /* ─── Component ─── */
@@ -95,9 +99,9 @@ export default function TripsModule() {
   const [form, setForm] = useState<TripForm>(defaultForm());
   const [points, setPoints] = useState<TripPoint[]>([makePoint("Ponto de Partida")]);
   const [gpsLoading, setGpsLoading] = useState<number | null>(null);
+  const [routeLoading, setRouteLoading] = useState<number | null>(null);
   const [activeTripId, setActiveTripId] = useState<string | null>(null);
 
-  // Quick complete dialog
   const [completeOpen, setCompleteOpen] = useState(false);
   const [completeTripId, setCompleteTripId] = useState("");
   const [completeKm, setCompleteKm] = useState("");
@@ -139,25 +143,25 @@ export default function TripsModule() {
     return d ? d.full_name : "—";
   };
 
-  /* ─── Auto-save session to localStorage ─── */
+  /* ─── Auto-save session ─── */
   useEffect(() => {
     if (open && activeTripId) {
       upsertSession(activeTripId, form.vehicle_id, form, points);
     }
   }, [form, points, open, activeTripId]);
 
-  /* ─── Vehicle change auto-selects assigned driver ─── */
+  /* ─── Vehicle change ─── */
   const onVehicleChange = (vid: string) => {
     const existingTrip = activeTrips.find((t: any) => t.vehicle_id === vid);
     if (existingTrip && !activeTripId) {
-      toast.error(`Este veículo já tem um trajeto ativo (${getDriverName(existingTrip.driver_id)}). Finalize-o primeiro ou selecione outro veículo.`);
+      toast.error(`Este veículo já tem um trajeto ativo. Finalize-o primeiro.`);
       return;
     }
     const assignment = assignments.find((a: any) => a.vehicle_id === vid);
     setForm(p => ({ ...p, vehicle_id: vid, driver_id: assignment?.driver_id || "" }));
   };
 
-  /* ─── GPS + Reverse Geocoding ─── */
+  /* ─── GPS + Reverse Geocoding + Auto Route Calc ─── */
   const getGPS = useCallback(async (i: number) => {
     if (!navigator.geolocation) { toast.error("GPS indisponível neste dispositivo"); return; }
     setGpsLoading(i);
@@ -186,6 +190,31 @@ export default function TripsModule() {
           setPoints(p => p.map((pt, idx) => idx === i ? { ...pt, latitude: lat, longitude: lon } : pt));
         }
         setGpsLoading(null);
+
+        // Auto-calculate route from previous point
+        if (i > 0) {
+          const prevPoint = points[i - 1];
+          if (prevPoint.latitude && prevPoint.longitude) {
+            setRouteLoading(i);
+            try {
+              const result = await calculateRouteAPI(
+                { lat: parseFloat(prevPoint.latitude), lng: parseFloat(prevPoint.longitude) },
+                { lat: parseFloat(lat), lng: parseFloat(lon) },
+                activeTripId || undefined,
+                i,
+              );
+              setPoints(p => p.map((pt, idx) => idx === i ? {
+                ...pt, latitude: lat, longitude: lon,
+                distance_from_previous: result.distance_km,
+                duration_from_previous: result.duration_min,
+              } : pt));
+              toast.success(`Rota calculada: ${result.distance_km.toFixed(1)} km, ${Math.round(result.duration_min)} min`);
+            } catch (err) {
+              console.error("Route calc failed, using GPS coords only:", err);
+            }
+            setRouteLoading(null);
+          }
+        }
       },
       (err) => {
         const msg = err.code === 1 ? "Permissão GPS negada" : err.code === 2 ? "GPS indisponível" : "Tempo limite GPS esgotado";
@@ -193,7 +222,7 @@ export default function TripsModule() {
         setGpsLoading(null);
       },
     );
-  }, []);
+  }, [points, activeTripId]);
 
   /* ─── Point management ─── */
   const addIntermediatePoint = () => {
@@ -221,29 +250,20 @@ export default function TripsModule() {
     setPoints(p => p.map((pt, idx) => idx === i ? { ...pt, [k]: v } : pt));
   };
 
-  /* ─── Distance calculations ─── */
-  const segmentDistances = points.reduce<number[]>((acc, pt, i) => {
-    if (i === 0) return acc;
-    const prev = points[i - 1];
-    if (prev.latitude && prev.longitude && pt.latitude && pt.longitude) {
-      acc.push(haversine(parseFloat(prev.latitude), parseFloat(prev.longitude), parseFloat(pt.latitude), parseFloat(pt.longitude)));
-    } else {
-      acc.push(0);
-    }
-    return acc;
-  }, []);
-  const totalGpsDistance = segmentDistances.reduce((s, d) => s + d, 0);
+  /* ─── Distance/Duration totals from API ─── */
+  const totalApiDistance = points.reduce((s, pt) => s + (pt.distance_from_previous || 0), 0);
+  const totalApiDuration = points.reduce((s, pt) => s + (pt.duration_from_previous || 0), 0);
 
   /* ─── Save / Start trip ─── */
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const kmStart = parseFloat(form.km_start);
-      if (isNaN(kmStart)) throw new Error("KM início é obrigatório");
       if (!form.vehicle_id) throw new Error("Selecione um veículo");
       if (!form.driver_id) throw new Error("Selecione um condutor");
 
       const existingActive = activeTrips.find((t: any) => t.vehicle_id === form.vehicle_id);
       if (existingActive) throw new Error(`Veículo já tem trajeto ativo. Finalize-o primeiro.`);
+
+      const kmStart = form.km_start ? parseFloat(form.km_start) : null;
 
       const { data: trip, error } = await supabase.from("fleet_trips").insert({
         vehicle_id: form.vehicle_id,
@@ -258,7 +278,7 @@ export default function TripsModule() {
       const tripId = (trip as any).id;
       setActiveTripId(tripId);
 
-      const validPoints = points.filter(p => p.street || p.city);
+      const validPoints = points.filter(p => p.street || p.city || p.latitude);
       if (validPoints.length > 0) {
         const pointRows = validPoints.map((p, i) => ({
           trip_id: tripId,
@@ -268,6 +288,8 @@ export default function TripsModule() {
           city: p.city || null,
           latitude: p.latitude ? parseFloat(p.latitude) : null,
           longitude: p.longitude ? parseFloat(p.longitude) : null,
+          distance_from_previous: p.distance_from_previous || 0,
+          duration_from_previous: p.duration_from_previous || 0,
         }));
         await supabase.from("fleet_trip_points").insert(pointRows as any);
       }
@@ -287,27 +309,9 @@ export default function TripsModule() {
     mutationFn: async ({ id, km_end }: { id: string; km_end: number | null }) => {
       const trip = trips.find((t: any) => t.id === id);
       if (!trip) throw new Error("Trajeto não encontrado na base de dados");
-      const kmStart = Number(trip.km_start);
 
-      let finalKm = km_end;
-      let totalDist: number;
-
-      if (finalKm === null || isNaN(finalKm)) {
-        if (totalGpsDistance > 0) {
-          finalKm = Math.round(kmStart + totalGpsDistance);
-          totalDist = totalGpsDistance;
-        } else {
-          finalKm = kmStart;
-          totalDist = 0;
-        }
-      } else {
-        if (finalKm < kmStart) {
-          throw new Error(`KM fim (${finalKm}) não pode ser inferior ao KM início (${kmStart})`);
-        }
-        totalDist = finalKm - kmStart;
-      }
-
-      const validPoints = points.filter(p => p.street || p.city);
+      // Save final points
+      const validPoints = points.filter(p => p.street || p.city || p.latitude);
       if (validPoints.length > 0 && activeTripId === id) {
         await supabase.from("fleet_trip_points").delete().eq("trip_id", id);
         const pointRows = validPoints.map((p, i) => ({
@@ -318,14 +322,33 @@ export default function TripsModule() {
           city: p.city || null,
           latitude: p.latitude ? parseFloat(p.latitude) : null,
           longitude: p.longitude ? parseFloat(p.longitude) : null,
+          distance_from_previous: p.distance_from_previous || 0,
+          duration_from_previous: p.duration_from_previous || 0,
         }));
         await supabase.from("fleet_trip_points").insert(pointRows as any);
+      }
+
+      // Calculate totals from API distances
+      const apiDist = points.reduce((s, pt) => s + (pt.distance_from_previous || 0), 0);
+      const apiDur = points.reduce((s, pt) => s + (pt.duration_from_previous || 0), 0);
+
+      let totalDist = apiDist;
+      let finalKm = km_end;
+      const kmStart = trip.km_start ? Number(trip.km_start) : null;
+
+      // If manual KM provided and API distance is 0, use manual
+      if (finalKm !== null && !isNaN(finalKm) && kmStart !== null) {
+        if (finalKm < kmStart) throw new Error(`KM fim (${finalKm}) < KM início (${kmStart})`);
+        if (totalDist === 0) totalDist = finalKm - kmStart;
+      } else if (totalDist > 0 && kmStart !== null) {
+        finalKm = Math.round(kmStart + totalDist);
       }
 
       const { error } = await supabase.from("fleet_trips").update({
         km_end: finalKm,
         status: "completed",
-        total_distance: Math.round(totalDist * 10) / 10,
+        total_distance: Math.round((totalDist || 0) * 10) / 10,
+        total_duration: Math.round((apiDur || 0) * 10) / 10,
         notes: form.notes || null,
       }).eq("id", id);
       if (error) throw new Error(`Falha ao finalizar: ${error.message}`);
@@ -343,13 +366,36 @@ export default function TripsModule() {
 
   /* ─── Quick finalize from table ─── */
   const quickFinalize = useMutation({
-    mutationFn: async ({ id, km_end }: { id: string; km_end: number }) => {
+    mutationFn: async ({ id, km_end }: { id: string; km_end: number | null }) => {
       const trip = trips.find((t: any) => t.id === id);
       if (!trip) throw new Error("Trajeto não encontrado");
-      const kmStart = Number(trip.km_start);
-      if (km_end < kmStart) throw new Error(`KM fim (${km_end}) não pode ser inferior ao KM início (${kmStart})`);
+
+      // Fetch saved trip points for API distances
+      const { data: savedPoints } = await supabase
+        .from("fleet_trip_points")
+        .select("distance_from_previous, duration_from_previous")
+        .eq("trip_id", id)
+        .order("order_index");
+
+      const apiDist = (savedPoints || []).reduce((s: number, p: any) => s + Number(p.distance_from_previous || 0), 0);
+      const apiDur = (savedPoints || []).reduce((s: number, p: any) => s + Number(p.duration_from_previous || 0), 0);
+
+      let totalDist = apiDist;
+      let finalKm = km_end;
+      const kmStart = trip.km_start ? Number(trip.km_start) : null;
+
+      if (finalKm !== null && !isNaN(finalKm) && kmStart !== null) {
+        if (finalKm < kmStart) throw new Error(`KM fim (${finalKm}) < KM início (${kmStart})`);
+        if (totalDist === 0) totalDist = finalKm - kmStart;
+      } else if (totalDist > 0 && kmStart !== null) {
+        finalKm = Math.round(kmStart + totalDist);
+      }
+
       const { error } = await supabase.from("fleet_trips").update({
-        km_end, status: "completed", total_distance: km_end - kmStart,
+        km_end: finalKm,
+        status: "completed",
+        total_distance: Math.round((totalDist || 0) * 10) / 10,
+        total_duration: Math.round((apiDur || 0) * 10) / 10,
       }).eq("id", id);
       if (error) throw new Error(`Falha ao finalizar: ${error.message}`);
       removeSession(id);
@@ -375,22 +421,12 @@ export default function TripsModule() {
   });
 
   const resetAndClose = () => {
-    setOpen(false);
-    setMinimized(false);
-    setForm(defaultForm());
-    setPoints([makePoint("Ponto de Partida")]);
-    setActiveTripId(null);
+    setOpen(false); setMinimized(false); setForm(defaultForm());
+    setPoints([makePoint("Ponto de Partida")]); setActiveTripId(null);
   };
 
-  const minimizeDialog = () => {
-    setOpen(false);
-    setMinimized(true);
-  };
-
-  const restoreDialog = () => {
-    setMinimized(false);
-    setOpen(true);
-  };
+  const minimizeDialog = () => { setOpen(false); setMinimized(true); };
+  const restoreDialog = () => { setMinimized(false); setOpen(true); };
 
   /* ─── Open / Resume trip ─── */
   const openTripDialog = (tripId?: string) => {
@@ -398,27 +434,19 @@ export default function TripsModule() {
       const trip = trips.find((t: any) => t.id === tripId);
       if (!trip) return;
       setForm({
-        vehicle_id: trip.vehicle_id,
-        driver_id: trip.driver_id,
-        date: trip.date,
-        km_start: String(trip.km_start),
+        vehicle_id: trip.vehicle_id, driver_id: trip.driver_id, date: trip.date,
+        km_start: trip.km_start ? String(trip.km_start) : "",
         km_end: trip.km_end ? String(trip.km_end) : "",
         notes: trip.notes || "",
       });
       setActiveTripId(tripId);
-      const sessions = loadSessions();
-      const session = sessions.find(s => s.tripId === tripId);
-      if (session?.points?.length) {
-        setPoints(session.points);
-      } else {
-        setPoints([makePoint("Ponto de Partida")]);
-      }
+      const session = loadSessions().find(s => s.tripId === tripId);
+      setPoints(session?.points?.length ? session.points : [makePoint("Ponto de Partida")]);
     } else {
       const f = defaultForm();
       if (assignments.length === 1) {
-        const a = assignments[0] as any;
-        f.vehicle_id = a.vehicle_id;
-        f.driver_id = a.driver_id;
+        f.vehicle_id = (assignments[0] as any).vehicle_id;
+        f.driver_id = (assignments[0] as any).driver_id;
       }
       setForm(f);
       setPoints([makePoint("Ponto de Partida")]);
@@ -430,14 +458,9 @@ export default function TripsModule() {
 
   useEffect(() => {
     const handler = (e: Event) => {
-      const customEvent = e as CustomEvent;
-      const tripId = customEvent.detail?.tripId;
-      if (tripId) {
-        openTripDialog(tripId);
-      } else {
-        const first = trips.find((t: any) => t.status === "in_progress");
-        if (first) openTripDialog(first.id);
-      }
+      const tripId = (e as CustomEvent).detail?.tripId;
+      if (tripId) openTripDialog(tripId);
+      else { const first = trips.find((t: any) => t.status === "in_progress"); if (first) openTripDialog(first.id); }
     };
     window.addEventListener("fleet:resume-trip", handler);
     return () => window.removeEventListener("fleet:resume-trip", handler);
@@ -445,12 +468,19 @@ export default function TripsModule() {
 
   const isActiveSession = !!activeTripId;
 
+  const formatDuration = (min: number) => {
+    if (min < 60) return `${Math.round(min)} min`;
+    const h = Math.floor(min / 60);
+    const m = Math.round(min % 60);
+    return `${h}h${m > 0 ? ` ${m}min` : ""}`;
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-base font-semibold">Trajetos</h2>
-          <p className="text-xs text-muted-foreground">Registo de deslocações com pontos e quilometragem</p>
+          <p className="text-xs text-muted-foreground">Cálculo automático de rotas via OpenRouteService</p>
         </div>
         <Button size="sm" onClick={() => openTripDialog()}>
           <Navigation className="h-4 w-4 mr-1" /> Iniciar Trajeto
@@ -463,6 +493,9 @@ export default function TripsModule() {
           <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
           <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">Trajeto minimizado</span>
           <span className="text-xs text-muted-foreground">{getVehicleLabel(form.vehicle_id)}</span>
+          {totalApiDistance > 0 && (
+            <span className="text-xs font-semibold text-foreground">{totalApiDistance.toFixed(1)} km</span>
+          )}
           <Button size="sm" variant="outline" className="ml-auto h-6 text-xs" onClick={(e) => { e.stopPropagation(); restoreDialog(); }}>
             Restaurar
           </Button>
@@ -478,26 +511,24 @@ export default function TripsModule() {
                 <TableHead>Data</TableHead>
                 <TableHead>Veículo</TableHead>
                 <TableHead>Condutor</TableHead>
-                <TableHead>KM Início</TableHead>
-                <TableHead>KM Fim</TableHead>
                 <TableHead>Distância</TableHead>
+                <TableHead>Duração</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
               ) : trips.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum trajeto registrado</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum trajeto registrado</TableCell></TableRow>
               ) : trips.map((t: any) => (
                 <TableRow key={t.id}>
                   <TableCell>{t.date}</TableCell>
                   <TableCell className="max-w-[140px] truncate">{getVehicleLabel(t.vehicle_id)}</TableCell>
                   <TableCell>{getDriverName(t.driver_id)}</TableCell>
-                  <TableCell className="tabular-nums">{Number(t.km_start).toLocaleString()}</TableCell>
-                  <TableCell className="tabular-nums">{t.km_end ? Number(t.km_end).toLocaleString() : "—"}</TableCell>
                   <TableCell className="font-semibold tabular-nums">{t.total_distance ? `${Number(t.total_distance).toLocaleString()} km` : "—"}</TableCell>
+                  <TableCell className="tabular-nums text-muted-foreground">{t.total_duration ? formatDuration(Number(t.total_duration)) : "—"}</TableCell>
                   <TableCell>
                     <Badge className={t.status === "completed" ? "bg-green-500/10 text-green-500" : "bg-blue-500/10 text-blue-500"}>
                       {t.status === "completed" ? "Concluído" : "Em curso"}
@@ -538,7 +569,7 @@ export default function TripsModule() {
               <div>
                 <DialogTitle>{isActiveSession ? "Trajeto em Curso" : "Iniciar Trajeto"}</DialogTitle>
                 <DialogDescription>
-                  {isActiveSession ? "Continue a registar pontos de passagem ou finalize o trajeto." : "Registe um novo trajeto com pontos de passagem."}
+                  {isActiveSession ? "Continue a registar pontos. Distâncias calculadas automaticamente." : "Registe um novo trajeto com cálculo automático de rotas."}
                 </DialogDescription>
               </div>
               <div className="flex gap-1">
@@ -557,12 +588,12 @@ export default function TripsModule() {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Data Início *</Label>
+                <Label>Data Início</Label>
                 <Input type="date" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} disabled={isActiveSession} />
               </div>
               <div>
-                <Label>KM Início *</Label>
-                <Input type="number" value={form.km_start} onChange={e => setForm(p => ({ ...p, km_start: e.target.value }))} disabled={isActiveSession} />
+                <Label>KM Início (opcional)</Label>
+                <Input type="number" value={form.km_start} onChange={e => setForm(p => ({ ...p, km_start: e.target.value }))} disabled={isActiveSession} placeholder="Opcional" />
               </div>
             </div>
 
@@ -591,6 +622,24 @@ export default function TripsModule() {
               </div>
             </div>
 
+            {/* Live accumulated distance/duration */}
+            {totalApiDistance > 0 && (
+              <div className="rounded-lg bg-primary/5 border border-primary/20 p-3 flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Navigation className="h-4 w-4 text-primary" />
+                  <span className="text-sm text-muted-foreground">Distância acumulada:</span>
+                  <span className="text-lg font-bold text-primary">{totalApiDistance.toFixed(1)} km</span>
+                </div>
+                {totalApiDuration > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">Duração:</span>
+                    <span className="text-sm font-semibold">{formatDuration(totalApiDuration)}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div>
               <div className="flex items-center justify-between mb-2">
                 <p className="text-sm font-semibold">Pontos de Passagem</p>
@@ -610,14 +659,19 @@ export default function TripsModule() {
                     <div className="flex items-center gap-2 mb-2">
                       <MapPin className="h-4 w-4 text-primary shrink-0" />
                       <span className="text-xs font-semibold">{pt.label}</span>
-                      {i > 0 && segmentDistances[i - 1] > 0 && (
-                        <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                      {i > 0 && pt.distance_from_previous > 0 && (
+                        <span className="text-[10px] text-green-600 dark:text-green-400 flex items-center gap-0.5 bg-green-500/10 px-1.5 py-0.5 rounded">
                           <ArrowRight className="h-2.5 w-2.5" />
-                          {segmentDistances[i - 1].toFixed(1)} km
+                          {pt.distance_from_previous.toFixed(1)} km · {Math.round(pt.duration_from_previous)} min
+                        </span>
+                      )}
+                      {routeLoading === i && (
+                        <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                          <Loader2 className="h-3 w-3 animate-spin" /> Calculando rota...
                         </span>
                       )}
                       <div className="ml-auto flex gap-1">
-                        <Button size="sm" variant="ghost" className="h-6 text-xs gap-1" onClick={() => getGPS(i)} disabled={gpsLoading === i}>
+                        <Button size="sm" variant="ghost" className="h-6 text-xs gap-1" onClick={() => getGPS(i)} disabled={gpsLoading === i || routeLoading === i}>
                           {gpsLoading === i ? <Loader2 className="h-3 w-3 animate-spin" /> : <Locate className="h-3 w-3" />}
                           GPS
                         </Button>
@@ -651,13 +705,6 @@ export default function TripsModule() {
                   </Card>
                 ))}
               </div>
-
-              {totalGpsDistance > 0 && (
-                <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-                  <Navigation className="h-3 w-3" />
-                  Distância GPS estimada: <span className="font-semibold text-foreground">{totalGpsDistance.toFixed(1)} km</span>
-                </div>
-              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -667,7 +714,7 @@ export default function TripsModule() {
                   type="number"
                   value={form.km_end}
                   onChange={e => setForm(p => ({ ...p, km_end: e.target.value }))}
-                  placeholder={totalGpsDistance > 0 ? `Auto: ~${Math.round(parseFloat(form.km_start || "0") + totalGpsDistance)}` : "Deixar vazio para auto-cálculo"}
+                  placeholder={totalApiDistance > 0 ? `Auto: ~${totalApiDistance.toFixed(0)} km via API` : "Opcional"}
                 />
               </div>
               <div>
@@ -675,13 +722,6 @@ export default function TripsModule() {
                 <Textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} className="h-9 min-h-[36px] text-sm" />
               </div>
             </div>
-
-            {form.km_start && form.km_end && parseFloat(form.km_end) > parseFloat(form.km_start) && (
-              <div className="rounded-lg bg-primary/5 border border-primary/20 p-3 text-sm">
-                <span className="text-muted-foreground">Distância total (KM): </span>
-                <span className="font-bold text-primary">{(parseFloat(form.km_end) - parseFloat(form.km_start)).toLocaleString()} km</span>
-              </div>
-            )}
           </div>
 
           <div className="flex justify-between gap-2 pt-2">
@@ -692,7 +732,7 @@ export default function TripsModule() {
               {!isActiveSession && (
                 <Button
                   onClick={() => saveMutation.mutate()}
-                  disabled={!form.vehicle_id || !form.driver_id || !form.km_start || saveMutation.isPending}
+                  disabled={!form.vehicle_id || !form.driver_id || saveMutation.isPending}
                 >
                   {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Navigation className="h-4 w-4 mr-1" />}
                   Iniciar Trajeto
@@ -722,13 +762,13 @@ export default function TripsModule() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Finalizar Trajeto</DialogTitle>
-            <DialogDescription>Insira a quilometragem final para concluir. Deixe vazio para auto-cálculo.</DialogDescription>
+            <DialogDescription>KM fim é opcional. A distância será calculada automaticamente pela API de rotas.</DialogDescription>
           </DialogHeader>
-          <div><Label>KM Fim</Label><Input type="number" value={completeKm} onChange={e => setCompleteKm(e.target.value)} placeholder="Opcional — auto-calcula se vazio" /></div>
+          <div><Label>KM Fim (opcional)</Label><Input type="number" value={completeKm} onChange={e => setCompleteKm(e.target.value)} placeholder="Opcional — usa cálculo da API" /></div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setCompleteOpen(false)}>Cancelar</Button>
             <Button
-              onClick={() => quickFinalize.mutate({ id: completeTripId, km_end: parseFloat(completeKm) })}
+              onClick={() => quickFinalize.mutate({ id: completeTripId, km_end: completeKm ? parseFloat(completeKm) : null })}
               disabled={quickFinalize.isPending}
             >
               {quickFinalize.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
