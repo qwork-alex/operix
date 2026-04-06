@@ -172,6 +172,8 @@ export default function TripsModule() {
   const [gpsLoading, setGpsLoading] = useState<number | null>(null);
   const [routeLoading, setRouteLoading] = useState<number | null>(null);
   const [activeTripId, setActiveTripId] = useState<string | null>(null);
+  const [expandedTrip, setExpandedTrip] = useState<string | null>(null);
+  const [segmentsCache, setSegmentsCache] = useState<Record<string, any[]>>({});
 
   const [completeOpen, setCompleteOpen] = useState(false);
   const [completeTripId, setCompleteTripId] = useState("");
