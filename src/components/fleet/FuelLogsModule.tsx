@@ -118,8 +118,11 @@ export default function FuelLogsModule() {
     mutationFn: async () => {
       const liters = parseFloat(form.liters);
       const totalCost = parseFloat(form.total_cost);
-      if (isNaN(liters) || isNaN(totalCost)) throw new Error("Litros e custo total são campos obrigatórios");
+      if (!liters || !totalCost || isNaN(liters) || isNaN(totalCost)) throw new Error("Dados inválidos");
       if (!form.vehicle_id) throw new Error("Selecione um veículo");
+
+      const pricePerLiter = totalCost / liters;
+      if (!Number.isFinite(pricePerLiter) || pricePerLiter <= 0) throw new Error("Dados inválidos");
 
       let receiptPath: string | null = null;
       if (receiptFile) {
@@ -141,7 +144,6 @@ export default function FuelLogsModule() {
         km_at_fuel: form.km_at_fuel ? parseFloat(form.km_at_fuel) : null,
         liters,
         total_cost: totalCost,
-        price_per_liter: liters > 0 ? totalCost / liters : null,
         notes: form.notes || null,
       };
 
