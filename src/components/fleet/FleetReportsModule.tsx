@@ -56,11 +56,13 @@ function computeKPIs(trips: any[], fuel: any[]): CalcResult {
   const totalKm = trips.reduce((s, t) => s + Number(t.total_distance || 0), 0);
   const totalFuelCost = fuel.reduce((s, f) => s + Number(f.total_cost || 0), 0);
   const totalLiters = fuel.reduce((s, f) => s + Number(f.liters || 0), 0);
+  const totalDuration = trips.reduce((s, t) => s + Number(t.total_duration || 0), 0);
   return {
     totalTrips,
     totalKm,
     totalFuelCost,
     totalLiters,
+    totalDuration,
     costPerKm: totalKm > 0 ? totalFuelCost / totalKm : 0,
     consumption: totalKm > 0 ? (totalLiters / totalKm) * 100 : 0,
     avgKmPerTrip: totalTrips > 0 ? totalKm / totalTrips : 0,
