@@ -183,6 +183,7 @@ export type Database = {
           entity_type: string | null
           id: string
           mime_type: string | null
+          module: string
           name: string
           parent_id: string | null
           size_bytes: number | null
@@ -196,6 +197,7 @@ export type Database = {
           entity_type?: string | null
           id?: string
           mime_type?: string | null
+          module?: string
           name: string
           parent_id?: string | null
           size_bytes?: number | null
@@ -209,6 +211,7 @@ export type Database = {
           entity_type?: string | null
           id?: string
           mime_type?: string | null
+          module?: string
           name?: string
           parent_id?: string | null
           size_bytes?: number | null
