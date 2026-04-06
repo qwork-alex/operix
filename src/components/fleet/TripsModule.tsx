@@ -591,33 +591,72 @@ export default function TripsModule() {
               ) : trips.length === 0 ? (
                 <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum trajeto registrado</TableCell></TableRow>
               ) : trips.map((t: any) => (
-                <TableRow key={t.id}>
-                  <TableCell>{t.date}</TableCell>
-                  <TableCell className="max-w-[140px] truncate">{getVehicleLabel(t.vehicle_id)}</TableCell>
-                  <TableCell>{getDriverName(t.driver_id)}</TableCell>
-                  <TableCell className="font-semibold tabular-nums">{t.total_distance ? `${Number(t.total_distance).toLocaleString()} km` : "—"}</TableCell>
-                  <TableCell className="tabular-nums text-muted-foreground">{t.total_duration ? formatDuration(Number(t.total_duration)) : "—"}</TableCell>
-                  <TableCell>
-                    <Badge className={t.status === "completed" ? "bg-green-500/10 text-green-500" : "bg-blue-500/10 text-blue-500"}>
-                      {t.status === "completed" ? "Concluído" : "Em curso"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right space-x-1">
-                    {t.status === "in_progress" && (
-                      <>
-                        <Button variant="outline" size="sm" onClick={() => openTripDialog(t.id)}>
-                          <Navigation className="h-3.5 w-3.5 mr-1" /> Continuar
+                <>
+                  <TableRow key={t.id}>
+                    <TableCell>{t.date}</TableCell>
+                    <TableCell className="max-w-[140px] truncate">{getVehicleLabel(t.vehicle_id)}</TableCell>
+                    <TableCell>{getDriverName(t.driver_id)}</TableCell>
+                    <TableCell className="font-semibold tabular-nums">{t.total_distance ? `${Number(t.total_distance).toLocaleString()} km` : "—"}</TableCell>
+                    <TableCell className="tabular-nums text-muted-foreground">{t.total_duration ? formatDuration(Number(t.total_duration)) : "—"}</TableCell>
+                    <TableCell>
+                      <Badge className={t.status === "completed" ? "bg-green-500/10 text-green-500" : "bg-blue-500/10 text-blue-500"}>
+                        {t.status === "completed" ? "Concluído" : "Em curso"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right space-x-1">
+                      {t.status === "completed" && (
+                        <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={async () => {
+                          if (expandedTrip === t.id) { setExpandedTrip(null); return; }
+                          if (!segmentsCache[t.id]) {
+                            const { data } = await supabase.from("fleet_trip_points").select("*").eq("trip_id", t.id).order("order_index");
+                            setSegmentsCache(c => ({ ...c, [t.id]: data || [] }));
+                          }
+                          setExpandedTrip(t.id);
+                        }}>
+                          {expandedTrip === t.id ? <ChevronDown className="h-3.5 w-3.5 mr-1" /> : <Eye className="h-3.5 w-3.5 mr-1" />}
+                          {expandedTrip === t.id ? "Fechar" : "Detalhes"}
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => { setCompleteTripId(t.id); setCompleteKm(""); setCompleteOpen(true); }}>
-                          <CheckCircle className="h-3.5 w-3.5 mr-1" /> Finalizar
-                        </Button>
-                      </>
-                    )}
-                    <Button variant="ghost" size="icon" onClick={() => remove.mutate(t.id)}>
-                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
+                      )}
+                      {t.status === "in_progress" && (
+                        <>
+                          <Button variant="outline" size="sm" onClick={() => openTripDialog(t.id)}>
+                            <Navigation className="h-3.5 w-3.5 mr-1" /> Continuar
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => { setCompleteTripId(t.id); setCompleteKm(""); setCompleteOpen(true); }}>
+                            <CheckCircle className="h-3.5 w-3.5 mr-1" /> Finalizar
+                          </Button>
+                        </>
+                      )}
+                      <Button variant="ghost" size="icon" onClick={() => remove.mutate(t.id)}>
+                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                  {expandedTrip === t.id && segmentsCache[t.id] && (
+                    <TableRow key={`${t.id}-segments`}>
+                      <TableCell colSpan={7} className="bg-muted/30 p-3">
+                        <p className="text-xs font-semibold mb-2">Segmentos do Trajeto</p>
+                        <div className="space-y-1">
+                          {segmentsCache[t.id].map((seg: any, i: number) => (
+                            <div key={seg.id} className="flex items-center gap-3 text-xs py-1 border-b border-border/30 last:border-0">
+                              <span className="w-6 text-center font-mono text-muted-foreground">{i + 1}</span>
+                              <MapPin className="h-3 w-3 text-primary shrink-0" />
+                              <span className="flex-1 truncate">{seg.address || seg.city || `${seg.latitude?.toFixed(4)}, ${seg.longitude?.toFixed(4)}`}</span>
+                              {i > 0 && Number(seg.distance_from_previous) > 0 && (
+                                <span className="text-xs font-semibold tabular-nums">
+                                  {Number(seg.distance_from_previous).toFixed(1)} km · {Math.round(Number(seg.duration_from_previous))} min
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                          {segmentsCache[t.id].length === 0 && (
+                            <p className="text-xs text-muted-foreground">Sem pontos registados</p>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </>
               ))}
             </TableBody>
           </Table>
