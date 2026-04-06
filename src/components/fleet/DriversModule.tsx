@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -9,21 +9,19 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Plus, Save, Trash2, Pencil, Loader2 } from "lucide-react";
+import { Plus, Save, Trash2, Pencil, Loader2, Upload, Camera, ScanLine, AlertTriangle, CheckCircle2 } from "lucide-react";
 
 interface DriverForm {
   full_name: string;
   birth_date: string;
   phone: string;
   email: string;
-  // Structured address
   addr_number: string;
   addr_street: string;
   addr_postal_code: string;
   addr_city: string;
   addr_region: string;
   addr_country: string;
-  // License
   license_category: string;
   license_number: string;
   license_expiry_date: string;
@@ -33,6 +31,22 @@ const emptyForm: DriverForm = {
   full_name: "", birth_date: "", phone: "", email: "",
   addr_number: "", addr_street: "", addr_postal_code: "", addr_city: "", addr_region: "", addr_country: "Portugal",
   license_category: "", license_number: "", license_expiry_date: "",
+};
+
+type ConfidenceLevel = "high" | "medium" | "low";
+
+const confidenceIcon = (c?: ConfidenceLevel) => {
+  if (!c) return null;
+  if (c === "high") return <CheckCircle2 className="h-3 w-3 text-green-500" />;
+  if (c === "medium") return <AlertTriangle className="h-3 w-3 text-yellow-500" />;
+  return <AlertTriangle className="h-3 w-3 text-red-500" />;
+};
+
+const confidenceRing = (c?: ConfidenceLevel) => {
+  if (!c) return "";
+  if (c === "high") return "ring-1 ring-green-500/30";
+  if (c === "medium") return "ring-1 ring-yellow-500/40";
+  return "ring-1 ring-red-500/50";
 };
 
 function calcAge(birthDate: string): number | null {
@@ -45,7 +59,6 @@ function calcAge(birthDate: string): number | null {
 }
 
 function parseAddress(address: string): Partial<DriverForm> {
-  // Try to parse existing address string into structured fields
   if (!address) return {};
   const parts = address.split(",").map(s => s.trim());
   if (parts.length >= 3) {
@@ -57,9 +70,7 @@ function parseAddress(address: string): Partial<DriverForm> {
 function buildAddress(form: DriverForm): string {
   const parts = [
     form.addr_number && form.addr_street ? `${form.addr_street} ${form.addr_number}` : form.addr_street,
-    form.addr_postal_code,
-    form.addr_city,
-    form.addr_region,
+    form.addr_postal_code, form.addr_city, form.addr_region,
     form.addr_country !== "Portugal" ? form.addr_country : "",
   ].filter(Boolean);
   return parts.join(", ");
@@ -70,6 +81,11 @@ export default function DriversModule() {
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<DriverForm>(emptyForm);
+  const [extracting, setExtracting] = useState(false);
+  const [confidence, setConfidence] = useState<Record<string, ConfidenceLevel>>({});
+  const [ocrNotes, setOcrNotes] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const { data: drivers = [], isLoading } = useQuery({
     queryKey: ["fleet_drivers"],
@@ -117,7 +133,10 @@ export default function DriversModule() {
     onError: (e) => toast.error((e as Error).message),
   });
 
-  const closeDialog = () => { setOpen(false); setEditId(null); setForm(emptyForm); };
+  const closeDialog = () => {
+    setOpen(false); setEditId(null); setForm(emptyForm);
+    setConfidence({}); setOcrNotes(null);
+  };
 
   const startEdit = (d: any) => {
     setEditId(d.id);
@@ -131,12 +150,65 @@ export default function DriversModule() {
       license_category: d.license_category || "", license_number: d.license_number || "",
       license_expiry_date: d.license_expiry_date || "",
     });
+    setConfidence({});
+    setOcrNotes(null);
     setOpen(true);
   };
 
   const set = (k: keyof DriverForm, v: string) => setForm(p => ({ ...p, [k]: v }));
-
   const isExpired = (d: string) => d && new Date(d) < new Date();
+
+  /* ─── OCR Extraction ─── */
+  const handleFileUpload = async (file: File) => {
+    if (!file) return;
+    setExtracting(true);
+    setOcrNotes(null);
+    try {
+      const reader = new FileReader();
+      const base64 = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve((reader.result as string).split(",")[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const { data, error } = await supabase.functions.invoke("extract-fleet-document", {
+        body: { imageBase64: base64, mimeType: file.type, documentType: "driver" },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      // Pre-fill — never overwrite user-entered data
+      setForm(prev => ({
+        ...prev,
+        full_name: data.full_name || prev.full_name,
+        birth_date: data.birth_date || prev.birth_date,
+        license_number: data.license_number || prev.license_number,
+        license_category: data.license_category || prev.license_category,
+        license_expiry_date: data.license_expiry_date || prev.license_expiry_date,
+      }));
+
+      setConfidence(data.confidence || {});
+      setOcrNotes(data.notes || null);
+
+      // Store document
+      const path = `fleet/drivers/${Date.now()}_${file.name}`;
+      await supabase.storage.from("uploads").upload(path, file);
+      await supabase.from("documents").insert({
+        name: file.name, type: "file", entity_type: "driver_document",
+        storage_path: path, mime_type: file.type, size_bytes: file.size,
+      });
+
+      toast.success("Dados extraídos — verifique e corrija antes de salvar");
+    } catch (err) {
+      console.error("OCR error:", err);
+      toast.error("Erro na extração. Preencha manualmente.");
+    } finally {
+      setExtracting(false);
+    }
+  };
+
+  const hasConfidence = Object.keys(confidence).length > 0;
 
   return (
     <div className="space-y-4">
@@ -145,7 +217,7 @@ export default function DriversModule() {
           <h2 className="text-base font-semibold">Condutores</h2>
           <p className="text-xs text-muted-foreground">Registo de condutores autorizados</p>
         </div>
-        <Button size="sm" onClick={() => { setForm(emptyForm); setEditId(null); setOpen(true); }}>
+        <Button size="sm" onClick={() => { setForm(emptyForm); setEditId(null); setConfidence({}); setOcrNotes(null); setOpen(true); }}>
           <Plus className="h-4 w-4 mr-1" /> Novo Condutor
         </Button>
       </div>
@@ -194,17 +266,61 @@ export default function DriversModule() {
         </CardContent>
       </Card>
 
+      {/* Hidden file inputs */}
+      <input ref={fileInputRef} type="file" accept="image/*,.pdf" className="hidden" onChange={e => { if (e.target.files?.[0]) handleFileUpload(e.target.files[0]); e.target.value = ""; }} />
+      <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { if (e.target.files?.[0]) handleFileUpload(e.target.files[0]); e.target.value = ""; }} />
+
       <Dialog open={open} onOpenChange={(o) => { if (!o) closeDialog(); else setOpen(true); }}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editId ? "Editar Condutor" : "Novo Condutor"}</DialogTitle>
-            <DialogDescription>Preencha os dados do condutor.</DialogDescription>
+            <DialogDescription>Preencha os dados ou importe da carta de condução.</DialogDescription>
           </DialogHeader>
+
+          {/* OCR Upload Zone */}
+          {!editId && (
+            <div className="rounded-lg border border-dashed border-border/60 bg-muted/30 p-3">
+              <p className="text-xs font-semibold text-muted-foreground mb-2">📄 Importar da carta de condução</p>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" onClick={() => fileInputRef.current?.click()} disabled={extracting}>
+                  <Upload className="h-3 w-3 mr-1" /> Ficheiro
+                </Button>
+                <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" onClick={() => cameraInputRef.current?.click()} disabled={extracting}>
+                  <Camera className="h-3 w-3 mr-1" /> Foto
+                </Button>
+                <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" onClick={() => cameraInputRef.current?.click()} disabled={extracting}>
+                  <ScanLine className="h-3 w-3 mr-1" /> Scan
+                </Button>
+              </div>
+              {extracting && (
+                <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Extraindo dados do documento...
+                </div>
+              )}
+              {ocrNotes && (
+                <p className="mt-2 text-[10px] text-yellow-500">⚠️ {ocrNotes}</p>
+              )}
+            </div>
+          )}
+
+          {/* Confidence banner */}
+          {hasConfidence && (
+            <div className="rounded-lg bg-primary/5 border border-primary/20 px-3 py-2 text-xs text-muted-foreground">
+              <span className="font-semibold text-foreground">Dados pré-preenchidos por IA.</span> Verifique cada campo antes de salvar.
+            </div>
+          )}
+
           <div className="space-y-4">
             {/* Personal */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2"><Label>Nome Completo *</Label><Input value={form.full_name} onChange={e => set("full_name", e.target.value)} /></div>
-              <div><Label>Data de Nascimento</Label><Input type="date" value={form.birth_date} onChange={e => set("birth_date", e.target.value)} /></div>
+              <div className="col-span-2">
+                <Label className="flex items-center gap-1">Nome Completo * {confidenceIcon(confidence.full_name)}</Label>
+                <Input value={form.full_name} onChange={e => set("full_name", e.target.value)} className={confidenceRing(confidence.full_name)} />
+              </div>
+              <div>
+                <Label className="flex items-center gap-1">Data de Nascimento {confidenceIcon(confidence.birth_date)}</Label>
+                <Input type="date" value={form.birth_date} onChange={e => set("birth_date", e.target.value)} className={confidenceRing(confidence.birth_date)} />
+              </div>
               <div><Label>Telefone</Label><Input value={form.phone} onChange={e => set("phone", e.target.value)} /></div>
               <div className="col-span-2"><Label>Email</Label><Input type="email" value={form.email} onChange={e => set("email", e.target.value)} /></div>
             </div>
@@ -226,12 +342,22 @@ export default function DriversModule() {
             <div>
               <p className="text-xs font-semibold text-muted-foreground mb-2">Carta de Condução</p>
               <div className="grid grid-cols-3 gap-2">
-                <div><Label className="text-xs">Categoria</Label><Input value={form.license_category} onChange={e => set("license_category", e.target.value)} placeholder="B, C, D..." className="text-sm" /></div>
-                <div><Label className="text-xs">Nº Carta</Label><Input value={form.license_number} onChange={e => set("license_number", e.target.value)} className="text-sm" /></div>
-                <div><Label className="text-xs">Validade</Label><Input type="date" value={form.license_expiry_date} onChange={e => set("license_expiry_date", e.target.value)} className="text-sm" /></div>
+                <div>
+                  <Label className="text-xs flex items-center gap-1">Categoria {confidenceIcon(confidence.license_category)}</Label>
+                  <Input value={form.license_category} onChange={e => set("license_category", e.target.value)} placeholder="B, C, D..." className={`text-sm ${confidenceRing(confidence.license_category)}`} />
+                </div>
+                <div>
+                  <Label className="text-xs flex items-center gap-1">Nº Carta {confidenceIcon(confidence.license_number)}</Label>
+                  <Input value={form.license_number} onChange={e => set("license_number", e.target.value)} className={`text-sm ${confidenceRing(confidence.license_number)}`} />
+                </div>
+                <div>
+                  <Label className="text-xs flex items-center gap-1">Validade {confidenceIcon(confidence.license_expiry_date)}</Label>
+                  <Input type="date" value={form.license_expiry_date} onChange={e => set("license_expiry_date", e.target.value)} className={`text-sm ${confidenceRing(confidence.license_expiry_date)}`} />
+                </div>
               </div>
             </div>
           </div>
+
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={closeDialog}>Cancelar</Button>
             <Button onClick={() => save.mutate()} disabled={!form.full_name || save.isPending}>
