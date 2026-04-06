@@ -133,6 +133,7 @@ function generateReportHTML(
       <td style="padding:3px 8px">${getVehicleLabel(t.vehicle_id)}</td>
       <td style="padding:3px 8px">${getDriverName(t.driver_id)}</td>
       <td style="padding:3px 8px;text-align:right">${t.total_distance ? `${Number(t.total_distance).toLocaleString()} km` : "—"}</td>
+      <td style="padding:3px 8px;text-align:right">${t.total_duration ? `${Math.round(Number(t.total_duration))} min` : "—"}</td>
     </tr>
   `).join("");
 
