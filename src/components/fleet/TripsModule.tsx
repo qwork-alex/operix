@@ -53,17 +53,20 @@ interface RouteCalcPoint {
   latitude: number;
   longitude: number;
   address: string | null;
+  postal_code: string | null;
   city: string | null;
+  display_address: string;
 }
 
-interface RouteCalcResult {
+interface RouteSegmentResult {
   distance_km: number;
   duration_min: number;
-  segments: Array<{
-    distance_km: number;
-    duration_min: number;
-  }>;
 }
+
+const roundMetric = (value: number) => Math.round(value * 100) / 100;
+
+const buildStoredPointAddress = (point: { address?: string | null; postal_code?: string | null; city?: string | null }) =>
+  [point.address, point.postal_code, point.city].filter(Boolean).join(", ") || "Ponto sem endereço";
 
 /* ─── Session storage helpers (multi-trip) ─── */
 interface TripSession {
@@ -95,26 +98,38 @@ function removeSession(tripId: string) {
 }
 
 /* ─── Route calculation via edge function ─── */
-async function calculateRouteAPI(
-  origin: { lat: number; lng: number },
-  destination: { lat: number; lng: number },
-  tripId?: string,
-  pointIndex?: number,
-): Promise<{ distance_km: number; duration_min: number }> {
-  console.log("Coordenadas:", { origin, destination, tripId, pointIndex });
+async function geocodeAddress(address: string): Promise<{ latitude: number; longitude: number }> {
+  console.log("Geocoding:", address);
+
   const { data, error } = await supabase.functions.invoke("calculate-route", {
-    body: { origin, destination, trip_id: tripId, point_index: pointIndex },
+    body: { geocode_text: address },
   });
+
   console.log("Resposta API:", data, error);
+
   if (error) throw new Error(`Erro ao calcular rota: ${error.message}`);
   if (data?.error) throw new Error(data.error);
-  return { distance_km: data.distance_km, duration_min: data.duration_min };
+
+  const latitude = Number(data?.latitude);
+  const longitude = Number(data?.longitude);
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    throw new Error("Erro ao calcular rota");
+  }
+
+  console.log("Coordenadas:", latitude, longitude);
+  return { latitude, longitude };
 }
 
-async function calculateRoute(points: RouteCalcPoint[]): Promise<RouteCalcResult> {
-  const coordinates = points.map((point) => [point.longitude, point.latitude]);
+async function calculateRouteSegment(
+  origin: { lat: number; lng: number },
+  destination: { lat: number; lng: number },
+): Promise<RouteSegmentResult> {
+  const coordinates = [
+    [origin.lng, origin.lat],
+    [destination.lng, destination.lat],
+  ];
 
-  console.log("Iniciando cálculo de rota");
   console.log("Pontos enviados:", coordinates);
 
   const { data, error } = await supabase.functions.invoke("calculate-route", {
@@ -123,26 +138,20 @@ async function calculateRoute(points: RouteCalcPoint[]): Promise<RouteCalcResult
 
   console.log("Resposta API:", data, error);
 
-  if (error || data?.error) {
-    throw new Error(data?.error || error?.message || "Erro ao calcular rota");
-  }
+  if (error) throw new Error(`Erro ao calcular rota: ${error.message}`);
+  if (data?.error) throw new Error(data.error);
 
   const distance_km = Number(data?.distance_km || 0);
   const duration_min = Number(data?.duration_min || 0);
-  const segments = Array.isArray(data?.segments)
-    ? data.segments.map((segment: any) => ({
-        distance_km: Number(segment?.distance_km || 0),
-        duration_min: Number(segment?.duration_min || 0),
-      }))
-    : [];
 
+  console.log("Segmento calculado:", distance_km);
   console.log("Distância calculada:", distance_km);
 
-  if (!(distance_km > 0) || segments.length !== points.length - 1) {
+  if (!(distance_km > 0)) {
     throw new Error("Erro ao calcular rota");
   }
 
-  return { distance_km, duration_min, segments };
+  return { distance_km, duration_min };
 }
 
 /* ─── Component ─── */
@@ -228,42 +237,93 @@ export default function TripsModule() {
   const fetchCalculationPoints = useCallback(async (tripId: string): Promise<RouteCalcPoint[]> => {
     const { data, error } = await supabase
       .from("fleet_trip_points")
-      .select("id, order_index, latitude, longitude, address, city")
+      .select("id, order_index, latitude, longitude, address, postal_code, city")
       .eq("trip_id", tripId)
       .order("order_index");
 
     if (error) throw new Error(`Falha ao carregar pontos do trajeto: ${error.message}`);
     if (!data || data.length < 2) throw new Error("Trajeto precisa de pelo menos 2 pontos");
 
-    const missingCoordinates = data.filter((point: any) => point.latitude === null || point.longitude === null);
-    if (missingCoordinates.length > 0) {
-      throw new Error("Existem pontos sem coordenadas. Use GPS em todos os pontos antes de finalizar o trajeto");
+    const resolvedPoints = await Promise.all(data.map(async (point: any) => {
+      let latitude = point.latitude !== null ? Number(point.latitude) : null;
+      let longitude = point.longitude !== null ? Number(point.longitude) : null;
+
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        const fullAddress = buildStoredPointAddress(point);
+
+        if (!fullAddress || fullAddress === "Ponto sem endereço") {
+          throw new Error("Existe um ponto sem GPS e sem endereço válido para geocodificação");
+        }
+
+        const geocoded = await geocodeAddress(fullAddress);
+        latitude = geocoded.latitude;
+        longitude = geocoded.longitude;
+
+        const { error: updateError } = await supabase
+          .from("fleet_trip_points")
+          .update({ latitude, longitude })
+          .eq("id", point.id);
+
+        if (updateError) {
+          throw new Error(`Falha ao guardar coordenadas geocodificadas: ${updateError.message}`);
+        }
+      }
+
+      return {
+        id: point.id,
+        order_index: point.order_index,
+        latitude: Number(latitude),
+        longitude: Number(longitude),
+        address: point.address,
+        postal_code: point.postal_code,
+        city: point.city,
+        display_address: buildStoredPointAddress(point),
+      };
+    }));
+
+    if (activeTripId === tripId) {
+      setPoints((current) => current.map((point, index) => {
+        const resolved = resolvedPoints.find((item) => item.order_index === index);
+        return resolved
+          ? { ...point, latitude: String(resolved.latitude), longitude: String(resolved.longitude) }
+          : point;
+      }));
     }
 
-    return data.map((point: any) => ({
-      id: point.id,
-      order_index: point.order_index,
-      latitude: Number(point.latitude),
-      longitude: Number(point.longitude),
-      address: point.address,
-      city: point.city,
-    }));
-  }, []);
+    return resolvedPoints;
+  }, [activeTripId]);
 
   const calculateAndSaveTripMetrics = useCallback(async (tripId: string) => {
     const calculationPoints = await fetchCalculationPoints(tripId);
 
     try {
-      const result = await calculateRoute(calculationPoints);
+      const segmentResults = await Promise.all(
+        calculationPoints.slice(1).map(async (point, index) => {
+          const previousPoint = calculationPoints[index];
+          const result = await calculateRouteSegment(
+            { lat: previousPoint.latitude, lng: previousPoint.longitude },
+            { lat: point.latitude, lng: point.longitude },
+          );
 
-      const updates = calculationPoints.slice(1).map((point, index) =>
+          return {
+            pointId: point.id,
+            order_index: point.order_index,
+            origin: previousPoint.display_address,
+            destination: point.display_address,
+            distance_km: roundMetric(result.distance_km),
+            duration_min: roundMetric(result.duration_min),
+          };
+        }),
+      );
+
+      const updates = segmentResults.map((segment) =>
         supabase
           .from("fleet_trip_points")
           .update({
-            distance_from_previous: Math.round(result.segments[index].distance_km * 100) / 100,
-            duration_from_previous: Math.round(result.segments[index].duration_min * 100) / 100,
+            distance_from_previous: segment.distance_km,
+            duration_from_previous: segment.duration_min,
           })
-          .eq("id", point.id)
+          .eq("id", segment.pointId)
       );
 
       const responses = await Promise.all(updates);
@@ -282,16 +342,38 @@ export default function TripsModule() {
         throw new Error(`Falha ao guardar segmento inicial: ${resetFirstPointError.message}`);
       }
 
+      if (activeTripId === tripId) {
+        setPoints((current) => current.map((point, index) => {
+          if (index === 0) {
+            return { ...point, distance_from_previous: 0, duration_from_previous: 0 };
+          }
+
+          const segment = segmentResults.find((item) => item.order_index === index);
+          return segment
+            ? {
+                ...point,
+                distance_from_previous: segment.distance_km,
+                duration_from_previous: segment.duration_min,
+              }
+            : point;
+        }));
+      }
+
+      setSegmentsCache((current) => ({ ...current, [tripId]: [] }));
+
+      const totalDistance = roundMetric(segmentResults.reduce((sum, segment) => sum + segment.distance_km, 0));
+      const totalDuration = roundMetric(segmentResults.reduce((sum, segment) => sum + segment.duration_min, 0));
+
       return {
-        totalDistance: Math.round(result.distance_km * 100) / 100,
-        totalDuration: Math.round(result.duration_min * 100) / 100,
+        totalDistance,
+        totalDuration,
       };
     } catch (error) {
       console.error("Erro ao calcular rota:", error);
       window.alert("Erro ao calcular rota");
       throw error instanceof Error ? error : new Error("Erro ao calcular rota");
     }
-  }, [fetchCalculationPoints]);
+  }, [activeTripId, fetchCalculationPoints]);
 
   /* ─── Auto-save session ─── */
   useEffect(() => {
@@ -347,11 +429,9 @@ export default function TripsModule() {
           if (prevPoint.latitude && prevPoint.longitude) {
             setRouteLoading(i);
             try {
-              const result = await calculateRouteAPI(
+              const result = await calculateRouteSegment(
                 { lat: parseFloat(prevPoint.latitude), lng: parseFloat(prevPoint.longitude) },
                 { lat: parseFloat(lat), lng: parseFloat(lon) },
-                activeTripId || undefined,
-                i,
               );
               setPoints(p => p.map((pt, idx) => idx === i ? {
                 ...pt, latitude: lat, longitude: lon,
@@ -660,9 +740,9 @@ export default function TripsModule() {
 
       {/* Minimized bar */}
       {minimized && activeTripId && (
-        <div className="sticky top-0 z-40 flex items-center gap-3 rounded-lg border border-blue-500/30 bg-blue-500/5 backdrop-blur-sm px-4 py-2 animate-fade-in shadow-sm cursor-pointer" onClick={restoreDialog}>
-          <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
-          <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">Trajeto minimizado</span>
+        <div className="sticky top-0 z-40 flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 backdrop-blur-sm px-4 py-2 animate-fade-in shadow-sm cursor-pointer" onClick={restoreDialog}>
+          <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+          <span className="text-xs font-semibold text-primary">Trajeto minimizado</span>
           <span className="text-xs text-muted-foreground">{getVehicleLabel(form.vehicle_id)}</span>
           {totalApiDistance > 0 && (
             <span className="text-xs font-semibold text-foreground">{totalApiDistance.toFixed(1)} km</span>
@@ -711,7 +791,7 @@ export default function TripsModule() {
                         <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={async () => {
                           if (expandedTrip === t.id) { setExpandedTrip(null); return; }
                           if (!segmentsCache[t.id]) {
-                            const { data } = await supabase.from("fleet_trip_points").select("*").eq("trip_id", t.id).order("order_index");
+                              const { data } = await supabase.from("fleet_trip_points").select("*").eq("trip_id", t.id).order("order_index");
                             setSegmentsCache(c => ({ ...c, [t.id]: data || [] }));
                           }
                           setExpandedTrip(t.id);
@@ -740,18 +820,22 @@ export default function TripsModule() {
                       <TableCell colSpan={7} className="bg-muted/30 p-3">
                         <p className="text-xs font-semibold mb-2">Segmentos do Trajeto</p>
                         <div className="space-y-1">
-                          {segmentsCache[t.id].map((seg: any, i: number) => (
-                            <div key={seg.id} className="flex items-center gap-3 text-xs py-1 border-b border-border/30 last:border-0">
-                              <span className="w-6 text-center font-mono text-muted-foreground">{i + 1}</span>
-                              <MapPin className="h-3 w-3 text-primary shrink-0" />
-                              <span className="flex-1 truncate">{seg.address || seg.city || `${seg.latitude?.toFixed(4)}, ${seg.longitude?.toFixed(4)}`}</span>
-                              {i > 0 && Number(seg.distance_from_previous) > 0 && (
+                          {segmentsCache[t.id].slice(1).map((seg: any, i: number) => {
+                            const origin = segmentsCache[t.id][i];
+                            const originLabel = buildStoredPointAddress(origin);
+                            const destinationLabel = buildStoredPointAddress(seg);
+
+                            return (
+                              <div key={seg.id} className="flex items-center gap-3 text-xs py-1 border-b border-border/30 last:border-0">
+                                <span className="w-6 text-center font-mono text-muted-foreground">{i + 1}</span>
+                                <MapPin className="h-3 w-3 text-primary shrink-0" />
+                                <span className="flex-1 truncate">{originLabel} → {destinationLabel}</span>
                                 <span className="text-xs font-semibold tabular-nums">
-                                  {Number(seg.distance_from_previous).toFixed(1)} km · {Math.round(Number(seg.duration_from_previous))} min
+                                  {Number(seg.distance_from_previous || 0).toFixed(1)} km · {Math.round(Number(seg.duration_from_previous || 0))} min
                                 </span>
-                              )}
-                            </div>
-                          ))}
+                              </div>
+                            );
+                          })}
                           {segmentsCache[t.id].length === 0 && (
                             <p className="text-xs text-muted-foreground">Sem pontos registados</p>
                           )}
@@ -870,7 +954,7 @@ export default function TripsModule() {
                       <MapPin className="h-4 w-4 text-primary shrink-0" />
                       <span className="text-xs font-semibold">{pt.label}</span>
                       {i > 0 && pt.distance_from_previous > 0 && (
-                        <span className="text-[10px] text-green-600 dark:text-green-400 flex items-center gap-0.5 bg-green-500/10 px-1.5 py-0.5 rounded">
+                        <span className="text-[10px] text-primary flex items-center gap-0.5 bg-primary/10 px-1.5 py-0.5 rounded">
                           <ArrowRight className="h-2.5 w-2.5" />
                           {pt.distance_from_previous.toFixed(1)} km · {Math.round(pt.duration_from_previous)} min
                         </span>
@@ -951,7 +1035,6 @@ export default function TripsModule() {
               {isActiveSession && (
                 <Button
                   variant="default"
-                  className="bg-green-600 hover:bg-green-700"
                   onClick={() => {
                     const kmEnd = form.km_end ? parseFloat(form.km_end) : null;
                     finalizeMutation.mutate({ id: activeTripId!, km_end: kmEnd });
