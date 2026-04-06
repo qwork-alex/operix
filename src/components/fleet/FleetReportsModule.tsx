@@ -623,11 +623,12 @@ export default function FleetReportsModule() {
                       <TableCell>{t.date}</TableCell>
                       <TableCell>{getVehicleLabel(t.vehicle_id)}</TableCell>
                       <TableCell>{getDriverName(t.driver_id)}</TableCell>
-                      <TableCell className="text-right tabular-nums font-semibold">
-                        {t.total_distance ? `${Number(t.total_distance).toLocaleString()} km` : "—"}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{t.km_start ? Number(t.km_start).toLocaleString() : "—"}</TableCell>
-                      <TableCell className="text-right tabular-nums">{t.km_end ? Number(t.km_end).toLocaleString() : "—"}</TableCell>
+                       <TableCell className="text-right tabular-nums font-semibold">
+                         {t.total_distance ? `${Number(t.total_distance).toLocaleString()} km` : "—"}
+                       </TableCell>
+                       <TableCell className="text-right tabular-nums text-muted-foreground">
+                         {t.total_duration ? `${Math.round(Number(t.total_duration))} min` : "—"}
+                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
