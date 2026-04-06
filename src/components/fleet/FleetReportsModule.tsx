@@ -180,7 +180,7 @@ function generateReportHTML(
 
 <h2>Detalhe de Trajetos</h2>
 <table>
-  <thead><tr><th>Data</th><th>Veículo</th><th>Condutor</th><th style="text-align:right">Distância</th></tr></thead>
+  <thead><tr><th>Data</th><th>Veículo</th><th>Condutor</th><th style="text-align:right">Distância</th><th style="text-align:right">Duração</th></tr></thead>
   <tbody>${tripRows}</tbody>
 </table>
 
