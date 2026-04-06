@@ -47,6 +47,24 @@ const defaultForm = (): TripForm => ({
   vehicle_id: "", driver_id: "", date: new Date().toISOString().slice(0, 10), km_start: "", km_end: "", notes: "",
 });
 
+interface RouteCalcPoint {
+  id: string;
+  order_index: number;
+  latitude: number;
+  longitude: number;
+  address: string | null;
+  city: string | null;
+}
+
+interface RouteCalcResult {
+  distance_km: number;
+  duration_min: number;
+  segments: Array<{
+    distance_km: number;
+    duration_min: number;
+  }>;
+}
+
 /* ─── Session storage helpers (multi-trip) ─── */
 interface TripSession {
   tripId: string;
@@ -93,73 +111,38 @@ async function calculateRouteAPI(
   return { distance_km: data.distance_km, duration_min: data.duration_min };
 }
 
-/* ─── Calculate all segments for a trip ─── */
-async function calculateAllSegments(
-  tripId: string,
-): Promise<{ totalDistance: number; totalDuration: number }> {
-  const { data: pts, error } = await supabase
-    .from("fleet_trip_points")
-    .select("*")
-    .eq("trip_id", tripId)
-    .order("order_index");
+async function calculateRoute(points: RouteCalcPoint[]): Promise<RouteCalcResult> {
+  const coordinates = points.map((point) => [point.longitude, point.latitude]);
 
-  if (error || !pts || pts.length < 2) {
-    console.log("Pontos insuficientes para cálculo:", pts?.length || 0);
-    return { totalDistance: 0, totalDuration: 0 };
+  console.log("Iniciando cálculo de rota");
+  console.log("Pontos enviados:", coordinates);
+
+  const { data, error } = await supabase.functions.invoke("calculate-route", {
+    body: { coordinates },
+  });
+
+  console.log("Resposta API:", data, error);
+
+  if (error || data?.error) {
+    throw new Error(data?.error || error?.message || "Erro ao calcular rota");
   }
 
-  let totalDistance = 0;
-  let totalDuration = 0;
+  const distance_km = Number(data?.distance_km || 0);
+  const duration_min = Number(data?.duration_min || 0);
+  const segments = Array.isArray(data?.segments)
+    ? data.segments.map((segment: any) => ({
+        distance_km: Number(segment?.distance_km || 0),
+        duration_min: Number(segment?.duration_min || 0),
+      }))
+    : [];
 
-  for (let i = 1; i < pts.length; i++) {
-    const prev = pts[i - 1];
-    const curr = pts[i];
+  console.log("Distância calculada:", distance_km);
 
-    if (!prev.latitude || !prev.longitude || !curr.latitude || !curr.longitude) {
-      console.log(`Segmento ${i}: coordenadas em falta, a saltar`);
-      continue;
-    }
-
-    // Skip if already calculated
-    if (Number(curr.distance_from_previous) > 0) {
-      totalDistance += Number(curr.distance_from_previous);
-      totalDuration += Number(curr.duration_from_previous);
-      continue;
-    }
-
-    try {
-      const result = await calculateRouteAPI(
-        { lat: Number(prev.latitude), lng: Number(prev.longitude) },
-        { lat: Number(curr.latitude), lng: Number(curr.longitude) },
-        tripId,
-        curr.order_index,
-      );
-      totalDistance += result.distance_km;
-      totalDuration += result.duration_min;
-    } catch (err) {
-      console.error(`Erro no segmento ${i}:`, err);
-      // Use Haversine fallback
-      const R = 6371;
-      const dLat = (Number(curr.latitude) - Number(prev.latitude)) * Math.PI / 180;
-      const dLon = (Number(curr.longitude) - Number(prev.longitude)) * Math.PI / 180;
-      const a = Math.sin(dLat / 2) ** 2 +
-        Math.cos(Number(prev.latitude) * Math.PI / 180) *
-        Math.cos(Number(curr.latitude) * Math.PI / 180) *
-        Math.sin(dLon / 2) ** 2;
-      const fallbackKm = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      const fallbackMin = fallbackKm / 0.8; // rough estimate ~48km/h
-
-      await supabase.from("fleet_trip_points").update({
-        distance_from_previous: Math.round(fallbackKm * 100) / 100,
-        duration_from_previous: Math.round(fallbackMin * 100) / 100,
-      }).eq("id", (curr as any).id);
-
-      totalDistance += fallbackKm;
-      totalDuration += fallbackMin;
-    }
+  if (!(distance_km > 0) || segments.length !== points.length - 1) {
+    throw new Error("Erro ao calcular rota");
   }
 
-  return { totalDistance: Math.round(totalDistance * 10) / 10, totalDuration: Math.round(totalDuration * 10) / 10 };
+  return { distance_km, duration_min, segments };
 }
 
 /* ─── Component ─── */
@@ -215,6 +198,100 @@ export default function TripsModule() {
     const d = drivers.find((x: any) => x.id === id);
     return d ? d.full_name : "—";
   };
+
+  const persistPointsToTrip = useCallback(async (tripId: string, sourcePoints: TripPoint[]) => {
+    const validPoints = sourcePoints.filter((p) => p.street || p.city || p.latitude || p.longitude);
+
+    if (validPoints.length < 2) {
+      throw new Error("Adicione pelo menos origem e destino antes de finalizar o trajeto");
+    }
+
+    const pointRows = validPoints.map((p, i) => ({
+      trip_id: tripId,
+      order_index: i,
+      address: [p.number, p.street].filter(Boolean).join(" ") || null,
+      postal_code: p.postal_code || null,
+      city: p.city || null,
+      latitude: p.latitude ? parseFloat(p.latitude) : null,
+      longitude: p.longitude ? parseFloat(p.longitude) : null,
+      distance_from_previous: p.distance_from_previous || 0,
+      duration_from_previous: p.duration_from_previous || 0,
+    }));
+
+    const { error: deleteError } = await supabase.from("fleet_trip_points").delete().eq("trip_id", tripId);
+    if (deleteError) throw new Error(`Falha ao preparar pontos do trajeto: ${deleteError.message}`);
+
+    const { error: insertError } = await supabase.from("fleet_trip_points").insert(pointRows as any);
+    if (insertError) throw new Error(`Falha ao guardar pontos do trajeto: ${insertError.message}`);
+  }, []);
+
+  const fetchCalculationPoints = useCallback(async (tripId: string): Promise<RouteCalcPoint[]> => {
+    const { data, error } = await supabase
+      .from("fleet_trip_points")
+      .select("id, order_index, latitude, longitude, address, city")
+      .eq("trip_id", tripId)
+      .order("order_index");
+
+    if (error) throw new Error(`Falha ao carregar pontos do trajeto: ${error.message}`);
+    if (!data || data.length < 2) throw new Error("Trajeto precisa de pelo menos 2 pontos");
+
+    const missingCoordinates = data.filter((point: any) => point.latitude === null || point.longitude === null);
+    if (missingCoordinates.length > 0) {
+      throw new Error("Existem pontos sem coordenadas. Use GPS em todos os pontos antes de finalizar o trajeto");
+    }
+
+    return data.map((point: any) => ({
+      id: point.id,
+      order_index: point.order_index,
+      latitude: Number(point.latitude),
+      longitude: Number(point.longitude),
+      address: point.address,
+      city: point.city,
+    }));
+  }, []);
+
+  const calculateAndSaveTripMetrics = useCallback(async (tripId: string) => {
+    const calculationPoints = await fetchCalculationPoints(tripId);
+
+    try {
+      const result = await calculateRoute(calculationPoints);
+
+      const updates = calculationPoints.slice(1).map((point, index) =>
+        supabase
+          .from("fleet_trip_points")
+          .update({
+            distance_from_previous: Math.round(result.segments[index].distance_km * 100) / 100,
+            duration_from_previous: Math.round(result.segments[index].duration_min * 100) / 100,
+          })
+          .eq("id", point.id)
+      );
+
+      const responses = await Promise.all(updates);
+      const updateError = responses.find((response) => response.error)?.error;
+
+      if (updateError) {
+        throw new Error(`Falha ao guardar segmentos: ${updateError.message}`);
+      }
+
+      const { error: resetFirstPointError } = await supabase
+        .from("fleet_trip_points")
+        .update({ distance_from_previous: 0, duration_from_previous: 0 })
+        .eq("id", calculationPoints[0].id);
+
+      if (resetFirstPointError) {
+        throw new Error(`Falha ao guardar segmento inicial: ${resetFirstPointError.message}`);
+      }
+
+      return {
+        totalDistance: Math.round(result.distance_km * 100) / 100,
+        totalDuration: Math.round(result.duration_min * 100) / 100,
+      };
+    } catch (error) {
+      console.error("Erro ao calcular rota:", error);
+      window.alert("Erro ao calcular rota");
+      throw error instanceof Error ? error : new Error("Erro ao calcular rota");
+    }
+  }, [fetchCalculationPoints]);
 
   /* ─── Auto-save session ─── */
   useEffect(() => {
@@ -383,28 +460,17 @@ export default function TripsModule() {
       const trip = trips.find((t: any) => t.id === id);
       if (!trip) throw new Error("Trajeto não encontrado na base de dados");
 
-      // Save final points to DB first
-      const validPoints = points.filter(p => p.street || p.city || p.latitude);
-      if (validPoints.length > 0 && activeTripId === id) {
-        await supabase.from("fleet_trip_points").delete().eq("trip_id", id);
-        const pointRows = validPoints.map((p, i) => ({
-          trip_id: id,
-          order_index: i,
-          address: [p.number, p.street].filter(Boolean).join(" ") || null,
-          postal_code: p.postal_code || null,
-          city: p.city || null,
-          latitude: p.latitude ? parseFloat(p.latitude) : null,
-          longitude: p.longitude ? parseFloat(p.longitude) : null,
-          distance_from_previous: p.distance_from_previous || 0,
-          duration_from_previous: p.duration_from_previous || 0,
-        }));
-        await supabase.from("fleet_trip_points").insert(pointRows as any);
+      if (activeTripId === id) {
+        await persistPointsToTrip(id, points);
       }
 
-      // AUTO-CALCULATE all segments via ORS
       toast.info("A calcular rotas automaticamente...");
-      const { totalDistance, totalDuration } = await calculateAllSegments(id);
+      const { totalDistance, totalDuration } = await calculateAndSaveTripMetrics(id);
       console.log("Cálculo completo:", { totalDistance, totalDuration });
+
+      if (!(totalDistance > 0)) {
+        throw new Error("Erro ao calcular rota");
+      }
 
       let finalDist = totalDistance;
       let finalKm = km_end;
@@ -443,10 +509,13 @@ export default function TripsModule() {
       const trip = trips.find((t: any) => t.id === id);
       if (!trip) throw new Error("Trajeto não encontrado");
 
-      // AUTO-CALCULATE all segments via ORS
       toast.info("A calcular rotas automaticamente...");
-      const { totalDistance, totalDuration } = await calculateAllSegments(id);
+      const { totalDistance, totalDuration } = await calculateAndSaveTripMetrics(id);
       console.log("Quick finalize - Cálculo completo:", { totalDistance, totalDuration });
+
+      if (!(totalDistance > 0)) {
+        throw new Error("Erro ao calcular rota");
+      }
 
       let finalDist = totalDistance;
       let finalKm = km_end;
@@ -497,7 +566,7 @@ export default function TripsModule() {
   const restoreDialog = () => { setMinimized(false); setOpen(true); };
 
   /* ─── Open / Resume trip ─── */
-  const openTripDialog = (tripId?: string) => {
+  const openTripDialog = async (tripId?: string) => {
     if (tripId) {
       const trip = trips.find((t: any) => t.id === tripId);
       if (!trip) return;
@@ -508,8 +577,42 @@ export default function TripsModule() {
         notes: trip.notes || "",
       });
       setActiveTripId(tripId);
+      const { data: dbPoints } = await supabase
+        .from("fleet_trip_points")
+        .select("*")
+        .eq("trip_id", tripId)
+        .order("order_index");
       const session = loadSessions().find(s => s.tripId === tripId);
-      setPoints(session?.points?.length ? session.points : [makePoint("Ponto de Partida")]);
+      const fallbackPoints = (dbPoints || []).map((point: any, index: number) => ({
+        label: index === 0 ? "Ponto de Partida" : `Ponto ${index}`,
+        number: "",
+        street: point.address || "",
+        postal_code: point.postal_code || "",
+        city: point.city || "",
+        country: "Portugal",
+        latitude: point.latitude ? String(point.latitude) : "",
+        longitude: point.longitude ? String(point.longitude) : "",
+        distance_from_previous: Number(point.distance_from_previous || 0),
+        duration_from_previous: Number(point.duration_from_previous || 0),
+      }));
+
+      const mergedPoints = session?.points?.length
+        ? session.points.map((point, index) => {
+            const dbPoint = fallbackPoints[index];
+            return dbPoint
+              ? {
+                  ...dbPoint,
+                  ...point,
+                  latitude: point.latitude || dbPoint.latitude,
+                  longitude: point.longitude || dbPoint.longitude,
+                  distance_from_previous: point.distance_from_previous || dbPoint.distance_from_previous,
+                  duration_from_previous: point.duration_from_previous || dbPoint.duration_from_previous,
+                }
+              : point;
+          })
+        : fallbackPoints;
+
+      setPoints(mergedPoints.length ? mergedPoints : [makePoint("Ponto de Partida")]);
     } else {
       const f = defaultForm();
       if (assignments.length === 1) {
