@@ -720,7 +720,7 @@ export function Documents() {
     queryKey: ["documents", parentId],
     queryFn: async () => {
       let q = supabase.from("documents").select("*")
-        .or("entity_type.is.null,entity_type.eq.documents")
+        .eq("module", "global")
         .order("type", { ascending: true }).order("name");
       q = parentId ? q.eq("parent_id", parentId) : q.is("parent_id", null);
       const { data, error } = await q;
@@ -735,7 +735,7 @@ export function Documents() {
       const { data, error } = await supabase
         .from("documents")
         .select("id, name, parent_id")
-        .or("entity_type.is.null,entity_type.eq.documents")
+        .eq("module", "global")
         .eq("type", "folder")
         .order("name");
       if (error) throw error;
