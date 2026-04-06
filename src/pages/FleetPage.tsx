@@ -15,13 +15,13 @@ import FleetDocumentsModule from "@/components/fleet/FleetDocumentsModule";
 import FleetReportsModule from "@/components/fleet/FleetReportsModule";
 
 const TAB_COLORS: Record<string, string> = {
-  vehicles: "hsl(220 70% 50%)",
-  drivers: "hsl(260 60% 55%)",
-  assignments: "hsl(180 60% 40%)",
-  trips: "hsl(140 55% 42%)",
-  fuel: "hsl(35 90% 50%)",
-  documents: "hsl(340 60% 50%)",
-  reports: "hsl(200 70% 50%)",
+  vehicles: "hsl(40 60% 45%)",
+  drivers: "hsl(35 55% 50%)",
+  assignments: "hsl(30 50% 42%)",
+  trips: "hsl(38 65% 48%)",
+  fuel: "hsl(42 70% 50%)",
+  documents: "hsl(32 45% 40%)",
+  reports: "hsl(36 55% 46%)",
 };
 
 export default function FleetPage() {
@@ -150,7 +150,7 @@ export default function FleetPage() {
 
       {/* Tabs */}
       <div className="space-y-4">
-        <div className="flex w-full rounded-xl bg-muted/50 p-1.5 gap-1">
+        <div className="flex w-full rounded-xl bg-muted/40 p-1 gap-0.5 border border-border/30">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.value;
             const color = TAB_COLORS[tab.value];
@@ -159,16 +159,21 @@ export default function FleetPage() {
                 key={tab.value}
                 onClick={() => setActiveTab(tab.value)}
                 className={`
-                  relative flex-1 flex items-center justify-center gap-1.5 rounded-lg px-2 py-2.5
-                  text-sm font-medium transition-all duration-300 ease-out
-                  ${isActive ? "text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground/70"}
+                  relative flex-1 flex items-center justify-center gap-2 rounded-lg px-3 py-3
+                  text-[13px] sm:text-sm font-semibold tracking-wide transition-all duration-300 ease-out
+                  ${isActive ? "text-foreground shadow-md" : "text-muted-foreground hover:text-foreground/60"}
                 `}
-                style={isActive ? { backgroundColor: `color-mix(in srgb, ${color} 12%, hsl(var(--background)))` } : undefined}
+                style={isActive ? {
+                  backgroundColor: `color-mix(in srgb, ${color} 15%, hsl(var(--card)))`,
+                } : undefined}
               >
-                <tab.icon className="h-4 w-4" style={isActive ? { color } : undefined} />
+                <tab.icon className="h-4 w-4 sm:h-[18px] sm:w-[18px]" style={isActive ? { color } : undefined} />
                 <span className="hidden sm:inline">{tab.label}</span>
                 {isActive && (
-                  <span className="absolute bottom-0 left-1/4 right-1/4 h-0.5 rounded-full transition-all duration-300" style={{ backgroundColor: color }} />
+                  <span
+                    className="absolute bottom-0 left-[20%] right-[20%] h-[2px] rounded-full transition-all duration-300"
+                    style={{ backgroundColor: color }}
+                  />
                 )}
               </button>
             );

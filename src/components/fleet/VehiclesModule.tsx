@@ -31,10 +31,10 @@ const emptyForm: VehicleForm = {
 const STATUS_CYCLE = ["available", "in_use", "maintenance", "inactive"] as const;
 
 const statusConfig: Record<string, { label: string; bg: string; text: string; ring: string }> = {
-  available: { label: "Disponível", bg: "bg-green-500/10", text: "text-green-600 dark:text-green-400", ring: "ring-green-500/30" },
-  in_use: { label: "Em uso", bg: "bg-blue-500/10", text: "text-blue-600 dark:text-blue-400", ring: "ring-blue-500/30" },
-  maintenance: { label: "Manutenção", bg: "bg-orange-500/10", text: "text-orange-600 dark:text-orange-400", ring: "ring-orange-500/30" },
-  inactive: { label: "Inativo", bg: "bg-muted", text: "text-foreground font-semibold", ring: "ring-border" },
+  available: { label: "Disponível", bg: "bg-green-500/10", text: "text-green-500", ring: "ring-green-500/20" },
+  in_use: { label: "Em uso", bg: "bg-blue-500/10", text: "text-blue-400", ring: "ring-blue-500/20" },
+  maintenance: { label: "Manutenção", bg: "bg-orange-500/10", text: "text-orange-400", ring: "ring-orange-500/20" },
+  inactive: { label: "Inativo", bg: "bg-foreground/90", text: "text-background font-bold", ring: "ring-foreground/50" },
 };
 
 export default function VehiclesModule() {
