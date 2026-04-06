@@ -83,12 +83,83 @@ async function calculateRouteAPI(
   tripId?: string,
   pointIndex?: number,
 ): Promise<{ distance_km: number; duration_min: number }> {
+  console.log("Coordenadas:", { origin, destination, tripId, pointIndex });
   const { data, error } = await supabase.functions.invoke("calculate-route", {
     body: { origin, destination, trip_id: tripId, point_index: pointIndex },
   });
+  console.log("Resposta API:", data, error);
   if (error) throw new Error(`Erro ao calcular rota: ${error.message}`);
   if (data?.error) throw new Error(data.error);
   return { distance_km: data.distance_km, duration_min: data.duration_min };
+}
+
+/* ─── Calculate all segments for a trip ─── */
+async function calculateAllSegments(
+  tripId: string,
+): Promise<{ totalDistance: number; totalDuration: number }> {
+  const { data: pts, error } = await supabase
+    .from("fleet_trip_points")
+    .select("*")
+    .eq("trip_id", tripId)
+    .order("order_index");
+
+  if (error || !pts || pts.length < 2) {
+    console.log("Pontos insuficientes para cálculo:", pts?.length || 0);
+    return { totalDistance: 0, totalDuration: 0 };
+  }
+
+  let totalDistance = 0;
+  let totalDuration = 0;
+
+  for (let i = 1; i < pts.length; i++) {
+    const prev = pts[i - 1];
+    const curr = pts[i];
+
+    if (!prev.latitude || !prev.longitude || !curr.latitude || !curr.longitude) {
+      console.log(`Segmento ${i}: coordenadas em falta, a saltar`);
+      continue;
+    }
+
+    // Skip if already calculated
+    if (Number(curr.distance_from_previous) > 0) {
+      totalDistance += Number(curr.distance_from_previous);
+      totalDuration += Number(curr.duration_from_previous);
+      continue;
+    }
+
+    try {
+      const result = await calculateRouteAPI(
+        { lat: Number(prev.latitude), lng: Number(prev.longitude) },
+        { lat: Number(curr.latitude), lng: Number(curr.longitude) },
+        tripId,
+        curr.order_index,
+      );
+      totalDistance += result.distance_km;
+      totalDuration += result.duration_min;
+    } catch (err) {
+      console.error(`Erro no segmento ${i}:`, err);
+      // Use Haversine fallback
+      const R = 6371;
+      const dLat = (Number(curr.latitude) - Number(prev.latitude)) * Math.PI / 180;
+      const dLon = (Number(curr.longitude) - Number(prev.longitude)) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) ** 2 +
+        Math.cos(Number(prev.latitude) * Math.PI / 180) *
+        Math.cos(Number(curr.latitude) * Math.PI / 180) *
+        Math.sin(dLon / 2) ** 2;
+      const fallbackKm = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const fallbackMin = fallbackKm / 0.8; // rough estimate ~48km/h
+
+      await supabase.from("fleet_trip_points").update({
+        distance_from_previous: Math.round(fallbackKm * 100) / 100,
+        duration_from_previous: Math.round(fallbackMin * 100) / 100,
+      }).eq("id", (curr as any).id);
+
+      totalDistance += fallbackKm;
+      totalDuration += fallbackMin;
+    }
+  }
+
+  return { totalDistance: Math.round(totalDistance * 10) / 10, totalDuration: Math.round(totalDuration * 10) / 10 };
 }
 
 /* ─── Component ─── */
