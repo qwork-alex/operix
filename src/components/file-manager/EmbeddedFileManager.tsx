@@ -609,7 +609,8 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
 export async function storeFileInDocuments(
   file: File,
   entityType: "service_order" | "payment_order",
-  userId?: string
+  userId?: string,
+  module: string = "orders"
 ) {
   try {
     const storagePath = `${entityType}/${Date.now()}_${file.name}`;
@@ -630,7 +631,7 @@ export async function storeFileInDocuments(
       mime_type: file.type,
       size_bytes: file.size,
       entity_type: entityType,
-      module: moduleName,
+      module,
     });
     if (error) console.error("[FileManager] Document record insert failed:", error.message);
   } catch (err) {
