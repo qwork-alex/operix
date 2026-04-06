@@ -48,6 +48,7 @@ interface CalcResult {
   costPerKm: number;
   consumption: number; // L/100km
   avgKmPerTrip: number;
+  totalDuration: number; // minutes
 }
 
 function computeKPIs(trips: any[], fuel: any[]): CalcResult {
