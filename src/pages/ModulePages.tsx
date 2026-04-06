@@ -720,7 +720,7 @@ export function Documents() {
     queryKey: ["documents", parentId],
     queryFn: async () => {
       let q = supabase.from("documents").select("*")
-        .or("entity_type.is.null,entity_type.eq.documents")
+        .eq("module", "global")
         .order("type", { ascending: true }).order("name");
       q = parentId ? q.eq("parent_id", parentId) : q.is("parent_id", null);
       const { data, error } = await q;
@@ -735,7 +735,7 @@ export function Documents() {
       const { data, error } = await supabase
         .from("documents")
         .select("id, name, parent_id")
-        .or("entity_type.is.null,entity_type.eq.documents")
+        .eq("module", "global")
         .eq("type", "folder")
         .order("name");
       if (error) throw error;
@@ -764,7 +764,7 @@ export function Documents() {
   const createFolder = useMutation({
     mutationFn: async () => {
       const { error } = await supabase.from("documents").insert({
-        name: folderName, type: "folder", parent_id: parentId, uploaded_by: user?.id, entity_type: "documents",
+        name: folderName, type: "folder", parent_id: parentId, uploaded_by: user?.id, entity_type: "documents", module: "global",
       });
       if (error) throw error;
     },
@@ -826,7 +826,7 @@ export function Documents() {
   const createFolderInMove = useMutation({
     mutationFn: async (name: string) => {
       const { data, error } = await supabase.from("documents").insert({
-        name, type: "folder", parent_id: null, uploaded_by: user?.id, entity_type: "documents",
+        name, type: "folder", parent_id: null, uploaded_by: user?.id, entity_type: "documents", module: "global",
       }).select("id").single();
       if (error) throw error;
       return data.id;
@@ -859,7 +859,7 @@ export function Documents() {
     if (uploadErr) { toast.error(uploadErr.message); return; }
     const { error } = await supabase.from("documents").insert({
       name: file.name, type: "file", parent_id: parentId, uploaded_by: user?.id,
-      storage_path: storagePath, mime_type: file.type, size_bytes: file.size, entity_type: "documents",
+      storage_path: storagePath, mime_type: file.type, size_bytes: file.size, entity_type: "documents", module: "global",
     });
     if (error) toast.error(error.message);
     else {

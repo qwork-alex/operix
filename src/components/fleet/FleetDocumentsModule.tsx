@@ -59,6 +59,7 @@ export default function FleetDocumentsModule() {
     queryKey: ["fleet_documents", parentId],
     queryFn: async () => {
       let q = supabase.from("documents").select("*")
+        .eq("module", "fleet")
         .order("type", { ascending: true })
         .order("created_at", { ascending: false });
 
@@ -70,10 +71,7 @@ export default function FleetDocumentsModule() {
 
       const { data, error } = await q;
       if (error) throw error;
-      // Scope isolation: only show fleet-scoped documents (by entity_type or folders created here)
-      return (data || []).filter((d: any) =>
-        d.type === "folder" || fleetEntityTypes.includes(d.entity_type)
-      );
+      return data || [];
     },
   });
 
@@ -89,6 +87,7 @@ export default function FleetDocumentsModule() {
         type: "folder",
         parent_id: parentId,
         entity_type: "vehicle_document",
+        module: "fleet",
       });
       if (error) throw error;
     },
@@ -114,6 +113,7 @@ export default function FleetDocumentsModule() {
       mime_type: file.type,
       size_bytes: file.size,
       parent_id: parentId,
+      module: "fleet",
     });
     if (error) toast.error(error.message);
     else {
@@ -177,6 +177,7 @@ export default function FleetDocumentsModule() {
     const { data } = await supabase.from("documents")
       .select("id, name, parent_id")
       .eq("type", "folder")
+      .eq("module", "fleet")
       .order("name");
     setMoveFolders(data || []);
   };

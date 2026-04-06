@@ -19,10 +19,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 interface Props {
   entityType: "service_order" | "payment_order";
+  module?: string;
   sessionFileNames?: string[];
 }
 
-export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props) {
+export function EmbeddedFileManager({ entityType, module: moduleName = "orders", sessionFileNames = [] }: Props) {
   const { t, formatDate } = useLanguage();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -52,6 +53,7 @@ export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props
         .from("documents")
         .select("*")
         .eq("entity_type", entityType)
+        .eq("module", moduleName)
         .order("type", { ascending: true })
         .order("name");
       q = parentId ? q.eq("parent_id", parentId) : q.is("parent_id", null);
@@ -108,6 +110,7 @@ export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props
         parent_id: parentId,
         uploaded_by: user?.id,
         entity_type: entityType,
+        module: moduleName,
       });
       if (error) throw error;
     },
@@ -193,6 +196,7 @@ export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props
         parent_id: null,
         uploaded_by: user?.id,
         entity_type: entityType,
+        module: moduleName,
       }).select("id").single();
       if (error) throw error;
       return data.id;
@@ -605,7 +609,8 @@ export function EmbeddedFileManager({ entityType, sessionFileNames = [] }: Props
 export async function storeFileInDocuments(
   file: File,
   entityType: "service_order" | "payment_order",
-  userId?: string
+  userId?: string,
+  module: string = "orders"
 ) {
   try {
     const storagePath = `${entityType}/${Date.now()}_${file.name}`;
@@ -626,6 +631,7 @@ export async function storeFileInDocuments(
       mime_type: file.type,
       size_bytes: file.size,
       entity_type: entityType,
+      module,
     });
     if (error) console.error("[FileManager] Document record insert failed:", error.message);
   } catch (err) {
