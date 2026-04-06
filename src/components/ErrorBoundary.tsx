@@ -13,33 +13,38 @@ interface State {
 }
 
 const errorSuggestions: Record<string, string> = {
-  "Failed to fetch": "Check your internet connection and try again.",
-  "NetworkError": "The server is unreachable. Please check your connection.",
-  "TypeError": "A data format issue occurred. Try refreshing the page.",
-  "ChunkLoadError": "The app was updated. Please refresh your browser.",
-  "Loading chunk": "The app was updated. Please refresh your browser.",
-  "PGRST": "A database query failed. Please retry or contact support.",
-  "JWT": "Your session expired. Please sign in again.",
-  "auth": "Authentication error. Please sign in again.",
+  "Failed to fetch": "Verifique a sua ligação à internet e tente novamente.",
+  "NetworkError": "O servidor está inacessível. Verifique a sua ligação.",
+  "TypeError": "Ocorreu um problema no formato de dados. Tente recarregar a página.",
+  "ChunkLoadError": "A aplicação foi atualizada. Recarregue o navegador.",
+  "Loading chunk": "A aplicação foi atualizada. Recarregue o navegador.",
+  "PGRST": "Uma consulta à base de dados falhou. Tente novamente ou contacte o suporte.",
+  "JWT": "A sua sessão expirou. Inicie sessão novamente.",
+  "auth": "Erro de autenticação. Inicie sessão novamente.",
+  "total_distance": "Erro na coluna de distância. A base de dados pode precisar de atualização.",
+  "non-DEFAULT": "Restrição na base de dados. Tente recarregar a página.",
+  "permission denied": "Não tem permissão para esta ação. Verifique as suas credenciais.",
+  "duplicate key": "Este registo já existe. Verifique os dados e tente novamente.",
+  "violates foreign key": "Este registo está associado a outros dados e não pode ser modificado desta forma.",
 };
 
 function getSuggestion(error: Error | null): string {
-  if (!error) return "Try refreshing the page.";
-  const msg = error.message || error.name || "";
+  if (!error) return "Tente recarregar a página.";
+  const msg = (error.message || error.name || "").toLowerCase();
   for (const [key, suggestion] of Object.entries(errorSuggestions)) {
-    if (msg.includes(key)) return suggestion;
+    if (msg.includes(key.toLowerCase())) return suggestion;
   }
-  return "Try refreshing the page or navigating back to the dashboard.";
+  return "Tente recarregar a página ou voltar ao painel principal.";
 }
 
 function getCategory(error: Error | null): string {
-  if (!error) return "Unknown Error";
-  const msg = error.message || "";
-  if (msg.includes("fetch") || msg.includes("Network")) return "Network Error";
-  if (msg.includes("JWT") || msg.includes("auth") || msg.includes("session")) return "Authentication Error";
-  if (msg.includes("PGRST") || msg.includes("database")) return "Database Error";
-  if (msg.includes("Chunk") || msg.includes("Loading chunk")) return "Update Required";
-  return "Application Error";
+  if (!error) return "Erro Desconhecido";
+  const msg = (error.message || "").toLowerCase();
+  if (msg.includes("fetch") || msg.includes("network")) return "Erro de Rede";
+  if (msg.includes("jwt") || msg.includes("auth") || msg.includes("session")) return "Erro de Autenticação";
+  if (msg.includes("pgrst") || msg.includes("database") || msg.includes("duplicate") || msg.includes("violates")) return "Erro de Base de Dados";
+  if (msg.includes("chunk") || msg.includes("loading chunk")) return "Atualização Necessária";
+  return "Erro da Aplicação";
 }
 
 export class ErrorBoundary extends Component<Props, State> {
@@ -53,7 +58,8 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error("[ErrorBoundary] Error:", error.message);
+    console.error("[ErrorBoundary] Categoria:", getCategory(error));
+    console.error("[ErrorBoundary] Erro:", error.message);
     console.error("[ErrorBoundary] Stack:", error.stack);
     console.error("[ErrorBoundary] Component Stack:", info.componentStack);
   }
@@ -63,7 +69,7 @@ export class ErrorBoundary extends Component<Props, State> {
       if (this.props.fallback) return this.props.fallback;
       const category = getCategory(this.state.error);
       const suggestion = getSuggestion(this.state.error);
-      const details = this.state.error?.message || "No details available";
+      const details = this.state.error?.message || "Sem detalhes disponíveis";
       return (
         <div className="min-h-[300px] flex flex-col items-center justify-center gap-5 p-8">
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10">
@@ -72,9 +78,12 @@ export class ErrorBoundary extends Component<Props, State> {
           <div className="text-center space-y-2">
             <h2 className="text-lg font-semibold text-foreground">{category}</h2>
             <p className="text-sm text-muted-foreground max-w-md">{suggestion}</p>
-            <p className="text-xs text-muted-foreground/60 max-w-md font-mono bg-muted/50 rounded px-3 py-1.5 mt-2">
-              {details}
-            </p>
+            <details className="mt-2">
+              <summary className="text-xs text-muted-foreground/60 cursor-pointer">Detalhes técnicos</summary>
+              <p className="text-xs text-muted-foreground/60 max-w-md font-mono bg-muted/50 rounded px-3 py-1.5 mt-1">
+                {details}
+              </p>
+            </details>
           </div>
           <div className="flex gap-2">
             <Button
@@ -83,7 +92,7 @@ export class ErrorBoundary extends Component<Props, State> {
               onClick={() => this.setState({ hasError: false, error: null })}
             >
               <RefreshCw className="h-4 w-4 mr-2" />
-              Try again
+              Tentar novamente
             </Button>
             <Button
               variant="ghost"
@@ -91,7 +100,7 @@ export class ErrorBoundary extends Component<Props, State> {
               onClick={() => window.location.assign("/")}
             >
               <Home className="h-4 w-4 mr-2" />
-              Go to Dashboard
+              Painel Principal
             </Button>
             <Button
               variant="ghost"
@@ -101,7 +110,7 @@ export class ErrorBoundary extends Component<Props, State> {
               }}
             >
               <Copy className="h-4 w-4 mr-2" />
-              Copy error
+              Copiar erro
             </Button>
           </div>
         </div>
