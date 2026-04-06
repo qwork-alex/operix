@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Save, Trash2, MapPin, Navigation, Loader2, CheckCircle, Locate, Plus, ArrowRight, Minus, Clock } from "lucide-react";
+import { Save, Trash2, MapPin, Navigation, Loader2, CheckCircle, Locate, Plus, ArrowRight, Minus, Clock, ChevronDown, ChevronRight, Eye } from "lucide-react";
 
 /* ─── Types ─── */
 interface TripPoint {
@@ -83,12 +83,83 @@ async function calculateRouteAPI(
   tripId?: string,
   pointIndex?: number,
 ): Promise<{ distance_km: number; duration_min: number }> {
+  console.log("Coordenadas:", { origin, destination, tripId, pointIndex });
   const { data, error } = await supabase.functions.invoke("calculate-route", {
     body: { origin, destination, trip_id: tripId, point_index: pointIndex },
   });
+  console.log("Resposta API:", data, error);
   if (error) throw new Error(`Erro ao calcular rota: ${error.message}`);
   if (data?.error) throw new Error(data.error);
   return { distance_km: data.distance_km, duration_min: data.duration_min };
+}
+
+/* ─── Calculate all segments for a trip ─── */
+async function calculateAllSegments(
+  tripId: string,
+): Promise<{ totalDistance: number; totalDuration: number }> {
+  const { data: pts, error } = await supabase
+    .from("fleet_trip_points")
+    .select("*")
+    .eq("trip_id", tripId)
+    .order("order_index");
+
+  if (error || !pts || pts.length < 2) {
+    console.log("Pontos insuficientes para cálculo:", pts?.length || 0);
+    return { totalDistance: 0, totalDuration: 0 };
+  }
+
+  let totalDistance = 0;
+  let totalDuration = 0;
+
+  for (let i = 1; i < pts.length; i++) {
+    const prev = pts[i - 1];
+    const curr = pts[i];
+
+    if (!prev.latitude || !prev.longitude || !curr.latitude || !curr.longitude) {
+      console.log(`Segmento ${i}: coordenadas em falta, a saltar`);
+      continue;
+    }
+
+    // Skip if already calculated
+    if (Number(curr.distance_from_previous) > 0) {
+      totalDistance += Number(curr.distance_from_previous);
+      totalDuration += Number(curr.duration_from_previous);
+      continue;
+    }
+
+    try {
+      const result = await calculateRouteAPI(
+        { lat: Number(prev.latitude), lng: Number(prev.longitude) },
+        { lat: Number(curr.latitude), lng: Number(curr.longitude) },
+        tripId,
+        curr.order_index,
+      );
+      totalDistance += result.distance_km;
+      totalDuration += result.duration_min;
+    } catch (err) {
+      console.error(`Erro no segmento ${i}:`, err);
+      // Use Haversine fallback
+      const R = 6371;
+      const dLat = (Number(curr.latitude) - Number(prev.latitude)) * Math.PI / 180;
+      const dLon = (Number(curr.longitude) - Number(prev.longitude)) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) ** 2 +
+        Math.cos(Number(prev.latitude) * Math.PI / 180) *
+        Math.cos(Number(curr.latitude) * Math.PI / 180) *
+        Math.sin(dLon / 2) ** 2;
+      const fallbackKm = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const fallbackMin = fallbackKm / 0.8; // rough estimate ~48km/h
+
+      await supabase.from("fleet_trip_points").update({
+        distance_from_previous: Math.round(fallbackKm * 100) / 100,
+        duration_from_previous: Math.round(fallbackMin * 100) / 100,
+      }).eq("id", (curr as any).id);
+
+      totalDistance += fallbackKm;
+      totalDuration += fallbackMin;
+    }
+  }
+
+  return { totalDistance: Math.round(totalDistance * 10) / 10, totalDuration: Math.round(totalDuration * 10) / 10 };
 }
 
 /* ─── Component ─── */
@@ -101,6 +172,8 @@ export default function TripsModule() {
   const [gpsLoading, setGpsLoading] = useState<number | null>(null);
   const [routeLoading, setRouteLoading] = useState<number | null>(null);
   const [activeTripId, setActiveTripId] = useState<string | null>(null);
+  const [expandedTrip, setExpandedTrip] = useState<string | null>(null);
+  const [segmentsCache, setSegmentsCache] = useState<Record<string, any[]>>({});
 
   const [completeOpen, setCompleteOpen] = useState(false);
   const [completeTripId, setCompleteTripId] = useState("");
@@ -304,13 +377,13 @@ export default function TripsModule() {
     onError: (e) => toast.error((e as Error).message),
   });
 
-  /* ─── Finalize trip ─── */
+  /* ─── Finalize trip (from dialog) ─── */
   const finalizeMutation = useMutation({
     mutationFn: async ({ id, km_end }: { id: string; km_end: number | null }) => {
       const trip = trips.find((t: any) => t.id === id);
       if (!trip) throw new Error("Trajeto não encontrado na base de dados");
 
-      // Save final points
+      // Save final points to DB first
       const validPoints = points.filter(p => p.street || p.city || p.latitude);
       if (validPoints.length > 0 && activeTripId === id) {
         await supabase.from("fleet_trip_points").delete().eq("trip_id", id);
@@ -328,27 +401,27 @@ export default function TripsModule() {
         await supabase.from("fleet_trip_points").insert(pointRows as any);
       }
 
-      // Calculate totals from API distances
-      const apiDist = points.reduce((s, pt) => s + (pt.distance_from_previous || 0), 0);
-      const apiDur = points.reduce((s, pt) => s + (pt.duration_from_previous || 0), 0);
+      // AUTO-CALCULATE all segments via ORS
+      toast.info("A calcular rotas automaticamente...");
+      const { totalDistance, totalDuration } = await calculateAllSegments(id);
+      console.log("Cálculo completo:", { totalDistance, totalDuration });
 
-      let totalDist = apiDist;
+      let finalDist = totalDistance;
       let finalKm = km_end;
       const kmStart = trip.km_start ? Number(trip.km_start) : null;
 
-      // If manual KM provided and API distance is 0, use manual
       if (finalKm !== null && !isNaN(finalKm) && kmStart !== null) {
         if (finalKm < kmStart) throw new Error(`KM fim (${finalKm}) < KM início (${kmStart})`);
-        if (totalDist === 0) totalDist = finalKm - kmStart;
-      } else if (totalDist > 0 && kmStart !== null) {
-        finalKm = Math.round(kmStart + totalDist);
+        if (finalDist === 0) finalDist = finalKm - kmStart;
+      } else if (finalDist > 0 && kmStart !== null) {
+        finalKm = Math.round(kmStart + finalDist);
       }
 
       const { error } = await supabase.from("fleet_trips").update({
         km_end: finalKm,
         status: "completed",
-        total_distance: Math.round((totalDist || 0) * 10) / 10,
-        total_duration: Math.round((apiDur || 0) * 10) / 10,
+        total_distance: finalDist,
+        total_duration: totalDuration,
         notes: form.notes || null,
       }).eq("id", id);
       if (error) throw new Error(`Falha ao finalizar: ${error.message}`);
@@ -370,32 +443,27 @@ export default function TripsModule() {
       const trip = trips.find((t: any) => t.id === id);
       if (!trip) throw new Error("Trajeto não encontrado");
 
-      // Fetch saved trip points for API distances
-      const { data: savedPoints } = await supabase
-        .from("fleet_trip_points")
-        .select("distance_from_previous, duration_from_previous")
-        .eq("trip_id", id)
-        .order("order_index");
+      // AUTO-CALCULATE all segments via ORS
+      toast.info("A calcular rotas automaticamente...");
+      const { totalDistance, totalDuration } = await calculateAllSegments(id);
+      console.log("Quick finalize - Cálculo completo:", { totalDistance, totalDuration });
 
-      const apiDist = (savedPoints || []).reduce((s: number, p: any) => s + Number(p.distance_from_previous || 0), 0);
-      const apiDur = (savedPoints || []).reduce((s: number, p: any) => s + Number(p.duration_from_previous || 0), 0);
-
-      let totalDist = apiDist;
+      let finalDist = totalDistance;
       let finalKm = km_end;
       const kmStart = trip.km_start ? Number(trip.km_start) : null;
 
       if (finalKm !== null && !isNaN(finalKm) && kmStart !== null) {
         if (finalKm < kmStart) throw new Error(`KM fim (${finalKm}) < KM início (${kmStart})`);
-        if (totalDist === 0) totalDist = finalKm - kmStart;
-      } else if (totalDist > 0 && kmStart !== null) {
-        finalKm = Math.round(kmStart + totalDist);
+        if (finalDist === 0) finalDist = finalKm - kmStart;
+      } else if (finalDist > 0 && kmStart !== null) {
+        finalKm = Math.round(kmStart + finalDist);
       }
 
       const { error } = await supabase.from("fleet_trips").update({
         km_end: finalKm,
         status: "completed",
-        total_distance: Math.round((totalDist || 0) * 10) / 10,
-        total_duration: Math.round((apiDur || 0) * 10) / 10,
+        total_distance: finalDist,
+        total_duration: totalDuration,
       }).eq("id", id);
       if (error) throw new Error(`Falha ao finalizar: ${error.message}`);
       removeSession(id);
@@ -523,33 +591,72 @@ export default function TripsModule() {
               ) : trips.length === 0 ? (
                 <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum trajeto registrado</TableCell></TableRow>
               ) : trips.map((t: any) => (
-                <TableRow key={t.id}>
-                  <TableCell>{t.date}</TableCell>
-                  <TableCell className="max-w-[140px] truncate">{getVehicleLabel(t.vehicle_id)}</TableCell>
-                  <TableCell>{getDriverName(t.driver_id)}</TableCell>
-                  <TableCell className="font-semibold tabular-nums">{t.total_distance ? `${Number(t.total_distance).toLocaleString()} km` : "—"}</TableCell>
-                  <TableCell className="tabular-nums text-muted-foreground">{t.total_duration ? formatDuration(Number(t.total_duration)) : "—"}</TableCell>
-                  <TableCell>
-                    <Badge className={t.status === "completed" ? "bg-green-500/10 text-green-500" : "bg-blue-500/10 text-blue-500"}>
-                      {t.status === "completed" ? "Concluído" : "Em curso"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right space-x-1">
-                    {t.status === "in_progress" && (
-                      <>
-                        <Button variant="outline" size="sm" onClick={() => openTripDialog(t.id)}>
-                          <Navigation className="h-3.5 w-3.5 mr-1" /> Continuar
+                <>
+                  <TableRow key={t.id}>
+                    <TableCell>{t.date}</TableCell>
+                    <TableCell className="max-w-[140px] truncate">{getVehicleLabel(t.vehicle_id)}</TableCell>
+                    <TableCell>{getDriverName(t.driver_id)}</TableCell>
+                    <TableCell className="font-semibold tabular-nums">{t.total_distance ? `${Number(t.total_distance).toLocaleString()} km` : "—"}</TableCell>
+                    <TableCell className="tabular-nums text-muted-foreground">{t.total_duration ? formatDuration(Number(t.total_duration)) : "—"}</TableCell>
+                    <TableCell>
+                      <Badge className={t.status === "completed" ? "bg-green-500/10 text-green-500" : "bg-blue-500/10 text-blue-500"}>
+                        {t.status === "completed" ? "Concluído" : "Em curso"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right space-x-1">
+                      {t.status === "completed" && (
+                        <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={async () => {
+                          if (expandedTrip === t.id) { setExpandedTrip(null); return; }
+                          if (!segmentsCache[t.id]) {
+                            const { data } = await supabase.from("fleet_trip_points").select("*").eq("trip_id", t.id).order("order_index");
+                            setSegmentsCache(c => ({ ...c, [t.id]: data || [] }));
+                          }
+                          setExpandedTrip(t.id);
+                        }}>
+                          {expandedTrip === t.id ? <ChevronDown className="h-3.5 w-3.5 mr-1" /> : <Eye className="h-3.5 w-3.5 mr-1" />}
+                          {expandedTrip === t.id ? "Fechar" : "Detalhes"}
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => { setCompleteTripId(t.id); setCompleteKm(""); setCompleteOpen(true); }}>
-                          <CheckCircle className="h-3.5 w-3.5 mr-1" /> Finalizar
-                        </Button>
-                      </>
-                    )}
-                    <Button variant="ghost" size="icon" onClick={() => remove.mutate(t.id)}>
-                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
+                      )}
+                      {t.status === "in_progress" && (
+                        <>
+                          <Button variant="outline" size="sm" onClick={() => openTripDialog(t.id)}>
+                            <Navigation className="h-3.5 w-3.5 mr-1" /> Continuar
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => { setCompleteTripId(t.id); setCompleteKm(""); setCompleteOpen(true); }}>
+                            <CheckCircle className="h-3.5 w-3.5 mr-1" /> Finalizar
+                          </Button>
+                        </>
+                      )}
+                      <Button variant="ghost" size="icon" onClick={() => remove.mutate(t.id)}>
+                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                  {expandedTrip === t.id && segmentsCache[t.id] && (
+                    <TableRow key={`${t.id}-segments`}>
+                      <TableCell colSpan={7} className="bg-muted/30 p-3">
+                        <p className="text-xs font-semibold mb-2">Segmentos do Trajeto</p>
+                        <div className="space-y-1">
+                          {segmentsCache[t.id].map((seg: any, i: number) => (
+                            <div key={seg.id} className="flex items-center gap-3 text-xs py-1 border-b border-border/30 last:border-0">
+                              <span className="w-6 text-center font-mono text-muted-foreground">{i + 1}</span>
+                              <MapPin className="h-3 w-3 text-primary shrink-0" />
+                              <span className="flex-1 truncate">{seg.address || seg.city || `${seg.latitude?.toFixed(4)}, ${seg.longitude?.toFixed(4)}`}</span>
+                              {i > 0 && Number(seg.distance_from_previous) > 0 && (
+                                <span className="text-xs font-semibold tabular-nums">
+                                  {Number(seg.distance_from_previous).toFixed(1)} km · {Math.round(Number(seg.duration_from_previous))} min
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                          {segmentsCache[t.id].length === 0 && (
+                            <p className="text-xs text-muted-foreground">Sem pontos registados</p>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </>
               ))}
             </TableBody>
           </Table>
