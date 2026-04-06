@@ -205,6 +205,7 @@ export default function DriversModule() {
       await supabase.from("documents").insert({
         name: file.name, type: "file", entity_type: "driver_document",
         storage_path: path, mime_type: file.type, size_bytes: file.size,
+        module: "fleet",
       });
 
       toast.success("Dados extraídos — verifique e corrija antes de salvar");

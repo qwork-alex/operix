@@ -131,6 +131,7 @@ export default function FuelLogsModule() {
         await supabase.from("documents").insert({
           name: receiptFile.name, type: "file", entity_type: "fuel_receipt",
           storage_path: path, mime_type: receiptFile.type, size_bytes: receiptFile.size,
+          module: "fleet",
         });
       }
 

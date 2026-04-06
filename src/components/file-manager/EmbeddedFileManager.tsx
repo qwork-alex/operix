@@ -630,6 +630,7 @@ export async function storeFileInDocuments(
       mime_type: file.type,
       size_bytes: file.size,
       entity_type: entityType,
+      module: moduleName,
     });
     if (error) console.error("[FileManager] Document record insert failed:", error.message);
   } catch (err) {
