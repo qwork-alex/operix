@@ -617,7 +617,7 @@ export default function FleetReportsModule() {
                 </TableHeader>
                 <TableBody>
                   {filtered.trips.length === 0 ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-4 text-muted-foreground">Sem trajetos</TableCell></TableRow>
+                     <TableRow><TableCell colSpan={5} className="text-center py-4 text-muted-foreground">Sem trajetos</TableCell></TableRow>
                   ) : filtered.trips.slice(0, 100).map((t: any) => (
                     <TableRow key={t.id}>
                       <TableCell>{t.date}</TableCell>
