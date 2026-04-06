@@ -10,6 +10,20 @@ function jsonResponse(payload: unknown, status = 200) {
   });
 }
 
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function estimateDurationMin(distanceKm: number): number {
+  return distanceKm / 50 * 60; // ~50 km/h average
+}
+
 function normalizeCoordinates(body: any): [number, number][] {
   if (Array.isArray(body?.coordinates) && body.coordinates.length >= 2) {
     return body.coordinates
@@ -52,38 +66,38 @@ Deno.serve(async (req) => {
       console.log("Geocoding:", geocodeText);
 
       const geocodeRes = await fetch(
-        `https://api.openrouteservice.org/geocode/search?text=${encodeURIComponent(geocodeText)}&size=1`,
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(geocodeText)}&limit=1&accept-language=pt`,
         {
           method: "GET",
           headers: {
-            Authorization: OPENROUTE_API_KEY,
+            "User-Agent": "FleetApp/1.0",
           },
         },
       );
 
       if (!geocodeRes.ok) {
         const errText = await geocodeRes.text();
-        console.error("ORS geocode error:", geocodeRes.status, errText);
+        console.error("Nominatim geocode error:", geocodeRes.status, errText);
         return jsonResponse({ error: `Geocode API error: ${geocodeRes.status}`, details: errText }, 502);
       }
 
       const geocodeData = await geocodeRes.json();
       console.log("Resposta API:", geocodeData);
 
-      const feature = geocodeData?.features?.[0];
-      const coordinates = feature?.geometry?.coordinates;
+      const firstResult = Array.isArray(geocodeData) ? geocodeData[0] : null;
 
-      if (!Array.isArray(coordinates) || coordinates.length < 2) {
+      if (!firstResult || !firstResult.lat || !firstResult.lon) {
         return jsonResponse({ error: "Address not found" }, 404);
       }
 
-      const [longitude, latitude] = coordinates;
+      const latitude = Number(firstResult.lat);
+      const longitude = Number(firstResult.lon);
       console.log("Coordenadas:", latitude, longitude);
 
       return jsonResponse({
-        latitude: Number(latitude),
-        longitude: Number(longitude),
-        label: feature?.properties?.label ?? geocodeText,
+        latitude,
+        longitude,
+        label: firstResult.display_name ?? geocodeText,
       });
     }
 
@@ -112,7 +126,26 @@ Deno.serve(async (req) => {
     if (!orsRes.ok) {
       const errText = await orsRes.text();
       console.error("ORS error:", orsRes.status, errText);
-      return jsonResponse({ error: `Route API error: ${orsRes.status}`, details: errText }, 502);
+
+      console.log("Fallback: usando Haversine para calcular distância");
+      const segments: { distance_km: number; duration_min: number }[] = [];
+      let totalDist = 0;
+      let totalDur = 0;
+      for (let i = 1; i < normalizedCoordinates.length; i++) {
+        const [lon1, lat1] = normalizedCoordinates[i - 1];
+        const [lon2, lat2] = normalizedCoordinates[i];
+        const d = haversineKm(lat1, lon1, lat2, lon2) * 1.3; // road factor
+        const dur = estimateDurationMin(d);
+        segments.push({ distance_km: Math.round(d * 100) / 100, duration_min: Math.round(dur * 100) / 100 });
+        totalDist += d;
+        totalDur += dur;
+      }
+      return jsonResponse({
+        distance_km: Math.round(totalDist * 100) / 100,
+        duration_min: Math.round(totalDur * 100) / 100,
+        segments,
+        fallback: true,
+      });
     }
 
     const orsData = await orsRes.json();
