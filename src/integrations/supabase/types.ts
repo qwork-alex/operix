@@ -404,6 +404,8 @@ export type Database = {
         Row: {
           address: string | null
           city: string | null
+          distance_from_previous: number | null
+          duration_from_previous: number | null
           id: string
           latitude: number | null
           longitude: number | null
@@ -415,6 +417,8 @@ export type Database = {
         Insert: {
           address?: string | null
           city?: string | null
+          distance_from_previous?: number | null
+          duration_from_previous?: number | null
           id?: string
           latitude?: number | null
           longitude?: number | null
@@ -426,6 +430,8 @@ export type Database = {
         Update: {
           address?: string | null
           city?: string | null
+          distance_from_previous?: number | null
+          duration_from_previous?: number | null
           id?: string
           latitude?: number | null
           longitude?: number | null
@@ -452,10 +458,11 @@ export type Database = {
           driver_id: string
           id: string
           km_end: number | null
-          km_start: number
+          km_start: number | null
           notes: string | null
           status: string
           total_distance: number | null
+          total_duration: number | null
           updated_at: string
           vehicle_id: string
         }
@@ -466,10 +473,11 @@ export type Database = {
           driver_id: string
           id?: string
           km_end?: number | null
-          km_start: number
+          km_start?: number | null
           notes?: string | null
           status?: string
           total_distance?: number | null
+          total_duration?: number | null
           updated_at?: string
           vehicle_id: string
         }
@@ -480,10 +488,11 @@ export type Database = {
           driver_id?: string
           id?: string
           km_end?: number | null
-          km_start?: number
+          km_start?: number | null
           notes?: string | null
           status?: string
           total_distance?: number | null
+          total_duration?: number | null
           updated_at?: string
           vehicle_id?: string
         }
