@@ -607,14 +607,13 @@ export default function FleetReportsModule() {
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Data</TableHead>
-                    <TableHead>Veículo</TableHead>
-                    <TableHead>Condutor</TableHead>
-                    <TableHead className="text-right">Distância</TableHead>
-                    <TableHead className="text-right">KM Início</TableHead>
-                    <TableHead className="text-right">KM Fim</TableHead>
-                  </TableRow>
+                   <TableRow>
+                     <TableHead>Data</TableHead>
+                     <TableHead>Veículo</TableHead>
+                     <TableHead>Condutor</TableHead>
+                     <TableHead className="text-right">Distância</TableHead>
+                     <TableHead className="text-right">Duração</TableHead>
+                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filtered.trips.length === 0 ? (
