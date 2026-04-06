@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -9,7 +9,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Plus, Save, Trash2, Pencil, Upload, Loader2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Plus, Save, Trash2, Pencil, Upload, Loader2, Camera, FileText, ScanLine, CheckCircle2, AlertCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface FuelForm {
   vehicle_id: string;
@@ -17,12 +19,22 @@ interface FuelForm {
   km_at_fuel: string;
   liters: string;
   total_cost: string;
+  price_per_liter: string;
   notes: string;
 }
 
-const emptyForm: FuelForm = { vehicle_id: "", date: new Date().toISOString().slice(0, 10), km_at_fuel: "", liters: "", total_cost: "", notes: "" };
+const emptyForm: FuelForm = { vehicle_id: "", date: new Date().toISOString().slice(0, 10), km_at_fuel: "", liters: "", total_cost: "", price_per_liter: "", notes: "" };
 
 const ACTIVE_TRIP_KEY = "fleet_active_trip_session";
+
+type ConfidenceLevel = "high" | "medium" | "low";
+
+const confidenceColor = (c?: ConfidenceLevel) => {
+  if (c === "high") return "ring-green-400/60";
+  if (c === "medium") return "ring-yellow-400/60";
+  if (c === "low") return "ring-red-400/60";
+  return "";
+};
 
 export default function FuelLogsModule() {
   const qc = useQueryClient();
@@ -30,6 +42,8 @@ export default function FuelLogsModule() {
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<FuelForm>(emptyForm);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [confidence, setConfidence] = useState<Record<string, ConfidenceLevel>>({});
 
   const { data: vehicles = [] } = useQuery({
     queryKey: ["fleet_vehicles"],
@@ -48,6 +62,55 @@ export default function FuelLogsModule() {
   const getVehicleLabel = (id: string) => {
     const v = vehicles.find((x: any) => x.id === id);
     return v ? `${v.brand || ""} ${v.model || ""} — ${v.license_plate}`.trim() : "—";
+  };
+
+  const handleReceiptOCR = useCallback(async (file: File) => {
+    setReceiptFile(file);
+    if (!file.type.startsWith("image/")) return; // only OCR images
+
+    setIsExtracting(true);
+    try {
+      const reader = new FileReader();
+      const base64 = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve((reader.result as string).split(",")[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const { data, error } = await supabase.functions.invoke("extract-fleet-document", {
+        body: { imageBase64: base64, mimeType: file.type, documentType: "fuel_receipt" },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      setForm(prev => ({
+        ...prev,
+        liters: data.liters ? String(data.liters) : prev.liters,
+        total_cost: data.total_cost ? String(data.total_cost) : prev.total_cost,
+        price_per_liter: data.price_per_liter ? String(data.price_per_liter) : prev.price_per_liter,
+        date: data.date || prev.date,
+      }));
+      setConfidence(data.confidence || {});
+      toast.success("Dados extraídos do comprovante");
+    } catch (err) {
+      console.error("OCR error:", err);
+      toast.error("Falha na extração. Preencha manualmente.");
+    } finally {
+      setIsExtracting(false);
+    }
+  }, []);
+
+  const handleUploadMethod = (method: "file" | "camera") => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = method === "camera" ? "image/*" : "image/*,.pdf";
+    if (method === "camera") input.capture = "environment";
+    input.onchange = () => {
+      const f = input.files?.[0];
+      if (f) handleReceiptOCR(f);
+    };
+    input.click();
   };
 
   const save = useMutation({
@@ -92,7 +155,6 @@ export default function FuelLogsModule() {
         const { error } = await supabase.from("fleet_fuel_logs").insert(payload);
         if (error) throw error;
 
-        // Sync to accounting (only on new)
         const vehicle = vehicles.find((v: any) => v.id === form.vehicle_id);
         await supabase.from("financial_records").insert({
           type: "expense",
@@ -128,6 +190,7 @@ export default function FuelLogsModule() {
     setEditId(null);
     setForm(emptyForm);
     setReceiptFile(null);
+    setConfidence({});
   };
 
   const startEdit = (l: any) => {
@@ -138,13 +201,17 @@ export default function FuelLogsModule() {
       km_at_fuel: l.km_at_fuel ? String(l.km_at_fuel) : "",
       liters: l.liters ? String(l.liters) : "",
       total_cost: l.total_cost ? String(l.total_cost) : "",
+      price_per_liter: l.price_per_liter ? String(l.price_per_liter) : "",
       notes: l.notes || "",
     });
+    setConfidence({});
     setOpen(true);
   };
 
   const totalCost = fuelLogs.reduce((s: number, l: any) => s + Number(l.total_cost || 0), 0);
   const totalLiters = fuelLogs.reduce((s: number, l: any) => s + Number(l.liters || 0), 0);
+
+  const set = (field: keyof FuelForm, value: string) => setForm(p => ({ ...p, [field]: value }));
 
   return (
     <div className="space-y-4">
@@ -156,7 +223,6 @@ export default function FuelLogsModule() {
               Total: {totalLiters.toFixed(1)}L — {totalCost.toFixed(2)} €
             </p>
           </div>
-          {/* Active trip indicator */}
           {(() => {
             try {
               const stored = localStorage.getItem(ACTIVE_TRIP_KEY);
@@ -174,7 +240,7 @@ export default function FuelLogsModule() {
             return null;
           })()}
         </div>
-        <Button size="sm" onClick={() => { setForm(emptyForm); setEditId(null); setOpen(true); }}>
+        <Button size="sm" onClick={() => { setForm(emptyForm); setEditId(null); setConfidence({}); setOpen(true); }}>
           <Plus className="h-4 w-4 mr-1" /> Novo Abastecimento
         </Button>
       </div>
@@ -207,7 +273,7 @@ export default function FuelLogsModule() {
                   <TableCell className="tabular-nums">{Number(l.liters).toFixed(1)} L</TableCell>
                   <TableCell className="font-semibold tabular-nums">{Number(l.total_cost).toFixed(2)} €</TableCell>
                   <TableCell className="tabular-nums">{l.price_per_liter ? `${Number(l.price_per_liter).toFixed(3)} €` : "—"}</TableCell>
-                  <TableCell>{l.receipt_storage_path ? "✓" : "—"}</TableCell>
+                  <TableCell>{l.receipt_storage_path ? <Badge variant="outline" className="text-[10px]">✓</Badge> : "—"}</TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="icon" onClick={() => startEdit(l)}><Pencil className="h-3.5 w-3.5" /></Button>
                     <Button variant="ghost" size="icon" onClick={() => remove.mutate(l)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
@@ -220,15 +286,45 @@ export default function FuelLogsModule() {
       </Card>
 
       <Dialog open={open} onOpenChange={(o) => { if (!o) closeDialog(); else setOpen(true); }}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>{editId ? "Editar Abastecimento" : "Novo Abastecimento"}</DialogTitle>
             <DialogDescription>Registe um abastecimento de combustível.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
+            {/* Smart Upload Zone */}
+            <div>
+              <Label className="text-xs font-medium mb-1 block">Comprovante (scan/foto/ficheiro)</Label>
+              {receiptFile ? (
+                <div className="flex items-center gap-2 p-2 rounded-lg border bg-muted/30">
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-xs flex-1 truncate">{receiptFile.name}</span>
+                  {isExtracting && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+                  {!isExtracting && Object.keys(confidence).length > 0 && <CheckCircle2 className="h-4 w-4 text-green-500" />}
+                  <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => { setReceiptFile(null); setConfidence({}); }}>Trocar</Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-2">
+                  <Button variant="outline" size="sm" className="h-16 flex-col gap-1" onClick={() => handleUploadMethod("camera")}>
+                    <Camera className="h-5 w-5" />
+                    <span className="text-[10px]">Câmara</span>
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-16 flex-col gap-1" onClick={() => handleUploadMethod("file")}>
+                    <ScanLine className="h-5 w-5" />
+                    <span className="text-[10px]">Scan</span>
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-16 flex-col gap-1" onClick={() => handleUploadMethod("file")}>
+                    <Upload className="h-5 w-5" />
+                    <span className="text-[10px]">Ficheiro</span>
+                  </Button>
+                </div>
+              )}
+              {isExtracting && <p className="text-xs text-primary mt-1 animate-pulse">Extraindo dados do comprovante...</p>}
+            </div>
+
             <div>
               <Label>Veículo *</Label>
-              <Select value={form.vehicle_id} onValueChange={v => setForm(p => ({ ...p, vehicle_id: v }))}>
+              <Select value={form.vehicle_id} onValueChange={v => set("vehicle_id", v)}>
                 <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
                 <SelectContent>
                   {vehicles.map((v: any) => <SelectItem key={v.id} value={v.id}>{v.brand} {v.model} — {v.license_plate}</SelectItem>)}
@@ -236,23 +332,43 @@ export default function FuelLogsModule() {
               </Select>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Data</Label><Input type="date" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} /></div>
-              <div><Label>KM no abastecimento</Label><Input type="number" value={form.km_at_fuel} onChange={e => setForm(p => ({ ...p, km_at_fuel: e.target.value }))} /></div>
-              <div><Label>Litros *</Label><Input type="number" step="0.01" value={form.liters} onChange={e => setForm(p => ({ ...p, liters: e.target.value }))} /></div>
-              <div><Label>Custo Total (€) *</Label><Input type="number" step="0.01" value={form.total_cost} onChange={e => setForm(p => ({ ...p, total_cost: e.target.value }))} /></div>
+              <div>
+                <Label>Data</Label>
+                <Input type="date" value={form.date} onChange={e => set("date", e.target.value)}
+                  className={cn(confidence.date && `ring-2 ${confidenceColor(confidence.date)}`)} />
+              </div>
+              <div>
+                <Label>KM no abastecimento</Label>
+                <Input type="number" value={form.km_at_fuel} onChange={e => set("km_at_fuel", e.target.value)} />
+              </div>
+              <div>
+                <Label>Litros *</Label>
+                <Input type="number" step="0.01" value={form.liters} onChange={e => set("liters", e.target.value)}
+                  className={cn(confidence.liters && `ring-2 ${confidenceColor(confidence.liters)}`)} />
+              </div>
+              <div>
+                <Label>Custo Total (€) *</Label>
+                <Input type="number" step="0.01" value={form.total_cost} onChange={e => set("total_cost", e.target.value)}
+                  className={cn(confidence.total_cost && `ring-2 ${confidenceColor(confidence.total_cost)}`)} />
+              </div>
             </div>
             {form.liters && form.total_cost && parseFloat(form.liters) > 0 && (
-              <p className="text-xs text-muted-foreground">€/L calculado: {(parseFloat(form.total_cost) / parseFloat(form.liters)).toFixed(3)} €</p>
+              <p className="text-xs text-muted-foreground">
+                €/L calculado: {(parseFloat(form.total_cost) / parseFloat(form.liters)).toFixed(3)} €
+                {confidence.price_per_liter && (
+                  <span className={cn("ml-2 px-1 rounded text-[10px]",
+                    confidence.price_per_liter === "high" ? "bg-green-500/10 text-green-600" :
+                    confidence.price_per_liter === "medium" ? "bg-yellow-500/10 text-yellow-600" :
+                    "bg-red-500/10 text-red-600"
+                  )}>OCR</span>
+                )}
+              </p>
             )}
-            <div><Label>Notas</Label><Input value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} /></div>
-            <div>
-              <Label>Comprovante (opcional)</Label>
-              <Input type="file" accept="image/*,.pdf" onChange={e => setReceiptFile(e.target.files?.[0] || null)} />
-            </div>
+            <div><Label>Notas</Label><Input value={form.notes} onChange={e => set("notes", e.target.value)} /></div>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={closeDialog}>Cancelar</Button>
-            <Button onClick={() => save.mutate()} disabled={!form.vehicle_id || !form.liters || !form.total_cost || save.isPending}>
+            <Button onClick={() => save.mutate()} disabled={!form.vehicle_id || !form.liters || !form.total_cost || save.isPending || isExtracting}>
               {save.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
               Salvar
             </Button>

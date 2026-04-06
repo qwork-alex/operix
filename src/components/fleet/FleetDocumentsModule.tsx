@@ -10,7 +10,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Upload, Eye, Download, Printer, Trash2, FileText, Loader2 } from "lucide-react";
+import {
+  Upload, Eye, Download, Printer, Trash2, FileText, Loader2,
+  FolderPlus, Folder, Pencil, Check, X, ArrowLeft, Share2, FolderOpen, MoreHorizontal
+} from "lucide-react";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
 
 const entityTypeLabels: Record<string, string> = {
   vehicle_document: "Documento Veículo",
@@ -25,21 +31,76 @@ export default function FleetDocumentsModule() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadType, setUploadType] = useState("vehicle_document");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewName, setPreviewName] = useState("");
+
+  // Folder navigation
+  const [parentId, setParentId] = useState<string | null>(null);
+  const [folderPath, setFolderPath] = useState<{ id: string | null; name: string }[]>([{ id: null, name: "Raiz" }]);
+
+  // Folder creation
+  const [showFolderDialog, setShowFolderDialog] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+
+  // Rename
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+
+  // Edit type
+  const [editTypeId, setEditTypeId] = useState<string | null>(null);
+  const [editTypeValue, setEditTypeValue] = useState("");
+
+  // Move
+  const [moveDoc, setMoveDoc] = useState<any>(null);
+  const [moveFolders, setMoveFolders] = useState<any[]>([]);
+
+  const fleetEntityTypes = ["vehicle_document", "driver_document", "fuel_receipt", "report"];
 
   const { data: docs = [], isLoading } = useQuery({
-    queryKey: ["fleet_documents"],
+    queryKey: ["fleet_documents", parentId],
     queryFn: async () => {
       let q = supabase.from("documents").select("*")
-        .in("entity_type", ["vehicle_document", "driver_document", "fuel_receipt", "report"])
+        .order("type", { ascending: true })
         .order("created_at", { ascending: false });
+
+      if (parentId) {
+        q = q.eq("parent_id", parentId);
+      } else {
+        q = q.is("parent_id", null);
+      }
+
+      // Include folders + fleet files
       const { data, error } = await q;
       if (error) throw error;
-      return data;
+      return (data || []).filter((d: any) =>
+        d.type === "folder" || fleetEntityTypes.includes(d.entity_type)
+      );
     },
   });
 
-  const filtered = typeFilter === "all" ? docs : docs.filter(d => d.entity_type === typeFilter);
+  const folders = docs.filter((d: any) => d.type === "folder");
+  const files = docs.filter((d: any) => d.type !== "folder");
+  const filtered = typeFilter === "all" ? files : files.filter((d: any) => d.entity_type === typeFilter);
 
+  // Create folder
+  const createFolder = useMutation({
+    mutationFn: async (name: string) => {
+      const { error } = await supabase.from("documents").insert({
+        name,
+        type: "folder",
+        parent_id: parentId,
+        entity_type: "vehicle_document",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["fleet_documents"] });
+      setShowFolderDialog(false);
+      setNewFolderName("");
+      toast.success("Pasta criada");
+    },
+  });
+
+  // Upload
   const uploadDoc = async (file: File) => {
     const path = `fleet/docs/${Date.now()}_${file.name}`;
     const { error: upErr } = await supabase.storage.from("uploads").upload(path, file);
@@ -52,6 +113,7 @@ export default function FleetDocumentsModule() {
       storage_path: path,
       mime_type: file.type,
       size_bytes: file.size,
+      parent_id: parentId,
     });
     if (error) toast.error(error.message);
     else {
@@ -61,6 +123,7 @@ export default function FleetDocumentsModule() {
     }
   };
 
+  // Delete
   const remove = useMutation({
     mutationFn: async (doc: any) => {
       if (doc.storage_path) await supabase.storage.from("uploads").remove([doc.storage_path]);
@@ -70,24 +133,108 @@ export default function FleetDocumentsModule() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["fleet_documents"] }); toast.success("Removido"); },
   });
 
+  // Rename
+  const renameMutation = useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      const { error } = await supabase.from("documents").update({ name }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["fleet_documents"] });
+      setRenamingId(null);
+      toast.success("Renomeado");
+    },
+  });
+
+  // Edit type
+  const editTypeMutation = useMutation({
+    mutationFn: async ({ id, entity_type }: { id: string; entity_type: string }) => {
+      const { error } = await supabase.from("documents").update({ entity_type }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["fleet_documents"] });
+      setEditTypeId(null);
+      toast.success("Tipo atualizado");
+    },
+  });
+
+  // Move
+  const moveMutation = useMutation({
+    mutationFn: async ({ id, targetParentId }: { id: string; targetParentId: string | null }) => {
+      const { error } = await supabase.from("documents").update({ parent_id: targetParentId }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["fleet_documents"] });
+      setMoveDoc(null);
+      toast.success("Movido");
+    },
+  });
+
+  // Load folders for move dialog
+  const loadMoveFolders = async () => {
+    const { data } = await supabase.from("documents")
+      .select("id, name, parent_id")
+      .eq("type", "folder")
+      .order("name");
+    setMoveFolders(data || []);
+  };
+
+  // Navigation
+  const navigateTo = (doc: any) => {
+    setParentId(doc.id);
+    setFolderPath(prev => [...prev, { id: doc.id, name: doc.name }]);
+  };
+
+  const navigateToPath = (index: number) => {
+    const target = folderPath[index];
+    setParentId(target.id);
+    setFolderPath(prev => prev.slice(0, index + 1));
+  };
+
+  // File actions
   const handlePreview = async (doc: any) => {
     if (doc.storage_path) {
-      const { data } = await supabase.storage.from("uploads").createSignedUrl(doc.storage_path, 300);
-      if (data?.signedUrl) setPreviewUrl(data.signedUrl);
+      const { data } = await supabase.storage.from("uploads").createSignedUrl(doc.storage_path, 600);
+      if (data?.signedUrl) {
+        setPreviewUrl(data.signedUrl);
+        setPreviewName(doc.name);
+      }
     }
   };
 
   const handleDownload = async (doc: any) => {
     if (doc.storage_path) {
       const { data } = await supabase.storage.from("uploads").createSignedUrl(doc.storage_path, 300);
-      if (data?.signedUrl) { const a = document.createElement("a"); a.href = data.signedUrl; a.download = doc.name; a.click(); }
+      if (data?.signedUrl) {
+        const a = document.createElement("a");
+        a.href = data.signedUrl;
+        a.download = doc.name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
     }
   };
 
   const handlePrint = async (doc: any) => {
     if (doc.storage_path) {
       const { data } = await supabase.storage.from("uploads").createSignedUrl(doc.storage_path, 300);
-      if (data?.signedUrl) { const w = window.open(data.signedUrl, "_blank"); w?.addEventListener("load", () => w.print()); }
+      if (data?.signedUrl) {
+        const w = window.open(data.signedUrl, "_blank");
+        if (w) setTimeout(() => w.print(), 1500);
+      }
+    }
+  };
+
+  const handleShare = async (doc: any) => {
+    if (doc.storage_path) {
+      const { data } = await supabase.storage.from("uploads").createSignedUrl(doc.storage_path, 86400);
+      if (data?.signedUrl) {
+        await navigator.clipboard.writeText(data.signedUrl);
+        toast.success("Link copiado (válido 24h)");
+      }
     }
   };
 
@@ -113,11 +260,32 @@ export default function FleetDocumentsModule() {
               {Object.entries(entityTypeLabels).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Button variant="outline" size="sm" onClick={() => setShowFolderDialog(true)}>
+            <FolderPlus className="h-4 w-4 mr-1" /> Nova Pasta
+          </Button>
           <Button size="sm" onClick={() => setUploadOpen(true)}>
             <Upload className="h-4 w-4 mr-1" /> Enviar
           </Button>
         </div>
       </div>
+
+      {/* Breadcrumb */}
+      {folderPath.length > 1 && (
+        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+          {folderPath.map((p, i) => (
+            <span key={i} className="flex items-center gap-1">
+              {i > 0 && <span>/</span>}
+              <button
+                onClick={() => navigateToPath(i)}
+                className={`hover:text-foreground transition-colors ${i === folderPath.length - 1 ? "text-foreground font-medium" : ""}`}
+              >
+                {i === 0 ? <Folder className="h-3 w-3 inline mr-0.5" /> : null}
+                {p.name}
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
 
       <Card>
         <CardContent className="p-0">
@@ -132,21 +300,122 @@ export default function FleetDocumentsModule() {
               </TableRow>
             </TableHeader>
             <TableBody>
+              {/* Back button */}
+              {parentId && (
+                <TableRow className="cursor-pointer hover:bg-muted/50" onClick={() => navigateToPath(folderPath.length - 2)}>
+                  <TableCell className="flex items-center gap-2" colSpan={5}>
+                    <ArrowLeft className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">Voltar</span>
+                  </TableCell>
+                </TableRow>
+              )}
+
+              {/* Folders */}
+              {folders.map((d: any) => (
+                <TableRow key={d.id} className="cursor-pointer hover:bg-muted/50">
+                  <TableCell className="flex items-center gap-2" onClick={() => navigateTo(d)}>
+                    <FolderOpen className="h-4 w-4 text-amber-500" />
+                    {renamingId === d.id ? (
+                      <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                        <Input value={renameValue} onChange={e => setRenameValue(e.target.value)}
+                          className="h-6 text-xs w-40" autoFocus onKeyDown={e => { if (e.key === "Enter") renameMutation.mutate({ id: d.id, name: renameValue }); }} />
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => renameMutation.mutate({ id: d.id, name: renameValue })}><Check className="h-3 w-3" /></Button>
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setRenamingId(null)}><X className="h-3 w-3" /></Button>
+                      </div>
+                    ) : (
+                      <span className="font-medium text-sm">{d.name}</span>
+                    )}
+                  </TableCell>
+                  <TableCell><Badge variant="outline" className="text-[10px]">Pasta</Badge></TableCell>
+                  <TableCell className="text-xs">—</TableCell>
+                  <TableCell className="text-xs">{new Date(d.created_at).toLocaleDateString()}</TableCell>
+                  <TableCell className="text-right" onClick={e => e.stopPropagation()}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon"><MoreHorizontal className="h-3.5 w-3.5" /></Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => { setRenamingId(d.id); setRenameValue(d.name); }}>
+                          <Pencil className="h-3.5 w-3.5 mr-2" /> Renomear
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="text-destructive" onClick={() => remove.mutate(d)}>
+                          <Trash2 className="h-3.5 w-3.5 mr-2" /> Eliminar
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))}
+
+              {/* Files */}
               {isLoading ? (
                 <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
-              ) : filtered.length === 0 ? (
+              ) : filtered.length === 0 && folders.length === 0 ? (
                 <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Nenhum documento</TableCell></TableRow>
               ) : filtered.map((d: any) => (
                 <TableRow key={d.id}>
-                  <TableCell className="flex items-center gap-2"><FileText className="h-4 w-4 text-muted-foreground" />{d.name}</TableCell>
-                  <TableCell><Badge variant="outline" className="text-[10px]">{entityTypeLabels[d.entity_type] || d.entity_type}</Badge></TableCell>
+                  <TableCell className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                    {renamingId === d.id ? (
+                      <div className="flex items-center gap-1">
+                        <Input value={renameValue} onChange={e => setRenameValue(e.target.value)}
+                          className="h-6 text-xs w-40" autoFocus onKeyDown={e => { if (e.key === "Enter") renameMutation.mutate({ id: d.id, name: renameValue }); }} />
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => renameMutation.mutate({ id: d.id, name: renameValue })}><Check className="h-3 w-3" /></Button>
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setRenamingId(null)}><X className="h-3 w-3" /></Button>
+                      </div>
+                    ) : (
+                      <span className="text-sm">{d.name}</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {editTypeId === d.id ? (
+                      <div className="flex items-center gap-1">
+                        <Select value={editTypeValue} onValueChange={v => { setEditTypeValue(v); editTypeMutation.mutate({ id: d.id, entity_type: v }); }}>
+                          <SelectTrigger className="h-6 text-[10px] w-36"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(entityTypeLabels).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditTypeId(null)}><X className="h-3 w-3" /></Button>
+                      </div>
+                    ) : (
+                      <Badge variant="outline" className="text-[10px] cursor-pointer hover:bg-muted"
+                        onClick={() => { setEditTypeId(d.id); setEditTypeValue(d.entity_type || "vehicle_document"); }}>
+                        {entityTypeLabels[d.entity_type] || d.entity_type}
+                      </Badge>
+                    )}
+                  </TableCell>
                   <TableCell className="text-xs">{formatSize(d.size_bytes)}</TableCell>
                   <TableCell className="text-xs">{new Date(d.created_at).toLocaleDateString()}</TableCell>
-                  <TableCell className="text-right space-x-1">
-                    <Button variant="ghost" size="icon" onClick={() => handlePreview(d)}><Eye className="h-3.5 w-3.5" /></Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDownload(d)}><Download className="h-3.5 w-3.5" /></Button>
-                    <Button variant="ghost" size="icon" onClick={() => handlePrint(d)}><Printer className="h-3.5 w-3.5" /></Button>
-                    <Button variant="ghost" size="icon" onClick={() => remove.mutate(d)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
+                  <TableCell className="text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon"><MoreHorizontal className="h-3.5 w-3.5" /></Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handlePreview(d)}>
+                          <Eye className="h-3.5 w-3.5 mr-2" /> Visualizar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleDownload(d)}>
+                          <Download className="h-3.5 w-3.5 mr-2" /> Descarregar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handlePrint(d)}>
+                          <Printer className="h-3.5 w-3.5 mr-2" /> Imprimir
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleShare(d)}>
+                          <Share2 className="h-3.5 w-3.5 mr-2" /> Partilhar Link
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => { setRenamingId(d.id); setRenameValue(d.name); }}>
+                          <Pencil className="h-3.5 w-3.5 mr-2" /> Renomear
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={async () => { setMoveDoc(d); await loadMoveFolders(); }}>
+                          <Folder className="h-3.5 w-3.5 mr-2" /> Mover
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="text-destructive" onClick={() => remove.mutate(d)}>
+                          <Trash2 className="h-3.5 w-3.5 mr-2" /> Eliminar
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))}
@@ -154,6 +423,24 @@ export default function FleetDocumentsModule() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Create Folder Dialog */}
+      <Dialog open={showFolderDialog} onOpenChange={setShowFolderDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nova Pasta</DialogTitle>
+            <DialogDescription>Criar uma pasta para organizar documentos.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div><Label>Nome da pasta</Label><Input value={newFolderName} onChange={e => setNewFolderName(e.target.value)} placeholder="Ex: Seguros 2025"
+              onKeyDown={e => { if (e.key === "Enter" && newFolderName.trim()) createFolder.mutate(newFolderName.trim()); }} /></div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setShowFolderDialog(false)}>Cancelar</Button>
+            <Button onClick={() => createFolder.mutate(newFolderName.trim())} disabled={!newFolderName.trim()}>Criar</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Upload Dialog */}
       <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
@@ -180,12 +467,32 @@ export default function FleetDocumentsModule() {
         </DialogContent>
       </Dialog>
 
+      {/* Move Dialog */}
+      <Dialog open={!!moveDoc} onOpenChange={() => setMoveDoc(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mover "{moveDoc?.name}"</DialogTitle>
+            <DialogDescription>Selecione a pasta de destino.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 max-h-60 overflow-y-auto">
+            <Button variant="outline" className="w-full justify-start" onClick={() => moveMutation.mutate({ id: moveDoc?.id, targetParentId: null })}>
+              <Folder className="h-4 w-4 mr-2" /> Raiz
+            </Button>
+            {moveFolders.filter(f => f.id !== moveDoc?.id).map(f => (
+              <Button key={f.id} variant="outline" className="w-full justify-start" onClick={() => moveMutation.mutate({ id: moveDoc?.id, targetParentId: f.id })}>
+                <FolderOpen className="h-4 w-4 mr-2 text-amber-500" /> {f.name}
+              </Button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Preview Dialog */}
       <Dialog open={!!previewUrl} onOpenChange={() => setPreviewUrl(null)}>
         <DialogContent className="max-w-4xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>Pré-visualização</DialogTitle>
-            <DialogDescription>Documento</DialogDescription>
+            <DialogDescription>{previewName}</DialogDescription>
           </DialogHeader>
           {previewUrl && <iframe src={previewUrl} className="w-full h-[70vh] rounded border" />}
         </DialogContent>

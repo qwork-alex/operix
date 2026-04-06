@@ -17,6 +17,7 @@ serve(async (req) => {
 
     let systemPrompt: string;
     let toolDef: any;
+    let toolName: string;
 
     if (documentType === "vehicle") {
       systemPrompt = `You are a document extraction assistant for a fleet management system.
@@ -33,7 +34,7 @@ RULES:
 - For fuel_type: look for field P.3 (type de carburant) — map to: diesel, gasoline, electric, hybrid
 - For vehicle_type: look for field J (catégorie) — map to: private or utility
 - For power: look for field P.2 (puissance nette maximale en kW) or field P.1
-- Be honest about confidence. If handwritten or blurry, set confidence to low.`;
+- Be honest about confidence.`;
 
       toolDef = {
         type: "function",
@@ -69,6 +70,50 @@ RULES:
           },
         },
       };
+      toolName = "extract_vehicle_data";
+    } else if (documentType === "fuel_receipt") {
+      systemPrompt = `You are a document extraction assistant for a fleet management system.
+Extract fuel receipt data from this document (ticket de caisse, reçu de carburant, fuel receipt, factura combustível).
+
+RULES:
+- Extract exactly the fields requested. Return null for any field you cannot read.
+- liters: total litres of fuel
+- total_cost: total amount paid in euros
+- price_per_liter: price per litre in euros
+- date: date of the receipt in YYYY-MM-DD format
+- station_name: name of the fuel station if visible
+- If you can calculate price_per_liter from total_cost/liters, do so.
+- Be honest about confidence.`;
+
+      toolDef = {
+        type: "function",
+        function: {
+          name: "extract_fuel_receipt",
+          description: "Extract structured fuel receipt data",
+          parameters: {
+            type: "object",
+            properties: {
+              liters: { type: "number" },
+              total_cost: { type: "number" },
+              price_per_liter: { type: "number" },
+              date: { type: "string" },
+              station_name: { type: "string" },
+              confidence: {
+                type: "object",
+                properties: {
+                  liters: { type: "string", enum: ["high", "medium", "low"] },
+                  total_cost: { type: "string", enum: ["high", "medium", "low"] },
+                  price_per_liter: { type: "string", enum: ["high", "medium", "low"] },
+                  date: { type: "string", enum: ["high", "medium", "low"] },
+                },
+              },
+              notes: { type: "string" },
+            },
+            required: ["confidence"],
+          },
+        },
+      };
+      toolName = "extract_fuel_receipt";
     } else {
       // Driver license
       systemPrompt = `You are a document extraction assistant for a fleet management system.
@@ -112,9 +157,8 @@ RULES:
           },
         },
       };
+      toolName = "extract_driver_data";
     }
-
-    const toolName = documentType === "vehicle" ? "extract_vehicle_data" : "extract_driver_data";
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -129,7 +173,7 @@ RULES:
           {
             role: "user",
             content: [
-              { type: "text", text: `Extract data from this ${documentType === "vehicle" ? "vehicle registration" : "driver's license"} document.` },
+              { type: "text", text: `Extract data from this ${documentType === "vehicle" ? "vehicle registration" : documentType === "fuel_receipt" ? "fuel receipt" : "driver's license"} document.` },
               { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
             ],
           },
@@ -145,6 +189,11 @@ RULES:
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again shortly." }), {
           status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (response.status === 402) {
+        return new Response(JSON.stringify({ error: "Payment required. Please add credits." }), {
+          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       throw new Error(`AI gateway error: ${response.status}`);
