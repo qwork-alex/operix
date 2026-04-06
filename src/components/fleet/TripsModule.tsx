@@ -954,7 +954,7 @@ export default function TripsModule() {
                       <MapPin className="h-4 w-4 text-primary shrink-0" />
                       <span className="text-xs font-semibold">{pt.label}</span>
                       {i > 0 && pt.distance_from_previous > 0 && (
-                        <span className="text-[10px] text-green-600 dark:text-green-400 flex items-center gap-0.5 bg-green-500/10 px-1.5 py-0.5 rounded">
+                        <span className="text-[10px] text-primary flex items-center gap-0.5 bg-primary/10 px-1.5 py-0.5 rounded">
                           <ArrowRight className="h-2.5 w-2.5" />
                           {pt.distance_from_previous.toFixed(1)} km · {Math.round(pt.duration_from_previous)} min
                         </span>
@@ -1035,7 +1035,6 @@ export default function TripsModule() {
               {isActiveSession && (
                 <Button
                   variant="default"
-                  className="bg-green-600 hover:bg-green-700"
                   onClick={() => {
                     const kmEnd = form.km_end ? parseFloat(form.km_end) : null;
                     finalizeMutation.mutate({ id: activeTripId!, km_end: kmEnd });
