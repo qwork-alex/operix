@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -34,7 +34,7 @@ interface TripForm {
   notes: string;
 }
 
-const STORAGE_KEY = "fleet_active_trip_session";
+const STORAGE_KEY = "fleet_active_trips"; // stores array of active trip sessions
 
 const makePoint = (label: string): TripPoint => ({
   label, number: "", street: "", postal_code: "", city: "", country: "Portugal", latitude: "", longitude: "",
@@ -53,6 +53,40 @@ function haversine(lat1: number, lon1: number, lat2: number, lon2: number): numb
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+/* ─── Session storage helpers (multi-trip) ─── */
+interface TripSession {
+  tripId: string;
+  vehicleId: string;
+  form: TripForm;
+  points: TripPoint[];
+  ts: number;
+}
+
+function loadSessions(): TripSession[] {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch { return []; }
+}
+
+function saveSessionToStorage(sessions: TripSession[]) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+}
+
+function upsertSession(tripId: string, vehicleId: string, form: TripForm, points: TripPoint[]) {
+  const sessions = loadSessions();
+  const idx = sessions.findIndex(s => s.tripId === tripId);
+  const entry: TripSession = { tripId, vehicleId, form, points, ts: Date.now() };
+  if (idx >= 0) sessions[idx] = entry;
+  else sessions.push(entry);
+  saveSessionToStorage(sessions);
+}
+
+function removeSession(tripId: string) {
+  const sessions = loadSessions().filter(s => s.tripId !== tripId);
+  saveSessionToStorage(sessions);
+}
+
 /* ─── Component ─── */
 export default function TripsModule() {
   const qc = useQueryClient();
@@ -60,9 +94,9 @@ export default function TripsModule() {
   const [form, setForm] = useState<TripForm>(defaultForm());
   const [points, setPoints] = useState<TripPoint[]>([makePoint("Ponto de Partida")]);
   const [gpsLoading, setGpsLoading] = useState<number | null>(null);
-  const [resumingTripId, setResumingTripId] = useState<string | null>(null);
+  const [activeTripId, setActiveTripId] = useState<string | null>(null);
 
-  // Complete trip mini-dialog
+  // Quick complete dialog
   const [completeOpen, setCompleteOpen] = useState(false);
   const [completeTripId, setCompleteTripId] = useState("");
   const [completeKm, setCompleteKm] = useState("");
@@ -92,6 +126,8 @@ export default function TripsModule() {
     },
   });
 
+  const activeTrips = trips.filter((t: any) => t.status === "in_progress");
+
   /* ─── Helpers ─── */
   const getVehicleLabel = (id: string) => {
     const v = vehicles.find((x: any) => x.id === id);
@@ -102,42 +138,28 @@ export default function TripsModule() {
     return d ? d.full_name : "—";
   };
 
-  /* ─── Persist form to localStorage on every change ─── */
-  const saveSession = useCallback((f: TripForm, p: TripPoint[], tripId: string | null) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ form: f, points: p, tripId, ts: Date.now() }));
-  }, []);
-
-  // Auto-save on form/points change
+  /* ─── Auto-save session to localStorage ─── */
   useEffect(() => {
-    if (open || resumingTripId) {
-      saveSession(form, points, resumingTripId);
+    if (open && activeTripId) {
+      upsertSession(activeTripId, form.vehicle_id, form, points);
     }
-  }, [form, points, open, resumingTripId, saveSession]);
-
-  /* ─── Restore session on mount ─── */
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return;
-    try {
-      const session = JSON.parse(stored);
-      if (session.tripId) {
-        // There's an active trip in the DB — just set the resuming ID
-        setResumingTripId(session.tripId);
-        setForm(session.form || defaultForm());
-        setPoints(session.points || [makePoint("Ponto de Partida")]);
-      }
-    } catch { /* ignore */ }
-  }, []);
+  }, [form, points, open, activeTripId]);
 
   /* ─── Vehicle change auto-selects assigned driver ─── */
   const onVehicleChange = (vid: string) => {
+    // Check if vehicle already has an active trip
+    const existingTrip = activeTrips.find((t: any) => t.vehicle_id === vid);
+    if (existingTrip && !activeTripId) {
+      toast.error(`Este veículo já tem um trajeto ativo (${getDriverName(existingTrip.driver_id)}). Finalize-o primeiro ou selecione outro veículo.`);
+      return;
+    }
     const assignment = assignments.find((a: any) => a.vehicle_id === vid);
     setForm(p => ({ ...p, vehicle_id: vid, driver_id: assignment?.driver_id || "" }));
   };
 
   /* ─── GPS + Reverse Geocoding ─── */
   const getGPS = useCallback(async (i: number) => {
-    if (!navigator.geolocation) { toast.error("GPS indisponível"); return; }
+    if (!navigator.geolocation) { toast.error("GPS indisponível neste dispositivo"); return; }
     setGpsLoading(i);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
@@ -165,13 +187,16 @@ export default function TripsModule() {
         }
         setGpsLoading(null);
       },
-      () => { toast.error("Erro ao obter localização GPS"); setGpsLoading(null); },
+      (err) => {
+        const msg = err.code === 1 ? "Permissão GPS negada" : err.code === 2 ? "GPS indisponível" : "Tempo limite GPS esgotado";
+        toast.error(msg);
+        setGpsLoading(null);
+      },
     );
   }, []);
 
   /* ─── Point management ─── */
   const addIntermediatePoint = () => {
-    // Insert before last point if it's "Destino Final", otherwise just append
     const lastIdx = points.length - 1;
     const isLastFinal = points[lastIdx]?.label === "Destino Final";
     const newLabel = `Ponto ${points.filter(p => p.label.startsWith("Ponto ")).length + 1}`;
@@ -214,9 +239,12 @@ export default function TripsModule() {
     mutationFn: async () => {
       const kmStart = parseFloat(form.km_start);
       if (isNaN(kmStart)) throw new Error("KM início é obrigatório");
+      if (!form.vehicle_id) throw new Error("Selecione um veículo");
+      if (!form.driver_id) throw new Error("Selecione um condutor");
 
-      const hasAssignment = assignments.some((a: any) => a.vehicle_id === form.vehicle_id && a.driver_id === form.driver_id);
-      if (!hasAssignment) throw new Error("O condutor não está atribuído a este veículo");
+      // Check no duplicate active trip for same vehicle
+      const existingActive = activeTrips.find((t: any) => t.vehicle_id === form.vehicle_id);
+      if (existingActive) throw new Error(`Veículo já tem trajeto ativo. Finalize-o primeiro.`);
 
       const { data: trip, error } = await supabase.from("fleet_trips").insert({
         vehicle_id: form.vehicle_id,
@@ -231,7 +259,7 @@ export default function TripsModule() {
       if (error) throw error;
 
       const tripId = (trip as any).id;
-      setResumingTripId(tripId);
+      setActiveTripId(tripId);
 
       // Save initial points
       const validPoints = points.filter(p => p.street || p.city);
@@ -248,31 +276,47 @@ export default function TripsModule() {
         await supabase.from("fleet_trip_points").insert(pointRows as any);
       }
 
-      // Persist session
-      saveSession(form, points, tripId);
+      upsertSession(tripId, form.vehicle_id, form, points);
       return tripId;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["fleet_trips"] });
       toast.success("Trajeto iniciado com sucesso");
-      // Don't close dialog — trip stays active
     },
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e) => toast.error(`Erro ao iniciar trajeto: ${(e as Error).message}`),
   });
 
   /* ─── Finalize trip ─── */
   const finalizeMutation = useMutation({
-    mutationFn: async ({ id, km_end }: { id: string; km_end: number }) => {
+    mutationFn: async ({ id, km_end }: { id: string; km_end: number | null }) => {
       const trip = trips.find((t: any) => t.id === id);
-      if (!trip) throw new Error("Trajeto não encontrado");
+      if (!trip) throw new Error("Trajeto não encontrado na base de dados");
       const kmStart = Number(trip.km_start);
-      if (km_end <= kmStart) throw new Error("KM fim deve ser maior que KM início");
-      const totalDist = km_end - kmStart;
+
+      let finalKm = km_end;
+      let totalDist: number;
+
+      if (finalKm === null || isNaN(finalKm)) {
+        // Auto-estimate from KM start + GPS distance
+        if (totalGpsDistance > 0) {
+          finalKm = Math.round(kmStart + totalGpsDistance);
+          totalDist = totalGpsDistance;
+        } else {
+          // No GPS data and no KM end — just mark completed with 0 distance
+          finalKm = kmStart;
+          totalDist = 0;
+        }
+      } else {
+        // Validate consistency
+        if (finalKm < kmStart) {
+          throw new Error(`KM fim (${finalKm}) não pode ser inferior ao KM início (${kmStart})`);
+        }
+        totalDist = finalKm - kmStart;
+      }
 
       // Save any remaining points
       const validPoints = points.filter(p => p.street || p.city);
-      if (validPoints.length > 0 && resumingTripId === id) {
-        // Delete old points and re-insert
+      if (validPoints.length > 0 && activeTripId === id) {
         await supabase.from("fleet_trip_points").delete().eq("trip_id", id);
         const pointRows = validPoints.map((p, i) => ({
           trip_id: id,
@@ -287,21 +331,22 @@ export default function TripsModule() {
       }
 
       const { error } = await supabase.from("fleet_trips").update({
-        km_end, status: "completed", total_distance: totalDist,
+        km_end: finalKm,
+        status: "completed",
+        total_distance: Math.round(totalDist * 10) / 10,
         notes: form.notes || null,
       } as any).eq("id", id);
       if (error) throw error;
 
-      // Clear session
-      localStorage.removeItem(STORAGE_KEY);
-      setResumingTripId(null);
+      removeSession(id);
+      setActiveTripId(null);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["fleet_trips"] });
       toast.success("Trajeto finalizado com sucesso");
       resetAndClose();
     },
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e) => toast.error(`Erro ao finalizar: ${(e as Error).message}`),
   });
 
   /* ─── Quick finalize from table ─── */
@@ -310,22 +355,20 @@ export default function TripsModule() {
       const trip = trips.find((t: any) => t.id === id);
       if (!trip) throw new Error("Trajeto não encontrado");
       const kmStart = Number(trip.km_start);
-      if (km_end <= kmStart) throw new Error("KM fim deve ser maior que KM início");
+      if (km_end < kmStart) throw new Error(`KM fim (${km_end}) não pode ser inferior ao KM início (${kmStart})`);
       const { error } = await supabase.from("fleet_trips").update({
         km_end, status: "completed", total_distance: km_end - kmStart,
       } as any).eq("id", id);
       if (error) throw error;
-      if (resumingTripId === id) {
-        localStorage.removeItem(STORAGE_KEY);
-        setResumingTripId(null);
-      }
+      removeSession(id);
+      if (activeTripId === id) setActiveTripId(null);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["fleet_trips"] });
       setCompleteOpen(false);
       toast.success("Trajeto finalizado");
     },
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e) => toast.error(`Erro ao finalizar: ${(e as Error).message}`),
   });
 
   const remove = useMutation({
@@ -333,10 +376,8 @@ export default function TripsModule() {
       await supabase.from("fleet_trip_points").delete().eq("trip_id", id);
       const { error } = await supabase.from("fleet_trips").delete().eq("id", id);
       if (error) throw error;
-      if (resumingTripId === id) {
-        localStorage.removeItem(STORAGE_KEY);
-        setResumingTripId(null);
-      }
+      removeSession(id);
+      if (activeTripId === id) setActiveTripId(null);
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["fleet_trips"] }); toast.success("Trajeto removido"); },
   });
@@ -345,87 +386,65 @@ export default function TripsModule() {
     setOpen(false);
     setForm(defaultForm());
     setPoints([makePoint("Ponto de Partida")]);
-    setResumingTripId(null);
+    setActiveTripId(null);
   };
 
-  /* ─── Quick Start ─── */
-  const quickStart = () => {
-    // Check if there's already an active trip
-    const activeTrip = trips.find((t: any) => t.status === "in_progress");
-    if (activeTrip || resumingTripId) {
-      // Resume it
-      const tripToResume = activeTrip || trips.find((t: any) => t.id === resumingTripId);
-      if (tripToResume) {
-        setForm({
-          vehicle_id: tripToResume.vehicle_id,
-          driver_id: tripToResume.driver_id,
-          date: tripToResume.date,
-          km_start: String(tripToResume.km_start),
-          km_end: tripToResume.km_end ? String(tripToResume.km_end) : "",
-          notes: tripToResume.notes || "",
-        });
-        setResumingTripId(tripToResume.id);
-        // Try to restore points from localStorage
-        try {
-          const stored = localStorage.getItem(STORAGE_KEY);
-          if (stored) {
-            const session = JSON.parse(stored);
-            if (session.tripId === tripToResume.id && session.points?.length) {
-              setPoints(session.points);
-            }
-          }
-        } catch { /* use defaults */ }
+  /* ─── Open / Resume trip ─── */
+  const openTripDialog = (tripId?: string) => {
+    if (tripId) {
+      // Resume existing trip
+      const trip = trips.find((t: any) => t.id === tripId);
+      if (!trip) return;
+      setForm({
+        vehicle_id: trip.vehicle_id,
+        driver_id: trip.driver_id,
+        date: trip.date,
+        km_start: String(trip.km_start),
+        km_end: trip.km_end ? String(trip.km_end) : "",
+        notes: trip.notes || "",
+      });
+      setActiveTripId(tripId);
+      // Restore points from localStorage
+      const sessions = loadSessions();
+      const session = sessions.find(s => s.tripId === tripId);
+      if (session?.points?.length) {
+        setPoints(session.points);
+      } else {
+        setPoints([makePoint("Ponto de Partida")]);
       }
-      setOpen(true);
-      return;
+    } else {
+      // New trip
+      const f = defaultForm();
+      if (assignments.length === 1) {
+        const a = assignments[0] as any;
+        f.vehicle_id = a.vehicle_id;
+        f.driver_id = a.driver_id;
+      }
+      setForm(f);
+      setPoints([makePoint("Ponto de Partida")]);
+      setActiveTripId(null);
     }
-
-    // Auto-fill if single assignment
-    const f = defaultForm();
-    if (assignments.length === 1) {
-      const a = assignments[0] as any;
-      f.vehicle_id = a.vehicle_id;
-      f.driver_id = a.driver_id;
-    }
-    setForm(f);
-    setPoints([makePoint("Ponto de Partida")]);
     setOpen(true);
   };
 
-  /* ─── Resume from global bar ─── */
-  const resumeTrip = useCallback(() => {
-    const activeTrip = trips.find((t: any) => t.status === "in_progress");
-    if (activeTrip) {
-      setForm({
-        vehicle_id: activeTrip.vehicle_id,
-        driver_id: activeTrip.driver_id,
-        date: activeTrip.date,
-        km_start: String(activeTrip.km_start),
-        km_end: "",
-        notes: activeTrip.notes || "",
-      });
-      setResumingTripId(activeTrip.id);
-      try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) {
-          const session = JSON.parse(stored);
-          if (session.tripId === activeTrip.id && session.points?.length) {
-            setPoints(session.points);
-          }
-        }
-      } catch { /* defaults */ }
-      setOpen(true);
-    }
-  }, [trips]);
-
-  // Expose resumeTrip for parent via window event
+  // Expose resume for parent via window event
   useEffect(() => {
-    const handler = () => resumeTrip();
+    const handler = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const tripId = customEvent.detail?.tripId;
+      if (tripId) {
+        openTripDialog(tripId);
+      } else {
+        // Resume first active trip
+        const first = trips.find((t: any) => t.status === "in_progress");
+        if (first) openTripDialog(first.id);
+      }
+    };
     window.addEventListener("fleet:resume-trip", handler);
     return () => window.removeEventListener("fleet:resume-trip", handler);
-  }, [resumeTrip]);
+  }, [trips, assignments]);
 
-  const isActiveSession = !!resumingTripId;
+  const isActiveSession = !!activeTripId;
 
   return (
     <div className="space-y-4">
@@ -434,9 +453,8 @@ export default function TripsModule() {
           <h2 className="text-base font-semibold">Trajetos</h2>
           <p className="text-xs text-muted-foreground">Registo de deslocações com pontos e quilometragem</p>
         </div>
-        <Button size="sm" onClick={quickStart}>
-          <Navigation className="h-4 w-4 mr-1" />
-          {resumingTripId || trips.some((t: any) => t.status === "in_progress") ? "Continuar Trajeto" : "Iniciar Trajeto"}
+        <Button size="sm" onClick={() => openTripDialog()}>
+          <Navigation className="h-4 w-4 mr-1" /> Iniciar Trajeto
         </Button>
       </div>
 
@@ -476,9 +494,14 @@ export default function TripsModule() {
                   </TableCell>
                   <TableCell className="text-right space-x-1">
                     {t.status === "in_progress" && (
-                      <Button variant="outline" size="sm" onClick={() => { setCompleteTripId(t.id); setCompleteKm(""); setCompleteOpen(true); }}>
-                        <CheckCircle className="h-3.5 w-3.5 mr-1" /> Finalizar
-                      </Button>
+                      <>
+                        <Button variant="outline" size="sm" onClick={() => openTripDialog(t.id)}>
+                          <Navigation className="h-3.5 w-3.5 mr-1" /> Continuar
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => { setCompleteTripId(t.id); setCompleteKm(""); setCompleteOpen(true); }}>
+                          <CheckCircle className="h-3.5 w-3.5 mr-1" /> Finalizar
+                        </Button>
+                      </>
                     )}
                     <Button variant="ghost" size="icon" onClick={() => remove.mutate(t.id)}>
                       <Trash2 className="h-3.5 w-3.5 text-destructive" />
@@ -565,7 +588,6 @@ export default function TripsModule() {
                     <div className="flex items-center gap-2 mb-2">
                       <MapPin className="h-4 w-4 text-primary shrink-0" />
                       <span className="text-xs font-semibold">{pt.label}</span>
-                      {/* Segment distance */}
                       {i > 0 && segmentDistances[i - 1] > 0 && (
                         <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
                           <ArrowRight className="h-2.5 w-2.5" />
@@ -608,7 +630,6 @@ export default function TripsModule() {
                 ))}
               </div>
 
-              {/* GPS total distance */}
               {totalGpsDistance > 0 && (
                 <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
                   <Navigation className="h-3 w-3" />
@@ -620,8 +641,13 @@ export default function TripsModule() {
             {/* 4. Final KM + Notes */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>KM Fim {isActiveSession ? "*" : "(opcional)"}</Label>
-                <Input type="number" value={form.km_end} onChange={e => setForm(p => ({ ...p, km_end: e.target.value }))} placeholder={isActiveSession ? "Obrigatório para finalizar" : "Deixar vazio se em curso"} />
+                <Label>KM Fim (opcional)</Label>
+                <Input
+                  type="number"
+                  value={form.km_end}
+                  onChange={e => setForm(p => ({ ...p, km_end: e.target.value }))}
+                  placeholder={totalGpsDistance > 0 ? `Auto: ~${Math.round(parseFloat(form.km_start || "0") + totalGpsDistance)}` : "Deixar vazio para auto-cálculo"}
+                />
               </div>
               <div>
                 <Label>Notas</Label>
@@ -658,9 +684,8 @@ export default function TripsModule() {
                   variant="default"
                   className="bg-green-600 hover:bg-green-700"
                   onClick={() => {
-                    const kmEnd = parseFloat(form.km_end);
-                    if (isNaN(kmEnd)) { toast.error("Insira o KM final para finalizar"); return; }
-                    finalizeMutation.mutate({ id: resumingTripId!, km_end: kmEnd });
+                    const kmEnd = form.km_end ? parseFloat(form.km_end) : null;
+                    finalizeMutation.mutate({ id: activeTripId!, km_end: kmEnd });
                   }}
                   disabled={finalizeMutation.isPending}
                 >
@@ -678,14 +703,14 @@ export default function TripsModule() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Finalizar Trajeto</DialogTitle>
-            <DialogDescription>Insira a quilometragem final para concluir.</DialogDescription>
+            <DialogDescription>Insira a quilometragem final para concluir. Deixe vazio para auto-cálculo.</DialogDescription>
           </DialogHeader>
-          <div><Label>KM Fim *</Label><Input type="number" value={completeKm} onChange={e => setCompleteKm(e.target.value)} /></div>
+          <div><Label>KM Fim</Label><Input type="number" value={completeKm} onChange={e => setCompleteKm(e.target.value)} placeholder="Opcional — auto-calcula se vazio" /></div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setCompleteOpen(false)}>Cancelar</Button>
             <Button
               onClick={() => quickFinalize.mutate({ id: completeTripId, km_end: parseFloat(completeKm) })}
-              disabled={!completeKm || quickFinalize.isPending}
+              disabled={quickFinalize.isPending}
             >
               {quickFinalize.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
               Finalizar

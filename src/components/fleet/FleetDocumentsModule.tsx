@@ -68,9 +68,9 @@ export default function FleetDocumentsModule() {
         q = q.is("parent_id", null);
       }
 
-      // Include folders + fleet files
       const { data, error } = await q;
       if (error) throw error;
+      // Scope isolation: only show fleet-scoped documents (by entity_type or folders created here)
       return (data || []).filter((d: any) =>
         d.type === "folder" || fleetEntityTypes.includes(d.entity_type)
       );

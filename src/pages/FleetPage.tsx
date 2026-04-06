@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/hooks/useLanguage";
@@ -28,7 +28,6 @@ export default function FleetPage() {
   const { formatCurrency } = useLanguage();
   const [activeTab, setActiveTab] = useState("vehicles");
 
-  // KPI data
   const { data: vehicles = [] } = useQuery({
     queryKey: ["fleet_vehicles"],
     queryFn: async () => { const { data } = await supabase.from("vehicles").select("*"); return data || []; },
@@ -54,8 +53,8 @@ export default function FleetPage() {
     queryFn: async () => { const { data } = await supabase.from("fleet_fuel_logs").select("*"); return (data || []) as any[]; },
   });
 
-  // Active trip detection
-  const activeTrip = trips.find((t: any) => t.status === "in_progress") || null;
+  // Multiple active trips
+  const activeTrips = trips.filter((t: any) => t.status === "in_progress");
 
   const getVehicleLabel = (id: string) => {
     const v = vehicles.find((x: any) => x.id === id);
@@ -89,14 +88,9 @@ export default function FleetPage() {
     { value: "reports", label: "Relatórios", icon: BarChart3 },
   ];
 
-  const handleResume = () => {
+  const handleResume = (tripId: string) => {
     setActiveTab("trips");
-    setTimeout(() => window.dispatchEvent(new Event("fleet:resume-trip")), 100);
-  };
-
-  const handleFinalize = () => {
-    setActiveTab("trips");
-    setTimeout(() => window.dispatchEvent(new Event("fleet:resume-trip")), 100);
+    setTimeout(() => window.dispatchEvent(new CustomEvent("fleet:resume-trip", { detail: { tripId } })), 100);
   };
 
   return (
@@ -112,26 +106,26 @@ export default function FleetPage() {
         </div>
       </div>
 
-      {/* Global Active Trip Bar */}
-      {activeTrip && (
-        <div className="sticky top-0 z-50 flex items-center gap-3 rounded-lg border border-green-500/30 bg-green-500/5 backdrop-blur-sm px-4 py-3 animate-fade-in shadow-sm">
+      {/* Global Active Trip Bar(s) — supports multiple */}
+      {activeTrips.map((trip: any) => (
+        <div key={trip.id} className="sticky top-0 z-50 flex items-center gap-3 rounded-lg border border-green-500/30 bg-green-500/5 backdrop-blur-sm px-4 py-3 animate-fade-in shadow-sm">
           <div className="flex items-center gap-2">
             <div className="h-2.5 w-2.5 rounded-full bg-green-500 animate-pulse" />
             <span className="text-sm font-semibold text-green-600 dark:text-green-400">Trajeto em andamento</span>
           </div>
           <span className="text-xs text-muted-foreground hidden sm:inline">
-            {getVehicleLabel(activeTrip.vehicle_id)} — {getDriverName(activeTrip.driver_id)} — KM: {Number(activeTrip.km_start).toLocaleString()}
+            {getVehicleLabel(trip.vehicle_id)} — {getDriverName(trip.driver_id)} — KM: {Number(trip.km_start).toLocaleString()}
           </span>
           <div className="ml-auto flex gap-2">
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleResume}>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleResume(trip.id)}>
               <Navigation className="h-3 w-3 mr-1" /> Continuar
             </Button>
-            <Button size="sm" variant="default" className="h-7 text-xs bg-green-600 hover:bg-green-700" onClick={handleFinalize}>
+            <Button size="sm" variant="default" className="h-7 text-xs bg-green-600 hover:bg-green-700" onClick={() => handleResume(trip.id)}>
               Finalizar
             </Button>
           </div>
         </div>
-      )}
+      ))}
 
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
