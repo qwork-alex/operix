@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Upload, Camera, ScanLine, Loader2, X } from "lucide-react";
+import { Upload, Camera, ScanLine, Loader2, X, SwitchCamera, Minus } from "lucide-react";
 
 interface DocumentCaptureProps {
   onFileReady: (file: File) => void;
@@ -10,12 +10,6 @@ interface DocumentCaptureProps {
   label?: string;
 }
 
-/**
- * Provides 3 distinct capture methods:
- * 1. File picker (images + PDF)
- * 2. Camera photo (native device camera via getUserMedia)
- * 3. Scan mode (continuous camera with manual capture)
- */
 export default function DocumentCapture({ onFileReady, disabled, extracting, label = "Importar dados do documento" }: DocumentCaptureProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -25,16 +19,24 @@ export default function DocumentCapture({ onFileReady, disabled, extracting, lab
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraMode, setCameraMode] = useState<"photo" | "scan">("photo");
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
 
-  // Start camera stream
-  const startCamera = useCallback(async (mode: "photo" | "scan") => {
+  const startCamera = useCallback(async (mode: "photo" | "scan", facing?: "environment" | "user") => {
     setCameraMode(mode);
     setCameraError(null);
     setCameraOpen(true);
 
+    const useFacing = facing || facingMode;
+
+    // Stop existing stream first
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } },
+        video: { facingMode: useFacing, width: { ideal: 1920 }, height: { ideal: 1080 } },
         audio: false,
       });
       streamRef.current = stream;
@@ -53,9 +55,16 @@ export default function DocumentCapture({ onFileReady, disabled, extracting, lab
         setCameraError(`Erro ao aceder à câmara: ${msg}`);
       }
     }
-  }, []);
+  }, [facingMode]);
 
-  // Stop camera stream
+  const toggleCamera = useCallback(async () => {
+    const newFacing = facingMode === "environment" ? "user" : "environment";
+    setFacingMode(newFacing);
+    if (cameraOpen) {
+      await startCamera(cameraMode, newFacing);
+    }
+  }, [facingMode, cameraOpen, cameraMode, startCamera]);
+
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop());
@@ -65,7 +74,6 @@ export default function DocumentCapture({ onFileReady, disabled, extracting, lab
     setCameraError(null);
   }, []);
 
-  // Capture frame from video
   const captureFrame = useCallback(() => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -87,7 +95,6 @@ export default function DocumentCapture({ onFileReady, disabled, extracting, lab
     }, "image/jpeg", 0.92);
   }, [cameraMode, onFileReady, stopCamera]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (streamRef.current) {
@@ -96,7 +103,6 @@ export default function DocumentCapture({ onFileReady, disabled, extracting, lab
     };
   }, []);
 
-  // Wire up video element when dialog opens
   useEffect(() => {
     if (cameraOpen && streamRef.current && videoRef.current) {
       videoRef.current.srcObject = streamRef.current;
@@ -138,7 +144,6 @@ export default function DocumentCapture({ onFileReady, disabled, extracting, lab
         )}
       </div>
 
-      {/* Hidden file input */}
       <input
         ref={fileInputRef}
         type="file"
@@ -151,7 +156,6 @@ export default function DocumentCapture({ onFileReady, disabled, extracting, lab
         }}
       />
 
-      {/* Camera Dialog */}
       <Dialog open={cameraOpen} onOpenChange={(o) => { if (!o) stopCamera(); }}>
         <DialogContent className="max-w-lg p-0 overflow-hidden">
           <DialogHeader className="p-4 pb-2">
@@ -181,7 +185,6 @@ export default function DocumentCapture({ onFileReady, disabled, extracting, lab
                   muted
                   className="w-full h-full object-cover"
                 />
-                {/* Scan overlay guide */}
                 {cameraMode === "scan" && (
                   <div className="absolute inset-8 border-2 border-white/40 rounded-lg pointer-events-none" />
                 )}
@@ -189,6 +192,10 @@ export default function DocumentCapture({ onFileReady, disabled, extracting, lab
               <div className="flex items-center justify-between p-4">
                 <Button variant="ghost" size="sm" onClick={stopCamera}>
                   <X className="h-4 w-4 mr-1" /> Fechar
+                </Button>
+                <Button variant="outline" size="sm" onClick={toggleCamera}>
+                  <SwitchCamera className="h-4 w-4 mr-1" />
+                  {facingMode === "environment" ? "Frontal" : "Traseira"}
                 </Button>
                 <Button onClick={captureFrame} disabled={extracting}>
                   <Camera className="h-4 w-4 mr-1" />
@@ -200,7 +207,6 @@ export default function DocumentCapture({ onFileReady, disabled, extracting, lab
         </DialogContent>
       </Dialog>
 
-      {/* Hidden canvas for frame capture */}
       <canvas ref={canvasRef} className="hidden" />
     </>
   );
