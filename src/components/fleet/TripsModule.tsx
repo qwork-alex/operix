@@ -377,13 +377,13 @@ export default function TripsModule() {
     onError: (e) => toast.error((e as Error).message),
   });
 
-  /* ─── Finalize trip ─── */
+  /* ─── Finalize trip (from dialog) ─── */
   const finalizeMutation = useMutation({
     mutationFn: async ({ id, km_end }: { id: string; km_end: number | null }) => {
       const trip = trips.find((t: any) => t.id === id);
       if (!trip) throw new Error("Trajeto não encontrado na base de dados");
 
-      // Save final points
+      // Save final points to DB first
       const validPoints = points.filter(p => p.street || p.city || p.latitude);
       if (validPoints.length > 0 && activeTripId === id) {
         await supabase.from("fleet_trip_points").delete().eq("trip_id", id);
@@ -401,27 +401,27 @@ export default function TripsModule() {
         await supabase.from("fleet_trip_points").insert(pointRows as any);
       }
 
-      // Calculate totals from API distances
-      const apiDist = points.reduce((s, pt) => s + (pt.distance_from_previous || 0), 0);
-      const apiDur = points.reduce((s, pt) => s + (pt.duration_from_previous || 0), 0);
+      // AUTO-CALCULATE all segments via ORS
+      toast.info("A calcular rotas automaticamente...");
+      const { totalDistance, totalDuration } = await calculateAllSegments(id);
+      console.log("Cálculo completo:", { totalDistance, totalDuration });
 
-      let totalDist = apiDist;
+      let finalDist = totalDistance;
       let finalKm = km_end;
       const kmStart = trip.km_start ? Number(trip.km_start) : null;
 
-      // If manual KM provided and API distance is 0, use manual
       if (finalKm !== null && !isNaN(finalKm) && kmStart !== null) {
         if (finalKm < kmStart) throw new Error(`KM fim (${finalKm}) < KM início (${kmStart})`);
-        if (totalDist === 0) totalDist = finalKm - kmStart;
-      } else if (totalDist > 0 && kmStart !== null) {
-        finalKm = Math.round(kmStart + totalDist);
+        if (finalDist === 0) finalDist = finalKm - kmStart;
+      } else if (finalDist > 0 && kmStart !== null) {
+        finalKm = Math.round(kmStart + finalDist);
       }
 
       const { error } = await supabase.from("fleet_trips").update({
         km_end: finalKm,
         status: "completed",
-        total_distance: Math.round((totalDist || 0) * 10) / 10,
-        total_duration: Math.round((apiDur || 0) * 10) / 10,
+        total_distance: finalDist,
+        total_duration: totalDuration,
         notes: form.notes || null,
       }).eq("id", id);
       if (error) throw new Error(`Falha ao finalizar: ${error.message}`);
@@ -443,32 +443,27 @@ export default function TripsModule() {
       const trip = trips.find((t: any) => t.id === id);
       if (!trip) throw new Error("Trajeto não encontrado");
 
-      // Fetch saved trip points for API distances
-      const { data: savedPoints } = await supabase
-        .from("fleet_trip_points")
-        .select("distance_from_previous, duration_from_previous")
-        .eq("trip_id", id)
-        .order("order_index");
+      // AUTO-CALCULATE all segments via ORS
+      toast.info("A calcular rotas automaticamente...");
+      const { totalDistance, totalDuration } = await calculateAllSegments(id);
+      console.log("Quick finalize - Cálculo completo:", { totalDistance, totalDuration });
 
-      const apiDist = (savedPoints || []).reduce((s: number, p: any) => s + Number(p.distance_from_previous || 0), 0);
-      const apiDur = (savedPoints || []).reduce((s: number, p: any) => s + Number(p.duration_from_previous || 0), 0);
-
-      let totalDist = apiDist;
+      let finalDist = totalDistance;
       let finalKm = km_end;
       const kmStart = trip.km_start ? Number(trip.km_start) : null;
 
       if (finalKm !== null && !isNaN(finalKm) && kmStart !== null) {
         if (finalKm < kmStart) throw new Error(`KM fim (${finalKm}) < KM início (${kmStart})`);
-        if (totalDist === 0) totalDist = finalKm - kmStart;
-      } else if (totalDist > 0 && kmStart !== null) {
-        finalKm = Math.round(kmStart + totalDist);
+        if (finalDist === 0) finalDist = finalKm - kmStart;
+      } else if (finalDist > 0 && kmStart !== null) {
+        finalKm = Math.round(kmStart + finalDist);
       }
 
       const { error } = await supabase.from("fleet_trips").update({
         km_end: finalKm,
         status: "completed",
-        total_distance: Math.round((totalDist || 0) * 10) / 10,
-        total_duration: Math.round((apiDur || 0) * 10) / 10,
+        total_distance: finalDist,
+        total_duration: totalDuration,
       }).eq("id", id);
       if (error) throw new Error(`Falha ao finalizar: ${error.message}`);
       removeSession(id);
