@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/hooks/useLanguage";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Car, Users, Route, Fuel, FileText, BarChart3, Link2, Navigation, AlertCircle } from "lucide-react";
+import { Car, Users, Route, Fuel, FileText, BarChart3, Link2, Navigation } from "lucide-react";
 
 import VehiclesModule from "@/components/fleet/VehiclesModule";
 import DriversModule from "@/components/fleet/DriversModule";
@@ -27,9 +27,6 @@ const TAB_COLORS: Record<string, string> = {
 export default function FleetPage() {
   const { formatCurrency } = useLanguage();
   const [activeTab, setActiveTab] = useState("vehicles");
-
-  // Active trip detection
-  const [activeTrip, setActiveTrip] = useState<any>(null);
 
   // KPI data
   const { data: vehicles = [] } = useQuery({
@@ -57,21 +54,17 @@ export default function FleetPage() {
     queryFn: async () => { const { data } = await supabase.from("fleet_fuel_logs").select("*"); return (data || []) as any[]; },
   });
 
-  // Check for active trip
-  useEffect(() => {
-    const inProgress = trips.find((t: any) => t.status === "in_progress");
-    if (inProgress) {
-      setActiveTrip(inProgress);
-    } else {
-      // Check localStorage for persisted active trip
-      const stored = localStorage.getItem("fleet_active_trip");
-      if (stored) {
-        try { setActiveTrip(JSON.parse(stored)); } catch { /* ignore */ }
-      } else {
-        setActiveTrip(null);
-      }
-    }
-  }, [trips]);
+  // Active trip detection
+  const activeTrip = trips.find((t: any) => t.status === "in_progress") || null;
+
+  const getVehicleLabel = (id: string) => {
+    const v = vehicles.find((x: any) => x.id === id);
+    return v ? `${v.brand || ""} ${v.model || ""} — ${v.license_plate}`.trim() : "";
+  };
+  const getDriverName = (id: string) => {
+    const d = drivers.find((x: any) => x.id === id);
+    return d ? (d as any).full_name : "";
+  };
 
   const totalKm = trips.reduce((s: number, t: any) => s + Number(t.total_distance || 0), 0);
   const totalFuelCost = fuelLogs.reduce((s: number, f: any) => s + Number(f.total_cost || 0), 0);
@@ -96,14 +89,14 @@ export default function FleetPage() {
     { value: "reports", label: "Relatórios", icon: BarChart3 },
   ];
 
-  const getVehicleLabel = (id: string) => {
-    const v = vehicles.find((x: any) => x.id === id);
-    return v ? `${v.brand || ""} ${v.model || ""} — ${v.license_plate}`.trim() : "";
+  const handleResume = () => {
+    setActiveTab("trips");
+    setTimeout(() => window.dispatchEvent(new Event("fleet:resume-trip")), 100);
   };
 
-  const getDriverName = (id: string) => {
-    const d = drivers.find((x: any) => x.id === id);
-    return d ? (d as any).full_name : "";
+  const handleFinalize = () => {
+    setActiveTab("trips");
+    setTimeout(() => window.dispatchEvent(new Event("fleet:resume-trip")), 100);
   };
 
   return (
@@ -119,21 +112,21 @@ export default function FleetPage() {
         </div>
       </div>
 
-      {/* Active Trip Bar */}
+      {/* Global Active Trip Bar */}
       {activeTrip && (
-        <div className="flex items-center gap-3 rounded-lg border border-green-500/30 bg-green-500/5 px-4 py-3 animate-fade-in">
+        <div className="sticky top-0 z-50 flex items-center gap-3 rounded-lg border border-green-500/30 bg-green-500/5 backdrop-blur-sm px-4 py-3 animate-fade-in shadow-sm">
           <div className="flex items-center gap-2">
             <div className="h-2.5 w-2.5 rounded-full bg-green-500 animate-pulse" />
             <span className="text-sm font-semibold text-green-600 dark:text-green-400">Trajeto em andamento</span>
           </div>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs text-muted-foreground hidden sm:inline">
             {getVehicleLabel(activeTrip.vehicle_id)} — {getDriverName(activeTrip.driver_id)} — KM: {Number(activeTrip.km_start).toLocaleString()}
           </span>
           <div className="ml-auto flex gap-2">
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setActiveTab("trips")}>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleResume}>
               <Navigation className="h-3 w-3 mr-1" /> Continuar
             </Button>
-            <Button size="sm" variant="default" className="h-7 text-xs bg-green-600 hover:bg-green-700" onClick={() => setActiveTab("trips")}>
+            <Button size="sm" variant="default" className="h-7 text-xs bg-green-600 hover:bg-green-700" onClick={handleFinalize}>
               Finalizar
             </Button>
           </div>
@@ -168,22 +161,14 @@ export default function FleetPage() {
                 className={`
                   relative flex-1 flex items-center justify-center gap-1.5 rounded-lg px-2 py-2.5
                   text-sm font-medium transition-all duration-300 ease-out
-                  ${isActive
-                    ? "text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground/70"
-                  }
+                  ${isActive ? "text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground/70"}
                 `}
-                style={isActive ? {
-                  backgroundColor: `color-mix(in srgb, ${color} 12%, hsl(var(--background)))`,
-                } : undefined}
+                style={isActive ? { backgroundColor: `color-mix(in srgb, ${color} 12%, hsl(var(--background)))` } : undefined}
               >
                 <tab.icon className="h-4 w-4" style={isActive ? { color } : undefined} />
                 <span className="hidden sm:inline">{tab.label}</span>
                 {isActive && (
-                  <span
-                    className="absolute bottom-0 left-1/4 right-1/4 h-0.5 rounded-full transition-all duration-300"
-                    style={{ backgroundColor: color }}
-                  />
+                  <span className="absolute bottom-0 left-1/4 right-1/4 h-0.5 rounded-full transition-all duration-300" style={{ backgroundColor: color }} />
                 )}
               </button>
             );

@@ -22,6 +22,8 @@ interface FuelForm {
 
 const emptyForm: FuelForm = { vehicle_id: "", date: new Date().toISOString().slice(0, 10), km_at_fuel: "", liters: "", total_cost: "", notes: "" };
 
+const ACTIVE_TRIP_KEY = "fleet_active_trip_session";
+
 export default function FuelLogsModule() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
