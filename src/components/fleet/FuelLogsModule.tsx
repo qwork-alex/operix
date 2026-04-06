@@ -9,12 +9,24 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Plus, Save, Trash2, Upload, Fuel, Loader2 } from "lucide-react";
+import { Plus, Save, Trash2, Pencil, Upload, Loader2 } from "lucide-react";
+
+interface FuelForm {
+  vehicle_id: string;
+  date: string;
+  km_at_fuel: string;
+  liters: string;
+  total_cost: string;
+  notes: string;
+}
+
+const emptyForm: FuelForm = { vehicle_id: "", date: new Date().toISOString().slice(0, 10), km_at_fuel: "", liters: "", total_cost: "", notes: "" };
 
 export default function FuelLogsModule() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ vehicle_id: "", date: new Date().toISOString().slice(0, 10), km_at_fuel: "", liters: "", total_cost: "", notes: "" });
+  const [editId, setEditId] = useState<string | null>(null);
+  const [form, setForm] = useState<FuelForm>(emptyForm);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
 
   const { data: vehicles = [] } = useQuery({
@@ -25,7 +37,7 @@ export default function FuelLogsModule() {
   const { data: fuelLogs = [], isLoading } = useQuery({
     queryKey: ["fleet_fuel_logs"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("fleet_fuel_logs" as any).select("*").order("date", { ascending: false });
+      const { data, error } = await supabase.from("fleet_fuel_logs").select("*").order("date", { ascending: false });
       if (error) throw error;
       return data as any[];
     },
@@ -49,8 +61,6 @@ export default function FuelLogsModule() {
         if (upErr) throw upErr;
         receiptPath = path;
 
-        // Also store in centralized documents
-        const { data: urlData } = await supabase.storage.from("uploads").createSignedUrl(path, 31536000);
         await supabase.from("documents").insert({
           name: receiptFile.name,
           type: "file",
@@ -61,34 +71,43 @@ export default function FuelLogsModule() {
         });
       }
 
-      const { error } = await supabase.from("fleet_fuel_logs" as any).insert({
+      const payload: any = {
         vehicle_id: form.vehicle_id,
         date: form.date,
         km_at_fuel: form.km_at_fuel ? parseFloat(form.km_at_fuel) : null,
         liters,
         total_cost: totalCost,
-        receipt_storage_path: receiptPath,
+        price_per_liter: liters > 0 ? totalCost / liters : null,
         notes: form.notes || null,
-      });
-      if (error) throw error;
+      };
 
-      // Sync to accounting
-      const vehicle = vehicles.find((v: any) => v.id === form.vehicle_id);
-      await supabase.from("financial_records").insert({
-        type: "expense",
-        source: "fleet",
-        category: "fuel",
-        amount: totalCost,
-        label: `Combustível — ${vehicle?.brand || ""} ${vehicle?.model || ""} ${vehicle?.license_plate || ""}`.trim(),
-        notes: `${liters}L @ ${form.km_at_fuel || "?"} km`,
-        status: "confirmed",
-      });
+      if (receiptPath) payload.receipt_storage_path = receiptPath;
+
+      if (editId) {
+        const { error } = await supabase.from("fleet_fuel_logs").update(payload).eq("id", editId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("fleet_fuel_logs").insert(payload);
+        if (error) throw error;
+
+        // Sync to accounting (only on new)
+        const vehicle = vehicles.find((v: any) => v.id === form.vehicle_id);
+        await supabase.from("financial_records").insert({
+          type: "expense",
+          source: "fleet",
+          category: "fuel",
+          amount: totalCost,
+          label: `Combustível — ${vehicle?.brand || ""} ${vehicle?.model || ""} ${vehicle?.license_plate || ""}`.trim(),
+          notes: `${liters}L @ ${form.km_at_fuel || "?"} km`,
+          status: "confirmed",
+        });
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["fleet_fuel_logs"] });
       qc.invalidateQueries({ queryKey: ["financial_records"] });
       closeDialog();
-      toast.success("Abastecimento registrado");
+      toast.success(editId ? "Abastecimento atualizado" : "Abastecimento registrado");
     },
     onError: (e) => toast.error((e as Error).message),
   });
@@ -96,7 +115,7 @@ export default function FuelLogsModule() {
   const remove = useMutation({
     mutationFn: async (log: any) => {
       if (log.receipt_storage_path) await supabase.storage.from("uploads").remove([log.receipt_storage_path]);
-      const { error } = await supabase.from("fleet_fuel_logs" as any).delete().eq("id", log.id);
+      const { error } = await supabase.from("fleet_fuel_logs").delete().eq("id", log.id);
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["fleet_fuel_logs"] }); toast.success("Removido"); },
@@ -104,8 +123,22 @@ export default function FuelLogsModule() {
 
   const closeDialog = () => {
     setOpen(false);
-    setForm({ vehicle_id: "", date: new Date().toISOString().slice(0, 10), km_at_fuel: "", liters: "", total_cost: "", notes: "" });
+    setEditId(null);
+    setForm(emptyForm);
     setReceiptFile(null);
+  };
+
+  const startEdit = (l: any) => {
+    setEditId(l.id);
+    setForm({
+      vehicle_id: l.vehicle_id || "",
+      date: l.date || new Date().toISOString().slice(0, 10),
+      km_at_fuel: l.km_at_fuel ? String(l.km_at_fuel) : "",
+      liters: l.liters ? String(l.liters) : "",
+      total_cost: l.total_cost ? String(l.total_cost) : "",
+      notes: l.notes || "",
+    });
+    setOpen(true);
   };
 
   const totalCost = fuelLogs.reduce((s: number, l: any) => s + Number(l.total_cost || 0), 0);
@@ -120,7 +153,7 @@ export default function FuelLogsModule() {
             Total: {totalLiters.toFixed(1)}L — {totalCost.toFixed(2)} €
           </p>
         </div>
-        <Button size="sm" onClick={() => setOpen(true)}>
+        <Button size="sm" onClick={() => { setForm(emptyForm); setEditId(null); setOpen(true); }}>
           <Plus className="h-4 w-4 mr-1" /> Novo Abastecimento
         </Button>
       </div>
@@ -155,9 +188,8 @@ export default function FuelLogsModule() {
                   <TableCell className="tabular-nums">{l.price_per_liter ? `${Number(l.price_per_liter).toFixed(3)} €` : "—"}</TableCell>
                   <TableCell>{l.receipt_storage_path ? "✓" : "—"}</TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => remove.mutate(l)}>
-                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => startEdit(l)}><Pencil className="h-3.5 w-3.5" /></Button>
+                    <Button variant="ghost" size="icon" onClick={() => remove.mutate(l)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -169,7 +201,7 @@ export default function FuelLogsModule() {
       <Dialog open={open} onOpenChange={(o) => { if (!o) closeDialog(); else setOpen(true); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Novo Abastecimento</DialogTitle>
+            <DialogTitle>{editId ? "Editar Abastecimento" : "Novo Abastecimento"}</DialogTitle>
             <DialogDescription>Registe um abastecimento de combustível.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -188,6 +220,9 @@ export default function FuelLogsModule() {
               <div><Label>Litros *</Label><Input type="number" step="0.01" value={form.liters} onChange={e => setForm(p => ({ ...p, liters: e.target.value }))} /></div>
               <div><Label>Custo Total (€) *</Label><Input type="number" step="0.01" value={form.total_cost} onChange={e => setForm(p => ({ ...p, total_cost: e.target.value }))} /></div>
             </div>
+            {form.liters && form.total_cost && parseFloat(form.liters) > 0 && (
+              <p className="text-xs text-muted-foreground">€/L calculado: {(parseFloat(form.total_cost) / parseFloat(form.liters)).toFixed(3)} €</p>
+            )}
             <div><Label>Notas</Label><Input value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} /></div>
             <div>
               <Label>Comprovante (opcional)</Label>

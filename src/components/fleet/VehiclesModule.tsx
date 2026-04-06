@@ -8,9 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Plus, Save, Trash2, Pencil, Car, Loader2 } from "lucide-react";
+import { Plus, Save, Trash2, Pencil, Loader2 } from "lucide-react";
 
 interface VehicleForm {
   license_plate: string;
@@ -29,18 +28,13 @@ const emptyForm: VehicleForm = {
   power: "", vin_number: "", first_registration_date: "", vehicle_type: "private",
 };
 
-const statusColors: Record<string, string> = {
-  available: "bg-green-500/10 text-green-500",
-  in_use: "bg-blue-500/10 text-blue-500",
-  maintenance: "bg-yellow-500/10 text-yellow-500",
-  inactive: "bg-muted text-muted-foreground",
-};
+const STATUS_CYCLE = ["available", "in_use", "maintenance", "inactive"] as const;
 
-const statusLabels: Record<string, string> = {
-  available: "Disponível",
-  in_use: "Em uso",
-  maintenance: "Manutenção",
-  inactive: "Inativo",
+const statusConfig: Record<string, { label: string; bg: string; text: string; ring: string }> = {
+  available: { label: "Disponível", bg: "bg-green-500/10", text: "text-green-600 dark:text-green-400", ring: "ring-green-500/30" },
+  in_use: { label: "Em uso", bg: "bg-blue-500/10", text: "text-blue-600 dark:text-blue-400", ring: "ring-blue-500/30" },
+  maintenance: { label: "Manutenção", bg: "bg-orange-500/10", text: "text-orange-600 dark:text-orange-400", ring: "ring-orange-500/30" },
+  inactive: { label: "Inativo", bg: "bg-muted", text: "text-foreground font-semibold", ring: "ring-border" },
 };
 
 export default function VehiclesModule() {
@@ -102,8 +96,15 @@ export default function VehiclesModule() {
       const { error } = await supabase.from("vehicles").update({ status } as any).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["fleet_vehicles"] }); toast.success("Status atualizado"); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["fleet_vehicles"] }); },
   });
+
+  const cycleStatus = (v: any) => {
+    const current = v.status || "available";
+    const idx = STATUS_CYCLE.indexOf(current as any);
+    const next = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
+    changeStatus.mutate({ id: v.id, status: next });
+  };
 
   const close = () => { setOpen(false); setEditId(null); setForm(emptyForm); };
 
@@ -152,32 +153,40 @@ export default function VehiclesModule() {
                 <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
               ) : vehicles.length === 0 ? (
                 <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum veículo registrado</TableCell></TableRow>
-              ) : vehicles.map((v: any) => (
-                <TableRow key={v.id}>
-                  <TableCell className="font-mono font-semibold">{v.license_plate}</TableCell>
-                  <TableCell>{v.brand} {v.model}</TableCell>
-                  <TableCell>{v.year || "—"}</TableCell>
-                  <TableCell className="capitalize">{v.fuel_type || "—"}</TableCell>
-                  <TableCell className="font-mono text-xs">{v.vin_number || "—"}</TableCell>
-                  <TableCell className="capitalize">{v.vehicle_type === "utility" ? "Utilitário" : "Privado"}</TableCell>
-                  <TableCell>
-                    <Select value={v.status || "available"} onValueChange={(s) => changeStatus.mutate({ id: v.id, status: s })}>
-                      <SelectTrigger className="h-7 w-28 text-xs">
-                        <Badge className={`${statusColors[v.status || "available"]} text-[10px]`}>
-                          {statusLabels[v.status || "available"]}
-                        </Badge>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(statusLabels).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => startEdit(v)}><Pencil className="h-3.5 w-3.5" /></Button>
-                    <Button variant="ghost" size="icon" onClick={() => remove.mutate(v.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+              ) : vehicles.map((v: any) => {
+                const st = statusConfig[v.status || "available"] || statusConfig.available;
+                return (
+                  <TableRow key={v.id}>
+                    <TableCell className="font-mono font-semibold">{v.license_plate}</TableCell>
+                    <TableCell>{v.brand} {v.model}</TableCell>
+                    <TableCell>{v.year || "—"}</TableCell>
+                    <TableCell className="capitalize">{v.fuel_type || "—"}</TableCell>
+                    <TableCell className="font-mono text-xs">{v.vin_number || "—"}</TableCell>
+                    <TableCell className="capitalize">{v.vehicle_type === "utility" ? "Utilitário" : "Privado"}</TableCell>
+                    <TableCell>
+                      <button
+                        onClick={() => cycleStatus(v)}
+                        className={`
+                          inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium
+                          ring-1 cursor-pointer transition-all duration-200 hover:scale-105 active:scale-95
+                          ${st.bg} ${st.text} ${st.ring}
+                        `}
+                      >
+                        <span className={`h-1.5 w-1.5 rounded-full mr-1.5 ${
+                          v.status === "available" ? "bg-green-500" :
+                          v.status === "in_use" ? "bg-blue-500" :
+                          v.status === "maintenance" ? "bg-orange-500" : "bg-muted-foreground"
+                        }`} />
+                        {st.label}
+                      </button>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="icon" onClick={() => startEdit(v)}><Pencil className="h-3.5 w-3.5" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => remove.mutate(v.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>

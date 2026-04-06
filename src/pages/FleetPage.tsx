@@ -1,10 +1,10 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/hooks/useLanguage";
 import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Car, Users, Route, Fuel, FileText, BarChart3, Link2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Car, Users, Route, Fuel, FileText, BarChart3, Link2, Navigation, AlertCircle } from "lucide-react";
 
 import VehiclesModule from "@/components/fleet/VehiclesModule";
 import DriversModule from "@/components/fleet/DriversModule";
@@ -14,9 +14,22 @@ import FuelLogsModule from "@/components/fleet/FuelLogsModule";
 import FleetDocumentsModule from "@/components/fleet/FleetDocumentsModule";
 import FleetReportsModule from "@/components/fleet/FleetReportsModule";
 
+const TAB_COLORS: Record<string, string> = {
+  vehicles: "hsl(220 70% 50%)",
+  drivers: "hsl(260 60% 55%)",
+  assignments: "hsl(180 60% 40%)",
+  trips: "hsl(140 55% 42%)",
+  fuel: "hsl(35 90% 50%)",
+  documents: "hsl(340 60% 50%)",
+  reports: "hsl(200 70% 50%)",
+};
+
 export default function FleetPage() {
   const { formatCurrency } = useLanguage();
   const [activeTab, setActiveTab] = useState("vehicles");
+
+  // Active trip detection
+  const [activeTrip, setActiveTrip] = useState<any>(null);
 
   // KPI data
   const { data: vehicles = [] } = useQuery({
@@ -26,23 +39,39 @@ export default function FleetPage() {
 
   const { data: drivers = [] } = useQuery({
     queryKey: ["fleet_drivers"],
-    queryFn: async () => { const { data } = await supabase.from("drivers" as any).select("*"); return (data || []) as any[]; },
+    queryFn: async () => { const { data } = await supabase.from("drivers").select("*"); return (data || []) as any[]; },
   });
 
   const { data: assignments = [] } = useQuery({
     queryKey: ["fleet_assignments"],
-    queryFn: async () => { const { data } = await supabase.from("vehicle_assignments" as any).select("*").eq("status", "em_uso"); return (data || []) as any[]; },
+    queryFn: async () => { const { data } = await supabase.from("vehicle_assignments").select("*").eq("status", "em_uso"); return (data || []) as any[]; },
   });
 
   const { data: trips = [] } = useQuery({
     queryKey: ["fleet_trips"],
-    queryFn: async () => { const { data } = await supabase.from("fleet_trips" as any).select("*"); return (data || []) as any[]; },
+    queryFn: async () => { const { data } = await supabase.from("fleet_trips").select("*"); return (data || []) as any[]; },
   });
 
   const { data: fuelLogs = [] } = useQuery({
     queryKey: ["fleet_fuel_logs"],
-    queryFn: async () => { const { data } = await supabase.from("fleet_fuel_logs" as any).select("*"); return (data || []) as any[]; },
+    queryFn: async () => { const { data } = await supabase.from("fleet_fuel_logs").select("*"); return (data || []) as any[]; },
   });
+
+  // Check for active trip
+  useEffect(() => {
+    const inProgress = trips.find((t: any) => t.status === "in_progress");
+    if (inProgress) {
+      setActiveTrip(inProgress);
+    } else {
+      // Check localStorage for persisted active trip
+      const stored = localStorage.getItem("fleet_active_trip");
+      if (stored) {
+        try { setActiveTrip(JSON.parse(stored)); } catch { /* ignore */ }
+      } else {
+        setActiveTrip(null);
+      }
+    }
+  }, [trips]);
 
   const totalKm = trips.reduce((s: number, t: any) => s + Number(t.total_distance || 0), 0);
   const totalFuelCost = fuelLogs.reduce((s: number, f: any) => s + Number(f.total_cost || 0), 0);
@@ -67,6 +96,16 @@ export default function FleetPage() {
     { value: "reports", label: "Relatórios", icon: BarChart3 },
   ];
 
+  const getVehicleLabel = (id: string) => {
+    const v = vehicles.find((x: any) => x.id === id);
+    return v ? `${v.brand || ""} ${v.model || ""} — ${v.license_plate}`.trim() : "";
+  };
+
+  const getDriverName = (id: string) => {
+    const d = drivers.find((x: any) => x.id === id);
+    return d ? (d as any).full_name : "";
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
@@ -79,6 +118,27 @@ export default function FleetPage() {
           <p className="text-xs text-muted-foreground">Registo • Operações • Inteligência</p>
         </div>
       </div>
+
+      {/* Active Trip Bar */}
+      {activeTrip && (
+        <div className="flex items-center gap-3 rounded-lg border border-green-500/30 bg-green-500/5 px-4 py-3 animate-fade-in">
+          <div className="flex items-center gap-2">
+            <div className="h-2.5 w-2.5 rounded-full bg-green-500 animate-pulse" />
+            <span className="text-sm font-semibold text-green-600 dark:text-green-400">Trajeto em andamento</span>
+          </div>
+          <span className="text-xs text-muted-foreground">
+            {getVehicleLabel(activeTrip.vehicle_id)} — {getDriverName(activeTrip.driver_id)} — KM: {Number(activeTrip.km_start).toLocaleString()}
+          </span>
+          <div className="ml-auto flex gap-2">
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setActiveTab("trips")}>
+              <Navigation className="h-3 w-3 mr-1" /> Continuar
+            </Button>
+            <Button size="sm" variant="default" className="h-7 text-xs bg-green-600 hover:bg-green-700" onClick={() => setActiveTab("trips")}>
+              Finalizar
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -96,24 +156,50 @@ export default function FleetPage() {
       </div>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="flex flex-wrap h-auto gap-1">
-          {tabs.map((tab) => (
-            <TabsTrigger key={tab.value} value={tab.value} className="text-xs gap-1">
-              <tab.icon className="h-3.5 w-3.5" />
-              {tab.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+      <div className="space-y-4">
+        <div className="flex w-full rounded-xl bg-muted/50 p-1.5 gap-1">
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.value;
+            const color = TAB_COLORS[tab.value];
+            return (
+              <button
+                key={tab.value}
+                onClick={() => setActiveTab(tab.value)}
+                className={`
+                  relative flex-1 flex items-center justify-center gap-1.5 rounded-lg px-2 py-2.5
+                  text-sm font-medium transition-all duration-300 ease-out
+                  ${isActive
+                    ? "text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground/70"
+                  }
+                `}
+                style={isActive ? {
+                  backgroundColor: `color-mix(in srgb, ${color} 12%, hsl(var(--background)))`,
+                } : undefined}
+              >
+                <tab.icon className="h-4 w-4" style={isActive ? { color } : undefined} />
+                <span className="hidden sm:inline">{tab.label}</span>
+                {isActive && (
+                  <span
+                    className="absolute bottom-0 left-1/4 right-1/4 h-0.5 rounded-full transition-all duration-300"
+                    style={{ backgroundColor: color }}
+                  />
+                )}
+              </button>
+            );
+          })}
+        </div>
 
-        <TabsContent value="vehicles"><VehiclesModule /></TabsContent>
-        <TabsContent value="drivers"><DriversModule /></TabsContent>
-        <TabsContent value="assignments"><AssignmentsModule /></TabsContent>
-        <TabsContent value="trips"><TripsModule /></TabsContent>
-        <TabsContent value="fuel"><FuelLogsModule /></TabsContent>
-        <TabsContent value="documents"><FleetDocumentsModule /></TabsContent>
-        <TabsContent value="reports"><FleetReportsModule /></TabsContent>
-      </Tabs>
+        <div className="mt-2">
+          {activeTab === "vehicles" && <VehiclesModule />}
+          {activeTab === "drivers" && <DriversModule />}
+          {activeTab === "assignments" && <AssignmentsModule />}
+          {activeTab === "trips" && <TripsModule />}
+          {activeTab === "fuel" && <FuelLogsModule />}
+          {activeTab === "documents" && <FleetDocumentsModule />}
+          {activeTab === "reports" && <FleetReportsModule />}
+        </div>
+      </div>
     </div>
   );
 }
