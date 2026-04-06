@@ -149,11 +149,30 @@ export default function FuelLogsModule() {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-base font-semibold">Combustível</h2>
-          <p className="text-xs text-muted-foreground">
-            Total: {totalLiters.toFixed(1)}L — {totalCost.toFixed(2)} €
-          </p>
+        <div className="flex items-center gap-3">
+          <div>
+            <h2 className="text-base font-semibold">Combustível</h2>
+            <p className="text-xs text-muted-foreground">
+              Total: {totalLiters.toFixed(1)}L — {totalCost.toFixed(2)} €
+            </p>
+          </div>
+          {/* Active trip indicator */}
+          {(() => {
+            try {
+              const stored = localStorage.getItem(ACTIVE_TRIP_KEY);
+              if (stored) {
+                const session = JSON.parse(stored);
+                if (session.tripId) {
+                  return (
+                    <span className="text-[10px] bg-green-500/10 text-green-600 px-2 py-0.5 rounded-full">
+                      🔗 Trajeto ativo — será vinculado automaticamente
+                    </span>
+                  );
+                }
+              }
+            } catch { /* ignore */ }
+            return null;
+          })()}
         </div>
         <Button size="sm" onClick={() => { setForm(emptyForm); setEditId(null); setOpen(true); }}>
           <Plus className="h-4 w-4 mr-1" /> Novo Abastecimento
