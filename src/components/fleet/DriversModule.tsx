@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Plus, Save, Trash2, Pencil, Loader2, Upload, Camera, ScanLine, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Plus, Save, Trash2, Pencil, Loader2, AlertTriangle, CheckCircle2 } from "lucide-react";
+import DocumentCapture from "./DocumentCapture";
 
 interface DriverForm {
   full_name: string;
@@ -84,8 +85,6 @@ export default function DriversModule() {
   const [extracting, setExtracting] = useState(false);
   const [confidence, setConfidence] = useState<Record<string, ConfidenceLevel>>({});
   const [ocrNotes, setOcrNotes] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const { data: drivers = [], isLoading } = useQuery({
     queryKey: ["fleet_drivers"],
@@ -121,7 +120,7 @@ export default function DriversModule() {
       closeDialog();
       toast.success(editId ? "Condutor atualizado" : "Condutor adicionado");
     },
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e) => toast.error(`Erro ao salvar condutor: ${(e as Error).message}`),
   });
 
   const remove = useMutation({
@@ -130,7 +129,7 @@ export default function DriversModule() {
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["fleet_drivers"] }); toast.success("Removido"); },
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e) => toast.error(`Erro ao remover condutor: ${(e as Error).message}`),
   });
 
   const closeDialog = () => {
@@ -159,15 +158,15 @@ export default function DriversModule() {
   const isExpired = (d: string) => d && new Date(d) < new Date();
 
   /* ─── OCR Extraction ─── */
-  const handleFileUpload = async (file: File) => {
+  const handleFileReady = async (file: File) => {
     if (!file) return;
     setExtracting(true);
     setOcrNotes(null);
     try {
-      const reader = new FileReader();
       const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
         reader.onload = () => resolve((reader.result as string).split(",")[1]);
-        reader.onerror = reject;
+        reader.onerror = () => reject(new Error("Falha ao ler o ficheiro"));
         reader.readAsDataURL(file);
       });
 
@@ -175,23 +174,32 @@ export default function DriversModule() {
         body: { imageBase64: base64, mimeType: file.type, documentType: "driver" },
       });
 
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      if (error) {
+        const errMsg = error.message || "";
+        if (errMsg.includes("non-2xx")) {
+          toast.error("Serviço de extração indisponível. Preencha os campos manualmente.");
+        } else {
+          toast.error(`Erro na extração: ${errMsg}. Preencha manualmente.`);
+        }
+        return;
+      }
 
-      // Pre-fill — never overwrite user-entered data
+      if (data?.error) {
+        toast.warning(`Extração parcial: ${data.error}. Verifique os dados.`);
+      }
+
       setForm(prev => ({
         ...prev,
-        full_name: data.full_name || prev.full_name,
-        birth_date: data.birth_date || prev.birth_date,
-        license_number: data.license_number || prev.license_number,
-        license_category: data.license_category || prev.license_category,
-        license_expiry_date: data.license_expiry_date || prev.license_expiry_date,
+        full_name: data?.full_name || prev.full_name,
+        birth_date: data?.birth_date || prev.birth_date,
+        license_number: data?.license_number || prev.license_number,
+        license_category: data?.license_category || prev.license_category,
+        license_expiry_date: data?.license_expiry_date || prev.license_expiry_date,
       }));
 
-      setConfidence(data.confidence || {});
-      setOcrNotes(data.notes || null);
+      setConfidence(data?.confidence || {});
+      setOcrNotes(data?.notes || null);
 
-      // Store document
       const path = `fleet/drivers/${Date.now()}_${file.name}`;
       await supabase.storage.from("uploads").upload(path, file);
       await supabase.from("documents").insert({
@@ -201,8 +209,8 @@ export default function DriversModule() {
 
       toast.success("Dados extraídos — verifique e corrija antes de salvar");
     } catch (err) {
-      console.error("OCR error:", err);
-      toast.error("Erro na extração. Preencha manualmente.");
+      console.error("[DriverOCR] Extraction failed:", err);
+      toast.error("Erro na extração do documento. Os campos estão disponíveis para preenchimento manual.");
     } finally {
       setExtracting(false);
     }
@@ -266,10 +274,6 @@ export default function DriversModule() {
         </CardContent>
       </Card>
 
-      {/* Hidden file inputs */}
-      <input ref={fileInputRef} type="file" accept="image/*,.pdf" className="hidden" onChange={e => { if (e.target.files?.[0]) handleFileUpload(e.target.files[0]); e.target.value = ""; }} />
-      <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { if (e.target.files?.[0]) handleFileUpload(e.target.files[0]); e.target.value = ""; }} />
-
       <Dialog open={open} onOpenChange={(o) => { if (!o) closeDialog(); else setOpen(true); }}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
@@ -277,33 +281,17 @@ export default function DriversModule() {
             <DialogDescription>Preencha os dados ou importe da carta de condução.</DialogDescription>
           </DialogHeader>
 
-          {/* OCR Upload Zone */}
-          {!editId && (
-            <div className="rounded-lg border border-dashed border-border/60 bg-muted/30 p-3">
-              <p className="text-xs font-semibold text-muted-foreground mb-2">📄 Importar da carta de condução</p>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" onClick={() => fileInputRef.current?.click()} disabled={extracting}>
-                  <Upload className="h-3 w-3 mr-1" /> Ficheiro
-                </Button>
-                <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" onClick={() => cameraInputRef.current?.click()} disabled={extracting}>
-                  <Camera className="h-3 w-3 mr-1" /> Foto
-                </Button>
-                <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" onClick={() => cameraInputRef.current?.click()} disabled={extracting}>
-                  <ScanLine className="h-3 w-3 mr-1" /> Scan
-                </Button>
-              </div>
-              {extracting && (
-                <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                  <Loader2 className="h-3 w-3 animate-spin" /> Extraindo dados do documento...
-                </div>
-              )}
-              {ocrNotes && (
-                <p className="mt-2 text-[10px] text-yellow-500">⚠️ {ocrNotes}</p>
-              )}
-            </div>
+          {/* OCR Upload Zone — available in BOTH create and edit */}
+          <DocumentCapture
+            onFileReady={handleFileReady}
+            extracting={extracting}
+            label={editId ? "Reimportar da carta de condução" : "Importar da carta de condução"}
+          />
+
+          {ocrNotes && (
+            <p className="text-[10px] text-yellow-500">⚠️ {ocrNotes}</p>
           )}
 
-          {/* Confidence banner */}
           {hasConfidence && (
             <div className="rounded-lg bg-primary/5 border border-primary/20 px-3 py-2 text-xs text-muted-foreground">
               <span className="font-semibold text-foreground">Dados pré-preenchidos por IA.</span> Verifique cada campo antes de salvar.
@@ -311,7 +299,6 @@ export default function DriversModule() {
           )}
 
           <div className="space-y-4">
-            {/* Personal */}
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
                 <Label className="flex items-center gap-1">Nome Completo * {confidenceIcon(confidence.full_name)}</Label>
@@ -325,7 +312,6 @@ export default function DriversModule() {
               <div className="col-span-2"><Label>Email</Label><Input type="email" value={form.email} onChange={e => set("email", e.target.value)} /></div>
             </div>
 
-            {/* Structured Address */}
             <div>
               <p className="text-xs font-semibold text-muted-foreground mb-2">Morada</p>
               <div className="grid grid-cols-4 gap-2">
@@ -338,7 +324,6 @@ export default function DriversModule() {
               </div>
             </div>
 
-            {/* License */}
             <div>
               <p className="text-xs font-semibold text-muted-foreground mb-2">Carta de Condução</p>
               <div className="grid grid-cols-3 gap-2">

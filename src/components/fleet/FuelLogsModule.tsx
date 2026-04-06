@@ -10,8 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Save, Trash2, Pencil, Upload, Loader2, Camera, FileText, ScanLine, CheckCircle2, AlertCircle } from "lucide-react";
+import { Plus, Save, Trash2, Pencil, Loader2, FileText, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import DocumentCapture from "./DocumentCapture";
 
 interface FuelForm {
   vehicle_id: string;
@@ -25,7 +26,7 @@ interface FuelForm {
 
 const emptyForm: FuelForm = { vehicle_id: "", date: new Date().toISOString().slice(0, 10), km_at_fuel: "", liters: "", total_cost: "", price_per_liter: "", notes: "" };
 
-const ACTIVE_TRIP_KEY = "fleet_active_trip_session";
+const ACTIVE_TRIP_KEY = "fleet_active_trips";
 
 type ConfidenceLevel = "high" | "medium" | "low";
 
@@ -64,16 +65,17 @@ export default function FuelLogsModule() {
     return v ? `${v.brand || ""} ${v.model || ""} — ${v.license_plate}`.trim() : "—";
   };
 
-  const handleReceiptOCR = useCallback(async (file: File) => {
+  const handleReceiptFile = useCallback(async (file: File) => {
     setReceiptFile(file);
-    if (!file.type.startsWith("image/")) return; // only OCR images
+    // Only OCR images, not PDFs
+    if (!file.type.startsWith("image/")) return;
 
     setIsExtracting(true);
     try {
-      const reader = new FileReader();
       const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
         reader.onload = () => resolve((reader.result as string).split(",")[1]);
-        reader.onerror = reject;
+        reader.onerror = () => reject(new Error("Falha ao ler ficheiro"));
         reader.readAsDataURL(file);
       });
 
@@ -81,58 +83,54 @@ export default function FuelLogsModule() {
         body: { imageBase64: base64, mimeType: file.type, documentType: "fuel_receipt" },
       });
 
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      if (error) {
+        const errMsg = error.message || "";
+        if (errMsg.includes("non-2xx")) {
+          toast.error("Serviço de extração indisponível. Preencha manualmente.");
+        } else {
+          toast.error(`Erro na extração: ${errMsg}`);
+        }
+        return;
+      }
+
+      if (data?.error) {
+        toast.warning(`Extração parcial: ${data.error}`);
+      }
 
       setForm(prev => ({
         ...prev,
-        liters: data.liters ? String(data.liters) : prev.liters,
-        total_cost: data.total_cost ? String(data.total_cost) : prev.total_cost,
-        price_per_liter: data.price_per_liter ? String(data.price_per_liter) : prev.price_per_liter,
-        date: data.date || prev.date,
+        liters: data?.liters ? String(data.liters) : prev.liters,
+        total_cost: data?.total_cost ? String(data.total_cost) : prev.total_cost,
+        price_per_liter: data?.price_per_liter ? String(data.price_per_liter) : prev.price_per_liter,
+        date: data?.date || prev.date,
       }));
-      setConfidence(data.confidence || {});
+      setConfidence(data?.confidence || {});
       toast.success("Dados extraídos do comprovante");
     } catch (err) {
-      console.error("OCR error:", err);
-      toast.error("Falha na extração. Preencha manualmente.");
+      console.error("[FuelOCR] Extraction failed:", err);
+      toast.error("Erro na extração. Preencha manualmente.");
     } finally {
       setIsExtracting(false);
     }
   }, []);
 
-  const handleUploadMethod = (method: "file" | "camera") => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = method === "camera" ? "image/*" : "image/*,.pdf";
-    if (method === "camera") input.capture = "environment";
-    input.onchange = () => {
-      const f = input.files?.[0];
-      if (f) handleReceiptOCR(f);
-    };
-    input.click();
-  };
-
   const save = useMutation({
     mutationFn: async () => {
       const liters = parseFloat(form.liters);
       const totalCost = parseFloat(form.total_cost);
-      if (isNaN(liters) || isNaN(totalCost)) throw new Error("Litros e custo são obrigatórios");
+      if (isNaN(liters) || isNaN(totalCost)) throw new Error("Litros e custo total são campos obrigatórios");
+      if (!form.vehicle_id) throw new Error("Selecione um veículo");
 
       let receiptPath: string | null = null;
       if (receiptFile) {
         const path = `fleet/fuel/${form.vehicle_id}/${Date.now()}_${receiptFile.name}`;
         const { error: upErr } = await supabase.storage.from("uploads").upload(path, receiptFile);
-        if (upErr) throw upErr;
+        if (upErr) throw new Error(`Erro no upload: ${upErr.message}`);
         receiptPath = path;
 
         await supabase.from("documents").insert({
-          name: receiptFile.name,
-          type: "file",
-          entity_type: "fuel_receipt",
-          storage_path: path,
-          mime_type: receiptFile.type,
-          size_bytes: receiptFile.size,
+          name: receiptFile.name, type: "file", entity_type: "fuel_receipt",
+          storage_path: path, mime_type: receiptFile.type, size_bytes: receiptFile.size,
         });
       }
 
@@ -157,9 +155,7 @@ export default function FuelLogsModule() {
 
         const vehicle = vehicles.find((v: any) => v.id === form.vehicle_id);
         await supabase.from("financial_records").insert({
-          type: "expense",
-          source: "fleet",
-          category: "fuel",
+          type: "expense", source: "fleet", category: "fuel",
           amount: totalCost,
           label: `Combustível — ${vehicle?.brand || ""} ${vehicle?.model || ""} ${vehicle?.license_plate || ""}`.trim(),
           notes: `${liters}L @ ${form.km_at_fuel || "?"} km`,
@@ -173,7 +169,7 @@ export default function FuelLogsModule() {
       closeDialog();
       toast.success(editId ? "Abastecimento atualizado" : "Abastecimento registrado");
     },
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e) => toast.error(`Erro: ${(e as Error).message}`),
   });
 
   const remove = useMutation({
@@ -186,22 +182,15 @@ export default function FuelLogsModule() {
   });
 
   const closeDialog = () => {
-    setOpen(false);
-    setEditId(null);
-    setForm(emptyForm);
-    setReceiptFile(null);
-    setConfidence({});
+    setOpen(false); setEditId(null); setForm(emptyForm); setReceiptFile(null); setConfidence({});
   };
 
   const startEdit = (l: any) => {
     setEditId(l.id);
     setForm({
-      vehicle_id: l.vehicle_id || "",
-      date: l.date || new Date().toISOString().slice(0, 10),
-      km_at_fuel: l.km_at_fuel ? String(l.km_at_fuel) : "",
-      liters: l.liters ? String(l.liters) : "",
-      total_cost: l.total_cost ? String(l.total_cost) : "",
-      price_per_liter: l.price_per_liter ? String(l.price_per_liter) : "",
+      vehicle_id: l.vehicle_id || "", date: l.date || new Date().toISOString().slice(0, 10),
+      km_at_fuel: l.km_at_fuel ? String(l.km_at_fuel) : "", liters: l.liters ? String(l.liters) : "",
+      total_cost: l.total_cost ? String(l.total_cost) : "", price_per_liter: l.price_per_liter ? String(l.price_per_liter) : "",
       notes: l.notes || "",
     });
     setConfidence({});
@@ -210,8 +199,19 @@ export default function FuelLogsModule() {
 
   const totalCost = fuelLogs.reduce((s: number, l: any) => s + Number(l.total_cost || 0), 0);
   const totalLiters = fuelLogs.reduce((s: number, l: any) => s + Number(l.liters || 0), 0);
-
   const set = (field: keyof FuelForm, value: string) => setForm(p => ({ ...p, [field]: value }));
+
+  // Active trip indicator
+  const hasActiveTrip = (() => {
+    try {
+      const stored = localStorage.getItem(ACTIVE_TRIP_KEY);
+      if (stored) {
+        const sessions = JSON.parse(stored);
+        return Array.isArray(sessions) && sessions.length > 0;
+      }
+    } catch { /* ignore */ }
+    return false;
+  })();
 
   return (
     <div className="space-y-4">
@@ -219,26 +219,13 @@ export default function FuelLogsModule() {
         <div className="flex items-center gap-3">
           <div>
             <h2 className="text-base font-semibold">Combustível</h2>
-            <p className="text-xs text-muted-foreground">
-              Total: {totalLiters.toFixed(1)}L — {totalCost.toFixed(2)} €
-            </p>
+            <p className="text-xs text-muted-foreground">Total: {totalLiters.toFixed(1)}L — {totalCost.toFixed(2)} €</p>
           </div>
-          {(() => {
-            try {
-              const stored = localStorage.getItem(ACTIVE_TRIP_KEY);
-              if (stored) {
-                const session = JSON.parse(stored);
-                if (session.tripId) {
-                  return (
-                    <span className="text-[10px] bg-green-500/10 text-green-600 px-2 py-0.5 rounded-full">
-                      🔗 Trajeto ativo — será vinculado automaticamente
-                    </span>
-                  );
-                }
-              }
-            } catch { /* ignore */ }
-            return null;
-          })()}
+          {hasActiveTrip && (
+            <span className="text-[10px] bg-green-500/10 text-green-600 px-2 py-0.5 rounded-full">
+              🔗 Trajeto ativo — será vinculado automaticamente
+            </span>
+          )}
         </div>
         <Button size="sm" onClick={() => { setForm(emptyForm); setEditId(null); setConfidence({}); setOpen(true); }}>
           <Plus className="h-4 w-4 mr-1" /> Novo Abastecimento
@@ -294,7 +281,7 @@ export default function FuelLogsModule() {
           <div className="space-y-3">
             {/* Smart Upload Zone */}
             <div>
-              <Label className="text-xs font-medium mb-1 block">Comprovante (scan/foto/ficheiro)</Label>
+              <Label className="text-xs font-medium mb-1 block">Comprovante</Label>
               {receiptFile ? (
                 <div className="flex items-center gap-2 p-2 rounded-lg border bg-muted/30">
                   <FileText className="h-4 w-4 text-muted-foreground" />
@@ -304,22 +291,12 @@ export default function FuelLogsModule() {
                   <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => { setReceiptFile(null); setConfidence({}); }}>Trocar</Button>
                 </div>
               ) : (
-                <div className="grid grid-cols-3 gap-2">
-                  <Button variant="outline" size="sm" className="h-16 flex-col gap-1" onClick={() => handleUploadMethod("camera")}>
-                    <Camera className="h-5 w-5" />
-                    <span className="text-[10px]">Câmara</span>
-                  </Button>
-                  <Button variant="outline" size="sm" className="h-16 flex-col gap-1" onClick={() => handleUploadMethod("file")}>
-                    <ScanLine className="h-5 w-5" />
-                    <span className="text-[10px]">Scan</span>
-                  </Button>
-                  <Button variant="outline" size="sm" className="h-16 flex-col gap-1" onClick={() => handleUploadMethod("file")}>
-                    <Upload className="h-5 w-5" />
-                    <span className="text-[10px]">Ficheiro</span>
-                  </Button>
-                </div>
+                <DocumentCapture
+                  onFileReady={handleReceiptFile}
+                  extracting={isExtracting}
+                  label="Scan/foto/ficheiro do comprovante"
+                />
               )}
-              {isExtracting && <p className="text-xs text-primary mt-1 animate-pulse">Extraindo dados do comprovante...</p>}
             </div>
 
             <div>

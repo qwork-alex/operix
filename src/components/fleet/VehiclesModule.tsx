@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -9,8 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
-import { Plus, Save, Trash2, Pencil, Loader2, Upload, Camera, ScanLine, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Plus, Save, Trash2, Pencil, Loader2, AlertTriangle, CheckCircle2 } from "lucide-react";
+import DocumentCapture from "./DocumentCapture";
 
 interface VehicleForm {
   license_plate: string;
@@ -62,8 +62,6 @@ export default function VehiclesModule() {
   const [extracting, setExtracting] = useState(false);
   const [confidence, setConfidence] = useState<Record<string, ConfidenceLevel>>({});
   const [ocrNotes, setOcrNotes] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const { data: vehicles = [], isLoading } = useQuery({
     queryKey: ["fleet_vehicles"],
@@ -101,7 +99,7 @@ export default function VehiclesModule() {
       closeDialog();
       toast.success(editId ? "Veículo atualizado" : "Veículo adicionado");
     },
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e) => toast.error(`Erro ao salvar veículo: ${(e as Error).message}`),
   });
 
   const remove = useMutation({
@@ -110,7 +108,7 @@ export default function VehiclesModule() {
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["fleet_vehicles"] }); toast.success("Removido"); },
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e) => toast.error(`Erro ao remover veículo: ${(e as Error).message}`),
   });
 
   const changeStatus = useMutation({
@@ -149,18 +147,16 @@ export default function VehiclesModule() {
   const set = (k: keyof VehicleForm, v: string) => setForm(p => ({ ...p, [k]: v }));
 
   /* ─── OCR Extraction ─── */
-  const handleFileUpload = async (file: File) => {
+  const handleFileReady = async (file: File) => {
     if (!file) return;
     setExtracting(true);
     setOcrNotes(null);
     try {
-      const reader = new FileReader();
+      // Convert to base64
       const base64 = await new Promise<string>((resolve, reject) => {
-        reader.onload = () => {
-          const result = reader.result as string;
-          resolve(result.split(",")[1]);
-        };
-        reader.onerror = reject;
+        const reader = new FileReader();
+        reader.onload = () => resolve((reader.result as string).split(",")[1]);
+        reader.onerror = () => reject(new Error("Falha ao ler o ficheiro"));
         reader.readAsDataURL(file);
       });
 
@@ -168,25 +164,37 @@ export default function VehiclesModule() {
         body: { imageBase64: base64, mimeType: file.type, documentType: "vehicle" },
       });
 
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      if (error) {
+        // Handle specific error types
+        const errMsg = error.message || "";
+        if (errMsg.includes("non-2xx")) {
+          toast.error("Serviço de extração indisponível. Preencha os campos manualmente.");
+        } else {
+          toast.error(`Erro na extração: ${errMsg}. Preencha manualmente.`);
+        }
+        return;
+      }
 
-      // Pre-fill form with extracted data (user can correct)
+      if (data?.error) {
+        toast.warning(`Extração parcial: ${data.error}. Verifique os dados.`);
+      }
+
+      // Pre-fill form — never overwrite user-entered non-empty values
       setForm(prev => ({
         ...prev,
-        license_plate: data.license_plate || prev.license_plate,
-        vin_number: data.vin_number || prev.vin_number,
-        brand: data.brand || prev.brand,
-        model: data.model || prev.model,
-        year: data.year || prev.year,
-        first_registration_date: data.first_registration_date || prev.first_registration_date,
-        fuel_type: data.fuel_type || prev.fuel_type,
-        vehicle_type: data.vehicle_type || prev.vehicle_type,
-        power: data.power || prev.power,
+        license_plate: data?.license_plate || prev.license_plate,
+        vin_number: data?.vin_number || prev.vin_number,
+        brand: data?.brand || prev.brand,
+        model: data?.model || prev.model,
+        year: data?.year || prev.year,
+        first_registration_date: data?.first_registration_date || prev.first_registration_date,
+        fuel_type: data?.fuel_type || prev.fuel_type,
+        vehicle_type: data?.vehicle_type || prev.vehicle_type,
+        power: data?.power || prev.power,
       }));
 
-      setConfidence(data.confidence || {});
-      setOcrNotes(data.notes || null);
+      setConfidence(data?.confidence || {});
+      setOcrNotes(data?.notes || null);
 
       // Store document
       const path = `fleet/vehicles/${Date.now()}_${file.name}`;
@@ -198,8 +206,8 @@ export default function VehiclesModule() {
 
       toast.success("Dados extraídos — verifique e corrija antes de salvar");
     } catch (err) {
-      console.error("OCR error:", err);
-      toast.error("Erro na extração. Preencha manualmente.");
+      console.error("[VehicleOCR] Extraction failed:", err);
+      toast.error("Erro na extração do documento. Os campos estão disponíveis para preenchimento manual.");
     } finally {
       setExtracting(false);
     }
@@ -274,10 +282,6 @@ export default function VehiclesModule() {
         </CardContent>
       </Card>
 
-      {/* Hidden file inputs */}
-      <input ref={fileInputRef} type="file" accept="image/*,.pdf" className="hidden" onChange={e => { if (e.target.files?.[0]) handleFileUpload(e.target.files[0]); e.target.value = ""; }} />
-      <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { if (e.target.files?.[0]) handleFileUpload(e.target.files[0]); e.target.value = ""; }} />
-
       <Dialog open={open} onOpenChange={(o) => { if (!o) closeDialog(); else setOpen(true); }}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
@@ -285,30 +289,16 @@ export default function VehiclesModule() {
             <DialogDescription>Preencha os dados ou importe de um documento.</DialogDescription>
           </DialogHeader>
 
-          {/* OCR Upload Zone */}
-          {!editId && (
-            <div className="rounded-lg border border-dashed border-border/60 bg-muted/30 p-3">
-              <p className="text-xs font-semibold text-muted-foreground mb-2">📄 Importar dados do documento</p>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" onClick={() => fileInputRef.current?.click()} disabled={extracting}>
-                  <Upload className="h-3 w-3 mr-1" /> Ficheiro
-                </Button>
-                <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" onClick={() => cameraInputRef.current?.click()} disabled={extracting}>
-                  <Camera className="h-3 w-3 mr-1" /> Foto
-                </Button>
-                <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" onClick={() => cameraInputRef.current?.click()} disabled={extracting}>
-                  <ScanLine className="h-3 w-3 mr-1" /> Scan
-                </Button>
-              </div>
-              {extracting && (
-                <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                  <Loader2 className="h-3 w-3 animate-spin" /> Extraindo dados do documento...
-                </div>
-              )}
-              {ocrNotes && (
-                <p className="mt-2 text-[10px] text-yellow-500">⚠️ {ocrNotes}</p>
-              )}
-            </div>
+          {/* OCR Upload Zone — available in BOTH create and edit */}
+          <DocumentCapture
+            onFileReady={handleFileReady}
+            disabled={false}
+            extracting={extracting}
+            label={editId ? "Reimportar dados do documento" : "Importar dados do documento"}
+          />
+
+          {ocrNotes && (
+            <p className="text-[10px] text-yellow-500">⚠️ {ocrNotes}</p>
           )}
 
           {/* Confidence banner */}
