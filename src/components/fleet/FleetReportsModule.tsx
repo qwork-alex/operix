@@ -51,6 +51,26 @@ interface CalcResult {
   totalDuration: number; // minutes
 }
 
+function formatPointAddress(point: any) {
+  return [point?.address, point?.postal_code, point?.city].filter(Boolean).join(", ") || "—";
+}
+
+function buildTripSegments(points: any[]) {
+  if (!Array.isArray(points) || points.length < 2) return [] as Array<{
+    origin: string;
+    destination: string;
+    distance_km: number;
+    duration_min: number;
+  }>;
+
+  return points.slice(1).map((point, index) => ({
+    origin: formatPointAddress(points[index]),
+    destination: formatPointAddress(point),
+    distance_km: Number(point.distance_from_previous || 0),
+    duration_min: Number(point.duration_from_previous || 0),
+  }));
+}
+
 function computeKPIs(trips: any[], fuel: any[]): CalcResult {
   const totalTrips = trips.length;
   const totalKm = trips.reduce((s, t) => s + Number(t.total_distance || 0), 0);
@@ -135,6 +155,14 @@ function generateReportHTML(
       <td style="padding:3px 8px;text-align:right">${t.total_distance ? `${Number(t.total_distance).toLocaleString()} km` : "—"}</td>
       <td style="padding:3px 8px;text-align:right">${t.total_duration ? `${Math.round(Number(t.total_duration))} min` : "—"}</td>
     </tr>
+    ${(t.segments || []).map((segment: any) => `
+      <tr>
+        <td></td>
+        <td colspan="2" style="padding:3px 8px 3px 24px;color:#666">${segment.origin} → ${segment.destination}</td>
+        <td style="padding:3px 8px;text-align:right">${Number(segment.distance_km || 0).toFixed(1)} km</td>
+        <td style="padding:3px 8px;text-align:right">${Math.round(Number(segment.duration_min || 0))} min</td>
+      </tr>
+    `).join("")}
   `).join("");
 
   return `<!DOCTYPE html>
@@ -195,14 +223,19 @@ function generateCSV(
   getVehicleLabel: (id: string) => string,
   getDriverName: (id: string) => string,
 ) {
-  const header = "Data,Veículo,Condutor,Distância (km),Litros,Custo (€),€/km\n";
-  const tripLines = trips.map(t => {
+  const header = "Tipo,Data,Veículo,Condutor,Origem,Destino,Distância (km),Duração (min),Litros,Custo (€)\n";
+  const tripLines = trips.flatMap(t => {
     const km = Number(t.total_distance || 0);
-    return `${t.date},"${getVehicleLabel(t.vehicle_id)}","${getDriverName(t.driver_id)}",${km},,,"`;
+    const summaryLine = `trajeto,${t.date},"${getVehicleLabel(t.vehicle_id)}","${getDriverName(t.driver_id)}",,,${km},${Number(t.total_duration || 0)},,`;
+    const segmentLines = (t.segments || []).map((segment: any) => (
+      `segmento,${t.date},"${getVehicleLabel(t.vehicle_id)}","${getDriverName(t.driver_id)}","${segment.origin}","${segment.destination}",${Number(segment.distance_km || 0)},${Number(segment.duration_min || 0)},,`
+    ));
+
+    return [summaryLine, ...segmentLines];
   }).join("\n");
 
   const fuelLines = fuel.map(f => {
-    return `${f.date},"${getVehicleLabel(f.vehicle_id)}",,,"${Number(f.liters).toFixed(1)}","${Number(f.total_cost).toFixed(2)}",""`;
+    return `combustível,${f.date},"${getVehicleLabel(f.vehicle_id)}",,,, , ,"${Number(f.liters).toFixed(1)}","${Number(f.total_cost).toFixed(2)}"`;
   }).join("\n");
 
   return header + tripLines + "\n" + fuelLines;
@@ -242,6 +275,18 @@ export default function FleetReportsModule() {
     queryFn: async () => { const { data } = await supabase.from("fleet_fuel_logs").select("*").order("date", { ascending: false }); return (data || []) as any[]; },
   });
 
+  const { data: tripPoints = [] } = useQuery({
+    queryKey: ["fleet_trip_points"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("fleet_trip_points")
+        .select("trip_id, order_index, address, postal_code, city, distance_from_previous, duration_from_previous")
+        .order("trip_id")
+        .order("order_index");
+      return (data || []) as any[];
+    },
+  });
+
   // Lookups
   const getVehicleLabel = useCallback((id: string) => {
     const v = vehicles.find((x: any) => x.id === id);
@@ -275,14 +320,33 @@ export default function FleetReportsModule() {
     return { trips: ft, fuel: ff };
   }, [trips, fuelLogs, vehicleFilter, driverFilter, periodFrom, periodTo]);
 
+  const pointsByTripId = useMemo(() => tripPoints.reduce((acc: Record<string, any[]>, point: any) => {
+    if (!acc[point.trip_id]) acc[point.trip_id] = [];
+    acc[point.trip_id].push(point);
+    return acc;
+  }, {}), [tripPoints]);
+
+  const normalizedTrips = useMemo(() => filtered.trips.map((trip) => {
+    const segments = buildTripSegments(pointsByTripId[trip.id] || []);
+    const fallbackDistance = segments.reduce((sum, segment) => sum + Number(segment.distance_km || 0), 0);
+    const fallbackDuration = segments.reduce((sum, segment) => sum + Number(segment.duration_min || 0), 0);
+
+    return {
+      ...trip,
+      total_distance: Number(trip.total_distance || fallbackDistance || 0),
+      total_duration: Number(trip.total_duration || fallbackDuration || 0),
+      segments,
+    };
+  }), [filtered.trips, pointsByTripId]);
+
   // Calculation engine
-  const globalKPIs = useMemo(() => computeKPIs(filtered.trips, filtered.fuel), [filtered]);
-  const perVehicle = useMemo(() => computePerVehicle(filtered.trips, filtered.fuel, vehicles), [filtered, vehicles]);
+  const globalKPIs = useMemo(() => computeKPIs(normalizedTrips, filtered.fuel), [normalizedTrips, filtered.fuel]);
+  const perVehicle = useMemo(() => computePerVehicle(normalizedTrips, filtered.fuel, vehicles), [normalizedTrips, filtered.fuel, vehicles]);
 
   // Weekly aggregation
   const weeklyData = useMemo(() => {
     const weeks: Record<string, { km: number; fuel: number; trips: number; liters: number }> = {};
-    filtered.trips.forEach(t => {
+    normalizedTrips.forEach(t => {
       const key = getWeekKey(t.date);
       if (!weeks[key]) weeks[key] = { km: 0, fuel: 0, trips: 0, liters: 0 };
       weeks[key].km += Number(t.total_distance || 0);
@@ -295,12 +359,12 @@ export default function FleetReportsModule() {
       weeks[key].liters += Number(f.liters || 0);
     });
     return Object.entries(weeks).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [filtered]);
+  }, [normalizedTrips, filtered.fuel]);
 
   // Monthly aggregation
   const monthlyData = useMemo(() => {
     const months: Record<string, { km: number; fuel: number; trips: number; liters: number }> = {};
-    filtered.trips.forEach(t => {
+    normalizedTrips.forEach(t => {
       const key = getMonthKey(t.date);
       if (!months[key]) months[key] = { km: 0, fuel: 0, trips: 0, liters: 0 };
       months[key].km += Number(t.total_distance || 0);
@@ -313,7 +377,7 @@ export default function FleetReportsModule() {
       months[key].liters += Number(f.liters || 0);
     });
     return Object.entries(months).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [filtered]);
+  }, [normalizedTrips, filtered.fuel]);
 
   // Date range label
   const dateRange = periodFrom || periodTo
@@ -323,8 +387,8 @@ export default function FleetReportsModule() {
   // ─── Actions ────────────────────────────────────────────
 
   const buildHTML = useCallback(() => {
-    return generateReportHTML(reportName, dateRange, globalKPIs, perVehicle, weeklyData, filtered.trips, getVehicleLabel, getDriverName);
-  }, [reportName, dateRange, globalKPIs, perVehicle, weeklyData, filtered.trips, getVehicleLabel, getDriverName]);
+    return generateReportHTML(reportName, dateRange, globalKPIs, perVehicle, weeklyData, normalizedTrips, getVehicleLabel, getDriverName);
+  }, [reportName, dateRange, globalKPIs, perVehicle, weeklyData, normalizedTrips, getVehicleLabel, getDriverName]);
 
   const handlePreview = () => {
     setPreviewHtml(buildHTML());
@@ -348,7 +412,7 @@ export default function FleetReportsModule() {
   };
 
   const handleExportCSV = () => {
-    const csv = generateCSV(filtered.trips, filtered.fuel, getVehicleLabel, getDriverName);
+    const csv = generateCSV(normalizedTrips, filtered.fuel, getVehicleLabel, getDriverName);
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -616,20 +680,30 @@ export default function FleetReportsModule() {
                    </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.trips.length === 0 ? (
+                  {normalizedTrips.length === 0 ? (
                      <TableRow><TableCell colSpan={5} className="text-center py-4 text-muted-foreground">Sem trajetos</TableCell></TableRow>
-                  ) : filtered.trips.slice(0, 100).map((t: any) => (
-                    <TableRow key={t.id}>
-                      <TableCell>{t.date}</TableCell>
-                      <TableCell>{getVehicleLabel(t.vehicle_id)}</TableCell>
-                      <TableCell>{getDriverName(t.driver_id)}</TableCell>
-                       <TableCell className="text-right tabular-nums font-semibold">
-                         {t.total_distance ? `${Number(t.total_distance).toLocaleString()} km` : "—"}
-                       </TableCell>
-                       <TableCell className="text-right tabular-nums text-muted-foreground">
-                         {t.total_duration ? `${Math.round(Number(t.total_duration))} min` : "—"}
-                       </TableCell>
-                    </TableRow>
+                  ) : normalizedTrips.slice(0, 100).map((t: any) => (
+                    <>
+                      <TableRow key={t.id}>
+                        <TableCell>{t.date}</TableCell>
+                        <TableCell>{getVehicleLabel(t.vehicle_id)}</TableCell>
+                        <TableCell>{getDriverName(t.driver_id)}</TableCell>
+                        <TableCell className="text-right tabular-nums font-semibold">
+                          {t.total_distance ? `${Number(t.total_distance).toLocaleString()} km` : "—"}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums text-muted-foreground">
+                          {t.total_duration ? `${Math.round(Number(t.total_duration))} min` : "—"}
+                        </TableCell>
+                      </TableRow>
+                      {(t.segments || []).map((segment: any, index: number) => (
+                        <TableRow key={`${t.id}-segment-${index}`}>
+                          <TableCell></TableCell>
+                          <TableCell colSpan={2} className="text-xs text-muted-foreground">{segment.origin} → {segment.destination}</TableCell>
+                          <TableCell className="text-right tabular-nums">{Number(segment.distance_km || 0).toFixed(1)} km</TableCell>
+                          <TableCell className="text-right tabular-nums text-muted-foreground">{Math.round(Number(segment.duration_min || 0))} min</TableCell>
+                        </TableRow>
+                      ))}
+                    </>
                   ))}
                 </TableBody>
               </Table>
