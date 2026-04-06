@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Plus, Save, Trash2, Pencil, Loader2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Plus, Save, Trash2, Pencil, Loader2, Upload, Camera, ScanLine, AlertTriangle, CheckCircle2 } from "lucide-react";
 
 interface VehicleForm {
   license_plate: string;
@@ -37,11 +38,32 @@ const statusConfig: Record<string, { label: string; bg: string; text: string; ri
   inactive: { label: "Inativo", bg: "bg-foreground/90", text: "text-background font-bold", ring: "ring-foreground/50" },
 };
 
+type ConfidenceLevel = "high" | "medium" | "low";
+
+const confidenceColor = (c?: ConfidenceLevel) => {
+  if (!c) return "";
+  if (c === "high") return "ring-green-500/30";
+  if (c === "medium") return "ring-yellow-500/40";
+  return "ring-red-500/50";
+};
+
+const confidenceIcon = (c?: ConfidenceLevel) => {
+  if (!c) return null;
+  if (c === "high") return <CheckCircle2 className="h-3 w-3 text-green-500" />;
+  if (c === "medium") return <AlertTriangle className="h-3 w-3 text-yellow-500" />;
+  return <AlertTriangle className="h-3 w-3 text-red-500" />;
+};
+
 export default function VehiclesModule() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<VehicleForm>(emptyForm);
+  const [extracting, setExtracting] = useState(false);
+  const [confidence, setConfidence] = useState<Record<string, ConfidenceLevel>>({});
+  const [ocrNotes, setOcrNotes] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const { data: vehicles = [], isLoading } = useQuery({
     queryKey: ["fleet_vehicles"],
@@ -76,7 +98,7 @@ export default function VehiclesModule() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["fleet_vehicles"] });
-      close();
+      closeDialog();
       toast.success(editId ? "Veículo atualizado" : "Veículo adicionado");
     },
     onError: (e) => toast.error((e as Error).message),
@@ -106,7 +128,10 @@ export default function VehiclesModule() {
     changeStatus.mutate({ id: v.id, status: next });
   };
 
-  const close = () => { setOpen(false); setEditId(null); setForm(emptyForm); };
+  const closeDialog = () => {
+    setOpen(false); setEditId(null); setForm(emptyForm);
+    setConfidence({}); setOcrNotes(null);
+  };
 
   const startEdit = (v: any) => {
     setEditId(v.id);
@@ -116,10 +141,71 @@ export default function VehiclesModule() {
       vin_number: v.vin_number || "", first_registration_date: v.first_registration_date || "",
       vehicle_type: v.vehicle_type || "private",
     });
+    setConfidence({});
+    setOcrNotes(null);
     setOpen(true);
   };
 
   const set = (k: keyof VehicleForm, v: string) => setForm(p => ({ ...p, [k]: v }));
+
+  /* ─── OCR Extraction ─── */
+  const handleFileUpload = async (file: File) => {
+    if (!file) return;
+    setExtracting(true);
+    setOcrNotes(null);
+    try {
+      const reader = new FileReader();
+      const base64 = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => {
+          const result = reader.result as string;
+          resolve(result.split(",")[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const { data, error } = await supabase.functions.invoke("extract-fleet-document", {
+        body: { imageBase64: base64, mimeType: file.type, documentType: "vehicle" },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      // Pre-fill form with extracted data (user can correct)
+      setForm(prev => ({
+        ...prev,
+        license_plate: data.license_plate || prev.license_plate,
+        vin_number: data.vin_number || prev.vin_number,
+        brand: data.brand || prev.brand,
+        model: data.model || prev.model,
+        year: data.year || prev.year,
+        first_registration_date: data.first_registration_date || prev.first_registration_date,
+        fuel_type: data.fuel_type || prev.fuel_type,
+        vehicle_type: data.vehicle_type || prev.vehicle_type,
+        power: data.power || prev.power,
+      }));
+
+      setConfidence(data.confidence || {});
+      setOcrNotes(data.notes || null);
+
+      // Store document
+      const path = `fleet/vehicles/${Date.now()}_${file.name}`;
+      await supabase.storage.from("uploads").upload(path, file);
+      await supabase.from("documents").insert({
+        name: file.name, type: "file", entity_type: "vehicle_document",
+        storage_path: path, mime_type: file.type, size_bytes: file.size,
+      });
+
+      toast.success("Dados extraídos — verifique e corrija antes de salvar");
+    } catch (err) {
+      console.error("OCR error:", err);
+      toast.error("Erro na extração. Preencha manualmente.");
+    } finally {
+      setExtracting(false);
+    }
+  };
+
+  const hasConfidence = Object.keys(confidence).length > 0;
 
   return (
     <div className="space-y-4">
@@ -128,7 +214,7 @@ export default function VehiclesModule() {
           <h2 className="text-base font-semibold">Veículos</h2>
           <p className="text-xs text-muted-foreground">Registo de veículos da frota</p>
         </div>
-        <Button size="sm" onClick={() => { setForm(emptyForm); setEditId(null); setOpen(true); }}>
+        <Button size="sm" onClick={() => { setForm(emptyForm); setEditId(null); setConfidence({}); setOcrNotes(null); setOpen(true); }}>
           <Plus className="h-4 w-4 mr-1" /> Novo Veículo
         </Button>
       </div>
@@ -166,11 +252,7 @@ export default function VehiclesModule() {
                     <TableCell>
                       <button
                         onClick={() => cycleStatus(v)}
-                        className={`
-                          inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium
-                          ring-1 cursor-pointer transition-all duration-200 hover:scale-105 active:scale-95
-                          ${st.bg} ${st.text} ${st.ring}
-                        `}
+                        className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium ring-1 cursor-pointer transition-all duration-200 hover:scale-105 active:scale-95 ${st.bg} ${st.text} ${st.ring}`}
                       >
                         <span className={`h-1.5 w-1.5 rounded-full mr-1.5 ${
                           v.status === "available" ? "bg-green-500" :
@@ -192,23 +274,86 @@ export default function VehiclesModule() {
         </CardContent>
       </Card>
 
-      <Dialog open={open} onOpenChange={(o) => { if (!o) close(); else setOpen(true); }}>
+      {/* Hidden file inputs */}
+      <input ref={fileInputRef} type="file" accept="image/*,.pdf" className="hidden" onChange={e => { if (e.target.files?.[0]) handleFileUpload(e.target.files[0]); e.target.value = ""; }} />
+      <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { if (e.target.files?.[0]) handleFileUpload(e.target.files[0]); e.target.value = ""; }} />
+
+      <Dialog open={open} onOpenChange={(o) => { if (!o) closeDialog(); else setOpen(true); }}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editId ? "Editar Veículo" : "Novo Veículo"}</DialogTitle>
-            <DialogDescription>Preencha os dados do veículo. Campos com * são obrigatórios.</DialogDescription>
+            <DialogDescription>Preencha os dados ou importe de um documento.</DialogDescription>
           </DialogHeader>
+
+          {/* OCR Upload Zone */}
+          {!editId && (
+            <div className="rounded-lg border border-dashed border-border/60 bg-muted/30 p-3">
+              <p className="text-xs font-semibold text-muted-foreground mb-2">📄 Importar dados do documento</p>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" onClick={() => fileInputRef.current?.click()} disabled={extracting}>
+                  <Upload className="h-3 w-3 mr-1" /> Ficheiro
+                </Button>
+                <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" onClick={() => cameraInputRef.current?.click()} disabled={extracting}>
+                  <Camera className="h-3 w-3 mr-1" /> Foto
+                </Button>
+                <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" onClick={() => cameraInputRef.current?.click()} disabled={extracting}>
+                  <ScanLine className="h-3 w-3 mr-1" /> Scan
+                </Button>
+              </div>
+              {extracting && (
+                <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Extraindo dados do documento...
+                </div>
+              )}
+              {ocrNotes && (
+                <p className="mt-2 text-[10px] text-yellow-500">⚠️ {ocrNotes}</p>
+              )}
+            </div>
+          )}
+
+          {/* Confidence banner */}
+          {hasConfidence && (
+            <div className="rounded-lg bg-primary/5 border border-primary/20 px-3 py-2 text-xs text-muted-foreground">
+              <span className="font-semibold text-foreground">Dados pré-preenchidos por IA.</span> Verifique cada campo antes de salvar. Ícones indicam a confiança da extração.
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
-            <div><Label>Matrícula *</Label><Input value={form.license_plate} onChange={e => set("license_plate", e.target.value)} placeholder="AA-00-BB" /></div>
-            <div><Label>VIN</Label><Input value={form.vin_number} onChange={e => set("vin_number", e.target.value)} placeholder="VIN" /></div>
-            <div><Label>Marca</Label><Input value={form.brand} onChange={e => set("brand", e.target.value)} placeholder="Renault" /></div>
-            <div><Label>Modelo</Label><Input value={form.model} onChange={e => set("model", e.target.value)} placeholder="Clio" /></div>
-            <div><Label>Ano</Label><Input type="number" value={form.year} onChange={e => set("year", e.target.value)} /></div>
-            <div><Label>Potência (cv)</Label><Input value={form.power} onChange={e => set("power", e.target.value)} /></div>
             <div>
-              <Label>Combustível</Label>
+              <Label className="flex items-center gap-1">Matrícula * {confidenceIcon(confidence.license_plate)}</Label>
+              <Input value={form.license_plate} onChange={e => set("license_plate", e.target.value)} placeholder="AA-00-BB"
+                className={confidence.license_plate ? `ring-1 ${confidenceColor(confidence.license_plate)}` : ""} />
+            </div>
+            <div>
+              <Label className="flex items-center gap-1">VIN {confidenceIcon(confidence.vin_number)}</Label>
+              <Input value={form.vin_number} onChange={e => set("vin_number", e.target.value)} placeholder="VIN"
+                className={confidence.vin_number ? `ring-1 ${confidenceColor(confidence.vin_number)}` : ""} />
+            </div>
+            <div>
+              <Label className="flex items-center gap-1">Marca {confidenceIcon(confidence.brand)}</Label>
+              <Input value={form.brand} onChange={e => set("brand", e.target.value)} placeholder="Renault"
+                className={confidence.brand ? `ring-1 ${confidenceColor(confidence.brand)}` : ""} />
+            </div>
+            <div>
+              <Label className="flex items-center gap-1">Modelo {confidenceIcon(confidence.model)}</Label>
+              <Input value={form.model} onChange={e => set("model", e.target.value)} placeholder="Clio"
+                className={confidence.model ? `ring-1 ${confidenceColor(confidence.model)}` : ""} />
+            </div>
+            <div>
+              <Label className="flex items-center gap-1">Ano {confidenceIcon(confidence.year)}</Label>
+              <Input type="number" value={form.year} onChange={e => set("year", e.target.value)}
+                className={confidence.year ? `ring-1 ${confidenceColor(confidence.year)}` : ""} />
+            </div>
+            <div>
+              <Label>Potência (cv)</Label>
+              <Input value={form.power} onChange={e => set("power", e.target.value)} />
+            </div>
+            <div>
+              <Label className="flex items-center gap-1">Combustível {confidenceIcon(confidence.fuel_type)}</Label>
               <Select value={form.fuel_type} onValueChange={v => set("fuel_type", v)}>
-                <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                <SelectTrigger className={confidence.fuel_type ? `ring-1 ${confidenceColor(confidence.fuel_type)}` : ""}>
+                  <SelectValue placeholder="Selecionar" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="diesel">Diesel</SelectItem>
                   <SelectItem value="gasoline">Gasolina</SelectItem>
@@ -227,10 +372,14 @@ export default function VehiclesModule() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="col-span-2"><Label>1ª Matrícula</Label><Input type="date" value={form.first_registration_date} onChange={e => set("first_registration_date", e.target.value)} /></div>
+            <div className="col-span-2">
+              <Label>1ª Matrícula</Label>
+              <Input type="date" value={form.first_registration_date} onChange={e => set("first_registration_date", e.target.value)} />
+            </div>
           </div>
+
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={close}>Cancelar</Button>
+            <Button variant="outline" onClick={closeDialog}>Cancelar</Button>
             <Button onClick={() => save.mutate()} disabled={!form.license_plate || save.isPending}>
               {save.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
               Salvar
