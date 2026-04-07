@@ -46,7 +46,7 @@ export function useServiceOrders(filters?: {
 }) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { memberAuthIds } = useWorkspace();
+  const { memberAuthIds, isAdmin } = useWorkspace();
 
   const hasRequiredAuditFields = (payload: {
     id?: string;
@@ -56,14 +56,20 @@ export function useServiceOrders(filters?: {
   }) => Boolean(payload.id && payload.created_by && payload.created_at && payload.updated_at);
 
   const query = useQuery({
-    queryKey: ["service_orders", filters, memberAuthIds],
+    queryKey: ["service_orders", filters, memberAuthIds, isAdmin, user?.id],
     queryFn: async () => {
       let q = supabase
         .from("service_orders")
         .select("*, clients(name), technicians(name)")
         .order("created_at", { ascending: false });
 
-      if (memberAuthIds.length > 0) q = q.in("created_by", memberAuthIds);
+      // Non-admin users see only their own data
+      if (!isAdmin && user?.id) {
+        q = q.eq("created_by", user.id);
+      } else if (isAdmin && memberAuthIds.length > 0) {
+        q = q.in("created_by", memberAuthIds);
+      }
+
       if (filters?.client_id) q = q.eq("client_id", filters.client_id);
       if (filters?.platform) q = q.eq("platform", filters.platform);
       if (filters?.technician_id) q = q.eq("technician_id", filters.technician_id);
