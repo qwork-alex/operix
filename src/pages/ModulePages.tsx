@@ -1235,6 +1235,7 @@ export function UsersPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workspace-members"] });
+      queryClient.invalidateQueries({ queryKey: ["my-workspace"] });
       setOpen(false);
       setEditId(null);
       setForm({ full_name: "", email: "", phone: "", role: "tecnico" });
@@ -1263,6 +1264,7 @@ export function UsersPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workspace-members"] });
+      queryClient.invalidateQueries({ queryKey: ["my-workspace"] });
       toast.success(t("toast.updated"));
     },
     onError: (err) => toast.error((err as Error).message),
