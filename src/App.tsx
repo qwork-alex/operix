@@ -7,6 +7,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { LanguageProvider } from "@/hooks/useLanguage";
 import { WorkspaceProvider } from "@/hooks/useWorkspace";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { RoleGuard } from "@/components/RoleGuard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppLayout } from "@/components/layout/AppLayout";
 import Index from "./pages/Index";
@@ -60,12 +61,12 @@ const App = () => (
                             <Route path="/" element={<Index />} />
                             <Route path="/service-orders" element={<ServiceOrdersPage />} />
                             <Route path="/payment-orders" element={<PaymentOrdersPage />} />
-                            <Route path="/financial" element={<FinancialPage />} />
-                            <Route path="/profit" element={<ProfitDistribution />} />
-                            <Route path="/accounting" element={<Accounting />} />
-                            <Route path="/fleet" element={<FleetPage />} />
-                            <Route path="/documents" element={<Documents />} />
-                            <Route path="/users" element={<UsersPage />} />
+                            <Route path="/financial" element={<RoleGuard allowedRoles={["admin", "socio"]}><FinancialPage /></RoleGuard>} />
+                            <Route path="/profit" element={<RoleGuard allowedRoles={["admin", "socio"]}><ProfitDistribution /></RoleGuard>} />
+                            <Route path="/accounting" element={<RoleGuard allowedRoles={["admin"]}><Accounting /></RoleGuard>} />
+                            <Route path="/fleet" element={<RoleGuard allowedRoles={["admin", "tecnico"]}><FleetPage /></RoleGuard>} />
+                            <Route path="/documents" element={<RoleGuard allowedRoles={["admin", "tecnico", "socio"]}><Documents /></RoleGuard>} />
+                            <Route path="/users" element={<RoleGuard allowedRoles={["admin"]}><UsersPage /></RoleGuard>} />
                             <Route path="/settings" element={<SettingsPage />} />
                             <Route path="*" element={<NotFound />} />
                           </Routes>
