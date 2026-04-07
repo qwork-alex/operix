@@ -25,23 +25,27 @@ import {
 } from "@/components/ui/sidebar";
 import { NavLink } from "@/components/NavLink";
 import { useLanguage } from "@/hooks/useLanguage";
+import { useWorkspace } from "@/hooks/useWorkspace";
 
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const { t } = useLanguage();
+  const { isAdmin, myRole } = useWorkspace();
 
-  const mainNav = [
-    { title: t("nav.dashboard"), url: "/", icon: LayoutDashboard },
-    { title: t("nav.serviceOrders"), url: "/service-orders", icon: FileText },
-    { title: t("nav.paymentOrders"), url: "/payment-orders", icon: CreditCard },
-    { title: t("nav.financial"), url: "/financial", icon: TrendingUp },
-    { title: t("nav.profit"), url: "/profit", icon: PieChart },
-    { title: t("nav.accounting"), url: "/accounting", icon: BookOpen },
-    { title: t("nav.fleet"), url: "/fleet", icon: Car },
-    { title: t("nav.documents"), url: "/documents", icon: FolderOpen },
-    { title: t("nav.users"), url: "/users", icon: Users },
+  const allNav = [
+    { title: t("nav.dashboard"), url: "/", icon: LayoutDashboard, roles: ["admin", "tecnico", "socio", "cliente"] },
+    { title: t("nav.serviceOrders"), url: "/service-orders", icon: FileText, roles: ["admin", "tecnico", "socio"] },
+    { title: t("nav.paymentOrders"), url: "/payment-orders", icon: CreditCard, roles: ["admin", "socio"] },
+    { title: t("nav.financial"), url: "/financial", icon: TrendingUp, roles: ["admin", "socio"] },
+    { title: t("nav.profit"), url: "/profit", icon: PieChart, roles: ["admin", "socio"] },
+    { title: t("nav.accounting"), url: "/accounting", icon: BookOpen, roles: ["admin"] },
+    { title: t("nav.fleet"), url: "/fleet", icon: Car, roles: ["admin", "tecnico"] },
+    { title: t("nav.documents"), url: "/documents", icon: FolderOpen, roles: ["admin", "tecnico", "socio"] },
+    { title: t("nav.users"), url: "/users", icon: Users, roles: ["admin"] },
   ];
+
+  const mainNav = allNav.filter((item) => !myRole || item.roles.includes(myRole));
 
   return (
     <Sidebar collapsible="icon" className="border-r border-border/50">
