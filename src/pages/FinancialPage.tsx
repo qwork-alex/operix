@@ -266,27 +266,25 @@ export default function FinancialPage() {
               {reconciliations.length === 0 ? (
                 <div className="text-center py-8 text-sm text-muted-foreground">
                   <CheckCircle className="h-8 w-8 mx-auto mb-2 text-emerald-400" />
-                  {t("fin.noDiscrepancies")}
+                  {s.serviceOrderCount === 0 && s.paymentOrderCount === 0
+                    ? "Nenhuma ordem encontrada. Importe dados para iniciar a reconciliação."
+                    : t("fin.noDiscrepancies")}
                 </div>
               ) : (
-                <div className="rounded-lg border border-border/50 overflow-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="text-[11px]">
-                        <TableHead>{t("label.status")}</TableHead>
-                        <TableHead>Match</TableHead>
-                        <TableHead>{t("nav.serviceOrders")}</TableHead>
-                        <TableHead>{t("nav.paymentOrders")}</TableHead>
-                        <TableHead className="text-right">{t("fin.expected")}</TableHead>
-                        <TableHead className="text-right">{t("fin.received")}</TableHead>
-                        <TableHead className="text-right">{t("fin.gap")}</TableHead>
-                        <TableHead className="text-right">Score</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {reconciliations.map((r: any) => (
-                        <TableRow key={r.id} className="text-xs">
-                          <TableCell>
+                <div className="space-y-2">
+                  {reconciliations.map((r: any) => {
+                    const pn = r.parsed_notes || {};
+                    const soPlate = pn.so_plate || r.service_orders?.license_plate || "—";
+                    const poPlate = pn.po_plate || r.payment_orders?.license_plate || "—";
+                    const soClient = pn.so_client || r.service_orders?.client_name || "—";
+                    const poClient = pn.po_client || r.payment_orders?.client_name || "—";
+                    const soTotal = pn.so_total ?? Number(r.service_orders?.total || 0);
+                    const poTotal = pn.po_total ?? Number(r.payment_orders?.total || 0);
+
+                    return (
+                      <div key={r.id} className="rounded-lg border border-border/50 p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
                             <Badge variant="outline" className={STATUS_COLORS[r.status] || ""}>
                               {r.status === "matched" ? <CheckCircle className="h-3 w-3 mr-1" /> :
                                r.status === "mismatch" ? <XCircle className="h-3 w-3 mr-1" /> :
@@ -294,42 +292,61 @@ export default function FinancialPage() {
                                <Link2 className="h-3 w-3 mr-1" />}
                               {r.status}
                             </Badge>
-                          </TableCell>
-                          <TableCell>
                             <Badge variant="outline" className="text-[10px]">
                               {r.matched_by === "auto" ? "Auto" : "Manual"}
                             </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {r.service_orders ? (
-                              <span>{r.service_orders.car_name || r.service_orders.license_plate || "—"}</span>
-                            ) : <span className="text-muted-foreground">—</span>}
-                          </TableCell>
-                          <TableCell>
-                            {r.payment_orders ? (
-                              <span>{r.payment_orders.car_name || r.payment_orders.license_plate || "—"}</span>
-                            ) : <span className="text-muted-foreground">—</span>}
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums">
-                            {formatCurrency(Number(r.service_orders?.total || 0))}
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums">
-                            {formatCurrency(Number(r.payment_orders?.total || 0))}
-                          </TableCell>
-                          <TableCell className={`text-right tabular-nums font-medium ${
+                            <span className={`text-[10px] tabular-nums ${Number(r.confidence_score) >= 70 ? "text-emerald-400" : Number(r.confidence_score) >= 40 ? "text-warning" : "text-muted-foreground"}`}>
+                              Score: {r.confidence_score}%
+                            </span>
+                          </div>
+                          <span className={`text-sm font-bold tabular-nums ${
                             r.difference_amount > 0 ? "text-destructive" : r.difference_amount < 0 ? "text-emerald-400" : "text-foreground"
                           }`}>
                             {r.difference_amount > 0 ? "-" : r.difference_amount < 0 ? "+" : ""}{formatCurrency(Math.abs(Number(r.difference_amount)))}
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums">
-                            <span className={Number(r.confidence_score) >= 80 ? "text-emerald-400" : Number(r.confidence_score) >= 50 ? "text-warning" : "text-muted-foreground"}>
-                              {r.confidence_score}%
-                            </span>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 text-xs">
+                          <div className="space-y-1">
+                            <p className="text-[10px] font-medium text-muted-foreground uppercase">Ordem de Serviço</p>
+                            {r.service_orders ? (
+                              <>
+                                <p><span className="text-muted-foreground">Placa:</span> {soPlate}</p>
+                                <p><span className="text-muted-foreground">Cliente:</span> {soClient}</p>
+                                <p><span className="text-muted-foreground">Valor:</span> {formatCurrency(soTotal)}</p>
+                              </>
+                            ) : <p className="text-muted-foreground italic">Sem OS correspondente</p>}
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-[10px] font-medium text-muted-foreground uppercase">Ordem de Pagamento</p>
+                            {r.payment_orders ? (
+                              <>
+                                <p><span className="text-muted-foreground">Placa:</span> {poPlate}</p>
+                                <p><span className="text-muted-foreground">Cliente:</span> {poClient}</p>
+                                <p><span className="text-muted-foreground">Valor:</span> {formatCurrency(poTotal)}</p>
+                              </>
+                            ) : <p className="text-muted-foreground italic">Sem pagamento correspondente</p>}
+                          </div>
+                        </div>
+
+                        {pn.explanation && (
+                          <p className="text-[11px] text-muted-foreground bg-muted/50 rounded p-2">
+                            💡 {pn.explanation}
+                          </p>
+                        )}
+
+                        {pn.match_reasons && pn.match_reasons.length > 0 && (
+                          <div className="flex gap-1 flex-wrap">
+                            {pn.match_reasons.map((reason: string, i: number) => (
+                              <Badge key={i} variant="secondary" className="text-[9px] px-1.5 py-0">
+                                {reason}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
