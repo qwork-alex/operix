@@ -1171,52 +1171,70 @@ export function UsersPage() {
           .eq("id", editId);
         if (error) throw error;
       } else {
-        // Create new user via auth, then add to workspace
-        const { data: authData, error: authErr } = await supabase.auth.signUp({
-          email: form.email,
-          password: "TempPass123!",
-          options: { data: { full_name: form.full_name } },
-        });
-        if (authErr) throw authErr;
+        // Try to find existing app_user by email
+        const { data: existingAppUser } = await supabase
+          .from("app_users")
+          .select("id")
+          .eq("email", form.email.trim().toLowerCase())
+          .maybeSingle();
 
-        if (authData.user && workspaceId) {
-          // Wait briefly for the trigger to create app_user
-          await new Promise((r) => setTimeout(r, 1500));
-
-          const { data: appUser } = await supabase
-            .from("app_users")
+        if (existingAppUser && workspaceId) {
+          // Check if already a member of this workspace
+          const { data: existingMembership } = await supabase
+            .from("memberships")
             .select("id")
-            .eq("auth_user_id", authData.user.id)
+            .eq("user_id", existingAppUser.id)
+            .eq("workspace_id", workspaceId)
             .maybeSingle();
 
-          if (appUser) {
-            // Update phone if provided
-            if (form.phone) {
-              await supabase.from("app_users").update({ phone: form.phone }).eq("id", appUser.id);
-            }
-
-            // Add membership to current workspace
-            await supabase.from("memberships").insert({
-              user_id: appUser.id,
-              workspace_id: workspaceId,
-              role: form.role as any,
-              status: "active",
-            });
+          if (existingMembership) {
+            throw new Error("Este usuário já faz parte deste workspace.");
           }
 
-          // Also set user_roles for backward compat
-          const roleMap: Record<string, string> = { admin: "admin", tecnico: "technician", cliente: "client", socio: "partner" };
-          await supabase.from("user_roles").insert({
-            user_id: authData.user.id,
-            role: (roleMap[form.role] || "technician") as any,
+          // Update name/phone if provided
+          if (form.full_name || form.phone) {
+            await supabase.from("app_users").update({
+              name: form.full_name || undefined,
+              phone: form.phone || null,
+            }).eq("id", existingAppUser.id);
+          }
+
+          // Add membership to current workspace
+          const { error } = await supabase.from("memberships").insert({
+            user_id: existingAppUser.id,
+            workspace_id: workspaceId,
+            role: form.role as any,
+            status: "active",
           });
+          if (error) throw error;
+        } else if (!existingAppUser && workspaceId) {
+          // User doesn't exist yet — pre-create app_user and membership
+          // When they sign up later, the trigger will find the membership and skip creating a new workspace
+          const { data: newAppUser, error: insertErr } = await supabase
+            .from("app_users")
+            .insert({
+              email: form.email.trim().toLowerCase(),
+              name: form.full_name || null,
+              phone: form.phone || null,
+            })
+            .select("id")
+            .single();
+          if (insertErr) throw insertErr;
+
+          const { error } = await supabase.from("memberships").insert({
+            user_id: newAppUser.id,
+            workspace_id: workspaceId,
+            role: form.role as any,
+            status: "pending",
+          });
+          if (error) throw error;
+        } else {
+          throw new Error("Workspace não encontrado.");
         }
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workspace-members"] });
-      queryClient.invalidateQueries({ queryKey: ["all-profiles"] });
-      queryClient.invalidateQueries({ queryKey: ["all-roles"] });
       setOpen(false);
       setEditId(null);
       setForm({ full_name: "", email: "", phone: "", role: "tecnico" });
