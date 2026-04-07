@@ -9,6 +9,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/useAuth";
+import { useWorkspace } from "@/hooks/useWorkspace";
 import { useLanguage, type LangCode } from "@/hooks/useLanguage";
 import { useNotifications } from "@/hooks/useNotifications";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -46,7 +47,8 @@ function timeAgo(dateStr: string, t: (k: string, fb?: string) => string): string
 }
 
 export function TopBar() {
-  const { profile, role, signOut } = useAuth();
+  const { profile, signOut } = useAuth();
+  const { myRole: role } = useWorkspace();
   const { t, lang, setLang } = useLanguage();
   const { notifications, unreadCount, markAsRead, markAllRead, clearAll } = useNotifications();
 
