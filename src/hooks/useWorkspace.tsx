@@ -14,11 +14,15 @@ interface WorkspaceMember {
   membership_id: string;
 }
 
+export type MembershipRole = "admin" | "tecnico" | "cliente" | "socio";
+
 interface WorkspaceContext {
   workspaceId: string | null;
   workspaceName: string | null;
   members: WorkspaceMember[];
   memberAuthIds: string[];
+  myRole: MembershipRole | null;
+  isAdmin: boolean;
   isLoading: boolean;
 }
 
@@ -85,6 +89,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     .filter((m) => m.auth_user_id)
     .map((m) => m.auth_user_id);
 
+  // Determine current user's role in this workspace
+  const myMember = members.find((m) => m.auth_user_id === user?.id);
+  const myRole = (myMember?.role as MembershipRole) ?? null;
+  const isAdmin = myRole === "admin";
+
   return (
     <WorkspaceCtx.Provider
       value={{
@@ -92,6 +101,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         workspaceName: wsData?.workspaceName ?? null,
         members,
         memberAuthIds,
+        myRole,
+        isAdmin,
         isLoading: wsLoading || membersLoading,
       }}
     >
