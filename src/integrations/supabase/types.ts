@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_users: {
+        Row: {
+          auth_user_id: string | null
+          created_at: string
+          email: string
+          id: string
+          name: string | null
+          phone: string | null
+        }
+        Insert: {
+          auth_user_id?: string | null
+          created_at?: string
+          email: string
+          id?: string
+          name?: string | null
+          phone?: string | null
+        }
+        Update: {
+          auth_user_id?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string | null
+          phone?: string | null
+        }
+        Relationships: []
+      }
       backend_event_logs: {
         Row: {
           action: string
@@ -547,6 +574,48 @@ export type Database = {
             columns: ["usage_log_id"]
             isOneToOne: false
             referencedRelation: "vehicle_usage_logs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      memberships: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["membership_role"]
+          status: Database["public"]["Enums"]["membership_status"]
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["membership_role"]
+          status?: Database["public"]["Enums"]["membership_status"]
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["membership_role"]
+          status?: Database["public"]["Enums"]["membership_status"]
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "memberships_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "memberships_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
             referencedColumns: ["id"]
           },
         ]
@@ -1240,6 +1309,35 @@ export type Database = {
           },
         ]
       }
+      workspaces: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          owner_user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          owner_user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          owner_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspaces_owner_user_id_fkey"
+            columns: ["owner_user_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -1267,6 +1365,8 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "partner" | "technician" | "client"
+      membership_role: "admin" | "tecnico" | "cliente" | "socio"
+      membership_status: "active" | "pending"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1395,6 +1495,8 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "partner", "technician", "client"],
+      membership_role: ["admin", "tecnico", "cliente", "socio"],
+      membership_status: ["active", "pending"],
     },
   },
 } as const
