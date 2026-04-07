@@ -1134,91 +1134,104 @@ export function Documents() {
 }
 
 // ─── USERS ───
+import { useWorkspace } from "@/hooks/useWorkspace";
+
 export function UsersPage() {
   const { t, formatDate } = useLanguage();
   const queryClient = useQueryClient();
+  const { workspaceId, members, isLoading: wsLoading } = useWorkspace();
   const [open, setOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState({ full_name: "", email: "", phone: "", role: "technician" });
+  const [form, setForm] = useState({ full_name: "", email: "", phone: "", role: "tecnico" });
 
-  const { data: profiles = [], isLoading } = useQuery({
-    queryKey: ["all-profiles"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("profiles").select("*").order("created_at", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  const { data: roles = [] } = useQuery({
-    queryKey: ["all-roles"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("user_roles").select("*");
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  const roleMap = new Map(roles.map((r: any) => [r.user_id, r.role]));
+  const roleLabels: Record<string, string> = {
+    admin: t("role.admin"),
+    tecnico: t("role.technician"),
+    cliente: t("role.client"),
+    socio: t("role.partner"),
+  };
 
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (editId) {
-        const { error } = await supabase.from("profiles").update({
-          full_name: form.full_name,
-          email: form.email || null,
-          phone: form.phone || null,
-          updated_at: new Date().toISOString(),
-        }).eq("id", editId);
-        if (error) throw error;
+        // Update app_user name/phone
+        const member = members.find((m) => m.membership_id === editId);
+        if (!member) throw new Error("Member not found");
 
-        const currentRole = roleMap.get(editId);
-        if (currentRole !== form.role) {
-          if (currentRole) {
-            const { error: re } = await supabase.from("user_roles").update({ role: form.role as any }).eq("user_id", editId);
-            if (re) throw re;
-          } else {
-            const { error: re } = await supabase.from("user_roles").insert({ user_id: editId, role: form.role as any });
-            if (re) throw re;
-          }
-        }
+        await supabase
+          .from("app_users")
+          .update({ name: form.full_name, phone: form.phone || null })
+          .eq("id", member.app_user_id);
+
+        // Update membership role
+        const { error } = await supabase
+          .from("memberships")
+          .update({ role: form.role as any })
+          .eq("id", editId);
+        if (error) throw error;
       } else {
+        // Create new user via auth, then add to workspace
         const { data: authData, error: authErr } = await supabase.auth.signUp({
           email: form.email,
           password: "TempPass123!",
           options: { data: { full_name: form.full_name } },
         });
         if (authErr) throw authErr;
-        if (authData.user) {
-          await supabase.from("user_roles").insert({ user_id: authData.user.id, role: form.role as any });
-          if (form.phone) {
-            await supabase.from("profiles").update({ phone: form.phone }).eq("id", authData.user.id);
+
+        if (authData.user && workspaceId) {
+          // Wait briefly for the trigger to create app_user
+          await new Promise((r) => setTimeout(r, 1500));
+
+          const { data: appUser } = await supabase
+            .from("app_users")
+            .select("id")
+            .eq("auth_user_id", authData.user.id)
+            .maybeSingle();
+
+          if (appUser) {
+            // Update phone if provided
+            if (form.phone) {
+              await supabase.from("app_users").update({ phone: form.phone }).eq("id", appUser.id);
+            }
+
+            // Add membership to current workspace
+            await supabase.from("memberships").insert({
+              user_id: appUser.id,
+              workspace_id: workspaceId,
+              role: form.role as any,
+              status: "active",
+            });
           }
+
+          // Also set user_roles for backward compat
+          const roleMap: Record<string, string> = { admin: "admin", tecnico: "technician", cliente: "client", socio: "partner" };
+          await supabase.from("user_roles").insert({
+            user_id: authData.user.id,
+            role: (roleMap[form.role] || "technician") as any,
+          });
         }
       }
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspace-members"] });
       queryClient.invalidateQueries({ queryKey: ["all-profiles"] });
       queryClient.invalidateQueries({ queryKey: ["all-roles"] });
       setOpen(false);
       setEditId(null);
-      setForm({ full_name: "", email: "", phone: "", role: "technician" });
+      setForm({ full_name: "", email: "", phone: "", role: "tecnico" });
       toast.success(editId ? t("toast.updated") : t("users.userCreated"));
     },
     onError: (err) => toast.error((err as Error).message),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error: re } = await supabase.from("user_roles").delete().eq("user_id", id);
-      if (re) throw re;
-      const { error } = await supabase.from("profiles").delete().eq("id", id);
+    mutationFn: async (membershipId: string) => {
+      const { error } = await supabase.from("memberships").delete().eq("id", membershipId);
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["all-profiles"] });
-      queryClient.invalidateQueries({ queryKey: ["all-roles"] });
+      queryClient.invalidateQueries({ queryKey: ["workspace-members"] });
       setDeleteTarget(null);
       toast.success(t("toast.deleted"));
     },
@@ -1226,26 +1239,20 @@ export function UsersPage() {
   });
 
   const updateRole = useMutation({
-    mutationFn: async ({ userId, newRole }: { userId: string; newRole: string }) => {
-      const existingRole = roleMap.get(userId);
-      if (existingRole) {
-        const { error } = await supabase.from("user_roles").update({ role: newRole as any }).eq("user_id", userId);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("user_roles").insert({ user_id: userId, role: newRole as any });
-        if (error) throw error;
-      }
+    mutationFn: async ({ membershipId, newRole }: { membershipId: string; newRole: string }) => {
+      const { error } = await supabase.from("memberships").update({ role: newRole as any }).eq("id", membershipId);
+      if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["all-roles"] });
+      queryClient.invalidateQueries({ queryKey: ["workspace-members"] });
       toast.success(t("toast.updated"));
     },
     onError: (err) => toast.error((err as Error).message),
   });
 
-  const startEdit = (p: any) => {
-    setEditId(p.id);
-    setForm({ full_name: p.full_name || "", email: p.email || "", phone: p.phone || "", role: roleMap.get(p.id) || "technician" });
+  const startEdit = (m: any) => {
+    setEditId(m.membership_id);
+    setForm({ full_name: m.name || "", email: m.email || "", phone: m.phone || "", role: m.role || "tecnico" });
     setOpen(true);
   };
 
@@ -1261,7 +1268,7 @@ export function UsersPage() {
             <p className="text-xs text-muted-foreground">{t("users.subtitle")}</p>
           </div>
         </div>
-        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setEditId(null); setForm({ full_name: "", email: "", phone: "", role: "technician" }); } }}>
+        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setEditId(null); setForm({ full_name: "", email: "", phone: "", role: "tecnico" }); } }}>
           <DialogTrigger asChild>
             <Button size="sm"><Plus className="h-4 w-4 mr-1" />{t("users.addUser")}</Button>
           </DialogTrigger>
@@ -1286,9 +1293,9 @@ export function UsersPage() {
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="admin">{t("role.admin")}</SelectItem>
-                    <SelectItem value="partner">{t("role.partner")}</SelectItem>
-                    <SelectItem value="technician">{t("role.technician")}</SelectItem>
-                    <SelectItem value="client">{t("role.client")}</SelectItem>
+                    <SelectItem value="socio">{t("role.partner")}</SelectItem>
+                    <SelectItem value="tecnico">{t("role.technician")}</SelectItem>
+                    <SelectItem value="cliente">{t("role.client")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1316,9 +1323,9 @@ export function UsersPage() {
         </DialogContent>
       </Dialog>
 
-      {isLoading ? (
+      {wsLoading ? (
         <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
-      ) : profiles.length === 0 ? (
+      ) : members.length === 0 ? (
         <div className="text-center py-12 text-sm text-muted-foreground">{t("users.noUsers")}</div>
       ) : (
         <div className="rounded-lg border border-border/50 overflow-auto">
@@ -1329,36 +1336,40 @@ export function UsersPage() {
                 <TableHead>{t("label.email")}</TableHead>
                 <TableHead>{t("users.phone")}</TableHead>
                 <TableHead>{t("label.role")}</TableHead>
-                <TableHead>{t("users.joined")}</TableHead>
+                <TableHead>{t("label.status")}</TableHead>
                 <TableHead>{t("label.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {profiles.map((p: any) => (
-                <TableRow key={p.id} className="text-xs">
-                  <TableCell className="font-medium">{p.full_name || "—"}</TableCell>
-                  <TableCell>{p.email || "—"}</TableCell>
-                  <TableCell>{p.phone || "—"}</TableCell>
+              {members.map((m) => (
+                <TableRow key={m.membership_id} className="text-xs">
+                  <TableCell className="font-medium">{m.name || "—"}</TableCell>
+                  <TableCell>{m.email || "—"}</TableCell>
+                  <TableCell>{m.phone || "—"}</TableCell>
                   <TableCell>
-                    <Select value={roleMap.get(p.id) || ""} onValueChange={(v) => updateRole.mutate({ userId: p.id, newRole: v })}>
+                    <Select value={m.role} onValueChange={(v) => updateRole.mutate({ membershipId: m.membership_id, newRole: v })}>
                       <SelectTrigger className="h-7 w-[120px] text-xs">
-                        <SelectValue placeholder={t("users.noRole")} />
+                        <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="admin">{t("role.admin")}</SelectItem>
-                        <SelectItem value="partner">{t("role.partner")}</SelectItem>
-                        <SelectItem value="technician">{t("role.technician")}</SelectItem>
-                        <SelectItem value="client">{t("role.client")}</SelectItem>
+                        <SelectItem value="socio">{t("role.partner")}</SelectItem>
+                        <SelectItem value="tecnico">{t("role.technician")}</SelectItem>
+                        <SelectItem value="cliente">{t("role.client")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{formatDate(p.created_at)}</TableCell>
+                  <TableCell>
+                    <Badge variant={m.status === "active" ? "default" : "secondary"} className="text-[10px]">
+                      {m.status === "active" ? t("status.confirmed") : t("status.pending")}
+                    </Badge>
+                  </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(p)}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(m)}>
                         <Pencil className="h-3 w-3" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget(p.id)}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget(m.membership_id)}>
                         <Trash2 className="h-3 w-3" />
                       </Button>
                     </div>

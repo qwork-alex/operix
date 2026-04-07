@@ -1,17 +1,30 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useWorkspace } from "./useWorkspace";
 
 export function useDashboardStats() {
+  const { memberAuthIds } = useWorkspace();
+
   return useQuery({
-    queryKey: ["dashboard-stats"],
+    queryKey: ["dashboard-stats", memberAuthIds],
     queryFn: async () => {
+      // Build queries – filter by workspace members when available
+      let soQ = supabase.from("service_orders").select("total, status, created_at, created_by");
+      let poQ = supabase.from("payment_orders").select("total, status, created_at, created_by");
+      let frQ = supabase.from("financial_records").select("amount, type, status, created_by");
+      const techQ = supabase.from("technicians").select("id");
+      let clientQ = supabase.from("clients").select("id, created_by");
+      const discQ = supabase.from("discrepancies").select("id, resolved");
+
+      if (memberAuthIds.length > 0) {
+        soQ = soQ.in("created_by", memberAuthIds);
+        poQ = poQ.in("created_by", memberAuthIds);
+        frQ = frQ.in("created_by", memberAuthIds);
+        clientQ = clientQ.in("created_by", memberAuthIds);
+      }
+
       const [soRes, poRes, frRes, techRes, clientRes, discRes] = await Promise.all([
-        supabase.from("service_orders").select("total, status, created_at"),
-        supabase.from("payment_orders").select("total, status, created_at"),
-        supabase.from("financial_records").select("amount, type, status"),
-        supabase.from("technicians").select("id"),
-        supabase.from("clients").select("id"),
-        supabase.from("discrepancies").select("id, resolved"),
+        soQ, poQ, frQ, techQ, clientQ, discQ,
       ]);
 
       const serviceOrders = soRes.data ?? [];

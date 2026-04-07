@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
 import { LanguageProvider } from "@/hooks/useLanguage";
+import { WorkspaceProvider } from "@/hooks/useWorkspace";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -52,6 +53,7 @@ const App = () => (
                   path="/*"
                   element={
                     <ProtectedRoute>
+                      <WorkspaceProvider>
                       <AppLayout>
                         <ErrorBoundary>
                           <Routes>
@@ -69,6 +71,7 @@ const App = () => (
                           </Routes>
                         </ErrorBoundary>
                       </AppLayout>
+                      </WorkspaceProvider>
                     </ProtectedRoute>
                   }
                 />

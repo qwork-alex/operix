@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import { useAuth } from "./useAuth";
+import { useWorkspace } from "./useWorkspace";
 import { toast } from "sonner";
 
 export type ServiceOrder = Tables<"service_orders">;
@@ -45,6 +46,7 @@ export function useServiceOrders(filters?: {
 }) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { memberAuthIds } = useWorkspace();
 
   const hasRequiredAuditFields = (payload: {
     id?: string;
@@ -54,13 +56,14 @@ export function useServiceOrders(filters?: {
   }) => Boolean(payload.id && payload.created_by && payload.created_at && payload.updated_at);
 
   const query = useQuery({
-    queryKey: ["service_orders", filters],
+    queryKey: ["service_orders", filters, memberAuthIds],
     queryFn: async () => {
       let q = supabase
         .from("service_orders")
         .select("*, clients(name), technicians(name)")
         .order("created_at", { ascending: false });
 
+      if (memberAuthIds.length > 0) q = q.in("created_by", memberAuthIds);
       if (filters?.client_id) q = q.eq("client_id", filters.client_id);
       if (filters?.platform) q = q.eq("platform", filters.platform);
       if (filters?.technician_id) q = q.eq("technician_id", filters.technician_id);
