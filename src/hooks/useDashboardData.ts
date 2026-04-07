@@ -1,14 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useWorkspace } from "./useWorkspace";
+import { useAuth } from "./useAuth";
 
 export function useDashboardStats() {
-  const { memberAuthIds } = useWorkspace();
+  const { memberAuthIds, isAdmin } = useWorkspace();
+  const { user } = useAuth();
 
   return useQuery({
-    queryKey: ["dashboard-stats", memberAuthIds],
+    queryKey: ["dashboard-stats", memberAuthIds, isAdmin, user?.id],
     queryFn: async () => {
-      // Build queries – filter by workspace members when available
       let soQ = supabase.from("service_orders").select("total, status, created_at, created_by");
       let poQ = supabase.from("payment_orders").select("total, status, created_at, created_by");
       let frQ = supabase.from("financial_records").select("amount, type, status, created_by");
@@ -16,7 +17,14 @@ export function useDashboardStats() {
       let clientQ = supabase.from("clients").select("id, created_by");
       const discQ = supabase.from("discrepancies").select("id, resolved");
 
-      if (memberAuthIds.length > 0) {
+      if (!isAdmin && user?.id) {
+        // Non-admin: only own data
+        soQ = soQ.eq("created_by", user.id);
+        poQ = poQ.eq("created_by", user.id);
+        frQ = frQ.eq("created_by", user.id);
+        clientQ = clientQ.eq("created_by", user.id);
+      } else if (isAdmin && memberAuthIds.length > 0) {
+        // Admin: all workspace members
         soQ = soQ.in("created_by", memberAuthIds);
         poQ = poQ.in("created_by", memberAuthIds);
         frQ = frQ.in("created_by", memberAuthIds);
