@@ -70,11 +70,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, fullName: string) => {
+    // Check for pending invite token to pass to backend trigger
+    const inviteToken = sessionStorage.getItem("invite_token") || undefined;
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { full_name: fullName },
+        data: { full_name: fullName, ...(inviteToken ? { invite_token: inviteToken } : {}) },
         emailRedirectTo: window.location.origin,
       },
     });
