@@ -100,6 +100,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       value={{
         workspaceId: wsData?.workspaceId ?? null,
         workspaceName: wsData?.workspaceName ?? null,
+        ownerAppUserId: wsData?.ownerAppUserId ?? null,
         members,
         memberAuthIds,
         myRole,
