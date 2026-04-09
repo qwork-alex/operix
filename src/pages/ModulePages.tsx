@@ -1533,6 +1533,59 @@ export function SettingsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {isOwner && (
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardHeader>
+            <CardTitle className="text-sm flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-4 w-4" />
+              Zona de Perigo — Desenvolvimento
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-xs text-muted-foreground mb-4">
+              Reset completo do sistema. Remove todos os usuários, convites e memberships exceto o owner. Esta ação é irreversível.
+            </p>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm" disabled={resetting}>
+                  {resetting ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1" />}
+                  Reset Sistema
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Tem certeza?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Isso apagará todos os usuários, convites, memberships e dados associados. Apenas o owner (qwork@qworkgroup.com) será mantido. Esta ação é irreversível.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    onClick={async () => {
+                      setResetting(true);
+                      try {
+                        const { data, error } = await supabase.functions.invoke("reset-system");
+                        if (error) throw error;
+                        toast.success("Sistema resetado com sucesso");
+                        queryClient.invalidateQueries();
+                      } catch (err: any) {
+                        toast.error(err.message || "Erro ao resetar sistema");
+                      } finally {
+                        setResetting(false);
+                      }
+                    }}
+                  >
+                    Sim, resetar tudo
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
