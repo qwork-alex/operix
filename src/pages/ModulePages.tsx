@@ -15,10 +15,15 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   PieChart as PieChartIcon, BookOpen, Car, FolderOpen, Users, Settings,
   Plus, Save, Trash2, Upload, FolderPlus, ChevronRight, Loader2, Pencil,
   CheckSquare, MoveRight, Eye, Download, Printer, FileText, Check, X, Crown,
-  Copy, Link,
+  Copy, Link, AlertTriangle,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -1447,6 +1452,8 @@ export function SettingsPage() {
   const { profile, user } = useAuth();
   const queryClient = useQueryClient();
   const { settings, isLoading: settingsLoading, saveMutation: saveCompany } = useCompanySettings();
+  const isOwner = user?.email === "qwork@qworkgroup.com";
+  const [resetting, setResetting] = useState(false);
   const [profileForm, setProfileForm] = useState({ full_name: "", email: "" });
   const [companyForm, setCompanyForm] = useState({ company_name: "", siret: "", tva_number: "", address: "", logo_url: "" });
 
@@ -1526,6 +1533,59 @@ export function SettingsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {isOwner && (
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardHeader>
+            <CardTitle className="text-sm flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-4 w-4" />
+              Zona de Perigo — Desenvolvimento
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-xs text-muted-foreground mb-4">
+              Reset completo do sistema. Remove todos os usuários, convites e memberships exceto o owner. Esta ação é irreversível.
+            </p>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm" disabled={resetting}>
+                  {resetting ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1" />}
+                  Reset Sistema
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Tem certeza?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Isso apagará todos os usuários, convites, memberships e dados associados. Apenas o owner (qwork@qworkgroup.com) será mantido. Esta ação é irreversível.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    onClick={async () => {
+                      setResetting(true);
+                      try {
+                        const { data, error } = await supabase.functions.invoke("reset-system");
+                        if (error) throw error;
+                        toast.success("Sistema resetado com sucesso");
+                        queryClient.invalidateQueries();
+                      } catch (err: any) {
+                        toast.error(err.message || "Erro ao resetar sistema");
+                      } finally {
+                        setResetting(false);
+                      }
+                    }}
+                  >
+                    Sim, resetar tudo
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
