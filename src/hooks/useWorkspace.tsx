@@ -49,7 +49,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       // Find first active membership
       const { data: membership, error: mErr } = await supabase
         .from("memberships")
-        .select("workspace_id, workspaces(id, name)")
+        .select("workspace_id, workspaces(id, name, owner_user_id)")
         .eq("user_id", appUser.id)
         .eq("status", "active")
         .limit(1)
