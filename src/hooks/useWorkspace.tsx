@@ -32,12 +32,11 @@ const WorkspaceCtx = createContext<WorkspaceContext | undefined>(undefined);
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
 
-  // 1. Get app_user + workspace for current auth user
+  // 1. Get app_user + workspace for current auth user (supports switching)
   const { data: wsData, isLoading: wsLoading } = useQuery({
     queryKey: ["my-workspace", user?.id],
     enabled: !!user?.id,
     queryFn: async () => {
-      // Find app_user for current auth user
       const { data: appUser, error: auErr } = await supabase
         .from("app_users")
         .select("id")
@@ -46,18 +45,23 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       if (auErr) throw auErr;
       if (!appUser) return null;
 
-      // Find first active membership
-      const { data: membership, error: mErr } = await supabase
+      // Get all active memberships
+      const { data: memberships, error: mErr } = await supabase
         .from("memberships")
         .select("workspace_id, workspaces(id, name, owner_user_id)")
         .eq("user_id", appUser.id)
-        .eq("status", "active")
-        .limit(1)
-        .maybeSingle();
+        .eq("status", "active");
       if (mErr) throw mErr;
-      if (!membership) return null;
+      if (!memberships || memberships.length === 0) return null;
 
-      const ws = membership.workspaces as any;
+      // Check if user has a preferred workspace stored
+      const savedWsId = localStorage.getItem("selected_workspace_id");
+      const selected = savedWsId
+        ? memberships.find((m: any) => m.workspace_id === savedWsId)
+        : null;
+
+      const membership = selected || memberships[0];
+      const ws = (membership as any).workspaces as any;
       return { workspaceId: ws.id as string, workspaceName: ws.name as string, appUserId: appUser.id, ownerAppUserId: (ws.owner_user_id || null) as string | null };
     },
   });
