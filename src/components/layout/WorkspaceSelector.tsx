@@ -30,7 +30,7 @@ export function WorkspaceSelector({ currentWorkspaceId }: { currentWorkspaceId: 
       const { data: appUser } = await supabase
         .from("app_users")
         .select("id")
-        .eq("auth_user_id", user!.id)
+        .eq("auth_user_id", user?.id ?? "")
         .maybeSingle();
       if (!appUser) return [];
 
