@@ -1139,11 +1139,12 @@ import { useWorkspace } from "@/hooks/useWorkspace";
 export function UsersPage() {
   const { t, formatDate } = useLanguage();
   const queryClient = useQueryClient();
-  const { workspaceId, members, ownerAppUserId, isLoading: wsLoading } = useWorkspace();
+  const { workspaceId, workspaceName, members, ownerAppUserId, isLoading: wsLoading } = useWorkspace();
   const [open, setOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState({ full_name: "", email: "", phone: "", role: "tecnico" });
+  const [inviteResult, setInviteResult] = useState<{ link: string; code: string } | null>(null);
 
   const roleLabels: Record<string, string> = {
     admin: t("role.admin"),
@@ -1155,91 +1156,62 @@ export function UsersPage() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (editId) {
-        // Update app_user name/phone
         const member = members.find((m) => m.membership_id === editId);
         if (!member) throw new Error("Member not found");
-
-        await supabase
-          .from("app_users")
-          .update({ name: form.full_name, phone: form.phone || null })
-          .eq("id", member.app_user_id);
-
-        // Update membership role
-        const { error } = await supabase
-          .from("memberships")
-          .update({ role: form.role as any })
-          .eq("id", editId);
+        await supabase.from("app_users").update({ name: form.full_name, phone: form.phone || null }).eq("id", member.app_user_id);
+        const { error } = await supabase.from("memberships").update({ role: form.role as any }).eq("id", editId);
         if (error) throw error;
       } else {
-        // Try to find existing app_user by email
-        const { data: existingAppUser } = await supabase
-          .from("app_users")
-          .select("id")
-          .eq("email", form.email.trim().toLowerCase())
-          .maybeSingle();
+        // Create invite
+        const { data: invite, error: invErr } = await supabase.from("invites").insert({
+          workspace_id: workspaceId!,
+          created_by: (await supabase.auth.getUser()).data.user!.id,
+          role: form.role as any,
+          email: form.email.trim().toLowerCase() || null,
+          invite_type: "link",
+        }).select("token, short_code").single();
+        if (invErr) throw invErr;
 
-        if (existingAppUser && workspaceId) {
-          // Check if already a member of this workspace
-          const { data: existingMembership } = await supabase
-            .from("memberships")
-            .select("id")
-            .eq("user_id", existingAppUser.id)
-            .eq("workspace_id", workspaceId)
-            .maybeSingle();
-
-          if (existingMembership) {
-            throw new Error("Este usuário já faz parte deste workspace.");
+        // Also try to pre-link existing user
+        const email = form.email.trim().toLowerCase();
+        if (email) {
+          const { data: existingAppUser } = await supabase.from("app_users").select("id").eq("email", email).maybeSingle();
+          if (existingAppUser) {
+            const { data: existingMembership } = await supabase.from("memberships").select("id").eq("user_id", existingAppUser.id).eq("workspace_id", workspaceId!).maybeSingle();
+            if (!existingMembership) {
+              await supabase.from("memberships").insert({
+                user_id: existingAppUser.id,
+                workspace_id: workspaceId!,
+                role: form.role as any,
+                status: "active",
+                source: "manual",
+              });
+            }
           }
-
-          // Update name/phone if provided
-          if (form.full_name || form.phone) {
-            await supabase.from("app_users").update({
-              name: form.full_name || undefined,
-              phone: form.phone || null,
-            }).eq("id", existingAppUser.id);
-          }
-
-          // Add membership to current workspace
-          const { error } = await supabase.from("memberships").insert({
-            user_id: existingAppUser.id,
-            workspace_id: workspaceId,
-            role: form.role as any,
-            status: "active",
-          });
-          if (error) throw error;
-        } else if (!existingAppUser && workspaceId) {
-          // User doesn't exist yet — pre-create app_user and membership
-          // When they sign up later, the trigger will find the membership and skip creating a new workspace
-          const { data: newAppUser, error: insertErr } = await supabase
-            .from("app_users")
-            .insert({
-              email: form.email.trim().toLowerCase(),
-              name: form.full_name || null,
-              phone: form.phone || null,
-            })
-            .select("id")
-            .single();
-          if (insertErr) throw insertErr;
-
-          const { error } = await supabase.from("memberships").insert({
-            user_id: newAppUser.id,
-            workspace_id: workspaceId,
-            role: form.role as any,
-            status: "pending",
-          });
-          if (error) throw error;
-        } else {
-          throw new Error("Workspace não encontrado.");
         }
+
+        // Log
+        await supabase.from("backend_event_logs").insert({
+          table_name: "invites", action: "INVITE_CREATED",
+          payload: { email, role: form.role, workspace_id: workspaceId } as any,
+        });
+
+        const link = `${window.location.origin}/join?token=${invite.token}`;
+        setInviteResult({ link, code: invite.short_code || "" });
+        return; // Don't close dialog yet — show the invite result
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workspace-members"] });
       queryClient.invalidateQueries({ queryKey: ["my-workspace"] });
-      setOpen(false);
-      setEditId(null);
-      setForm({ full_name: "", email: "", phone: "", role: "tecnico" });
-      toast.success(editId ? t("toast.updated") : t("users.userCreated"));
+      if (editId) {
+        setOpen(false);
+        setEditId(null);
+        setForm({ full_name: "", email: "", phone: "", role: "tecnico" });
+        toast.success(t("toast.updated"));
+      } else if (inviteResult === null) {
+        toast.success("Convite criado!");
+      }
     },
     onError: (err) => toast.error((err as Error).message),
   });
@@ -1273,7 +1245,20 @@ export function UsersPage() {
   const startEdit = (m: any) => {
     setEditId(m.membership_id);
     setForm({ full_name: m.name || "", email: m.email || "", phone: m.phone || "", role: m.role || "tecnico" });
+    setInviteResult(null);
     setOpen(true);
+  };
+
+  const closeDialog = () => {
+    setOpen(false);
+    setEditId(null);
+    setInviteResult(null);
+    setForm({ full_name: "", email: "", phone: "", role: "tecnico" });
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success("Copiado!");
   };
 
   return (
@@ -1288,46 +1273,76 @@ export function UsersPage() {
             <p className="text-xs text-muted-foreground">{t("users.subtitle")}</p>
           </div>
         </div>
-        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setEditId(null); setForm({ full_name: "", email: "", phone: "", role: "tecnico" }); } }}>
+        <Dialog open={open} onOpenChange={(v) => { if (!v) closeDialog(); else setOpen(true); }}>
           <DialogTrigger asChild>
             <Button size="sm"><Plus className="h-4 w-4 mr-1" />{t("users.addUser")}</Button>
           </DialogTrigger>
           <DialogContent className="bg-card border-border">
-            <DialogHeader><DialogTitle>{editId ? t("users.editUser") : t("users.addUser")}</DialogTitle></DialogHeader>
-            <div className="space-y-4 pt-2">
-              <div className="space-y-2">
-                <Label className="text-xs">{t("label.name")}</Label>
-                <Input value={form.full_name} onChange={e => setForm(p => ({ ...p, full_name: e.target.value }))} />
+            <DialogHeader><DialogTitle>{editId ? t("users.editUser") : "Convidar usuário"}</DialogTitle></DialogHeader>
+
+            {inviteResult ? (
+              <div className="space-y-4 pt-2">
+                <p className="text-sm text-muted-foreground">Convite criado! Compartilhe o link ou código abaixo:</p>
+                <div className="space-y-2">
+                  <Label className="text-xs">Link de convite</Label>
+                  <div className="flex gap-2">
+                    <Input value={inviteResult.link} readOnly className="text-xs font-mono" />
+                    <Button size="sm" variant="outline" onClick={() => copyToClipboard(inviteResult.link)}>
+                      <Copy className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Código manual</Label>
+                  <div className="flex gap-2">
+                    <Input value={inviteResult.code} readOnly className="text-center font-mono text-lg font-bold tracking-widest" />
+                    <Button size="sm" variant="outline" onClick={() => copyToClipboard(inviteResult.code)}>
+                      <Copy className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+                <Button className="w-full" variant="outline" onClick={closeDialog}>Fechar</Button>
               </div>
-              <div className="space-y-2">
-                <Label className="text-xs">{t("label.email")}</Label>
-                <Input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} disabled={!!editId} />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs">{t("users.phone")}</Label>
-                <Input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs">{t("label.role")}</Label>
-                {editId && members.find(m => m.membership_id === editId)?.app_user_id === ownerAppUserId ? (
-                  <Input value={t("role.admin")} disabled className="bg-muted" />
-                ) : (
-                  <Select value={form.role} onValueChange={v => setForm(p => ({ ...p, role: v }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="admin">{t("role.admin")}</SelectItem>
-                      <SelectItem value="socio">{t("role.partner")}</SelectItem>
-                      <SelectItem value="tecnico">{t("role.technician")}</SelectItem>
-                      <SelectItem value="cliente">{t("role.client")}</SelectItem>
-                    </SelectContent>
-                  </Select>
+            ) : (
+              <div className="space-y-4 pt-2">
+                {editId && (
+                  <div className="space-y-2">
+                    <Label className="text-xs">{t("label.name")}</Label>
+                    <Input value={form.full_name} onChange={e => setForm(p => ({ ...p, full_name: e.target.value }))} />
+                  </div>
                 )}
+                <div className="space-y-2">
+                  <Label className="text-xs">{t("label.email")}</Label>
+                  <Input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} disabled={!!editId} placeholder={editId ? "" : "email@exemplo.com"} />
+                </div>
+                {editId && (
+                  <div className="space-y-2">
+                    <Label className="text-xs">{t("users.phone")}</Label>
+                    <Input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label className="text-xs">{t("label.role")}</Label>
+                  {editId && members.find(m => m.membership_id === editId)?.app_user_id === ownerAppUserId ? (
+                    <Input value={t("role.admin")} disabled className="bg-muted" />
+                  ) : (
+                    <Select value={form.role} onValueChange={v => setForm(p => ({ ...p, role: v }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="admin">{t("role.admin")}</SelectItem>
+                        <SelectItem value="socio">{t("role.partner")}</SelectItem>
+                        <SelectItem value="tecnico">{t("role.technician")}</SelectItem>
+                        <SelectItem value="cliente">{t("role.client")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+                <Button className="w-full" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || (!editId && !form.email)}>
+                  {saveMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : editId ? <Save className="h-4 w-4 mr-1" /> : <Link className="h-4 w-4 mr-1" />}
+                  {editId ? t("action.save") : "Gerar convite"}
+                </Button>
               </div>
-              <Button className="w-full" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || !form.full_name || !form.email}>
-                {saveMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
-                {t("action.save")}
-              </Button>
-            </div>
+            )}
           </DialogContent>
         </Dialog>
       </div>
