@@ -19,6 +19,7 @@ export type MembershipRole = "admin" | "tecnico" | "cliente" | "socio";
 interface WorkspaceContext {
   workspaceId: string | null;
   workspaceName: string | null;
+  ownerAppUserId: string | null;
   members: WorkspaceMember[];
   memberAuthIds: string[];
   myRole: MembershipRole | null;
