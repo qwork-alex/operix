@@ -19,7 +19,6 @@ export function useDashboardStats() {
       const discQ = supabase.from("discrepancies").select("id, resolved");
 
       if (!isAdmin && user?.id) {
-        // Non-admin: only own data
         soQ = soQ.eq("created_by", user.id);
         poQ = poQ.eq("created_by", user.id);
         frQ = frQ.eq("created_by", user.id);
