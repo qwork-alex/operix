@@ -1309,15 +1309,19 @@ export function UsersPage() {
               </div>
               <div className="space-y-2">
                 <Label className="text-xs">{t("label.role")}</Label>
-                <Select value={form.role} onValueChange={v => setForm(p => ({ ...p, role: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="admin">{t("role.admin")}</SelectItem>
-                    <SelectItem value="socio">{t("role.partner")}</SelectItem>
-                    <SelectItem value="tecnico">{t("role.technician")}</SelectItem>
-                    <SelectItem value="cliente">{t("role.client")}</SelectItem>
-                  </SelectContent>
-                </Select>
+                {editId && members.find(m => m.membership_id === editId)?.app_user_id === ownerAppUserId ? (
+                  <Input value={t("role.admin")} disabled className="bg-muted" />
+                ) : (
+                  <Select value={form.role} onValueChange={v => setForm(p => ({ ...p, role: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="admin">{t("role.admin")}</SelectItem>
+                      <SelectItem value="socio">{t("role.partner")}</SelectItem>
+                      <SelectItem value="tecnico">{t("role.technician")}</SelectItem>
+                      <SelectItem value="cliente">{t("role.client")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
               <Button className="w-full" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || !form.full_name || !form.email}>
                 {saveMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
