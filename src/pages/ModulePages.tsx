@@ -15,10 +15,15 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   PieChart as PieChartIcon, BookOpen, Car, FolderOpen, Users, Settings,
   Plus, Save, Trash2, Upload, FolderPlus, ChevronRight, Loader2, Pencil,
   CheckSquare, MoveRight, Eye, Download, Printer, FileText, Check, X, Crown,
-  Copy, Link,
+  Copy, Link, AlertTriangle,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 
