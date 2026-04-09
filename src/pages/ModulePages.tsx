@@ -18,6 +18,7 @@ import {
   PieChart as PieChartIcon, BookOpen, Car, FolderOpen, Users, Settings,
   Plus, Save, Trash2, Upload, FolderPlus, ChevronRight, Loader2, Pencil,
   CheckSquare, MoveRight, Eye, Download, Printer, FileText, Check, X, Crown,
+  Copy, Link,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 
