@@ -1452,6 +1452,9 @@ export function SettingsPage() {
   const { profile, user } = useAuth();
   const queryClient = useQueryClient();
   const { settings, isLoading: settingsLoading, saveMutation: saveCompany } = useCompanySettings();
+  const isOwner = user?.email === "qwork@qworkgroup.com";
+  const [resetting, setResetting] = useState(false);
+  const { settings, isLoading: settingsLoading, saveMutation: saveCompany } = useCompanySettings();
   const [profileForm, setProfileForm] = useState({ full_name: "", email: "" });
   const [companyForm, setCompanyForm] = useState({ company_name: "", siret: "", tva_number: "", address: "", logo_url: "" });
 
