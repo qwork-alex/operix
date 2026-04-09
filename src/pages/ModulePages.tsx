@@ -1360,26 +1360,34 @@ export function UsersPage() {
                 <TableHead>{t("label.email")}</TableHead>
                 <TableHead>{t("users.phone")}</TableHead>
                 <TableHead>{t("label.role")}</TableHead>
-                <TableHead>{t("label.status")}</TableHead>
                 <TableHead>{t("label.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {members.map((m) => {
+              {members.map((m, idx) => {
                 const isOwner = m.app_user_id === ownerAppUserId;
+                const rolePrefix = m.role === "tecnico" ? "T" : m.role === "cliente" ? "C" : m.role === "admin" ? "A" : "S";
+                const userId = `${rolePrefix}-${String(idx + 1).padStart(5, "0")}`;
                 return (
                 <TableRow key={m.membership_id} className="text-xs">
-                  <TableCell className="font-medium">
-                    {m.name || "—"}
-                    {isOwner && (
-                      <Badge variant="outline" className="ml-2 text-[9px] border-primary/30 text-primary">Owner</Badge>
-                    )}
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <div>
+                        <div className="flex items-center gap-1.5 font-medium">
+                          {m.name || "—"}
+                          {isOwner && (
+                            <Crown className="h-3.5 w-3.5 text-amber-500/70" />
+                          )}
+                        </div>
+                        <span className="text-[10px] text-muted-foreground font-mono">{userId}</span>
+                      </div>
+                    </div>
                   </TableCell>
                   <TableCell>{m.email || "—"}</TableCell>
                   <TableCell>{m.phone || "—"}</TableCell>
                   <TableCell>
                     {isOwner ? (
-                      <Badge variant="default" className="text-[10px]">{t("role.admin")}</Badge>
+                      <Badge variant="outline" className="text-[10px] border-border text-muted-foreground">{t("role.admin")}</Badge>
                     ) : (
                       <Select value={m.role} onValueChange={(v) => updateRole.mutate({ membershipId: m.membership_id, newRole: v })}>
                         <SelectTrigger className="h-7 w-[120px] text-xs">
@@ -1393,11 +1401,6 @@ export function UsersPage() {
                         </SelectContent>
                       </Select>
                     )}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={m.status === "active" ? "default" : "secondary"} className="text-[10px]">
-                      {m.status === "active" ? t("status.confirmed") : t("status.pending")}
-                    </Badge>
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
