@@ -106,6 +106,12 @@ export default function JoinPage() {
         accepted_by: appUser!.id,
       }).eq("id", invite.id);
 
+      // Set this workspace as active
+      localStorage.setItem("selected_workspace_id", invite.workspace_id);
+
+      // Clear any stored invite token
+      sessionStorage.removeItem("invite_token");
+
       // Log
       await supabase.from("backend_event_logs").insert({
         table_name: "invites",
@@ -142,11 +148,14 @@ export default function JoinPage() {
       return;
     }
     setInvite(data);
+    setErrorMsg("");
     setStatus("ready");
   };
 
-  // If not authenticated, redirect to auth with return URL
+  // If not authenticated and invite is loaded, redirect to auth with invite token stored
   if (!authLoading && !user && invite) {
+    // Store the invite token in sessionStorage so auth page can redirect back
+    sessionStorage.setItem("invite_token", invite.token);
     const returnUrl = `/join?token=${invite.token}`;
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
