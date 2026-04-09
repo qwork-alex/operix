@@ -1420,6 +1420,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      apply_invite_after_auth: {
+        Args: { p_invite_token: string }
+        Returns: Json
+      }
       can_access_client: {
         Args: { _client_id: string; _user_id: string }
         Returns: boolean
