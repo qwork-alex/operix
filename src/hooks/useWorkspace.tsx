@@ -58,7 +58,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       if (!membership) return null;
 
       const ws = membership.workspaces as any;
-      return { workspaceId: ws.id as string, workspaceName: ws.name as string, appUserId: appUser.id };
+      return { workspaceId: ws.id as string, workspaceName: ws.name as string, appUserId: appUser.id, ownerAppUserId: (ws.owner_user_id || null) as string | null };
     },
   });
 
