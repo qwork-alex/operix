@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -23,7 +23,7 @@ export default function JoinPage() {
   useEffect(() => {
     const fetchInvite = async () => {
       if (!token && !code) {
-        setStatus("ready"); // show manual code entry
+        setStatus("ready");
         return;
       }
 
@@ -53,80 +53,54 @@ export default function JoinPage() {
     fetchInvite();
   }, [token, code]);
 
-  // When user is authenticated and invite is loaded, accept it
-  useEffect(() => {
-    if (status !== "ready" || !invite || !user || authLoading) return;
-    acceptInvite();
-  }, [status, invite, user, authLoading]);
-
-  const acceptInvite = async () => {
-    if (!invite || !user) return;
+  // Apply invite via RPC after user is authenticated
+  const applyInviteViaRPC = useCallback(async (inviteToken: string) => {
     setStatus("accepting");
+    console.log("[JoinPage] Calling apply_invite_after_auth with token:", inviteToken);
 
     try {
-      // Find or create app_user
-      let { data: appUser } = await supabase
-        .from("app_users")
-        .select("id")
-        .eq("auth_user_id", user.id)
-        .maybeSingle();
-
-      if (!appUser) {
-        const { data: newUser, error } = await supabase
-          .from("app_users")
-          .insert({ auth_user_id: user.id, email: user.email!, name: user.user_metadata?.full_name || "" })
-          .select("id")
-          .single();
-        if (error) throw error;
-        appUser = newUser;
-      }
-
-      // Check if already a member
-      const { data: existing } = await supabase
-        .from("memberships")
-        .select("id")
-        .eq("user_id", appUser!.id)
-        .eq("workspace_id", invite.workspace_id)
-        .maybeSingle();
-
-      if (!existing) {
-        const { error } = await supabase.from("memberships").insert({
-          user_id: appUser!.id,
-          workspace_id: invite.workspace_id,
-          role: invite.role,
-          status: "active",
-          source: "invite_link",
-        });
-        if (error) throw error;
-      }
-
-      // Mark invite as accepted
-      await supabase.from("invites").update({
-        accepted_at: new Date().toISOString(),
-        accepted_by: appUser!.id,
-      }).eq("id", invite.id);
-
-      // Set this workspace as active
-      localStorage.setItem("selected_workspace_id", invite.workspace_id);
-
-      // Clear any stored invite token
-      localStorage.removeItem("invite_token");
-
-      // Log
-      await supabase.from("backend_event_logs").insert({
-        table_name: "invites",
-        action: "INVITE_ACCEPTED",
-        row_id: invite.id,
-        payload: { workspace_id: invite.workspace_id, role: invite.role } as any,
+      const { data, error } = await supabase.rpc("apply_invite_after_auth", {
+        p_invite_token: inviteToken,
       });
+
+      console.log("[JoinPage] RPC result:", data, error);
+
+      if (error) throw error;
+
+      const result = data as any;
+      if (!result?.success) {
+        throw new Error(result?.error || "Erro ao processar convite");
+      }
+
+      // Set workspace as active
+      localStorage.setItem("selected_workspace_id", result.workspace_id);
+      // Clear stored tokens
+      localStorage.removeItem("invite_token");
+      sessionStorage.removeItem("invite_token");
 
       setStatus("done");
       setTimeout(() => navigate("/"), 2000);
     } catch (err: any) {
+      console.error("[JoinPage] Error applying invite:", err);
       setErrorMsg(err.message || "Erro ao aceitar convite.");
       setStatus("error");
     }
-  };
+  }, [navigate]);
+
+  // When user is authenticated and invite is loaded, apply via RPC
+  useEffect(() => {
+    if (status !== "ready" || !invite || !user || authLoading) return;
+    applyInviteViaRPC(invite.token);
+  }, [status, invite, user, authLoading, applyInviteViaRPC]);
+
+  // Also check for stored invite_token (user coming back from auth)
+  useEffect(() => {
+    if (authLoading || !user) return;
+    const storedToken = localStorage.getItem("invite_token") || sessionStorage.getItem("invite_token");
+    if (storedToken && status === "loading" && !token && !code) {
+      applyInviteViaRPC(storedToken);
+    }
+  }, [authLoading, user, status, token, code, applyInviteViaRPC]);
 
   const handleCodeSubmit = async () => {
     if (!codeInput.trim()) return;
@@ -152,10 +126,11 @@ export default function JoinPage() {
     setStatus("ready");
   };
 
-  // If not authenticated and invite is loaded, redirect to auth with invite token stored
+  // If not authenticated and invite is loaded, store token and redirect to auth
   if (!authLoading && !user && invite) {
-    // Store the invite token in sessionStorage so auth page can redirect back
+    // Store in BOTH localStorage (for signup metadata) and sessionStorage (for post-auth)
     localStorage.setItem("invite_token", invite.token);
+    sessionStorage.setItem("invite_token", invite.token);
     const returnUrl = `/join?token=${invite.token}`;
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
