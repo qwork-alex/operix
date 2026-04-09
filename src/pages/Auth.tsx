@@ -28,7 +28,9 @@ export default function Auth() {
     );
   }
 
-  const redirectTo = searchParams.get("redirect") || "/";
+  // Check for invite token in sessionStorage as fallback redirect
+  const storedInviteToken = sessionStorage.getItem("invite_token");
+  const redirectTo = searchParams.get("redirect") || (storedInviteToken ? `/join?token=${storedInviteToken}` : "/");
   if (session) return <Navigate to={redirectTo} replace />;
 
   const handleSubmit = async (e: React.FormEvent) => {
