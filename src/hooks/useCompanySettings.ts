@@ -22,7 +22,7 @@ export function useCompanySettings() {
       const { data, error } = await supabase
         .from("company_settings")
         .select("*")
-        .eq("user_id", user!.id)
+        .eq("user_id", user?.id ?? "")
         .maybeSingle();
       if (error) throw error;
       return data;

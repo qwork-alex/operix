@@ -9,6 +9,7 @@ export function useDashboardStats() {
 
   return useQuery({
     queryKey: ["dashboard-stats", memberAuthIds, isAdmin, user?.id],
+    enabled: !!user?.id,
     queryFn: async () => {
       let soQ = supabase.from("service_orders").select("total, status, created_at, created_by");
       let poQ = supabase.from("payment_orders").select("total, status, created_at, created_by");
@@ -18,7 +19,6 @@ export function useDashboardStats() {
       const discQ = supabase.from("discrepancies").select("id, resolved");
 
       if (!isAdmin && user?.id) {
-        // Non-admin: only own data
         soQ = soQ.eq("created_by", user.id);
         poQ = poQ.eq("created_by", user.id);
         frQ = frQ.eq("created_by", user.id);

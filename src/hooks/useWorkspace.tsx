@@ -33,14 +33,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
 
   // 1. Get app_user + workspace for current auth user (supports switching)
+  const userId = user?.id ?? null;
+
   const { data: wsData, isLoading: wsLoading } = useQuery({
-    queryKey: ["my-workspace", user?.id],
-    enabled: !!user?.id,
+    queryKey: ["my-workspace", userId],
+    enabled: !!userId,
     queryFn: async () => {
+      if (!userId) return null;
       const { data: appUser, error: auErr } = await supabase
         .from("app_users")
         .select("id")
-        .eq("auth_user_id", user!.id)
+        .eq("auth_user_id", userId)
         .maybeSingle();
       if (auErr) throw auErr;
       if (!appUser) return null;
