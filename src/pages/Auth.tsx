@@ -29,12 +29,12 @@ export default function Auth() {
   }
 
   // Check for invite token in sessionStorage as fallback redirect
-  const storedInviteToken = sessionStorage.getItem("invite_token");
+  const storedInviteToken = localStorage.getItem("invite_token");
   // Extract invite token from redirect URL if present
   const redirectParam = searchParams.get("redirect") || "";
   const redirectTokenMatch = redirectParam.match(/[?&]token=([^&]+)/);
   if (redirectTokenMatch && !storedInviteToken) {
-    sessionStorage.setItem("invite_token", redirectTokenMatch[1]);
+    localStorage.setItem("invite_token", redirectTokenMatch[1]);
   }
   const effectiveInviteToken = storedInviteToken || (redirectTokenMatch ? redirectTokenMatch[1] : null);
   const redirectTo = redirectParam || (effectiveInviteToken ? `/join?token=${effectiveInviteToken}` : "/");
