@@ -1139,7 +1139,7 @@ import { useWorkspace } from "@/hooks/useWorkspace";
 export function UsersPage() {
   const { t, formatDate } = useLanguage();
   const queryClient = useQueryClient();
-  const { workspaceId, members, isLoading: wsLoading } = useWorkspace();
+  const { workspaceId, members, ownerAppUserId, isLoading: wsLoading } = useWorkspace();
   const [open, setOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
@@ -1309,15 +1309,19 @@ export function UsersPage() {
               </div>
               <div className="space-y-2">
                 <Label className="text-xs">{t("label.role")}</Label>
-                <Select value={form.role} onValueChange={v => setForm(p => ({ ...p, role: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="admin">{t("role.admin")}</SelectItem>
-                    <SelectItem value="socio">{t("role.partner")}</SelectItem>
-                    <SelectItem value="tecnico">{t("role.technician")}</SelectItem>
-                    <SelectItem value="cliente">{t("role.client")}</SelectItem>
-                  </SelectContent>
-                </Select>
+                {editId && members.find(m => m.membership_id === editId)?.app_user_id === ownerAppUserId ? (
+                  <Input value={t("role.admin")} disabled className="bg-muted" />
+                ) : (
+                  <Select value={form.role} onValueChange={v => setForm(p => ({ ...p, role: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="admin">{t("role.admin")}</SelectItem>
+                      <SelectItem value="socio">{t("role.partner")}</SelectItem>
+                      <SelectItem value="tecnico">{t("role.technician")}</SelectItem>
+                      <SelectItem value="cliente">{t("role.client")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
               <Button className="w-full" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || !form.full_name || !form.email}>
                 {saveMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
@@ -1361,23 +1365,34 @@ export function UsersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {members.map((m) => (
+              {members.map((m) => {
+                const isOwner = m.app_user_id === ownerAppUserId;
+                return (
                 <TableRow key={m.membership_id} className="text-xs">
-                  <TableCell className="font-medium">{m.name || "—"}</TableCell>
+                  <TableCell className="font-medium">
+                    {m.name || "—"}
+                    {isOwner && (
+                      <Badge variant="outline" className="ml-2 text-[9px] border-primary/30 text-primary">Owner</Badge>
+                    )}
+                  </TableCell>
                   <TableCell>{m.email || "—"}</TableCell>
                   <TableCell>{m.phone || "—"}</TableCell>
                   <TableCell>
-                    <Select value={m.role} onValueChange={(v) => updateRole.mutate({ membershipId: m.membership_id, newRole: v })}>
-                      <SelectTrigger className="h-7 w-[120px] text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="admin">{t("role.admin")}</SelectItem>
-                        <SelectItem value="socio">{t("role.partner")}</SelectItem>
-                        <SelectItem value="tecnico">{t("role.technician")}</SelectItem>
-                        <SelectItem value="cliente">{t("role.client")}</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    {isOwner ? (
+                      <Badge variant="default" className="text-[10px]">{t("role.admin")}</Badge>
+                    ) : (
+                      <Select value={m.role} onValueChange={(v) => updateRole.mutate({ membershipId: m.membership_id, newRole: v })}>
+                        <SelectTrigger className="h-7 w-[120px] text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="admin">{t("role.admin")}</SelectItem>
+                          <SelectItem value="socio">{t("role.partner")}</SelectItem>
+                          <SelectItem value="tecnico">{t("role.technician")}</SelectItem>
+                          <SelectItem value="cliente">{t("role.client")}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Badge variant={m.status === "active" ? "default" : "secondary"} className="text-[10px]">
@@ -1389,13 +1404,16 @@ export function UsersPage() {
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(m)}>
                         <Pencil className="h-3 w-3" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget(m.membership_id)}>
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
+                      {!isOwner && (
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget(m.membership_id)}>
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         </div>

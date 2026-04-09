@@ -19,6 +19,7 @@ export type MembershipRole = "admin" | "tecnico" | "cliente" | "socio";
 interface WorkspaceContext {
   workspaceId: string | null;
   workspaceName: string | null;
+  ownerAppUserId: string | null;
   members: WorkspaceMember[];
   memberAuthIds: string[];
   myRole: MembershipRole | null;
@@ -48,7 +49,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       // Find first active membership
       const { data: membership, error: mErr } = await supabase
         .from("memberships")
-        .select("workspace_id, workspaces(id, name)")
+        .select("workspace_id, workspaces(id, name, owner_user_id)")
         .eq("user_id", appUser.id)
         .eq("status", "active")
         .limit(1)
@@ -57,7 +58,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       if (!membership) return null;
 
       const ws = membership.workspaces as any;
-      return { workspaceId: ws.id as string, workspaceName: ws.name as string, appUserId: appUser.id };
+      return { workspaceId: ws.id as string, workspaceName: ws.name as string, appUserId: appUser.id, ownerAppUserId: (ws.owner_user_id || null) as string | null };
     },
   });
 
@@ -99,6 +100,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       value={{
         workspaceId: wsData?.workspaceId ?? null,
         workspaceName: wsData?.workspaceName ?? null,
+        ownerAppUserId: wsData?.ownerAppUserId ?? null,
         members,
         memberAuthIds,
         myRole,
