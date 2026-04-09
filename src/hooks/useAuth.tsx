@@ -56,6 +56,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
+    // Log auth event
+    if (!error) {
+      supabase.from("backend_event_logs").insert({
+        table_name: "auth", action: "LOGIN", payload: { email } as any,
+      }).then();
+    } else {
+      supabase.from("backend_event_logs").insert({
+        table_name: "auth", action: "LOGIN_FAILED", payload: { email, reason: error.message } as any,
+      }).then();
+    }
     return { error: error as Error | null };
   };
 
@@ -68,6 +78,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         emailRedirectTo: window.location.origin,
       },
     });
+    // Log signup event
+    if (!error) {
+      supabase.from("backend_event_logs").insert({
+        table_name: "auth", action: "SIGNUP", payload: { email, full_name: fullName } as any,
+      }).then();
+    }
     return { error: error as Error | null };
   };
 
