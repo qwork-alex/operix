@@ -1139,7 +1139,7 @@ import { useWorkspace } from "@/hooks/useWorkspace";
 export function UsersPage() {
   const { t, formatDate } = useLanguage();
   const queryClient = useQueryClient();
-  const { workspaceId, members, isLoading: wsLoading } = useWorkspace();
+  const { workspaceId, members, ownerAppUserId, isLoading: wsLoading } = useWorkspace();
   const [open, setOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
