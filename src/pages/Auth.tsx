@@ -30,7 +30,14 @@ export default function Auth() {
 
   // Check for invite token in sessionStorage as fallback redirect
   const storedInviteToken = sessionStorage.getItem("invite_token");
-  const redirectTo = searchParams.get("redirect") || (storedInviteToken ? `/join?token=${storedInviteToken}` : "/");
+  // Extract invite token from redirect URL if present
+  const redirectParam = searchParams.get("redirect") || "";
+  const redirectTokenMatch = redirectParam.match(/[?&]token=([^&]+)/);
+  if (redirectTokenMatch && !storedInviteToken) {
+    sessionStorage.setItem("invite_token", redirectTokenMatch[1]);
+  }
+  const effectiveInviteToken = storedInviteToken || (redirectTokenMatch ? redirectTokenMatch[1] : null);
+  const redirectTo = redirectParam || (effectiveInviteToken ? `/join?token=${effectiveInviteToken}` : "/");
   if (session) return <Navigate to={redirectTo} replace />;
 
   const handleSubmit = async (e: React.FormEvent) => {
