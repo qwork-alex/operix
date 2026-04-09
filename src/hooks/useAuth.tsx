@@ -71,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = async (email: string, password: string, fullName: string) => {
     // Check for pending invite token to pass to backend trigger
-    const inviteToken = localStorage.getItem("invite_token") || undefined;
+    const inviteToken = localStorage.getItem("invite_token") || sessionStorage.getItem("invite_token") || undefined;
     console.log("TOKEN NO SIGNUP:", inviteToken);
     const metadata: Record<string, string> = { full_name: fullName };
     if (inviteToken) {
