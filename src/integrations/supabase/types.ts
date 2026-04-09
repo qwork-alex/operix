@@ -578,11 +578,65 @@ export type Database = {
           },
         ]
       }
+      invites: {
+        Row: {
+          accepted_at: string | null
+          accepted_by: string | null
+          created_at: string
+          created_by: string
+          email: string | null
+          expires_at: string | null
+          id: string
+          invite_type: string
+          role: Database["public"]["Enums"]["membership_role"]
+          short_code: string | null
+          token: string
+          workspace_id: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          created_by: string
+          email?: string | null
+          expires_at?: string | null
+          id?: string
+          invite_type?: string
+          role?: Database["public"]["Enums"]["membership_role"]
+          short_code?: string | null
+          token?: string
+          workspace_id: string
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          created_by?: string
+          email?: string | null
+          expires_at?: string | null
+          id?: string
+          invite_type?: string
+          role?: Database["public"]["Enums"]["membership_role"]
+          short_code?: string | null
+          token?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invites_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       memberships: {
         Row: {
           created_at: string
           id: string
           role: Database["public"]["Enums"]["membership_role"]
+          source: string
           status: Database["public"]["Enums"]["membership_status"]
           user_id: string
           workspace_id: string
@@ -591,6 +645,7 @@ export type Database = {
           created_at?: string
           id?: string
           role?: Database["public"]["Enums"]["membership_role"]
+          source?: string
           status?: Database["public"]["Enums"]["membership_status"]
           user_id: string
           workspace_id: string
@@ -599,6 +654,7 @@ export type Database = {
           created_at?: string
           id?: string
           role?: Database["public"]["Enums"]["membership_role"]
+          source?: string
           status?: Database["public"]["Enums"]["membership_status"]
           user_id?: string
           workspace_id?: string
@@ -1098,6 +1154,27 @@ export type Database = {
         Update: {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_usage: {
+        Row: {
+          id: string
+          last_updated: string
+          total_workspaces: number
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          last_updated?: string
+          total_workspaces?: number
+          user_id: string
+        }
+        Update: {
+          id?: string
+          last_updated?: string
+          total_workspaces?: number
           user_id?: string
         }
         Relationships: []

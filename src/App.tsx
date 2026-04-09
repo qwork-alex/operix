@@ -12,6 +12,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppLayout } from "@/components/layout/AppLayout";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
+import JoinPage from "./pages/JoinPage";
 import NotFound from "./pages/NotFound";
 import ServiceOrdersPage from "./pages/ServiceOrdersPage";
 import PaymentOrdersPage from "./pages/PaymentOrdersPage";
@@ -50,6 +51,7 @@ const App = () => (
             <BrowserRouter>
               <Routes>
                 <Route path="/auth" element={<Auth />} />
+                <Route path="/join" element={<JoinPage />} />
                 <Route
                   path="/*"
                   element={

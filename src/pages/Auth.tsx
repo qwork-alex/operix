@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useLanguage } from "@/hooks/useLanguage";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Loader2, Eye, EyeOff } from "lucide-react";
 
 export default function Auth() {
   const { session, loading } = useAuth();
+  const [searchParams] = useSearchParams();
   const { t } = useLanguage();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
@@ -27,7 +28,8 @@ export default function Auth() {
     );
   }
 
-  if (session) return <Navigate to="/" replace />;
+  const redirectTo = searchParams.get("redirect") || "/";
+  if (session) return <Navigate to={redirectTo} replace />;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

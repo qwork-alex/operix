@@ -13,6 +13,7 @@ import { useWorkspace } from "@/hooks/useWorkspace";
 import { useLanguage, type LangCode } from "@/hooks/useLanguage";
 import { useNotifications } from "@/hooks/useNotifications";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { WorkspaceSelector } from "./WorkspaceSelector";
 
 const languages: { code: LangCode; label: string }[] = [
   { code: "fr", label: "Français" },
@@ -48,7 +49,7 @@ function timeAgo(dateStr: string, t: (k: string, fb?: string) => string): string
 
 export function TopBar() {
   const { profile, signOut } = useAuth();
-  const { myRole: role } = useWorkspace();
+  const { myRole: role, workspaceId } = useWorkspace();
   const { t, lang, setLang } = useLanguage();
   const { notifications, unreadCount, markAsRead, markAllRead, clearAll } = useNotifications();
 
@@ -60,6 +61,7 @@ export function TopBar() {
     <header className="flex h-14 items-center justify-between border-b border-border/50 px-4 glass-panel">
       <div className="flex items-center gap-2">
         <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
+        <WorkspaceSelector currentWorkspaceId={workspaceId} />
         <div className="hidden sm:flex items-center gap-2 ml-2 px-3 py-1.5 rounded-md bg-muted/50 text-muted-foreground text-sm">
           <Search className="h-3.5 w-3.5" />
           <span className="text-xs">{t("action.search")}</span>
