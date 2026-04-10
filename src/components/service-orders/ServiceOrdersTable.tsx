@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useClients, useTechnicians } from "@/hooks/useServiceOrders";
 import { toast } from "sonner";
 import { formatLicensePlate } from "@/lib/formatPlate";
+import { cn } from "@/lib/utils";
 
 interface ServiceOrderRow {
   id: string;
