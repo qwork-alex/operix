@@ -9,6 +9,7 @@ import type { ExtractedOrder, FieldConfidence } from "@/hooks/useServiceOrders";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/hooks/useLanguage";
 import { ExtractionStages, type Stage } from "./ExtractionStages";
+import { BulkEditBanner, type PendingBulkEdit } from "@/components/shared/BulkEditBanner";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -47,7 +48,17 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [errorRows, setErrorRows] = useState<Set<number>>(new Set());
   const [showOverrideDialog, setShowOverrideDialog] = useState(false);
+  const [pendingBulk, setPendingBulk] = useState<PendingBulkEdit | null>(null);
+  const [lastEditIdx, setLastEditIdx] = useState<number>(-1);
+  const [lastEditField, setLastEditField] = useState<string>("");
   const { t, formatCurrency } = useLanguage();
+
+  const fieldLabels: Record<string, string> = {
+    client: t("label.client"), platform: t("label.platform"), technician: t("label.technician"),
+    week: t("label.week"), car_name: t("label.car"), license_plate: t("label.plate"),
+    service_1_name: "Service 1", service_1_price: "Preço 1", service_2_name: "Service 2", service_2_price: "Preço 2",
+    service_3_name: "Service 3", service_3_price: "Preço 3", service_4_name: "Service 4", service_4_price: "Preço 4",
+  };
 
   const update = (idx: number, field: keyof ExtractedOrder, value: string | number | null) => {
     // Clear previous validation when user edits — fields always editable
@@ -137,6 +148,7 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
   return (
     <div className="space-y-3">
       <ExtractionStages current={stage} />
+      <BulkEditBanner pending={pendingBulk} onApply={applyBulk} onDismiss={() => setPendingBulk(null)} />
 
       {/* Review summary banner — shown whenever uncertain fields exist */}
       {(uncertainCount > 0 || hasMismatches) && (
