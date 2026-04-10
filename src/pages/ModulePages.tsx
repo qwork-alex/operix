@@ -1178,29 +1178,8 @@ export function UsersPage() {
         }).select("token, short_code").single();
         if (invErr) throw invErr;
 
-        // Also try to pre-link existing user
-        const email = form.email.trim().toLowerCase();
-        if (email) {
-          const { data: existingAppUser } = await supabase.from("app_users").select("id").eq("email", email).maybeSingle();
-          if (existingAppUser) {
-            const { data: existingMembership } = await supabase.from("memberships").select("id").eq("user_id", existingAppUser.id).eq("workspace_id", workspaceId!).maybeSingle();
-            if (!existingMembership) {
-              await supabase.from("memberships").insert({
-                user_id: existingAppUser.id,
-                workspace_id: workspaceId!,
-                role: form.role as any,
-                status: "active",
-                source: "manual",
-              });
-            }
-          }
-        }
-
-        // Log
-        await supabase.from("backend_event_logs").insert({
-          table_name: "invites", action: "INVITE_CREATED",
-          payload: { email, role: form.role, workspace_id: workspaceId } as any,
-        });
+        // Log invite creation (trigger also logs, but explicit log for clarity)
+        console.log("[INVITE] Created:", { token: invite.token, short_code: invite.short_code, role: form.role, workspace_id: workspaceId });
 
         const link = `${window.location.origin}/join?token=${invite.token}`;
         setInviteResult({ link, code: invite.short_code || "" });
