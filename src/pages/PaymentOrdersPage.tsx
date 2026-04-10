@@ -12,7 +12,6 @@ import { formatLicensePlate } from "@/lib/formatPlate";
 import {
   usePaymentOrders,
   useExtractPaymentOrder,
-  useDiscrepancyDetection,
   type ExtractedPaymentOrder,
   type PaymentExtractionResult,
   type PaymentOrderInsert,
