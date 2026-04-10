@@ -1140,111 +1140,79 @@ export function Documents() {
 }
 
 // ─── USERS ───
-import { useWorkspace } from "@/hooks/useWorkspace";
+import { useRole, DISPLAY_TO_DB, type AppRole } from "@/hooks/useRole";
 
 export function UsersPage() {
   const { t, formatDate } = useLanguage();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
-  const { workspaceId, workspaceName, members, ownerAppUserId, isLoading: wsLoading } = useWorkspace();
-  const [open, setOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const { isAdmin } = useRole();
   const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState({ full_name: "", email: "", phone: "", role: "tecnico" });
-  const [inviteResult, setInviteResult] = useState<{ link: string; code: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [form, setForm] = useState({ role: "technician" as string });
 
   const roleLabels: Record<string, string> = {
     admin: t("role.admin"),
-    tecnico: t("role.technician"),
-    cliente: t("role.client"),
-    socio: t("role.partner"),
+    technician: t("role.technician"),
+    client: t("role.client"),
+    partner: t("role.partner"),
   };
 
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      if (editId) {
-        const member = members.find((m) => m.membership_id === editId);
-        if (!member) throw new Error("Member not found");
-        await supabase.from("app_users").update({ name: form.full_name, phone: form.phone || null }).eq("id", member.app_user_id);
-        const { error } = await supabase.from("memberships").update({ role: form.role as any }).eq("id", editId);
-        if (error) throw error;
-      } else {
-        // Create invite
-        const { data: invite, error: invErr } = await supabase.from("invites").insert({
-          workspace_id: workspaceId!,
-          created_by: (await supabase.auth.getUser()).data.user!.id,
-          role: form.role as any,
-          email: form.email.trim().toLowerCase() || null,
-          invite_type: "link",
-        }).select("token, short_code").single();
-        if (invErr) throw invErr;
+  // Fetch all users with their roles
+  const { data: users = [], isLoading } = useQuery({
+    queryKey: ["all-users-with-roles"],
+    queryFn: async () => {
+      const { data: profiles, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, email, phone, created_at")
+        .order("created_at", { ascending: true });
+      if (error) throw error;
 
-        // Log invite creation (trigger also logs, but explicit log for clarity)
-        console.log("[INVITE] Created:", { token: invite.token, short_code: invite.short_code, role: form.role, workspace_id: workspaceId });
+      const { data: roles } = await supabase
+        .from("user_roles")
+        .select("user_id, role");
 
-        const link = `${window.location.origin}/join?token=${invite.token}`;
-        setInviteResult({ link, code: invite.short_code || "" });
-        return; // Don't close dialog yet — show the invite result
-      }
+      const roleMap: Record<string, string> = {};
+      (roles || []).forEach((r: any) => { roleMap[r.user_id] = r.role; });
+
+      return (profiles || []).map((p: any) => ({
+        ...p,
+        role: roleMap[p.id] || "technician",
+        isOwner: p.email === "qwork@qworkgroup.com",
+      }));
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["workspace-members"] });
-      queryClient.invalidateQueries({ queryKey: ["my-workspace"] });
-      if (editId) {
-        setOpen(false);
-        setEditId(null);
-        setForm({ full_name: "", email: "", phone: "", role: "tecnico" });
-        toast.success(t("toast.updated"));
-      } else if (inviteResult === null) {
-        toast.success("Convite criado!");
-      }
-    },
-    onError: (err) => toast.error((err as Error).message),
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: async (membershipId: string) => {
-      const { error } = await supabase.from("memberships").delete().eq("id", membershipId);
+  const updateRoleMutation = useMutation({
+    mutationFn: async ({ userId, newRole }: { userId: string; newRole: string }) => {
+      // Upsert user_roles
+      const { error: delErr } = await supabase.from("user_roles").delete().eq("user_id", userId);
+      if (delErr) throw delErr;
+      const { error } = await supabase.from("user_roles").insert({ user_id: userId, role: newRole as any });
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["workspace-members"] });
-      setDeleteTarget(null);
-      toast.success(t("toast.deleted"));
-    },
-    onError: (err) => toast.error((err as Error).message),
-  });
-
-  const updateRole = useMutation({
-    mutationFn: async ({ membershipId, newRole }: { membershipId: string; newRole: string }) => {
-      const { error } = await supabase.from("memberships").update({ role: newRole as any }).eq("id", membershipId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["workspace-members"] });
-      queryClient.invalidateQueries({ queryKey: ["my-workspace"] });
+      queryClient.invalidateQueries({ queryKey: ["all-users-with-roles"] });
+      queryClient.invalidateQueries({ queryKey: ["my-role"] });
+      setEditId(null);
       toast.success(t("toast.updated"));
     },
     onError: (err) => toast.error((err as Error).message),
   });
 
-  const startEdit = (m: any) => {
-    setEditId(m.membership_id);
-    setForm({ full_name: m.name || "", email: m.email || "", phone: m.phone || "", role: m.role || "tecnico" });
-    setInviteResult(null);
-    setOpen(true);
-  };
-
-  const closeDialog = () => {
-    setOpen(false);
-    setEditId(null);
-    setInviteResult(null);
-    setForm({ full_name: "", email: "", phone: "", role: "tecnico" });
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success("Copiado!");
-  };
+  const deleteUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      // Remove role (user stays in auth but loses access)
+      const { error } = await supabase.from("user_roles").delete().eq("user_id", userId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["all-users-with-roles"] });
+      setDeleteTarget(null);
+      toast.success(t("toast.deleted"));
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -1258,78 +1226,6 @@ export function UsersPage() {
             <p className="text-xs text-muted-foreground">{t("users.subtitle")}</p>
           </div>
         </div>
-        <Dialog open={open} onOpenChange={(v) => { if (!v) closeDialog(); else setOpen(true); }}>
-          <DialogTrigger asChild>
-            <Button size="sm"><Plus className="h-4 w-4 mr-1" />{t("users.addUser")}</Button>
-          </DialogTrigger>
-          <DialogContent className="bg-card border-border">
-            <DialogHeader><DialogTitle>{editId ? t("users.editUser") : "Convidar usuário"}</DialogTitle></DialogHeader>
-
-            {inviteResult ? (
-              <div className="space-y-4 pt-2">
-                <p className="text-sm text-muted-foreground">Convite criado! Compartilhe o link ou código abaixo:</p>
-                <div className="space-y-2">
-                  <Label className="text-xs">Link de convite</Label>
-                  <div className="flex gap-2">
-                    <Input value={inviteResult.link} readOnly className="text-xs font-mono" />
-                    <Button size="sm" variant="outline" onClick={() => copyToClipboard(inviteResult.link)}>
-                      <Copy className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs">Código manual</Label>
-                  <div className="flex gap-2">
-                    <Input value={inviteResult.code} readOnly className="text-center font-mono text-lg font-bold tracking-widest" />
-                    <Button size="sm" variant="outline" onClick={() => copyToClipboard(inviteResult.code)}>
-                      <Copy className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-                <Button className="w-full" variant="outline" onClick={closeDialog}>Fechar</Button>
-              </div>
-            ) : (
-              <div className="space-y-4 pt-2">
-                {editId && (
-                  <div className="space-y-2">
-                    <Label className="text-xs">{t("label.name")}</Label>
-                    <Input value={form.full_name} onChange={e => setForm(p => ({ ...p, full_name: e.target.value }))} />
-                  </div>
-                )}
-                <div className="space-y-2">
-                  <Label className="text-xs">{t("label.email")}</Label>
-                  <Input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} disabled={!!editId} placeholder={editId ? "" : "email@exemplo.com"} />
-                </div>
-                {editId && (
-                  <div className="space-y-2">
-                    <Label className="text-xs">{t("users.phone")}</Label>
-                    <Input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
-                  </div>
-                )}
-                <div className="space-y-2">
-                  <Label className="text-xs">{t("label.role")}</Label>
-                  {editId && members.find(m => m.membership_id === editId)?.app_user_id === ownerAppUserId ? (
-                    <Input value={t("role.admin")} disabled className="bg-muted" />
-                  ) : (
-                    <Select value={form.role} onValueChange={v => setForm(p => ({ ...p, role: v }))}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="admin">{t("role.admin")}</SelectItem>
-                        <SelectItem value="socio">{t("role.partner")}</SelectItem>
-                        <SelectItem value="tecnico">{t("role.technician")}</SelectItem>
-                        <SelectItem value="cliente">{t("role.client")}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
-                </div>
-                <Button className="w-full" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || (!editId && !form.email)}>
-                  {saveMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : editId ? <Save className="h-4 w-4 mr-1" /> : <Link className="h-4 w-4 mr-1" />}
-                  {editId ? t("action.save") : "Gerar convite"}
-                </Button>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
       </div>
 
       {/* Delete confirmation dialog */}
@@ -1339,17 +1235,17 @@ export function UsersPage() {
           <p className="text-sm text-muted-foreground">{t("users.deleteWarning")}</p>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" size="sm" onClick={() => setDeleteTarget(null)}>{t("action.cancel")}</Button>
-            <Button variant="destructive" size="sm" onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget)} disabled={deleteMutation.isPending}>
-              {deleteMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1" />}
+            <Button variant="destructive" size="sm" onClick={() => deleteTarget && deleteUserMutation.mutate(deleteTarget)} disabled={deleteUserMutation.isPending}>
+              {deleteUserMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1" />}
               {t("action.delete")}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {wsLoading ? (
+      {isLoading ? (
         <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
-      ) : members.length === 0 ? (
+      ) : users.length === 0 ? (
         <div className="text-center py-12 text-sm text-muted-foreground">{t("users.noUsers")}</div>
       ) : (
         <div className="rounded-lg border border-border/50 overflow-auto">
@@ -1358,63 +1254,55 @@ export function UsersPage() {
               <TableRow className="text-[11px]">
                 <TableHead>{t("label.name")}</TableHead>
                 <TableHead>{t("label.email")}</TableHead>
-                <TableHead>{t("users.phone")}</TableHead>
                 <TableHead>{t("label.role")}</TableHead>
                 <TableHead>{t("label.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {members.map((m, idx) => {
-                const isOwner = m.app_user_id === ownerAppUserId;
-                const rolePrefix = m.role === "tecnico" ? "T" : m.role === "cliente" ? "C" : m.role === "admin" ? "A" : "S";
+              {users.map((u: any, idx: number) => {
+                const rolePrefix = u.role === "technician" ? "T" : u.role === "client" ? "C" : u.role === "admin" ? "A" : "S";
                 const userId = `${rolePrefix}-${String(idx + 1).padStart(5, "0")}`;
                 return (
-                <TableRow key={m.membership_id} className="text-xs">
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <div>
-                        <div className="flex items-center gap-1.5 font-medium">
-                          {m.name || "—"}
-                          {isOwner && (
-                            <Crown className="h-3.5 w-3.5 text-amber-500/70" />
-                          )}
+                  <TableRow key={u.id} className="text-xs">
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <div>
+                          <div className="flex items-center gap-1.5 font-medium">
+                            {u.full_name || "—"}
+                            {u.isOwner && <Crown className="h-3.5 w-3.5 text-amber-500/70" />}
+                          </div>
+                          <span className="text-[10px] text-muted-foreground font-mono">{userId}</span>
                         </div>
-                        <span className="text-[10px] text-muted-foreground font-mono">{userId}</span>
                       </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>{m.email || "—"}</TableCell>
-                  <TableCell>{m.phone || "—"}</TableCell>
-                  <TableCell>
-                    {isOwner ? (
-                      <Badge variant="outline" className="text-[10px] border-border text-muted-foreground">{t("role.admin")}</Badge>
-                    ) : (
-                      <Select value={m.role} onValueChange={(v) => updateRole.mutate({ membershipId: m.membership_id, newRole: v })}>
-                        <SelectTrigger className="h-7 w-[120px] text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="admin">{t("role.admin")}</SelectItem>
-                          <SelectItem value="socio">{t("role.partner")}</SelectItem>
-                          <SelectItem value="tecnico">{t("role.technician")}</SelectItem>
-                          <SelectItem value="cliente">{t("role.client")}</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(m)}>
-                        <Pencil className="h-3 w-3" />
-                      </Button>
-                      {!isOwner && (
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget(m.membership_id)}>
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
+                    </TableCell>
+                    <TableCell>{u.email || "—"}</TableCell>
+                    <TableCell>
+                      {u.isOwner ? (
+                        <Badge variant="outline" className="text-[10px] border-border text-muted-foreground">{t("role.admin")}</Badge>
+                      ) : (
+                        <Select value={u.role} onValueChange={(v) => updateRoleMutation.mutate({ userId: u.id, newRole: v })}>
+                          <SelectTrigger className="h-7 w-[120px] text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="admin">{t("role.admin")}</SelectItem>
+                            <SelectItem value="partner">{t("role.partner")}</SelectItem>
+                            <SelectItem value="technician">{t("role.technician")}</SelectItem>
+                            <SelectItem value="client">{t("role.client")}</SelectItem>
+                          </SelectContent>
+                        </Select>
                       )}
-                    </div>
-                  </TableCell>
-                </TableRow>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        {!u.isOwner && (
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget(u.id)}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
                 );
               })}
             </TableBody>
