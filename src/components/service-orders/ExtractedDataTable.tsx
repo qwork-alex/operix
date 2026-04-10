@@ -81,6 +81,24 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
       })
     );
     if (stage !== "review") setStage("review");
+
+    // Offer bulk edit if multiple rows and it's a shared field
+    const bulkFields = ["client", "platform", "technician", "week", "car_name", "license_plate"];
+    if (rows.length > 1 && bulkFields.includes(field as string)) {
+      setLastEditIdx(idx);
+      setLastEditField(field as string);
+      setPendingBulk({ field: field as string, value, label: fieldLabels[field as string] || (field as string) });
+    }
+  };
+
+  const applyBulk = () => {
+    if (!pendingBulk) return;
+    setRows(prev => prev.map((r, i) => {
+      if (i === lastEditIdx) return r;
+      const updated = { ...r, [pendingBulk.field]: pendingBulk.value };
+      return updated;
+    }));
+    setPendingBulk(null);
   };
 
   const removeRow = (idx: number) => {
