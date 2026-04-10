@@ -1,5 +1,5 @@
-import { useState, useCallback, useRef } from "react";
-import { CreditCard, Filter, RefreshCw } from "lucide-react";
+import { useState, useCallback } from "react";
+import { CreditCard, Filter } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { FileUploadZone } from "@/components/service-orders/FileUploadZone";
@@ -12,7 +12,6 @@ import { formatLicensePlate } from "@/lib/formatPlate";
 import {
   usePaymentOrders,
   useExtractPaymentOrder,
-  useDiscrepancyDetection,
   type ExtractedPaymentOrder,
   type PaymentExtractionResult,
   type PaymentOrderInsert,
@@ -42,7 +41,7 @@ export default function PaymentOrdersPage() {
   const { extract } = useExtractPaymentOrder();
   const { data: clients = [] } = useClients();
   const { data: technicians = [] } = useTechnicians();
-  const detectMutation = useDiscrepancyDetection();
+  
   const { queue, isProcessing, addFiles, clearCompleted } = useFileQueue();
 
   const platforms = [...new Set((orders as any[]).map(o => o.platform).filter(Boolean))];
@@ -102,7 +101,7 @@ export default function PaymentOrdersPage() {
     saveMutation.mutate(inserts, {
       onSuccess: () => {
         setExtractions(prev => prev.filter((e) => e._id !== extractionId));
-        detectMutation.mutate();
+        
       },
     });
   };
@@ -127,15 +126,6 @@ export default function PaymentOrdersPage() {
             <p className="text-xs text-muted-foreground">{t("po.subtitle")}</p>
           </div>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => detectMutation.mutate()}
-          disabled={detectMutation.isPending}
-        >
-          <RefreshCw className={`h-4 w-4 mr-1 ${detectMutation.isPending ? "animate-spin" : ""}`} />
-          {t("po.runDetection")}
-        </Button>
       </div>
 
       {extractions.length === 0 && <ExtractionStages current="upload" />}

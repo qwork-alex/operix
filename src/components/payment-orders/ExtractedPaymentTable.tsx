@@ -57,6 +57,7 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
   const fieldLabels: Record<string, string> = {
     client: t("label.client"), platform: t("label.platform"), list_name: t("extract.listName"),
     technician: t("label.technician"), car_name: t("label.car"), license_plate: t("label.plate"),
+    services: t("label.services"),
   };
 
   const update = (idx: number, field: keyof ExtractedPaymentOrder, value: any) => {
@@ -80,9 +81,12 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
       return updated;
     }));
 
-    // Offer bulk edit for shared fields
+    // Offer bulk edit for shared fields (including services)
     const bulkFields = ["client", "platform", "list_name", "technician", "car_name", "license_plate"];
-    if (rows.length > 1 && bulkFields.includes(field as string)) {
+    const isBulkField = bulkFields.includes(field as string);
+    // Also offer bulk for service edits (name or price changes)
+    const isServiceBulk = field === "services";
+    if (rows.length > 1 && (isBulkField || isServiceBulk)) {
       setLastEditIdx(idx);
       setPendingBulk({ field: field as string, value, label: fieldLabels[field as string] || (field as string) });
     }
