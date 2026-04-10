@@ -1207,15 +1207,24 @@ export function UsersPage() {
     if (!createForm.email) return;
     setCreating(true);
     try {
-      const { data, error } = await supabase.functions.invoke("admin-create-user", {
-        body: {
-          email: createForm.email,
-          full_name: createForm.full_name || undefined,
-          role: createForm.role,
-        },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-create-user`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({
+            email: createForm.email,
+            full_name: createForm.full_name || undefined,
+            role: createForm.role,
+          }),
+        }
+      );
+      const data = await resp.json();
+      if (!data.success) throw new Error(data.error || "Erro ao criar usuário");
       setTempPassword(data.temp_password);
       queryClient.invalidateQueries({ queryKey: ["all-users-with-roles"] });
       toast.success("Usuário criado com sucesso");
@@ -1228,11 +1237,20 @@ export function UsersPage() {
 
   const handleDeleteUser = async (userId: string) => {
     try {
-      const { data, error } = await supabase.functions.invoke("admin-create-user", {
-        body: { action: "delete_user", user_id: userId },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-create-user`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({ action: "delete_user", user_id: userId }),
+        }
+      );
+      const data = await resp.json();
+      if (!data.success) throw new Error(data.error || "Erro ao remover usuário");
       queryClient.invalidateQueries({ queryKey: ["all-users-with-roles"] });
       setDeleteTarget(null);
       toast.success(t("toast.deleted"));
