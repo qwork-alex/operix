@@ -41,7 +41,9 @@ interface PaymentOrderRow {
 }
 
 const statusStyle: Record<string, string> = {
-  pending: "bg-amber-500/10 text-amber-400 border-amber-500/30",
+  pending: "bg-red-500/10 text-red-400 border-red-500/30",
+  partial: "bg-amber-500/10 text-amber-400 border-amber-500/30",
+  paid: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
   matched: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
   mismatch: "bg-red-500/10 text-red-400 border-red-500/30",
 };
