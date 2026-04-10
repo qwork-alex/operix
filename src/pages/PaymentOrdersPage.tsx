@@ -42,7 +42,7 @@ export default function PaymentOrdersPage() {
   const { extract } = useExtractPaymentOrder();
   const { data: clients = [] } = useClients();
   const { data: technicians = [] } = useTechnicians();
-  const detectMutation = useDiscrepancyDetection();
+  
   const { queue, isProcessing, addFiles, clearCompleted } = useFileQueue();
 
   const platforms = [...new Set((orders as any[]).map(o => o.platform).filter(Boolean))];
