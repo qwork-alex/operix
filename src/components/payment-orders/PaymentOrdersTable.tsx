@@ -15,12 +15,39 @@ import { toast } from "sonner";
 import { formatLicensePlate } from "@/lib/formatPlate";
 import type { Json } from "@/integrations/supabase/types";
 import { cn } from "@/lib/utils";
+import { getRowAlertLevel, type AlertLevel } from "@/hooks/useAgingAlerts";
+import { AlertTriangle, Clock } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const paymentRowColor = (status: string): string => {
   const s = status?.toLowerCase();
   if (s === "paid" || s === "pago") return "bg-emerald-500/8 border-l-2 border-l-emerald-500";
   if (s === "partial" || s === "parcial") return "bg-amber-500/8 border-l-2 border-l-amber-500";
   return "bg-red-500/8 border-l-2 border-l-red-500";
+};
+
+const poAlertStyle: Record<AlertLevel, string> = {
+  none: "",
+  level1: "ring-1 ring-amber-500/40",
+  level2: "ring-1 ring-red-500/50 animate-pulse",
+};
+
+const PoAlertIcon = ({ level, days }: { level: AlertLevel; days: number }) => {
+  if (level === "none") return null;
+  const Icon = level === "level2" ? AlertTriangle : Clock;
+  const color = level === "level2" ? "text-red-500" : "text-amber-500";
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Icon className={cn("h-3.5 w-3.5 shrink-0", color)} />
+        </TooltipTrigger>
+        <TooltipContent side="top" className="text-xs">
+          {level === "level2" ? `⚠️ ${days} dias sem pagamento` : `⏳ ${days} dias pendente`}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
 };
 
 interface PaymentOrderRow {
