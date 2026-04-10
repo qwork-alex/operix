@@ -14,6 +14,9 @@ import { useClients, useTechnicians } from "@/hooks/useServiceOrders";
 import { toast } from "sonner";
 import { formatLicensePlate } from "@/lib/formatPlate";
 import { cn } from "@/lib/utils";
+import { getRowAlertLevel, type AlertLevel } from "@/hooks/useAgingAlerts";
+import { AlertTriangle, Clock } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ServiceOrderRow {
   id: string;
@@ -129,6 +132,30 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
   });
 
   const getPaymentStatus = (soId: string): PaymentStatus => paymentMap[soId] || "none";
+
+  const alertStyle: Record<AlertLevel, string> = {
+    none: "",
+    level1: "ring-1 ring-amber-500/40",
+    level2: "ring-1 ring-red-500/50 animate-pulse",
+  };
+
+  const AlertIcon = ({ level, days }: { level: AlertLevel; days: number }) => {
+    if (level === "none") return null;
+    const Icon = level === "level2" ? AlertTriangle : Clock;
+    const color = level === "level2" ? "text-red-500" : "text-amber-500";
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Icon className={cn("h-3.5 w-3.5 shrink-0", color)} />
+          </TooltipTrigger>
+          <TooltipContent side="top" className="text-xs">
+            {level === "level2" ? `⚠️ ${days} dias sem pagamento` : `⏳ ${days} dias pendente`}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  };
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -379,9 +406,16 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
             }
 
             const services = [o.service_1_name, o.service_2_name, o.service_3_name, o.service_4_name].filter(Boolean);
+            const rowAlert = ps !== "paid" ? getRowAlertLevel(o.created_at) : "none";
+            const daysOld = Math.floor((Date.now() - new Date(o.created_at).getTime()) / 86400000);
             return (
-              <TableRow key={o.id} className={cn(paymentRowStyle[ps])}>
-                <TableCell className="font-medium">{o.client_name || o.clients?.name || "—"}</TableCell>
+              <TableRow key={o.id} className={cn(paymentRowStyle[ps], alertStyle[rowAlert])}>
+                <TableCell className="font-medium">
+                  <div className="flex items-center gap-1.5">
+                    <AlertIcon level={rowAlert} days={daysOld} />
+                    {o.client_name || o.clients?.name || "—"}
+                  </div>
+                </TableCell>
                 <TableCell>{o.platform || "—"}</TableCell>
                 <TableCell>{o.technician_name || o.technicians?.name || "—"}</TableCell>
                 <TableCell>{o.week || "—"}</TableCell>
