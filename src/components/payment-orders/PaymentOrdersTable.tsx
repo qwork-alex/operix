@@ -65,6 +65,7 @@ interface PaymentOrderRow {
   services: Json | null;
   total: number | null;
   status: string;
+  created_at: string;
 }
 
 const statusStyle: Record<string, string> = {
