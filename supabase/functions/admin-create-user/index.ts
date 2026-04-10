@@ -5,34 +5,31 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function jsonResp(body: Record<string, unknown>, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    // Validate caller is admin
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "No authorization header" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    if (!authHeader) return jsonResp({ error: "No authorization header" }, 401);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    // Client with caller's JWT to check role
+    // Verify caller identity
     const callerClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
       global: { headers: { Authorization: authHeader } },
     });
-
     const { data: { user: caller } } = await callerClient.auth.getUser();
-    if (!caller) {
-      return new Response(JSON.stringify({ error: "not_authenticated" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    if (!caller) return jsonResp({ error: "not_authenticated" }, 401);
 
     // Check admin role
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
@@ -42,94 +39,51 @@ Deno.serve(async (req) => {
       .eq("user_id", caller.id)
       .maybeSingle();
 
-    if (roleData?.role !== "admin") {
-      return new Response(JSON.stringify({ error: "forbidden" }), {
-        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    if (roleData?.role !== "admin") return jsonResp({ error: "forbidden" }, 403);
 
     const body = await req.json();
-    const { email, full_name, role, action } = body;
+    const { action } = body;
 
     // ── TOGGLE USER (ban/unban) ──
     if (action === "toggle_active") {
       const { user_id, active } = body;
-      if (!user_id) {
-        return new Response(JSON.stringify({ error: "user_id required" }), {
-          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+      if (!user_id) return jsonResp({ error: "user_id required" }, 400);
 
-      if (active) {
-        // Unban
-        const { error } = await adminClient.auth.admin.updateUserById(user_id, {
-          ban_duration: "none",
-        });
-        if (error) throw error;
-      } else {
-        // Ban (effectively disable)
-        const { error } = await adminClient.auth.admin.updateUserById(user_id, {
-          ban_duration: "876600h", // ~100 years
-        });
-        if (error) throw error;
-      }
-
-      await adminClient.from("backend_event_logs").insert({
-        table_name: "auth",
-        action: active ? "USER_ACTIVATED" : "USER_DEACTIVATED",
-        row_id: user_id,
-        actor_user_id: caller.id,
-        payload: { user_id, active },
+      const { error } = await adminClient.auth.admin.updateUserById(user_id, {
+        ban_duration: active ? "none" : "876600h",
       });
+      if (error) return jsonResp({ error: error.message }, 400);
 
-      return new Response(JSON.stringify({ success: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResp({ success: true });
     }
 
     // ── DELETE USER ──
     if (action === "delete_user") {
       const { user_id } = body;
-      if (!user_id) {
-        return new Response(JSON.stringify({ error: "user_id required" }), {
-          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+      if (!user_id) return jsonResp({ error: "user_id required" }, 400);
+
+      // Cascade FKs handle profiles + user_roles cleanup
+      const { error } = await adminClient.auth.admin.deleteUser(user_id);
+      if (error) {
+        // User may already be deleted — treat as success
+        if (error.message?.includes("not found")) {
+          // Clean up orphaned rows just in case
+          await adminClient.from("user_roles").delete().eq("user_id", user_id);
+          await adminClient.from("profiles").delete().eq("id", user_id);
+          return jsonResp({ success: true });
+        }
+        return jsonResp({ error: error.message }, 400);
       }
 
-      // Delete role first
-      await adminClient.from("user_roles").delete().eq("user_id", user_id);
-      // Delete profile
-      await adminClient.from("profiles").delete().eq("id", user_id);
-      // Delete auth user
-      const { error } = await adminClient.auth.admin.deleteUser(user_id);
-      if (error) throw error;
-
-      await adminClient.from("backend_event_logs").insert({
-        table_name: "auth",
-        action: "USER_DELETED",
-        row_id: user_id,
-        actor_user_id: caller.id,
-        payload: { user_id },
-      });
-
-      return new Response(JSON.stringify({ success: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResp({ success: true });
     }
 
     // ── CREATE USER ──
-    if (!email || !role) {
-      return new Response(JSON.stringify({ error: "email and role required" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const { email, full_name, role } = body;
+    if (!email || !role) return jsonResp({ error: "email and role required" }, 400);
 
     const validRoles = ["admin", "partner", "technician", "client"];
-    if (!validRoles.includes(role)) {
-      return new Response(JSON.stringify({ error: "invalid role" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    if (!validRoles.includes(role)) return jsonResp({ error: "invalid role" }, 400);
 
     // Generate temporary password
     const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$";
@@ -138,7 +92,7 @@ Deno.serve(async (req) => {
       tempPassword += chars[Math.floor(Math.random() * chars.length)];
     }
 
-    // Create auth user with auto-confirm
+    // Create auth user
     const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
       email,
       password: tempPassword,
@@ -149,41 +103,36 @@ Deno.serve(async (req) => {
       },
     });
 
-    if (createError) throw createError;
+    if (createError) {
+      const msg = createError.message || "";
+      if (msg.includes("already been registered") || msg.includes("email_exists")) {
+        return jsonResp({ error: "Este email já está registrado no sistema." }, 400);
+      }
+      return jsonResp({ error: msg }, 400);
+    }
 
-    // Assign role
-    await adminClient.from("user_roles").insert({
-      user_id: newUser.user.id,
-      role,
-    });
+    const userId = newUser.user.id;
+    const displayName = full_name || email.split("@")[0];
 
-    // Ensure profile exists (trigger should handle, but be safe)
+    // Insert profile and role (triggers are removed, we do it manually)
     await adminClient.from("profiles").upsert({
-      id: newUser.user.id,
-      full_name: full_name || email.split("@")[0],
+      id: userId,
+      full_name: displayName,
       email,
     }, { onConflict: "id" });
 
-    // Log
-    await adminClient.from("backend_event_logs").insert({
-      table_name: "auth",
-      action: "ADMIN_CREATE_USER",
-      row_id: newUser.user.id,
-      actor_user_id: caller.id,
-      payload: { email, role, full_name: full_name || null },
-    });
+    await adminClient.from("user_roles").upsert({
+      user_id: userId,
+      role,
+    }, { onConflict: "user_id" });
 
-    return new Response(JSON.stringify({
+    return jsonResp({
       success: true,
-      user_id: newUser.user.id,
+      user_id: userId,
       temp_password: tempPassword,
-    }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResp({ error: err.message || "Internal error" }, 500);
   }
 });
