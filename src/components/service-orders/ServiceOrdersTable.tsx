@@ -51,6 +51,29 @@ const statusStyle: Record<string, string> = {
   invoiced: "bg-blue-500/10 text-blue-400 border-blue-500/30",
 };
 
+type PaymentStatus = "paid" | "partial" | "pending" | "none";
+
+const paymentRowStyle: Record<PaymentStatus, string> = {
+  paid: "bg-emerald-500/8 border-l-2 border-l-emerald-500",
+  partial: "bg-amber-500/8 border-l-2 border-l-amber-500",
+  pending: "bg-red-500/8 border-l-2 border-l-red-500",
+  none: "bg-muted/30 border-l-2 border-l-muted-foreground/30",
+};
+
+const paymentBadgeStyle: Record<PaymentStatus, string> = {
+  paid: "bg-emerald-500/10 text-emerald-500 border-emerald-500/30",
+  partial: "bg-amber-500/10 text-amber-500 border-amber-500/30",
+  pending: "bg-red-500/10 text-red-500 border-red-500/30",
+  none: "bg-muted text-muted-foreground",
+};
+
+const paymentLabel: Record<PaymentStatus, string> = {
+  paid: "Pago",
+  partial: "Parcial",
+  pending: "Pendente",
+  none: "Sem pagamento",
+};
+
 interface EditState {
   client_id: string;
   platform: string;
