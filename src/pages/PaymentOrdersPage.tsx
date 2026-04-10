@@ -102,7 +102,7 @@ export default function PaymentOrdersPage() {
     saveMutation.mutate(inserts, {
       onSuccess: () => {
         setExtractions(prev => prev.filter((e) => e._id !== extractionId));
-        detectMutation.mutate();
+        
       },
     });
   };
