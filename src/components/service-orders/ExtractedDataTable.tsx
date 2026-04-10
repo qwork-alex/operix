@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Save, Trash2, AlertTriangle, Pencil, CheckCircle2, XCircle } from "lucide-react";
 import type { ExtractedOrder, FieldConfidence } from "@/hooks/useServiceOrders";
 import { cn } from "@/lib/utils";
+import { formatLicensePlate } from "@/lib/formatPlate";
 import { useLanguage } from "@/hooks/useLanguage";
 import { ExtractionStages, type Stage } from "./ExtractionStages";
 import { BulkEditBanner, type PendingBulkEdit } from "@/components/shared/BulkEditBanner";
@@ -68,6 +69,10 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
       prev.map((r, i) => {
         if (i !== idx) return r;
         const updated = { ...r, [field]: value };
+        // Auto-format license plate
+        if (field === "license_plate" && typeof value === "string") {
+          updated.license_plate = formatLicensePlate(value);
+        }
         const p1 = Number(updated.service_1_price) || 0;
         const p2 = Number(updated.service_2_price) || 0;
         const p3 = Number(updated.service_3_price) || 0;

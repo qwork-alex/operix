@@ -12,6 +12,7 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { useAuth } from "@/hooks/useAuth";
 import { useClients, useTechnicians } from "@/hooks/useServiceOrders";
 import { toast } from "sonner";
+import { formatLicensePlate } from "@/lib/formatPlate";
 
 interface ServiceOrderRow {
   id: string;
@@ -129,7 +130,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
         platform: toNullableText(editForm.platform),
         week: toNullableText(editForm.week),
         car_name: toNullableText(editForm.car_name),
-        license_plate: toNullableText(editForm.license_plate),
+        license_plate: formatLicensePlate(editForm.license_plate),
         service_1_name: toNullableText(editForm.service_1_name),
         service_1_price: Number(editForm.service_1_price) || 0,
         service_2_name: toNullableText(editForm.service_2_name),
@@ -341,7 +342,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
                 <TableCell>{o.technician_name || o.technicians?.name || "—"}</TableCell>
                 <TableCell>{o.week || "—"}</TableCell>
                 <TableCell>{o.car_name || "—"}</TableCell>
-                <TableCell className="font-mono text-xs">{o.license_plate || "—"}</TableCell>
+                <TableCell className="font-mono text-xs">{formatLicensePlate(o.license_plate) || "—"}</TableCell>
                 <TableCell>
                   <span className="text-xs text-muted-foreground">{services.length ? services.join(", ") : "—"}</span>
                 </TableCell>

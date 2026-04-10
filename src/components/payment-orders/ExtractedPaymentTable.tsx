@@ -8,6 +8,7 @@ import { Save, X, Trash2, AlertTriangle, CheckCircle2, XCircle, Pencil } from "l
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { ExtractedPaymentOrder, FieldConfidence } from "@/hooks/usePaymentOrders";
 import { cn } from "@/lib/utils";
+import { formatLicensePlate } from "@/lib/formatPlate";
 import { useLanguage } from "@/hooks/useLanguage";
 import { ExtractionStages, type Stage } from "@/components/service-orders/ExtractionStages";
 import { BulkEditBanner, type PendingBulkEdit } from "@/components/shared/BulkEditBanner";
@@ -65,6 +66,10 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
     setRows(prev => prev.map((r, i) => {
       if (i !== idx) return r;
       const updated = { ...r, [field]: value };
+      // Auto-format license plate
+      if (field === "license_plate" && typeof value === "string") {
+        updated.license_plate = formatLicensePlate(value);
+      }
       if (field === "services") {
         updated.total = (value as { name: string; price: number }[]).reduce((s, sv) => s + (sv.price || 0), 0);
       }

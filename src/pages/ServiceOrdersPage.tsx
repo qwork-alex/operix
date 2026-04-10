@@ -7,6 +7,7 @@ import { ExtractionStages } from "@/components/service-orders/ExtractionStages";
 import { UploadQueue } from "@/components/service-orders/UploadQueue";
 import { ServiceOrdersTable } from "@/components/service-orders/ServiceOrdersTable";
 import { EmbeddedFileManager, storeFileInDocuments } from "@/components/file-manager/EmbeddedFileManager";
+import { formatLicensePlate } from "@/lib/formatPlate";
 import {
   useServiceOrders,
   useExtractServiceOrder,
@@ -91,7 +92,7 @@ export default function ServiceOrdersPage() {
         platform: r.platform ?? null,
         week: r.week ?? null,
         car_name: r.car_name ?? null,
-        license_plate: r.license_plate ?? null,
+        license_plate: r.license_plate ? formatLicensePlate(r.license_plate) : null,
         service_1_name: r.service_1_name ?? null,
         service_1_price: r.service_1_price ?? null,
         service_2_name: r.service_2_name ?? null,

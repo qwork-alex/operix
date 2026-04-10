@@ -8,6 +8,7 @@ import { ExtractionStages } from "@/components/service-orders/ExtractionStages";
 import { UploadQueue } from "@/components/service-orders/UploadQueue";
 import { PaymentOrdersTable } from "@/components/payment-orders/PaymentOrdersTable";
 import { EmbeddedFileManager, storeFileInDocuments } from "@/components/file-manager/EmbeddedFileManager";
+import { formatLicensePlate } from "@/lib/formatPlate";
 import {
   usePaymentOrders,
   useExtractPaymentOrder,
@@ -88,7 +89,7 @@ export default function PaymentOrdersPage() {
         platform: r.platform ?? null,
         list_name: r.list_name ?? null,
         car_name: r.car_name ?? null,
-        license_plate: r.license_plate ?? null,
+        license_plate: r.license_plate ? formatLicensePlate(r.license_plate) : null,
         services: (r.services || []) as unknown as Json,
         total: r.total ?? null,
         status: "pending",
