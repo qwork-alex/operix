@@ -338,9 +338,16 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
                 <TableCell className="max-w-[180px] truncate">{services.map((service) => service.name).join(", ") || "—"}</TableCell>
                 <TableCell className="text-right font-medium tabular-nums">{formatCurrency(o.total || 0)}</TableCell>
                 <TableCell>
-                  <Badge variant="outline" className={statusStyle[o.status] || statusStyle.pending}>
-                    {t(`status.${o.status}`, o.status)}
-                  </Badge>
+                  <Select value={o.status} onValueChange={(v) => statusMutation.mutate({ id: o.id, status: v })}>
+                    <SelectTrigger className={cn("h-7 w-[110px] text-[10px] border", statusStyle[o.status] || statusStyle.pending)}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pending">Pendente</SelectItem>
+                      <SelectItem value="partial">Parcial</SelectItem>
+                      <SelectItem value="paid">Pago</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </TableCell>
                 <TableCell>
                   <div className="flex gap-1">
