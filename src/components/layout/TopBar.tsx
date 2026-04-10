@@ -1,6 +1,7 @@
-import { Bell, Globe, Search, LogOut, Check, Trash2, FileText, CreditCard, AlertTriangle, Info } from "lucide-react";
+import { Bell, Globe, Search, LogOut, Check, Trash2, FileText, CreditCard, AlertTriangle, Info, Clock } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import { useAgingAlerts } from "@/hooks/useAgingAlerts";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuTrigger, DropdownMenuSeparator,
@@ -48,6 +49,8 @@ export function TopBar() {
   const { role } = useRole();
   const { t, lang, setLang } = useLanguage();
   const { notifications, unreadCount, markAsRead, markAllRead, clearAll } = useNotifications();
+  const { data: agingAlerts = [] } = useAgingAlerts();
+  const totalAlertCount = unreadCount + agingAlerts.length;
 
   const initials = profile?.full_name
     ? profile.full_name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
@@ -95,9 +98,9 @@ export function TopBar() {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="relative text-muted-foreground hover:text-foreground">
               <Bell className="h-4 w-4" />
-              {unreadCount > 0 && (
+              {totalAlertCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground">
-                  {unreadCount > 9 ? "9+" : unreadCount}
+                  {totalAlertCount > 9 ? "9+" : totalAlertCount}
                 </span>
               )}
             </Button>
