@@ -10,6 +10,7 @@ import type { ExtractedPaymentOrder, FieldConfidence } from "@/hooks/usePaymentO
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/hooks/useLanguage";
 import { ExtractionStages, type Stage } from "@/components/service-orders/ExtractionStages";
+import { BulkEditBanner, type PendingBulkEdit } from "@/components/shared/BulkEditBanner";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,7 +49,14 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [errorRows, setErrorRows] = useState<Set<number>>(new Set());
   const [showOverrideDialog, setShowOverrideDialog] = useState(false);
+  const [pendingBulk, setPendingBulk] = useState<PendingBulkEdit | null>(null);
+  const [lastEditIdx, setLastEditIdx] = useState<number>(-1);
   const { t, formatCurrency } = useLanguage();
+
+  const fieldLabels: Record<string, string> = {
+    client: t("label.client"), platform: t("label.platform"), list_name: t("extract.listName"),
+    technician: t("label.technician"), car_name: t("label.car"), license_plate: t("label.plate"),
+  };
 
   const update = (idx: number, field: keyof ExtractedPaymentOrder, value: any) => {
     setValidationErrors([]);
@@ -66,6 +74,22 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
       updated.total_mismatch = false;
       return updated;
     }));
+
+    // Offer bulk edit for shared fields
+    const bulkFields = ["client", "platform", "list_name", "technician", "car_name", "license_plate"];
+    if (rows.length > 1 && bulkFields.includes(field as string)) {
+      setLastEditIdx(idx);
+      setPendingBulk({ field: field as string, value, label: fieldLabels[field as string] || (field as string) });
+    }
+  };
+
+  const applyBulk = () => {
+    if (!pendingBulk) return;
+    setRows(prev => prev.map((r, i) => {
+      if (i === lastEditIdx) return r;
+      return { ...r, [pendingBulk.field]: pendingBulk.value };
+    }));
+    setPendingBulk(null);
   };
 
   const removeRow = (idx: number) => {
@@ -140,6 +164,7 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
   return (
     <div className="space-y-3">
       <ExtractionStages current={stage} />
+      <BulkEditBanner pending={pendingBulk} onApply={applyBulk} onDismiss={() => setPendingBulk(null)} />
 
       {/* Review summary banner */}
       {(uncertainCount > 0 || hasMismatches) && (
