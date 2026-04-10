@@ -19,11 +19,12 @@ import { getRowAlertLevel, type AlertLevel } from "@/hooks/useAgingAlerts";
 import { AlertTriangle, Clock } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-const paymentRowColor = (status: string): string => {
+const paymentTextColor = (status: string): string => {
   const s = status?.toLowerCase();
-  if (s === "paid" || s === "pago") return "bg-emerald-500/8 border-l-2 border-l-emerald-500";
-  if (s === "partial" || s === "parcial") return "bg-amber-500/8 border-l-2 border-l-amber-500";
-  return "bg-red-500/8 border-l-2 border-l-red-500";
+  if (s === "paid" || s === "pago") return "text-emerald-400";
+  if (s === "partial" || s === "parcial") return "text-amber-400";
+  if (s === "pending" || s === "pendente") return "text-red-400";
+  return "";
 };
 
 const poAlertStyle: Record<AlertLevel, string> = {
@@ -359,7 +360,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
             const rowAlert = getRowAlertLevel(o.created_at, o.status);
             const daysOld = Math.floor((Date.now() - new Date(o.created_at).getTime()) / 86400000);
             return (
-              <TableRow key={o.id} className={cn("text-xs", paymentRowColor(o.status), poAlertStyle[rowAlert])}>
+              <TableRow key={o.id} className={cn("text-xs", paymentTextColor(o.status), poAlertStyle[rowAlert])}>
                 <TableCell className="font-medium">
                   <div className="flex items-center gap-1.5">
                     <PoAlertIcon level={rowAlert} days={daysOld} />
