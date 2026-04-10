@@ -7,6 +7,7 @@ import { ExtractionStages } from "@/components/service-orders/ExtractionStages";
 import { UploadQueue } from "@/components/service-orders/UploadQueue";
 import { ServiceOrdersTable } from "@/components/service-orders/ServiceOrdersTable";
 import { EmbeddedFileManager, storeFileInDocuments } from "@/components/file-manager/EmbeddedFileManager";
+import { formatLicensePlate } from "@/lib/formatPlate";
 import {
   useServiceOrders,
   useExtractServiceOrder,
