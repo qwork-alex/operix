@@ -50,11 +50,11 @@ interface ServiceOrdersTableProps {
 
 type PaymentStatus = "paid" | "partial" | "pending" | "none";
 
-const paymentRowStyle: Record<PaymentStatus, string> = {
-  paid: "bg-emerald-500/8 border-l-2 border-l-emerald-500",
-  partial: "bg-amber-500/8 border-l-2 border-l-amber-500",
-  pending: "bg-red-500/8 border-l-2 border-l-red-500",
-  none: "bg-muted/30 border-l-2 border-l-muted-foreground/30",
+const paymentTextStyle: Record<PaymentStatus, string> = {
+  paid: "text-emerald-400",
+  partial: "text-amber-400",
+  pending: "text-red-400",
+  none: "",
 };
 
 const paymentBadgeStyle: Record<PaymentStatus, string> = {
@@ -313,7 +313,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
                 (Number(editForm.service_4_price) || 0);
 
               return (
-                <TableRow key={o.id} className={cn("relative", paymentRowStyle[ps])}>
+                <TableRow key={o.id} className={cn("relative", paymentTextStyle[ps])}>
                   <TableCell className="p-1 min-w-[170px]">
                     <Select value={editForm.client_id} onValueChange={(value) => updateField("client_id", value)}>
                       <SelectTrigger className="h-7 text-xs bg-background">
@@ -409,7 +409,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
             const rowAlert = ps !== "paid" ? getRowAlertLevel(o.created_at) : "none";
             const daysOld = Math.floor((Date.now() - new Date(o.created_at).getTime()) / 86400000);
             return (
-              <TableRow key={o.id} className={cn(paymentRowStyle[ps], alertStyle[rowAlert])}>
+              <TableRow key={o.id} className={cn(paymentTextStyle[ps], alertStyle[rowAlert])}>
                 <TableCell className="font-medium">
                   <div className="flex items-center gap-1.5">
                     <AlertIcon level={rowAlert} days={daysOld} />
@@ -422,9 +422,9 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
                 <TableCell>{o.car_name || "—"}</TableCell>
                 <TableCell className="font-mono text-xs">{formatLicensePlate(o.license_plate) || "—"}</TableCell>
                 <TableCell>
-                  <span className="text-xs text-muted-foreground">{services.length ? services.join(", ") : "—"}</span>
+                  <span className="text-xs">{services.length ? services.join(", ") : "—"}</span>
                 </TableCell>
-                <TableCell className="text-right font-semibold text-primary tabular-nums">
+                <TableCell className="text-right font-semibold tabular-nums">
                   {o.total != null ? formatCurrency(Number(o.total)) : "—"}
                 </TableCell>
                 <TableCell>
