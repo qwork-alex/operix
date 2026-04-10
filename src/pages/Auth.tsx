@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Navigate, useSearchParams } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useLanguage } from "@/hooks/useLanguage";
 import { Button } from "@/components/ui/button";
@@ -9,13 +9,10 @@ import { toast } from "sonner";
 import { Loader2, Eye, EyeOff } from "lucide-react";
 
 export default function Auth() {
-  const { session, loading, signIn, signUp } = useAuth();
-  const [searchParams] = useSearchParams();
+  const { session, loading, signIn } = useAuth();
   const { t } = useLanguage();
-  const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [fullName, setFullName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -27,44 +24,15 @@ export default function Auth() {
     );
   }
 
-  // Capture invite token from redirect URL and persist
-  const redirectParam = searchParams.get("redirect") || "";
-  const redirectTokenMatch = redirectParam.match(/[?&]token=([^&]+)/);
-  const storedInviteToken = localStorage.getItem("invite_token") || sessionStorage.getItem("invite_token");
-  if (redirectTokenMatch) {
-    localStorage.setItem("invite_token", redirectTokenMatch[1]);
-    sessionStorage.setItem("invite_token", redirectTokenMatch[1]);
-  }
-  const effectiveInviteToken = storedInviteToken || (redirectTokenMatch ? redirectTokenMatch[1] : null);
-
-  // If already authenticated, redirect appropriately
   if (session) {
-    // If there's a pending invite token, always go to /join to apply it
-    if (effectiveInviteToken) {
-      return <Navigate to={`/join?token=${effectiveInviteToken}`} replace />;
-    }
-    const redirectTo = redirectParam || "/";
-    return <Navigate to={redirectTo} replace />;
+    return <Navigate to="/" replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-
-    if (isLogin) {
-      const { error } = await signIn(email, password);
-      if (error) toast.error(error.message);
-    } else {
-      if (!fullName.trim()) {
-        toast.error(t("auth.enterName"));
-        setSubmitting(false);
-        return;
-      }
-      const { error } = await signUp(email, password, fullName);
-      if (error) toast.error(error.message);
-      else toast.success(t("auth.checkEmail"));
-    }
-
+    const { error } = await signIn(email, password);
+    if (error) toast.error(error.message);
     setSubmitting(false);
   };
 
@@ -76,25 +44,10 @@ export default function Auth() {
             Q
           </div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">QWork Nexus</h1>
-          <p className="text-sm text-muted-foreground">
-            {isLogin ? t("auth.signInTitle") : t("auth.signUpTitle")}
-          </p>
+          <p className="text-sm text-muted-foreground">{t("auth.signInTitle")}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="glass-panel rounded-xl p-6 space-y-4">
-          {!isLogin && (
-            <div className="space-y-2">
-              <Label htmlFor="name" className="text-foreground">{t("auth.fullName")}</Label>
-              <Input
-                id="name"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="Jean Dupont"
-                className="bg-muted/50 border-border"
-              />
-            </div>
-          )}
-
           <div className="space-y-2">
             <Label htmlFor="email" className="text-foreground">{t("auth.email")}</Label>
             <Input
@@ -134,20 +87,9 @@ export default function Auth() {
 
           <Button type="submit" className="w-full" disabled={submitting}>
             {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isLogin ? t("auth.signIn") : t("auth.createAccount")}
+            {t("auth.signIn")}
           </Button>
         </form>
-
-        <p className="text-center text-sm text-muted-foreground">
-          {isLogin ? t("auth.noAccount") : t("auth.hasAccount")}{" "}
-          <button
-            type="button"
-            onClick={() => setIsLogin(!isLogin)}
-            className="text-primary hover:underline font-medium"
-          >
-            {isLogin ? t("auth.signUpLink") : t("auth.signInLink")}
-          </button>
-        </p>
       </div>
     </div>
   );
