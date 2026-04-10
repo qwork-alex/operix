@@ -107,6 +107,35 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditState | null>(null);
 
+  // Fetch payment statuses linked to these service orders
+  const soIds = orders.map(o => o.id);
+  const { data: paymentMap = {} } = useQuery({
+    queryKey: ["payment_status_map", soIds],
+    queryFn: async () => {
+      if (!soIds.length) return {};
+      const { data, error } = await supabase
+        .from("payment_orders")
+        .select("service_order_id, status, total")
+        .in("service_order_id", soIds);
+      if (error) throw error;
+      const map: Record<string, PaymentStatus> = {};
+      for (const po of data || []) {
+        if (!po.service_order_id) continue;
+        const s = po.status?.toLowerCase();
+        if (s === "paid" || s === "pago") map[po.service_order_id] = "paid";
+        else if (s === "partial" || s === "parcial") {
+          if (map[po.service_order_id] !== "paid") map[po.service_order_id] = "partial";
+        } else {
+          if (!map[po.service_order_id]) map[po.service_order_id] = "pending";
+        }
+      }
+      return map;
+    },
+    enabled: soIds.length > 0,
+  });
+
+  const getPaymentStatus = (soId: string): PaymentStatus => paymentMap[soId] || "none";
+
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("service_orders").delete().eq("id", id);
