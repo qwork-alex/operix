@@ -356,9 +356,16 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
             }
 
             const services = Array.isArray(o.services) ? (o.services as { name: string; price: number }[]) : [];
+            const rowAlert = getRowAlertLevel(o.created_at, o.status);
+            const daysOld = Math.floor((Date.now() - new Date(o.created_at).getTime()) / 86400000);
             return (
-              <TableRow key={o.id} className={cn("text-xs", paymentRowColor(o.status))}>
-                <TableCell className="font-medium">{o.client_name || o.clients?.name || "—"}</TableCell>
+              <TableRow key={o.id} className={cn("text-xs", paymentRowColor(o.status), poAlertStyle[rowAlert])}>
+                <TableCell className="font-medium">
+                  <div className="flex items-center gap-1.5">
+                    <PoAlertIcon level={rowAlert} days={daysOld} />
+                    {o.client_name || o.clients?.name || "—"}
+                  </div>
+                </TableCell>
                 <TableCell>{o.platform || "—"}</TableCell>
                 <TableCell>{o.list_name || "—"}</TableCell>
                 <TableCell>{o.technician_name || o.technicians?.name || "—"}</TableCell>
