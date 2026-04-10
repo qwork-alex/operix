@@ -1,37 +1,22 @@
-import { useLocation, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import {
-  LayoutDashboard,
-  FileText,
-  CreditCard,
-  TrendingUp,
-  PieChart,
-  BookOpen,
-  Car,
-  FolderOpen,
-  Users,
-  Settings,
+  LayoutDashboard, FileText, CreditCard, TrendingUp, PieChart,
+  BookOpen, Car, FolderOpen, Users, Settings,
 } from "lucide-react";
 import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarFooter,
-  useSidebar,
+  Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
+  SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
+  SidebarFooter, useSidebar,
 } from "@/components/ui/sidebar";
 import { NavLink } from "@/components/NavLink";
 import { useLanguage } from "@/hooks/useLanguage";
-import { useWorkspace } from "@/hooks/useWorkspace";
+import { useRole } from "@/hooks/useRole";
 
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const { t } = useLanguage();
-  const { isAdmin, myRole } = useWorkspace();
+  const { isAdmin, role } = useRole();
 
   const allNav = [
     { title: t("nav.dashboard"), url: "/", icon: LayoutDashboard, roles: ["admin", "tecnico", "socio", "cliente"] },
@@ -45,7 +30,7 @@ export function AppSidebar() {
     { title: t("nav.users"), url: "/users", icon: Users, roles: ["admin"] },
   ];
 
-  const mainNav = allNav.filter((item) => !myRole || item.roles.includes(myRole));
+  const mainNav = allNav.filter((item) => !role || item.roles.includes(role));
 
   return (
     <Sidebar collapsible="icon" className="border-r border-border/50">

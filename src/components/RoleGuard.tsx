@@ -1,14 +1,14 @@
 import { Navigate } from "react-router-dom";
-import { useWorkspace, MembershipRole } from "@/hooks/useWorkspace";
+import { useRole, type DisplayRole } from "@/hooks/useRole";
 import { Loader2 } from "lucide-react";
 
 interface RoleGuardProps {
-  allowedRoles: MembershipRole[];
+  allowedRoles: DisplayRole[];
   children: React.ReactNode;
 }
 
 export function RoleGuard({ allowedRoles, children }: RoleGuardProps) {
-  const { myRole, isLoading } = useWorkspace();
+  const { role, isLoading } = useRole();
 
   if (isLoading) {
     return (
@@ -18,10 +18,9 @@ export function RoleGuard({ allowedRoles, children }: RoleGuardProps) {
     );
   }
 
-  // If no role yet (workspace not loaded), allow access (will be filtered by queries)
-  if (!myRole) return <>{children}</>;
+  if (!role) return <>{children}</>;
 
-  if (!allowedRoles.includes(myRole)) {
+  if (!allowedRoles.includes(role)) {
     return <Navigate to="/" replace />;
   }
 
