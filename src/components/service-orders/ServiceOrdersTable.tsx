@@ -388,9 +388,8 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
             }
 
             const services = [o.service_1_name, o.service_2_name, o.service_3_name, o.service_4_name].filter(Boolean);
-            const ps = getPaymentStatus(o.id);
             return (
-              <TableRow key={o.id} className={cn(paymentRowStyle[ps])}>
+              <TableRow key={o.id}>
                 <TableCell className="font-medium">{o.client_name || o.clients?.name || "—"}</TableCell>
                 <TableCell>{o.platform || "—"}</TableCell>
                 <TableCell>{o.technician_name || o.technicians?.name || "—"}</TableCell>
@@ -406,11 +405,6 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
                 <TableCell>
                   <Badge variant="outline" className={statusStyle[o.status] || statusStyle.draft}>
                     {t(`status.${o.status}`, o.status)}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <Badge variant="outline" className={cn("text-[10px]", paymentBadgeStyle[ps])}>
-                    {paymentLabel[ps]}
                   </Badge>
                 </TableCell>
                 <TableCell>
