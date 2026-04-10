@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -45,12 +45,28 @@ interface ServiceOrdersTableProps {
   isLoading: boolean;
 }
 
-const statusStyle: Record<string, string> = {
-  draft: "bg-muted text-muted-foreground",
-  confirmed: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
-  invoiced: "bg-blue-500/10 text-blue-400 border-blue-500/30",
+type PaymentStatus = "paid" | "partial" | "pending" | "none";
+
+const paymentRowStyle: Record<PaymentStatus, string> = {
+  paid: "bg-emerald-500/8 border-l-2 border-l-emerald-500",
+  partial: "bg-amber-500/8 border-l-2 border-l-amber-500",
+  pending: "bg-red-500/8 border-l-2 border-l-red-500",
+  none: "bg-muted/30 border-l-2 border-l-muted-foreground/30",
 };
 
+const paymentBadgeStyle: Record<PaymentStatus, string> = {
+  paid: "bg-emerald-500/10 text-emerald-500 border-emerald-500/30",
+  partial: "bg-amber-500/10 text-amber-500 border-amber-500/30",
+  pending: "bg-red-500/10 text-red-500 border-red-500/30",
+  none: "bg-muted text-muted-foreground",
+};
+
+const paymentLabel: Record<PaymentStatus, string> = {
+  paid: "Pago",
+  partial: "Parcial",
+  pending: "Pendente",
+  none: "Sem pagamento",
+};
 
 interface EditState {
   client_id: string;
@@ -85,6 +101,34 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditState | null>(null);
 
+  // Fetch payment statuses linked to these service orders
+  const soIds = orders.map(o => o.id);
+  const { data: paymentMap = {} } = useQuery({
+    queryKey: ["payment_status_map", soIds],
+    queryFn: async () => {
+      if (!soIds.length) return {};
+      const { data, error } = await supabase
+        .from("payment_orders")
+        .select("service_order_id, status")
+        .in("service_order_id", soIds);
+      if (error) throw error;
+      const map: Record<string, PaymentStatus> = {};
+      for (const po of data || []) {
+        if (!po.service_order_id) continue;
+        const s = po.status?.toLowerCase();
+        if (s === "paid" || s === "pago") map[po.service_order_id] = "paid";
+        else if (s === "partial" || s === "parcial") {
+          if (map[po.service_order_id] !== "paid") map[po.service_order_id] = "partial";
+        } else {
+          if (!map[po.service_order_id]) map[po.service_order_id] = "pending";
+        }
+      }
+      return map;
+    },
+    enabled: soIds.length > 0,
+  });
+
+  const getPaymentStatus = (soId: string): PaymentStatus => paymentMap[soId] || "none";
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -150,8 +194,6 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
 
       delete (payload as any).clients;
       delete (payload as any).technicians;
-
-      console.log("SAVING DATA:", { id, formData: editForm, payload });
 
       const { error } = await supabase.from("service_orders").update(payload).eq("id", id);
       if (error) throw error;
@@ -227,13 +269,14 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
             <TableHead>{t("label.plate")}</TableHead>
             <TableHead>{t("label.services")}</TableHead>
             <TableHead className="text-right">{t("label.total")}</TableHead>
-            <TableHead>{t("label.status")}</TableHead>
+            <TableHead>Pagamento</TableHead>
             <TableHead>{t("label.actions")}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {orders.map((o) => {
             const isEditing = editingId === o.id && editForm;
+            const ps = getPaymentStatus(o.id);
 
             if (isEditing) {
               const computedTotal =
@@ -243,9 +286,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
                 (Number(editForm.service_4_price) || 0);
 
               return (
-                <TableRow key={o.id} className="bg-primary/5 relative">
-                  <TableCell colSpan={0} className="absolute -left-0 top-0 bottom-0 w-1 bg-primary rounded-l" />
-
+                <TableRow key={o.id} className={cn("relative", paymentRowStyle[ps])}>
                   <TableCell className="p-1 min-w-[170px]">
                     <Select value={editForm.client_id} onValueChange={(value) => updateField("client_id", value)}>
                       <SelectTrigger className="h-7 text-xs bg-background">
@@ -313,8 +354,8 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
                     {formatCurrency(computedTotal)}
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={statusStyle[o.status] || statusStyle.draft}>
-                      {t(`status.${o.status}`, o.status)}
+                    <Badge variant="outline" className={cn("text-[10px]", paymentBadgeStyle[ps])}>
+                      {paymentLabel[ps]}
                     </Badge>
                   </TableCell>
                   <TableCell>
@@ -339,7 +380,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
 
             const services = [o.service_1_name, o.service_2_name, o.service_3_name, o.service_4_name].filter(Boolean);
             return (
-              <TableRow key={o.id}>
+              <TableRow key={o.id} className={cn(paymentRowStyle[ps])}>
                 <TableCell className="font-medium">{o.client_name || o.clients?.name || "—"}</TableCell>
                 <TableCell>{o.platform || "—"}</TableCell>
                 <TableCell>{o.technician_name || o.technicians?.name || "—"}</TableCell>
@@ -353,8 +394,8 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
                   {o.total != null ? formatCurrency(Number(o.total)) : "—"}
                 </TableCell>
                 <TableCell>
-                  <Badge variant="outline" className={statusStyle[o.status] || statusStyle.draft}>
-                    {t(`status.${o.status}`, o.status)}
+                  <Badge variant="outline" className={cn("text-[10px]", paymentBadgeStyle[ps])}>
+                    {paymentLabel[ps]}
                   </Badge>
                 </TableCell>
                 <TableCell>

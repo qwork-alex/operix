@@ -41,7 +41,9 @@ interface PaymentOrderRow {
 }
 
 const statusStyle: Record<string, string> = {
-  pending: "bg-amber-500/10 text-amber-400 border-amber-500/30",
+  pending: "bg-red-500/10 text-red-400 border-red-500/30",
+  partial: "bg-amber-500/10 text-amber-400 border-amber-500/30",
+  paid: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
   matched: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
   mismatch: "bg-red-500/10 text-red-400 border-red-500/30",
 };
@@ -71,6 +73,19 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditState | null>(null);
+
+  const statusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const { error } = await supabase.from("payment_orders").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["payment_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["payment_status_map"] });
+      toast.success(t("toast.updated"));
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -138,6 +153,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payment_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["payment_status_map"] });
       queryClient.invalidateQueries({ queryKey: ["financial-summary"] });
       setEditingId(null);
       setEditForm(null);
@@ -323,9 +339,16 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
                 <TableCell className="max-w-[180px] truncate">{services.map((service) => service.name).join(", ") || "—"}</TableCell>
                 <TableCell className="text-right font-medium tabular-nums">{formatCurrency(o.total || 0)}</TableCell>
                 <TableCell>
-                  <Badge variant="outline" className={statusStyle[o.status] || statusStyle.pending}>
-                    {t(`status.${o.status}`, o.status)}
-                  </Badge>
+                  <Select value={o.status} onValueChange={(v) => statusMutation.mutate({ id: o.id, status: v })}>
+                    <SelectTrigger className={cn("h-7 w-[110px] text-[10px] border", statusStyle[o.status] || statusStyle.pending)}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pending">Pendente</SelectItem>
+                      <SelectItem value="partial">Parcial</SelectItem>
+                      <SelectItem value="paid">Pago</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </TableCell>
                 <TableCell>
                   <div className="flex gap-1">
