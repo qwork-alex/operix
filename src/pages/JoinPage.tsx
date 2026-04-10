@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -15,6 +15,7 @@ export default function JoinPage() {
   const [invite, setInvite] = useState<any>(null);
   const [errorMsg, setErrorMsg] = useState("");
   const [codeInput, setCodeInput] = useState("");
+  const applyingRef = useRef(false);
 
   const token = searchParams.get("token");
   const code = searchParams.get("code");
@@ -22,48 +23,64 @@ export default function JoinPage() {
   // Fetch invite by token or code
   useEffect(() => {
     const fetchInvite = async () => {
-      if (!token && !code) {
+      // Also check stored token if none in URL
+      const effectiveToken = token || localStorage.getItem("invite_token") || sessionStorage.getItem("invite_token");
+
+      if (!effectiveToken && !code) {
         setStatus("ready");
         return;
       }
 
       let query = supabase.from("invites").select("*, workspaces(name)");
-      if (token) query = query.eq("token", token);
+      if (effectiveToken) query = query.eq("token", effectiveToken);
       else if (code) query = query.eq("short_code", code.toUpperCase());
 
       const { data, error } = await query.maybeSingle();
       if (error || !data) {
         setErrorMsg("Convite não encontrado ou inválido.");
         setStatus("error");
+        // Clear invalid stored tokens
+        localStorage.removeItem("invite_token");
+        sessionStorage.removeItem("invite_token");
         return;
       }
       if (data.accepted_at) {
         setErrorMsg("Este convite já foi utilizado.");
         setStatus("error");
+        localStorage.removeItem("invite_token");
+        sessionStorage.removeItem("invite_token");
         return;
       }
       if (data.expires_at && new Date(data.expires_at) < new Date()) {
         setErrorMsg("Este convite expirou.");
         setStatus("error");
+        localStorage.removeItem("invite_token");
+        sessionStorage.removeItem("invite_token");
         return;
       }
+
+      // Persist token for signup metadata
+      localStorage.setItem("invite_token", data.token);
+      sessionStorage.setItem("invite_token", data.token);
+
       setInvite(data);
       setStatus("ready");
     };
     fetchInvite();
   }, [token, code]);
 
-  // Apply invite via RPC after user is authenticated
+  // Apply invite via RPC
   const applyInviteViaRPC = useCallback(async (inviteToken: string) => {
+    // Prevent duplicate calls
+    if (applyingRef.current) return;
+    applyingRef.current = true;
+
     setStatus("accepting");
-    console.log("[JoinPage] Calling apply_invite_after_auth with token:", inviteToken);
 
     try {
       const { data, error } = await supabase.rpc("apply_invite_after_auth", {
         p_invite_token: inviteToken,
       });
-
-      console.log("[JoinPage] RPC result:", data, error);
 
       if (error) throw error;
 
@@ -84,23 +101,15 @@ export default function JoinPage() {
       console.error("[JoinPage] Error applying invite:", err);
       setErrorMsg(err.message || "Erro ao aceitar convite.");
       setStatus("error");
+      applyingRef.current = false;
     }
   }, [navigate]);
 
   // When user is authenticated and invite is loaded, apply via RPC
   useEffect(() => {
-    if (status !== "ready" || !invite || !user || authLoading) return;
+    if (authLoading || !user || !invite || status !== "ready") return;
     applyInviteViaRPC(invite.token);
   }, [status, invite, user, authLoading, applyInviteViaRPC]);
-
-  // Also check for stored invite_token (user coming back from auth)
-  useEffect(() => {
-    if (authLoading || !user) return;
-    const storedToken = localStorage.getItem("invite_token") || sessionStorage.getItem("invite_token");
-    if (storedToken && status === "loading" && !token && !code) {
-      applyInviteViaRPC(storedToken);
-    }
-  }, [authLoading, user, status, token, code, applyInviteViaRPC]);
 
   const handleCodeSubmit = async () => {
     if (!codeInput.trim()) return;
@@ -121,16 +130,17 @@ export default function JoinPage() {
       setStatus("error");
       return;
     }
+
+    localStorage.setItem("invite_token", data.token);
+    sessionStorage.setItem("invite_token", data.token);
+
     setInvite(data);
     setErrorMsg("");
     setStatus("ready");
   };
 
-  // If not authenticated and invite is loaded, store token and redirect to auth
+  // If not authenticated and invite is loaded, redirect to auth
   if (!authLoading && !user && invite) {
-    // Store in BOTH localStorage (for signup metadata) and sessionStorage (for post-auth)
-    localStorage.setItem("invite_token", invite.token);
-    sessionStorage.setItem("invite_token", invite.token);
     const returnUrl = `/join?token=${invite.token}`;
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -171,13 +181,6 @@ export default function JoinPage() {
           </>
         )}
 
-        {status === "ready" && invite && !user && (
-          <>
-            <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-            <p className="text-sm text-muted-foreground">Aguardando autenticação...</p>
-          </>
-        )}
-
         {status === "accepting" && (
           <>
             <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
@@ -199,7 +202,7 @@ export default function JoinPage() {
             <h2 className="text-lg font-semibold">Erro</h2>
             <p className="text-sm text-muted-foreground">{errorMsg}</p>
             <div className="flex gap-2 justify-center">
-              <Button variant="outline" onClick={() => { setStatus("ready"); setInvite(null); setErrorMsg(""); }}>
+              <Button variant="outline" onClick={() => { setStatus("ready"); setInvite(null); setErrorMsg(""); applyingRef.current = false; }}>
                 Tentar código
               </Button>
               <Button onClick={() => navigate("/")}>Ir para início</Button>

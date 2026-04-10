@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
 
 interface AuthContextType {
   session: Session | null;
@@ -31,7 +30,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    // IMPORTANT: restore session first, then listen for changes
     let mounted = true;
 
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -64,7 +62,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    // Log auth event
     if (!error) {
       supabase.from("backend_event_logs").insert({
         table_name: "auth", action: "LOGIN", payload: { email } as any,
@@ -78,23 +75,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, fullName: string) => {
-    // Check for pending invite token to pass to backend trigger
     const inviteToken = localStorage.getItem("invite_token") || sessionStorage.getItem("invite_token") || undefined;
-    console.log("TOKEN NO SIGNUP:", inviteToken);
     const metadata: Record<string, string> = { full_name: fullName };
     if (inviteToken) {
       metadata.invite_token = inviteToken;
     }
-    console.log("SIGNUP METADATA:", JSON.stringify(metadata));
+
+    // If invite token exists, redirect back to /join after email confirmation
+    const redirectUrl = inviteToken
+      ? `${window.location.origin}/join?token=${inviteToken}`
+      : window.location.origin;
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: metadata,
-        emailRedirectTo: window.location.origin,
+        emailRedirectTo: redirectUrl,
       },
     });
-    // Log signup event
+
     if (!error) {
       supabase.from("backend_event_logs").insert({
         table_name: "auth", action: "SIGNUP", payload: { email, full_name: fullName, invite_token: inviteToken || null } as any,

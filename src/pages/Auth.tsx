@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { Loader2, Eye, EyeOff } from "lucide-react";
 
 export default function Auth() {
-  const { session, loading } = useAuth();
+  const { session, loading, signIn, signUp } = useAuth();
   const [searchParams] = useSearchParams();
   const { t } = useLanguage();
   const [isLogin, setIsLogin] = useState(true);
@@ -18,7 +18,6 @@ export default function Auth() {
   const [fullName, setFullName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const { signIn, signUp } = useAuth();
 
   if (loading) {
     return (
@@ -28,7 +27,7 @@ export default function Auth() {
     );
   }
 
-  // Capture invite token from redirect URL and persist in both storages
+  // Capture invite token from redirect URL and persist
   const redirectParam = searchParams.get("redirect") || "";
   const redirectTokenMatch = redirectParam.match(/[?&]token=([^&]+)/);
   const storedInviteToken = localStorage.getItem("invite_token") || sessionStorage.getItem("invite_token");
@@ -37,8 +36,16 @@ export default function Auth() {
     sessionStorage.setItem("invite_token", redirectTokenMatch[1]);
   }
   const effectiveInviteToken = storedInviteToken || (redirectTokenMatch ? redirectTokenMatch[1] : null);
-  const redirectTo = redirectParam || (effectiveInviteToken ? `/join?token=${effectiveInviteToken}` : "/");
-  if (session) return <Navigate to={redirectTo} replace />;
+
+  // If already authenticated, redirect appropriately
+  if (session) {
+    // If there's a pending invite token, always go to /join to apply it
+    if (effectiveInviteToken) {
+      return <Navigate to={`/join?token=${effectiveInviteToken}`} replace />;
+    }
+    const redirectTo = redirectParam || "/";
+    return <Navigate to={redirectTo} replace />;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,7 +71,6 @@ export default function Auth() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm space-y-8">
-        {/* Logo */}
         <div className="text-center space-y-2">
           <div className="inline-flex h-14 w-14 items-center justify-center rounded-xl bg-primary font-bold text-primary-foreground text-2xl">
             Q
@@ -75,7 +81,6 @@ export default function Auth() {
           </p>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="glass-panel rounded-xl p-6 space-y-4">
           {!isLogin && (
             <div className="space-y-2">
