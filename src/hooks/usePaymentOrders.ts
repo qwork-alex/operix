@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import { useAuth } from "./useAuth";
-import { useWorkspace } from "./useWorkspace";
+import { useRole } from "./useRole";
 import { toast } from "sonner";
 import type { Json } from "@/integrations/supabase/types";
 
@@ -40,7 +40,7 @@ export function usePaymentOrders(filters?: {
 }) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { memberAuthIds, isAdmin } = useWorkspace();
+  const { isAdmin } = useRole();
 
   const hasRequiredAuditFields = (payload: {
     id?: string;
@@ -50,7 +50,7 @@ export function usePaymentOrders(filters?: {
   }) => Boolean(payload.id && payload.created_by && payload.created_at && payload.updated_at);
 
   const query = useQuery({
-    queryKey: ["payment_orders", filters, memberAuthIds, isAdmin, user?.id],
+    queryKey: ["payment_orders", filters, isAdmin, user?.id],
     queryFn: async () => {
       let q = supabase
         .from("payment_orders")
@@ -59,8 +59,6 @@ export function usePaymentOrders(filters?: {
 
       if (!isAdmin && user?.id) {
         q = q.eq("created_by", user.id);
-      } else if (isAdmin && memberAuthIds.length > 0) {
-        q = q.in("created_by", memberAuthIds);
       }
 
       if (filters?.client_id) q = q.eq("client_id", filters.client_id);
