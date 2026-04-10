@@ -74,6 +74,19 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditState | null>(null);
 
+  const statusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const { error } = await supabase.from("payment_orders").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["payment_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["payment_status_map"] });
+      toast.success(t("toast.updated"));
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("payment_orders").delete().eq("id", id);
