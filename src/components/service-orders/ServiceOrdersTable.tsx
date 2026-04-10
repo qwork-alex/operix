@@ -278,7 +278,6 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
             <TableHead>{t("label.services")}</TableHead>
             <TableHead className="text-right">{t("label.total")}</TableHead>
             <TableHead>{t("label.status")}</TableHead>
-            <TableHead>Pagamento</TableHead>
             <TableHead>{t("label.actions")}</TableHead>
           </TableRow>
         </TableHeader>

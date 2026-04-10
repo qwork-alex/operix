@@ -127,15 +127,6 @@ export default function PaymentOrdersPage() {
             <p className="text-xs text-muted-foreground">{t("po.subtitle")}</p>
           </div>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => detectMutation.mutate()}
-          disabled={detectMutation.isPending}
-        >
-          <RefreshCw className={`h-4 w-4 mr-1 ${detectMutation.isPending ? "animate-spin" : ""}`} />
-          {t("po.runDetection")}
-        </Button>
       </div>
 
       {extractions.length === 0 && <ExtractionStages current="upload" />}

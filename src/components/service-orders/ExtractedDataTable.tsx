@@ -88,7 +88,9 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
     if (stage !== "review") setStage("review");
 
     // Offer bulk edit if multiple rows and it's a shared field
-    const bulkFields = ["client", "platform", "technician", "week", "car_name", "license_plate"];
+    const bulkFields = ["client", "platform", "technician", "week", "car_name", "license_plate",
+      "service_1_name", "service_1_price", "service_2_name", "service_2_price",
+      "service_3_name", "service_3_price", "service_4_name", "service_4_price"];
     if (rows.length > 1 && bulkFields.includes(field as string)) {
       setLastEditIdx(idx);
       setLastEditField(field as string);
