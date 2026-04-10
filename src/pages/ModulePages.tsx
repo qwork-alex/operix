@@ -1147,9 +1147,11 @@ export function UsersPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { isAdmin } = useRole();
-  const [editId, setEditId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
-  const [form, setForm] = useState({ role: "technician" as string });
+  const [showCreate, setShowCreate] = useState(false);
+  const [createForm, setCreateForm] = useState({ email: "", full_name: "", role: "technician" });
+  const [creating, setCreating] = useState(false);
+  const [tempPassword, setTempPassword] = useState<string | null>(null);
 
   const roleLabels: Record<string, string> = {
     admin: t("role.admin"),
@@ -1175,17 +1177,19 @@ export function UsersPage() {
       const roleMap: Record<string, string> = {};
       (roles || []).forEach((r: any) => { roleMap[r.user_id] = r.role; });
 
-      return (profiles || []).map((p: any) => ({
-        ...p,
-        role: roleMap[p.id] || "technician",
-        isOwner: p.email === "qwork@qworkgroup.com",
-      }));
+      // Only show users that have a role assigned (real users)
+      return (profiles || [])
+        .filter((p: any) => !!roleMap[p.id])
+        .map((p: any) => ({
+          ...p,
+          role: roleMap[p.id],
+          isOwner: p.email === "qwork@qworkgroup.com",
+        }));
     },
   });
 
   const updateRoleMutation = useMutation({
     mutationFn: async ({ userId, newRole }: { userId: string; newRole: string }) => {
-      // Upsert user_roles
       const { error: delErr } = await supabase.from("user_roles").delete().eq("user_id", userId);
       if (delErr) throw delErr;
       const { error } = await supabase.from("user_roles").insert({ user_id: userId, role: newRole as any });
@@ -1194,25 +1198,67 @@ export function UsersPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["all-users-with-roles"] });
       queryClient.invalidateQueries({ queryKey: ["my-role"] });
-      setEditId(null);
       toast.success(t("toast.updated"));
     },
     onError: (err) => toast.error((err as Error).message),
   });
 
-  const deleteUserMutation = useMutation({
-    mutationFn: async (userId: string) => {
-      // Remove role (user stays in auth but loses access)
-      const { error } = await supabase.from("user_roles").delete().eq("user_id", userId);
+  const handleCreateUser = async () => {
+    if (!createForm.email) return;
+    setCreating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-create-user", {
+        body: {
+          email: createForm.email,
+          full_name: createForm.full_name || undefined,
+          role: createForm.role,
+        },
+      });
       if (error) throw error;
-    },
-    onSuccess: () => {
+      if (data?.error) throw new Error(data.error);
+      setTempPassword(data.temp_password);
+      queryClient.invalidateQueries({ queryKey: ["all-users-with-roles"] });
+      toast.success("Usuário criado com sucesso");
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao criar usuário");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-create-user", {
+        body: { action: "delete_user", user_id: userId },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
       queryClient.invalidateQueries({ queryKey: ["all-users-with-roles"] });
       setDeleteTarget(null);
       toast.success(t("toast.deleted"));
-    },
-    onError: (err) => toast.error((err as Error).message),
-  });
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao remover usuário");
+    }
+  };
+
+  const handleToggleActive = async (userId: string, active: boolean) => {
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-create-user", {
+        body: { action: "toggle_active", user_id: userId, active },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(active ? "Usuário ativado" : "Usuário desativado");
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
+  const closeCreateDialog = () => {
+    setShowCreate(false);
+    setCreateForm({ email: "", full_name: "", role: "technician" });
+    setTempPassword(null);
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -1226,6 +1272,83 @@ export function UsersPage() {
             <p className="text-xs text-muted-foreground">{t("users.subtitle")}</p>
           </div>
         </div>
+        {isAdmin && (
+          <Dialog open={showCreate} onOpenChange={(v) => { if (!v) closeCreateDialog(); else setShowCreate(true); }}>
+            <DialogTrigger asChild>
+              <Button size="sm"><Plus className="h-4 w-4 mr-1" />Adicionar usuário</Button>
+            </DialogTrigger>
+            <DialogContent className="bg-card border-border">
+              <DialogHeader><DialogTitle>Criar novo usuário</DialogTitle></DialogHeader>
+              {tempPassword ? (
+                <div className="space-y-4 pt-2">
+                  <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3">
+                    <div className="flex items-center gap-2 text-emerald-500">
+                      <Check className="h-5 w-5" />
+                      <span className="font-medium text-sm">Usuário criado com sucesso!</span>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground">Email:</p>
+                      <code className="text-xs bg-muted/50 px-2 py-1 rounded block">{createForm.email}</code>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground">Senha temporária:</p>
+                      <div className="flex items-center gap-2">
+                        <code className="text-sm bg-muted/50 px-3 py-2 rounded block flex-1 font-mono font-bold">{tempPassword}</code>
+                        <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => {
+                          navigator.clipboard.writeText(tempPassword);
+                          toast.success("Senha copiada!");
+                        }}>
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-amber-500 flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" />
+                      Envie esta senha ao usuário. Ele deverá alterá-la no primeiro login.
+                    </p>
+                  </div>
+                  <Button className="w-full" onClick={closeCreateDialog}>Fechar</Button>
+                </div>
+              ) : (
+                <div className="space-y-4 pt-2">
+                  <div className="space-y-2">
+                    <Label className="text-xs">Email *</Label>
+                    <Input
+                      type="email"
+                      value={createForm.email}
+                      onChange={(e) => setCreateForm(p => ({ ...p, email: e.target.value }))}
+                      placeholder="usuario@empresa.com"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs">Nome completo</Label>
+                    <Input
+                      value={createForm.full_name}
+                      onChange={(e) => setCreateForm(p => ({ ...p, full_name: e.target.value }))}
+                      placeholder="João Silva"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs">Função *</Label>
+                    <Select value={createForm.role} onValueChange={(v) => setCreateForm(p => ({ ...p, role: v }))}>
+                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="admin">{t("role.admin")}</SelectItem>
+                        <SelectItem value="partner">{t("role.partner")}</SelectItem>
+                        <SelectItem value="technician">{t("role.technician")}</SelectItem>
+                        <SelectItem value="client">{t("role.client")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button className="w-full" onClick={handleCreateUser} disabled={creating || !createForm.email}>
+                    {creating ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
+                    Criar usuário
+                  </Button>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       {/* Delete confirmation dialog */}
@@ -1235,8 +1358,8 @@ export function UsersPage() {
           <p className="text-sm text-muted-foreground">{t("users.deleteWarning")}</p>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" size="sm" onClick={() => setDeleteTarget(null)}>{t("action.cancel")}</Button>
-            <Button variant="destructive" size="sm" onClick={() => deleteTarget && deleteUserMutation.mutate(deleteTarget)} disabled={deleteUserMutation.isPending}>
-              {deleteUserMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1" />}
+            <Button variant="destructive" size="sm" onClick={() => deleteTarget && handleDeleteUser(deleteTarget)}>
+              <Trash2 className="h-4 w-4 mr-1" />
               {t("action.delete")}
             </Button>
           </div>
@@ -1279,7 +1402,7 @@ export function UsersPage() {
                     <TableCell>
                       {u.isOwner ? (
                         <Badge variant="outline" className="text-[10px] border-border text-muted-foreground">{t("role.admin")}</Badge>
-                      ) : (
+                      ) : isAdmin ? (
                         <Select value={u.role} onValueChange={(v) => updateRoleMutation.mutate({ userId: u.id, newRole: v })}>
                           <SelectTrigger className="h-7 w-[120px] text-xs">
                             <SelectValue />
@@ -1291,11 +1414,13 @@ export function UsersPage() {
                             <SelectItem value="client">{t("role.client")}</SelectItem>
                           </SelectContent>
                         </Select>
+                      ) : (
+                        <Badge variant="outline" className="text-[10px]">{roleLabels[u.role] || u.role}</Badge>
                       )}
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
-                        {!u.isOwner && (
+                        {!u.isOwner && isAdmin && (
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget(u.id)}>
                             <Trash2 className="h-3 w-3" />
                           </Button>
