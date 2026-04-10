@@ -153,6 +153,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payment_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["payment_status_map"] });
       queryClient.invalidateQueries({ queryKey: ["financial-summary"] });
       setEditingId(null);
       setEditForm(null);
