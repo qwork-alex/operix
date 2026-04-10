@@ -5,14 +5,13 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
 import { LanguageProvider } from "@/hooks/useLanguage";
-import { WorkspaceProvider } from "@/hooks/useWorkspace";
+import { RoleProvider } from "@/hooks/useRole";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { RoleGuard } from "@/components/RoleGuard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppLayout } from "@/components/layout/AppLayout";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
-import JoinPage from "./pages/JoinPage";
 import NotFound from "./pages/NotFound";
 import ServiceOrdersPage from "./pages/ServiceOrdersPage";
 import PaymentOrdersPage from "./pages/PaymentOrdersPage";
@@ -51,12 +50,11 @@ const App = () => (
             <BrowserRouter>
               <Routes>
                 <Route path="/auth" element={<Auth />} />
-                <Route path="/join" element={<JoinPage />} />
                 <Route
                   path="/*"
                   element={
                     <ProtectedRoute>
-                      <WorkspaceProvider>
+                      <RoleProvider>
                       <AppLayout>
                         <ErrorBoundary>
                           <Routes>
@@ -74,7 +72,7 @@ const App = () => (
                           </Routes>
                         </ErrorBoundary>
                       </AppLayout>
-                      </WorkspaceProvider>
+                      </RoleProvider>
                     </ProtectedRoute>
                   }
                 />

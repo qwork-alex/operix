@@ -1,14 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useWorkspace } from "./useWorkspace";
+import { useRole } from "./useRole";
 import { useAuth } from "./useAuth";
 
 export function useDashboardStats() {
-  const { memberAuthIds, isAdmin } = useWorkspace();
+  const { isAdmin } = useRole();
   const { user } = useAuth();
 
   return useQuery({
-    queryKey: ["dashboard-stats", memberAuthIds, isAdmin, user?.id],
+    queryKey: ["dashboard-stats", isAdmin, user?.id],
     enabled: !!user?.id,
     queryFn: async () => {
       let soQ = supabase.from("service_orders").select("total, status, created_at, created_by");
@@ -18,17 +18,12 @@ export function useDashboardStats() {
       let clientQ = supabase.from("clients").select("id, created_by");
       const discQ = supabase.from("discrepancies").select("id, resolved");
 
+      // Non-admin users only see their own data
       if (!isAdmin && user?.id) {
         soQ = soQ.eq("created_by", user.id);
         poQ = poQ.eq("created_by", user.id);
         frQ = frQ.eq("created_by", user.id);
         clientQ = clientQ.eq("created_by", user.id);
-      } else if (isAdmin && memberAuthIds.length > 0) {
-        // Admin: all workspace members
-        soQ = soQ.in("created_by", memberAuthIds);
-        poQ = poQ.in("created_by", memberAuthIds);
-        frQ = frQ.in("created_by", memberAuthIds);
-        clientQ = clientQ.in("created_by", memberAuthIds);
       }
 
       const [soRes, poRes, frRes, techRes, clientRes, discRes] = await Promise.all([
