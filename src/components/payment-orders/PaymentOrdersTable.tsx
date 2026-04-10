@@ -12,6 +12,7 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { useAuth } from "@/hooks/useAuth";
 import { useClients, useTechnicians } from "@/hooks/useServiceOrders";
 import { toast } from "sonner";
+import { formatLicensePlate } from "@/lib/formatPlate";
 import type { Json } from "@/integrations/supabase/types";
 
 interface PaymentOrderRow {
@@ -111,7 +112,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
         platform: toNullableText(editForm.platform),
         list_name: toNullableText(editForm.list_name),
         car_name: toNullableText(editForm.car_name),
-        license_plate: toNullableText(editForm.license_plate),
+        license_plate: formatLicensePlate(editForm.license_plate),
         services: filledServices as unknown as Json,
         total: computedTotal,
         created_by: existing.created_by ?? user?.id ?? null,
@@ -310,7 +311,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
                 <TableCell>{o.list_name || "—"}</TableCell>
                 <TableCell>{o.technician_name || o.technicians?.name || "—"}</TableCell>
                 <TableCell>{o.car_name || "—"}</TableCell>
-                <TableCell className="font-mono text-[11px]">{o.license_plate || "—"}</TableCell>
+                <TableCell className="font-mono text-[11px]">{formatLicensePlate(o.license_plate) || "—"}</TableCell>
                 <TableCell className="max-w-[180px] truncate">{services.map((service) => service.name).join(", ") || "—"}</TableCell>
                 <TableCell className="text-right font-medium tabular-nums">{formatCurrency(o.total || 0)}</TableCell>
                 <TableCell>
