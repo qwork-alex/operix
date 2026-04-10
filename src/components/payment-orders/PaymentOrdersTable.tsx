@@ -14,6 +14,14 @@ import { useClients, useTechnicians } from "@/hooks/useServiceOrders";
 import { toast } from "sonner";
 import { formatLicensePlate } from "@/lib/formatPlate";
 import type { Json } from "@/integrations/supabase/types";
+import { cn } from "@/lib/utils";
+
+const paymentRowColor = (status: string): string => {
+  const s = status?.toLowerCase();
+  if (s === "paid" || s === "pago") return "bg-emerald-500/8 border-l-2 border-l-emerald-500";
+  if (s === "partial" || s === "parcial") return "bg-amber-500/8 border-l-2 border-l-amber-500";
+  return "bg-red-500/8 border-l-2 border-l-red-500";
+};
 
 interface PaymentOrderRow {
   id: string;
@@ -305,7 +313,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
 
             const services = Array.isArray(o.services) ? (o.services as { name: string; price: number }[]) : [];
             return (
-              <TableRow key={o.id} className="text-xs">
+              <TableRow key={o.id} className={cn("text-xs", paymentRowColor(o.status))}>
                 <TableCell className="font-medium">{o.client_name || o.clients?.name || "—"}</TableCell>
                 <TableCell>{o.platform || "—"}</TableCell>
                 <TableCell>{o.list_name || "—"}</TableCell>
