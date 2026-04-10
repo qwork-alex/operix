@@ -123,8 +123,48 @@ export function TopBar() {
               </div>
             </div>
             <DropdownMenuSeparator />
-            <ScrollArea className="max-h-[320px]">
-              {notifications.length === 0 ? (
+            <ScrollArea className="max-h-[400px]">
+              {/* Aging Alerts */}
+              {agingAlerts.length > 0 && (
+                <>
+                  <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-amber-500 font-semibold bg-amber-500/5">
+                    Alertas de cobrança ({agingAlerts.length})
+                  </div>
+                  {agingAlerts.map((alert) => {
+                    const isLevel2 = alert.level === "level2";
+                    const Icon = isLevel2 ? AlertTriangle : Clock;
+                    return (
+                      <div
+                        key={alert.id}
+                        className={`flex gap-3 px-3 py-2.5 ${isLevel2 ? "bg-red-500/5" : "bg-amber-500/5"}`}
+                      >
+                        <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
+                          isLevel2 ? "bg-red-500/10 text-red-500" : "bg-amber-500/10 text-amber-500"
+                        }`}>
+                          <Icon className="h-3.5 w-3.5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <p className={`text-xs font-semibold ${isLevel2 ? "text-red-500" : "text-amber-500"}`}>
+                              {isLevel2 ? "Urgente" : "Atenção"} — {alert.daysOld}d
+                            </p>
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${
+                              isLevel2 ? "bg-red-500/20 text-red-500" : "bg-amber-500/20 text-amber-500"
+                            }`}>
+                              {alert.type === "payment_order" ? "OP" : "OS"}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">{alert.message}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <DropdownMenuSeparator />
+                </>
+              )}
+
+              {/* Regular Notifications */}
+              {notifications.length === 0 && agingAlerts.length === 0 ? (
                 <div className="py-8 text-center text-xs text-muted-foreground">{t("notif.empty")}</div>
               ) : (
                 notifications.map((n: any) => {
