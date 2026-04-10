@@ -1,9 +1,10 @@
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Loader2 } from "lucide-react";
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -18,6 +19,12 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!session) return <Navigate to="/auth" replace />;
+
+  // If user has a pending invite token, redirect to /join to apply it
+  const storedInviteToken = localStorage.getItem("invite_token") || sessionStorage.getItem("invite_token");
+  if (storedInviteToken && location.pathname !== "/join") {
+    return <Navigate to={`/join?token=${storedInviteToken}`} replace />;
+  }
 
   return <>{children}</>;
 }
