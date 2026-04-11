@@ -45,6 +45,12 @@ const SIZES = [
   { value: "1.125rem", label: "Extra" },
 ];
 
+const LOGO_SIZES = [
+  { value: "small" as const, label: "Pequeno" },
+  { value: "medium" as const, label: "Médio" },
+  { value: "large" as const, label: "Grande" },
+];
+
 interface BrandNameEditorProps {
   config: BrandConfig;
   onSave: (config: BrandConfig) => void;
@@ -132,7 +138,21 @@ export function BrandNameEditor({ config, onSave, children }: BrandNameEditorPro
           </Select>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="space-y-1.5">
+          <Label className="text-[10px] text-muted-foreground">Tamanho do logo</Label>
+          <Select value={draft.logoSize || "medium"} onValueChange={(v) => setDraft({ ...draft, logoSize: v as "small" | "medium" | "large" })}>
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {LOGO_SIZES.map((s) => (
+                <SelectItem key={s.value} value={s.value} className="text-xs">
+                  {s.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
           <Toggle
             pressed={draft.bold ?? false}
             onPressedChange={(v) => setDraft({ ...draft, bold: v })}
