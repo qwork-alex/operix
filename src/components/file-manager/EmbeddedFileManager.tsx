@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import {
   FolderOpen, FolderPlus, ChevronRight, Trash2, Download,
   Eye, Printer, FileText, MoveRight, Filter, CheckSquare, Pencil, Check, X,
+  ExternalLink, Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +24,48 @@ interface Props {
   sessionFileNames?: string[];
 }
 
+/** Get a fresh signed URL, never reuse stale ones */
+async function getFreshSignedUrl(storagePath: string, expiresIn = 600): Promise<string | null> {
+  try {
+    const { data, error } = await supabase.storage
+      .from("uploads")
+      .createSignedUrl(storagePath, expiresIn);
+    if (error) {
+      console.error("[FileManager] Signed URL error:", error.message);
+      return null;
+    }
+    return data?.signedUrl ?? null;
+  } catch (err) {
+    console.error("[FileManager] getFreshSignedUrl error:", err);
+    return null;
+  }
+}
+
+/** Detect correct Content-Type from filename */
+function getMimeType(fileName: string, storedMime?: string | null): string {
+  if (storedMime) return storedMime;
+  const ext = fileName.split(".").pop()?.toLowerCase() || "";
+  const map: Record<string, string> = {
+    pdf: "application/pdf",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    gif: "image/gif",
+    webp: "image/webp",
+    svg: "image/svg+xml",
+    bmp: "image/bmp",
+  };
+  return map[ext] || "application/octet-stream";
+}
+
+function isImageMime(mime: string) {
+  return mime.startsWith("image/");
+}
+
+function isPdfMime(mime: string) {
+  return mime === "application/pdf";
+}
+
 export function EmbeddedFileManager({ entityType, module: moduleName = "orders", sessionFileNames = [] }: Props) {
   const { t, formatDate } = useLanguage();
   const { user } = useAuth();
@@ -37,6 +80,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
   const [showMoveDialog, setShowMoveDialog] = useState(false);
   const [moveTarget, setMoveTarget] = useState<any>(null);
   const [previewDoc, setPreviewDoc] = useState<any>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [filterMode, setFilterMode] = useState<"all" | "session">("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [newFolderInMove, setNewFolderInMove] = useState("");
@@ -188,6 +232,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
     },
     onError: (err) => toast.error((err as Error).message),
   });
+
   const createFolderInMove = useMutation({
     mutationFn: async (name: string) => {
       const { data, error } = await supabase.from("documents").insert({
@@ -225,29 +270,108 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
 
   const handleDownload = async (doc: any) => {
     if (!doc.storage_path) return;
-    const { data } = await supabase.storage.from("uploads").createSignedUrl(doc.storage_path, 300);
-    if (data?.signedUrl) {
-      const a = document.createElement("a");
-      a.href = data.signedUrl;
-      a.download = doc.name;
-      a.click();
+    try {
+      const url = await getFreshSignedUrl(doc.storage_path, 300);
+      if (url) {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = doc.name;
+        a.click();
+      } else {
+        toast.error(t("fm.previewError"));
+      }
+    } catch (err) {
+      console.error("[FileManager] Download error:", err);
+      toast.error(t("fm.previewError"));
     }
   };
 
   const handlePreview = async (doc: any) => {
     if (!doc.storage_path) return;
-    const { data } = await supabase.storage.from("uploads").createSignedUrl(doc.storage_path, 300);
-    if (data?.signedUrl) {
-      setPreviewDoc({ ...doc, url: data.signedUrl });
+    setPreviewLoading(true);
+    try {
+      const url = await getFreshSignedUrl(doc.storage_path, 600);
+      if (url) {
+        const resolvedMime = getMimeType(doc.name, doc.mime_type);
+        setPreviewDoc({ ...doc, url, mime_type: resolvedMime });
+      } else {
+        // Fallback: open in new tab
+        toast.error(t("fm.previewError"));
+        const fallbackUrl = await getFreshSignedUrl(doc.storage_path, 60);
+        if (fallbackUrl) window.open(fallbackUrl, "_blank");
+      }
+    } catch (err) {
+      console.error("[FileManager] Preview error:", err);
+      toast.error(t("fm.previewError"));
+    } finally {
+      setPreviewLoading(false);
     }
   };
 
   const handlePrint = async (doc: any) => {
     if (!doc.storage_path) return;
-    const { data } = await supabase.storage.from("uploads").createSignedUrl(doc.storage_path, 300);
-    if (data?.signedUrl) {
-      const w = window.open(data.signedUrl, "_blank");
-      w?.addEventListener("load", () => w.print());
+    try {
+      const url = await getFreshSignedUrl(doc.storage_path, 300);
+      if (!url) {
+        toast.error(t("fm.previewError"));
+        return;
+      }
+      const resolvedMime = getMimeType(doc.name, doc.mime_type);
+
+      if (isPdfMime(resolvedMime)) {
+        // PDF: open in hidden iframe then print
+        const iframe = document.createElement("iframe");
+        iframe.style.position = "fixed";
+        iframe.style.left = "-9999px";
+        iframe.style.width = "1px";
+        iframe.style.height = "1px";
+        iframe.src = url;
+        document.body.appendChild(iframe);
+        iframe.onload = () => {
+          try {
+            iframe.contentWindow?.print();
+          } catch {
+            window.open(url, "_blank");
+          }
+          setTimeout(() => document.body.removeChild(iframe), 5000);
+        };
+      } else if (isImageMime(resolvedMime)) {
+        // Image: render in hidden iframe for printing
+        const iframe = document.createElement("iframe");
+        iframe.style.position = "fixed";
+        iframe.style.left = "-9999px";
+        iframe.style.width = "1px";
+        iframe.style.height = "1px";
+        document.body.appendChild(iframe);
+        const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+        if (iframeDoc) {
+          iframeDoc.open();
+          iframeDoc.write(`
+            <!DOCTYPE html>
+            <html><head><title>Print</title>
+            <style>body{margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh}img{max-width:100%;height:auto}</style>
+            </head><body><img src="${url}" onload="window.print()"/></body></html>
+          `);
+          iframeDoc.close();
+        }
+        setTimeout(() => document.body.removeChild(iframe), 10000);
+      } else {
+        // Other: open in new tab
+        window.open(url, "_blank");
+      }
+    } catch (err) {
+      console.error("[FileManager] Print error:", err);
+      toast.error(t("fm.previewError"));
+    }
+  };
+
+  const handleOpenInNewTab = async (doc: any) => {
+    if (!doc.storage_path) return;
+    try {
+      const url = await getFreshSignedUrl(doc.storage_path, 300);
+      if (url) window.open(url, "_blank");
+    } catch (err) {
+      console.error("[FileManager] Open in new tab error:", err);
     }
   };
 
@@ -431,14 +555,17 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
                     <div className="flex items-center gap-1">
                       {d.type === "file" && (
                         <>
-                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handlePreview(d)} title={t("fm.preview")}>
-                            <Eye className="h-3 w-3" />
+                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handlePreview(d)} title={t("fm.preview")} disabled={previewLoading}>
+                            {previewLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3 w-3" />}
                           </Button>
                           <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDownload(d)} title={t("fm.download")}>
                             <Download className="h-3 w-3" />
                           </Button>
                           <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handlePrint(d)} title={t("fm.print")}>
                             <Printer className="h-3 w-3" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleOpenInNewTab(d)} title={t("fm.openInNewTab")}>
+                            <ExternalLink className="h-3 w-3" />
                           </Button>
                         </>
                       )}
@@ -510,7 +637,6 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
                   ))}
               </SelectContent>
             </Select>
-            {/* Create new folder inline */}
             <div className="flex gap-2">
               <Input
                 value={newFolderInMove}
@@ -542,58 +668,69 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
         </DialogContent>
       </Dialog>
 
-      {/* Preview dialog with pinch-zoom support */}
+      {/* Preview dialog with pinch-zoom, print, and open-in-new-tab */}
       <Dialog open={!!previewDoc} onOpenChange={() => setPreviewDoc(null)}>
         <DialogContent className="bg-card border-border max-w-3xl max-h-[80vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between gap-2">
               <span className="truncate">{previewDoc?.name}</span>
-              {previewDoc?.url && (
-                <a
-                  href={previewDoc.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-primary underline shrink-0"
-                >
-                  {t("fm.openInNewTab")}
-                </a>
-              )}
+              <div className="flex items-center gap-2 shrink-0">
+                {previewDoc && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-[11px]"
+                    onClick={() => handlePrint(previewDoc)}
+                  >
+                    <Printer className="h-3 w-3 mr-1" />
+                    {t("fm.print")}
+                  </Button>
+                )}
+                {previewDoc?.url && (
+                  <a
+                    href={previewDoc.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-primary underline"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    {t("fm.openInNewTab")}
+                  </a>
+                )}
+              </div>
             </DialogTitle>
           </DialogHeader>
           <PinchZoomContainer>
-            {previewDoc?.mime_type?.startsWith("image/") ? (
+            {previewDoc?.mime_type && isImageMime(previewDoc.mime_type) ? (
               <img
                 src={previewDoc.url}
                 alt={previewDoc.name}
                 className="max-w-full rounded"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = "none";
-                  (e.target as HTMLImageElement).parentElement!.innerHTML =
-                    `<div class="text-center py-8 text-sm text-muted-foreground"><p>${t("fm.previewError")}</p><a href="${previewDoc.url}" target="_blank" rel="noopener noreferrer" class="text-primary underline mt-2 inline-block">${t("fm.openInNewTab")}</a></div>`;
+                onError={() => {
+                  // Fallback: open in new tab on image load error
+                  if (previewDoc?.url) {
+                    window.open(previewDoc.url, "_blank");
+                    setPreviewDoc(null);
+                    toast.error(t("fm.previewError"));
+                  }
                 }}
               />
-            ) : previewDoc?.mime_type === "application/pdf" ? (
+            ) : previewDoc?.mime_type && isPdfMime(previewDoc.mime_type) ? (
               <div className="relative">
                 <iframe
                   src={previewDoc.url + "#toolbar=1"}
                   className="w-full h-[60vh] rounded border-0"
                   title={previewDoc.name}
+                  onError={() => {
+                    if (previewDoc?.url) window.open(previewDoc.url, "_blank");
+                  }}
                 />
-                <div className="mt-2 text-center">
-                  <a
-                    href={previewDoc.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-primary underline"
-                  >
-                    {t("fm.openInNewTab")}
-                  </a>
-                </div>
               </div>
             ) : (
               <div className="text-center py-8 text-sm text-muted-foreground">
                 <p className="mb-2">{t("fm.previewError")}</p>
-                <a href={previewDoc?.url} target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                <a href={previewDoc?.url} target="_blank" rel="noopener noreferrer" className="text-primary underline inline-flex items-center gap-1">
+                  <ExternalLink className="h-3 w-3" />
                   {t("fm.download")}
                 </a>
               </div>
@@ -645,7 +782,6 @@ function PinchZoomContainer({ children }: { children: React.ReactNode }) {
     lastDistance.current = null;
   }, []);
 
-  // Reset scale on double-tap
   const lastTap = useRef(0);
   const onDoubleTap = useCallback((e: React.TouchEvent) => {
     if (e.touches.length !== 1) return;
@@ -701,7 +837,7 @@ export async function storeFileInDocuments(
       parent_id: null,
       uploaded_by: userId || null,
       storage_path: storagePath,
-      mime_type: file.type,
+      mime_type: file.type || getMimeType(file.name),
       size_bytes: file.size,
       entity_type: entityType,
       module,
