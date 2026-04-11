@@ -100,9 +100,7 @@ export function ActiveMap() {
       cityMap[city] = (cityMap[city] || 0) + 1;
     }
 
-    if (Object.keys(cityMap).length === 0 && serviceOrders.length > 0) {
-      cityMap["paris"] = serviceOrders.length;
-    }
+    // No fallback to Paris — only show real data
 
     return Object.entries(cityMap)
       .filter(([name]) => CITY_COORDS[name])
