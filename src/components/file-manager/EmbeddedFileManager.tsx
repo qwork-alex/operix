@@ -605,7 +605,79 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
   );
 }
 
-/** Utility to store a file in the document system linked to a module */
+/** Pinch-zoom container: allows touch zoom only inside document preview */
+function PinchZoomContainer({ children }: { children: React.ReactNode }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  const [origin, setOrigin] = useState({ x: 0, y: 0 });
+  const lastDistance = useRef<number | null>(null);
+
+  const getDistance = (touches: TouchList) => {
+    const [a, b] = [touches[0], touches[1]];
+    return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+  };
+
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      lastDistance.current = getDistance(e.touches);
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (rect) {
+        const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+        const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+        setOrigin({ x: midX, y: midY });
+      }
+    }
+  }, []);
+
+  const onTouchMove = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2 && lastDistance.current !== null) {
+      e.preventDefault();
+      const dist = getDistance(e.touches);
+      const delta = dist / lastDistance.current;
+      setScale(prev => Math.min(Math.max(prev * delta, 1), 5));
+      lastDistance.current = dist;
+    }
+  }, []);
+
+  const onTouchEnd = useCallback(() => {
+    lastDistance.current = null;
+  }, []);
+
+  // Reset scale on double-tap
+  const lastTap = useRef(0);
+  const onDoubleTap = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return;
+    const now = Date.now();
+    if (now - lastTap.current < 300) {
+      setScale(1);
+    }
+    lastTap.current = now;
+  }, []);
+
+  return (
+    <div
+      ref={containerRef}
+      className="overflow-auto max-h-[65vh] touch-manipulation"
+      style={{ touchAction: "pan-x pan-y" }}
+      onTouchStart={(e) => { onDoubleTap(e); onTouchStart(e); }}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+    >
+      <div
+        style={{
+          transform: `scale(${scale})`,
+          transformOrigin: `${origin.x}px ${origin.y}px`,
+          transition: lastDistance.current ? "none" : "transform 0.2s ease-out",
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+
 export async function storeFileInDocuments(
   file: File,
   entityType: "service_order" | "payment_order",
