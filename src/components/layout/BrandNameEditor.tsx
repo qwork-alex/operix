@@ -14,6 +14,7 @@ export interface BrandConfig {
   fontSize?: string;
   bold?: boolean;
   italic?: boolean;
+  logoSize?: "small" | "medium" | "large";
 }
 
 const FONTS = [

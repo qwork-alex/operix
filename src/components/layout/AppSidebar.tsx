@@ -63,6 +63,9 @@ export function AppSidebar() {
   const displayName = brandConfig.name || "QWork Nexus";
   const shortName = brandConfig.name?.split(" ")[0] || "QWork";
 
+  const logoSizeMap = { small: "h-6 w-6", medium: "h-8 w-8", large: "h-10 w-10" };
+  const logoSizeClass = logoSizeMap[brandConfig.logoSize || "medium"];
+
   const nameStyle: React.CSSProperties = {
     fontFamily: brandConfig.fontFamily || undefined,
     color: brandConfig.color || undefined,
