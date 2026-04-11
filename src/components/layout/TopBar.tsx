@@ -1,5 +1,5 @@
-import { Bell, Globe, Search, LogOut, Check, Trash2, FileText, CreditCard, AlertTriangle, Info, Clock } from "lucide-react";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { Bell, Globe, LogOut, Check, Trash2, FileText, CreditCard, AlertTriangle, Info, Clock } from "lucide-react";
+import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { useAgingAlerts } from "@/hooks/useAgingAlerts";
 import {
@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useRole } from "@/hooks/useRole";
 import { useLanguage, type LangCode } from "@/hooks/useLanguage";
 import { useNotifications } from "@/hooks/useNotifications";
+import { useCompanyLogo } from "@/hooks/useCompanyLogo";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 const languages: { code: LangCode; label: string }[] = [
@@ -50,16 +51,45 @@ export function TopBar() {
   const { t, lang, setLang } = useLanguage();
   const { notifications, unreadCount, markAsRead, markAllRead, clearAll } = useNotifications();
   const { data: agingAlerts = [] } = useAgingAlerts();
+  const { logoUrl, brandConfig } = useCompanyLogo();
+  const { state } = useSidebar();
+  const collapsed = state === "collapsed";
   const totalAlertCount = unreadCount + agingAlerts.length;
 
   const initials = profile?.full_name
     ? profile.full_name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
     : "?";
 
+  const displayName = brandConfig.name || "QWork Nexus";
+  const logoSizeMap = { small: "h-5 w-5", medium: "h-6 w-6", large: "h-7 w-7" };
+  const logoSizeClass = logoSizeMap[brandConfig.logoSize || "medium"];
+
   return (
     <header className="flex h-14 items-center justify-between border-b border-border/50 px-4 glass-panel">
       <div className="flex items-center gap-2">
         <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
+        {collapsed && (
+          <div className="flex items-center gap-2 animate-fade-in">
+            {logoUrl ? (
+              <img src={logoUrl} alt="Logo" className={`${logoSizeClass} shrink-0 rounded object-contain`} />
+            ) : (
+              <div className={`flex ${logoSizeClass} shrink-0 items-center justify-center rounded bg-primary font-bold text-primary-foreground text-[10px]`}>
+                Q
+              </div>
+            )}
+            <span
+              className="text-sm font-semibold text-foreground whitespace-nowrap"
+              style={{
+                fontFamily: brandConfig.fontFamily || undefined,
+                color: brandConfig.color || undefined,
+                fontWeight: brandConfig.bold ? 700 : 600,
+                fontStyle: brandConfig.italic ? "italic" : undefined,
+              }}
+            >
+              {displayName}
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-1">

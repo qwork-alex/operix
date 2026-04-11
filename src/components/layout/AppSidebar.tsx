@@ -63,6 +63,9 @@ export function AppSidebar() {
   const displayName = brandConfig.name || "QWork Nexus";
   const shortName = brandConfig.name?.split(" ")[0] || "QWork";
 
+  const logoSizeMap = { small: "h-6 w-6", medium: "h-8 w-8", large: "h-10 w-10" };
+  const logoSizeClass = logoSizeMap[brandConfig.logoSize || "medium"];
+
   const nameStyle: React.CSSProperties = {
     fontFamily: brandConfig.fontFamily || undefined,
     color: brandConfig.color || undefined,
@@ -86,9 +89,9 @@ export function AppSidebar() {
   const mainNav = allNav.filter((item) => !role || item.roles.includes(role));
 
   const logoElement = logoUrl ? (
-    <img src={logoUrl} alt="Logo" className="h-8 w-8 shrink-0 rounded-lg object-contain" />
+    <img src={logoUrl} alt="Logo" className={`${logoSizeClass} shrink-0 rounded-lg object-contain max-h-12`} />
   ) : (
-    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary font-bold text-primary-foreground text-sm">
+    <div className={`flex ${logoSizeClass} shrink-0 items-center justify-center rounded-lg bg-primary font-bold text-primary-foreground text-sm max-h-12`}>
       Q
     </div>
   );

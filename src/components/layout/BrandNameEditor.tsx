@@ -14,6 +14,7 @@ export interface BrandConfig {
   fontSize?: string;
   bold?: boolean;
   italic?: boolean;
+  logoSize?: "small" | "medium" | "large";
 }
 
 const FONTS = [
@@ -42,6 +43,12 @@ const SIZES = [
   { value: "0.875rem", label: "Médio" },
   { value: "1rem", label: "Grande" },
   { value: "1.125rem", label: "Extra" },
+];
+
+const LOGO_SIZES = [
+  { value: "small" as const, label: "Pequeno" },
+  { value: "medium" as const, label: "Médio" },
+  { value: "large" as const, label: "Grande" },
 ];
 
 interface BrandNameEditorProps {
@@ -123,6 +130,22 @@ export function BrandNameEditor({ config, onSave, children }: BrandNameEditorPro
             </SelectTrigger>
             <SelectContent>
               {SIZES.map((s) => (
+                <SelectItem key={s.value} value={s.value} className="text-xs">
+                  {s.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-[10px] text-muted-foreground">Tamanho do logo</Label>
+          <Select value={draft.logoSize || "medium"} onValueChange={(v) => setDraft({ ...draft, logoSize: v as "small" | "medium" | "large" })}>
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {LOGO_SIZES.map((s) => (
                 <SelectItem key={s.value} value={s.value} className="text-xs">
                   {s.label}
                 </SelectItem>
