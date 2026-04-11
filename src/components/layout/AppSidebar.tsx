@@ -13,6 +13,7 @@ import { NavLink } from "@/components/NavLink";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useRole } from "@/hooks/useRole";
 import { useCompanyLogo } from "@/hooks/useCompanyLogo";
+import { BrandNameEditor, type BrandConfig } from "@/components/layout/BrandNameEditor";
 import { toast } from "sonner";
 
 export function AppSidebar() {
@@ -20,7 +21,7 @@ export function AppSidebar() {
   const collapsed = state === "collapsed";
   const { t } = useLanguage();
   const { isAdmin, role } = useRole();
-  const { logoUrl, uploadLogo, isUploading } = useCompanyLogo();
+  const { logoUrl, brandConfig, uploadLogo, isUploading, saveBrandConfig } = useCompanyLogo();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleLogoClick = (e: React.MouseEvent) => {
@@ -33,9 +34,7 @@ export function AppSidebar() {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    // Reset so same file can be re-selected
     e.target.value = "";
-
     if (!file.type.startsWith("image/")) {
       toast.error("Apenas imagens são permitidas");
       return;
@@ -44,13 +43,32 @@ export function AppSidebar() {
       toast.error("Imagem deve ter no máximo 5MB");
       return;
     }
-
     try {
       await uploadLogo(file);
       toast.success("Logo atualizado com sucesso");
-    } catch (err) {
+    } catch {
       toast.error("Erro ao atualizar logo");
     }
+  };
+
+  const handleBrandSave = async (config: BrandConfig) => {
+    try {
+      await saveBrandConfig(config);
+      toast.success("Nome atualizado com sucesso");
+    } catch {
+      toast.error("Erro ao atualizar nome");
+    }
+  };
+
+  const displayName = brandConfig.name || "QWork Nexus";
+  const shortName = brandConfig.name?.split(" ")[0] || "QWork";
+
+  const nameStyle: React.CSSProperties = {
+    fontFamily: brandConfig.fontFamily || undefined,
+    color: brandConfig.color || undefined,
+    fontSize: collapsed ? "8px" : (brandConfig.fontSize || undefined),
+    fontWeight: brandConfig.bold ? 700 : 600,
+    fontStyle: brandConfig.italic ? "italic" : undefined,
   };
 
   const allNav = [
@@ -68,30 +86,26 @@ export function AppSidebar() {
   const mainNav = allNav.filter((item) => !role || item.roles.includes(role));
 
   const logoElement = logoUrl ? (
-    <img
-      src={logoUrl}
-      alt="Logo"
-      className="h-8 w-8 shrink-0 rounded-lg object-contain"
-    />
+    <img src={logoUrl} alt="Logo" className="h-8 w-8 shrink-0 rounded-lg object-contain" />
   ) : (
     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary font-bold text-primary-foreground text-sm">
       Q
     </div>
   );
 
+  const nameElement = (
+    <span className="whitespace-nowrap leading-none tracking-tight" style={nameStyle}>
+      {collapsed ? shortName : displayName}
+    </span>
+  );
+
   return (
     <Sidebar collapsible="icon" className="border-r border-border/50">
-      {/* Hidden file input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={handleFileChange}
-      />
+      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
 
       <div className={`flex h-14 items-center border-b border-border/50 ${collapsed ? "justify-center px-0" : "px-4"}`}>
         <div className={`flex items-center gap-2 overflow-hidden ${collapsed ? "flex-col gap-0.5" : ""}`}>
+          {/* Logo */}
           <div
             onClick={handleLogoClick}
             className={`relative group ${isAdmin ? "cursor-pointer" : ""}`}
@@ -112,17 +126,22 @@ export function AppSidebar() {
               </>
             )}
           </div>
-          <Link to="/" className="overflow-hidden">
-            {collapsed ? (
-              <span className="text-[8px] font-semibold tracking-tight text-muted-foreground whitespace-nowrap leading-none">
-                QWork
-              </span>
-            ) : (
-              <span className="text-base font-semibold tracking-tight text-foreground whitespace-nowrap">
-                QWork Nexus
-              </span>
-            )}
-          </Link>
+
+          {/* Name */}
+          {isAdmin ? (
+            <BrandNameEditor config={brandConfig} onSave={handleBrandSave}>
+              <button
+                className="overflow-hidden hover:opacity-80 transition-opacity cursor-pointer text-left"
+                title="Clique para personalizar"
+              >
+                {nameElement}
+              </button>
+            </BrandNameEditor>
+          ) : (
+            <Link to="/" className="overflow-hidden">
+              {nameElement}
+            </Link>
+          )}
         </div>
       </div>
 

@@ -110,6 +110,7 @@ export type Database = {
       company_settings: {
         Row: {
           address: string
+          brand_config: Json | null
           company_name: string
           company_share: number
           created_at: string
@@ -124,6 +125,7 @@ export type Database = {
         }
         Insert: {
           address?: string
+          brand_config?: Json | null
           company_name?: string
           company_share?: number
           created_at?: string
@@ -138,6 +140,7 @@ export type Database = {
         }
         Update: {
           address?: string
+          brand_config?: Json | null
           company_name?: string
           company_share?: number
           created_at?: string
