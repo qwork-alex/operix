@@ -1,11 +1,10 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Toggle } from "@/components/ui/toggle";
-import { Bold, Italic, Check, X } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Slider } from "@/components/ui/slider";
+import { Bold, Italic } from "lucide-react";
 
 export interface BrandConfig {
   name?: string;
@@ -15,49 +14,26 @@ export interface BrandConfig {
   bold?: boolean;
   italic?: boolean;
   logoSize?: "small" | "medium" | "large";
+  logoSizeNum?: number;
+  glowIntensity?: number;
 }
 
 const FONTS = [
-  { value: "system-ui", label: "System" },
-  { value: "'Inter', sans-serif", label: "Inter" },
-  { value: "'Space Grotesk', sans-serif", label: "Space Grotesk" },
-  { value: "'DM Sans', sans-serif", label: "DM Sans" },
-  { value: "'Sora', sans-serif", label: "Sora" },
-  { value: "'Urbanist', sans-serif", label: "Urbanist" },
-  { value: "'Outfit', sans-serif", label: "Outfit" },
-  { value: "'JetBrains Mono', monospace", label: "JetBrains Mono" },
+  "Inter", "Space Grotesk", "JetBrains Mono", "Poppins", "Montserrat",
+  "Raleway", "Outfit", "Sora", "Urbanist", "DM Sans",
+  "Playfair Display", "Cormorant", "Bebas Neue", "Archivo Black",
+  "Orbitron", "Rajdhani", "Exo 2", "Audiowide", "Michroma", "Oxanium",
 ];
 
-const COLORS = [
-  { value: "hsl(var(--foreground))", label: "Padrão" },
-  { value: "hsl(var(--primary))", label: "Primária" },
-  { value: "hsl(43, 85%, 55%)", label: "Dourado" },
-  { value: "hsl(210, 80%, 55%)", label: "Azul" },
-  { value: "hsl(150, 60%, 50%)", label: "Verde" },
-  { value: "hsl(280, 70%, 60%)", label: "Roxo" },
-  { value: "hsl(0, 0%, 100%)", label: "Branco" },
-];
-
-const SIZES = [
-  { value: "0.75rem", label: "Pequeno" },
-  { value: "0.875rem", label: "Médio" },
-  { value: "1rem", label: "Grande" },
-  { value: "1.125rem", label: "Extra" },
-];
-
-const LOGO_SIZES = [
-  { value: "small" as const, label: "Pequeno" },
-  { value: "medium" as const, label: "Médio" },
-  { value: "large" as const, label: "Grande" },
-];
-
-interface BrandNameEditorProps {
+export function BrandNameEditor({
+  config,
+  onSave,
+  children,
+}: {
   config: BrandConfig;
-  onSave: (config: BrandConfig) => void;
+  onSave: (c: BrandConfig) => void;
   children: React.ReactNode;
-}
-
-export function BrandNameEditor({ config, onSave, children }: BrandNameEditorProps) {
+}) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<BrandConfig>(config);
 
@@ -70,131 +46,158 @@ export function BrandNameEditor({ config, onSave, children }: BrandNameEditorPro
     setOpen(false);
   };
 
+  const fontSize = parseInt(draft.fontSize || "16", 10);
+  const glowIntensity = draft.glowIntensity ?? 0;
+  const logoSizeNum = draft.logoSizeNum ?? 32;
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>{children}</PopoverTrigger>
-      <PopoverContent className="w-72 p-4 space-y-3" side="right" align="start">
-        <p className="text-xs font-semibold text-foreground">Personalizar nome</p>
+      <PopoverContent className="w-80 max-h-[80vh] overflow-y-auto bg-card border-border" side="right" align="start">
+        <div className="space-y-4">
+          <h4 className="text-sm font-semibold text-foreground">Personalizar marca</h4>
 
-        <div className="space-y-1.5">
-          <Label className="text-[10px] text-muted-foreground">Nome</Label>
-          <Input
-            value={draft.name || ""}
-            onChange={(e) => setDraft({ ...draft, name: e.target.value.slice(0, 24) })}
-            placeholder="QWork Nexus"
-            className="h-8 text-sm"
-            maxLength={24}
-          />
-        </div>
-
-        <div className="space-y-1.5">
-          <Label className="text-[10px] text-muted-foreground">Fonte</Label>
-          <Select value={draft.fontFamily || "system-ui"} onValueChange={(v) => setDraft({ ...draft, fontFamily: v })}>
-            <SelectTrigger className="h-8 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {FONTS.map((f) => (
-                <SelectItem key={f.value} value={f.value} className="text-xs">
-                  <span style={{ fontFamily: f.value }}>{f.label}</span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-1.5">
-          <Label className="text-[10px] text-muted-foreground">Cor</Label>
-          <div className="flex gap-1.5 flex-wrap">
-            {COLORS.map((c) => (
-              <button
-                key={c.value}
-                onClick={() => setDraft({ ...draft, color: c.value })}
-                className={`h-6 w-6 rounded-full border-2 transition-all ${
-                  (draft.color || COLORS[0].value) === c.value
-                    ? "border-primary scale-110"
-                    : "border-transparent hover:border-muted-foreground/30"
-                }`}
-                style={{ backgroundColor: c.value }}
-                title={c.label}
-              />
-            ))}
+          {/* Name */}
+          <div className="space-y-1">
+            <Label className="text-xs">Nome</Label>
+            <Input
+              value={draft.name || ""}
+              onChange={(e) => setDraft({ ...draft, name: e.target.value.slice(0, 30) })}
+              maxLength={30}
+              className="h-8 text-sm bg-muted/30 border-border"
+            />
           </div>
-        </div>
 
-        <div className="space-y-1.5">
-          <Label className="text-[10px] text-muted-foreground">Tamanho</Label>
-          <Select value={draft.fontSize || "1rem"} onValueChange={(v) => setDraft({ ...draft, fontSize: v })}>
-            <SelectTrigger className="h-8 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {SIZES.map((s) => (
-                <SelectItem key={s.value} value={s.value} className="text-xs">
-                  {s.label}
-                </SelectItem>
+          {/* Font */}
+          <div className="space-y-1">
+            <Label className="text-xs">Fonte</Label>
+            <div className="grid grid-cols-2 gap-1 max-h-32 overflow-y-auto rounded border border-border p-1">
+              {FONTS.map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setDraft({ ...draft, fontFamily: f })}
+                  className={`text-[11px] px-2 py-1 rounded text-left transition-colors truncate ${
+                    draft.fontFamily === f ? "bg-primary/20 text-primary" : "hover:bg-muted/50 text-muted-foreground"
+                  }`}
+                  style={{ fontFamily: f }}
+                >
+                  {f}
+                </button>
               ))}
-            </SelectContent>
-          </Select>
-        </div>
+            </div>
+          </div>
 
-        <div className="space-y-1.5">
-          <Label className="text-[10px] text-muted-foreground">Tamanho do logo</Label>
-          <Select value={draft.logoSize || "medium"} onValueChange={(v) => setDraft({ ...draft, logoSize: v as "small" | "medium" | "large" })}>
-            <SelectTrigger className="h-8 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {LOGO_SIZES.map((s) => (
-                <SelectItem key={s.value} value={s.value} className="text-xs">
-                  {s.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+          {/* Color picker */}
+          <div className="space-y-1">
+            <Label className="text-xs">Cor (HEX)</Label>
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={draft.color || "#e2dcc8"}
+                onChange={(e) => setDraft({ ...draft, color: e.target.value })}
+                className="h-8 w-10 rounded border border-border cursor-pointer bg-transparent"
+              />
+              <Input
+                value={draft.color || "#e2dcc8"}
+                onChange={(e) => setDraft({ ...draft, color: e.target.value })}
+                className="h-8 text-xs flex-1 bg-muted/30 border-border font-mono"
+                maxLength={7}
+              />
+            </div>
+          </div>
 
-        <div className="flex items-center gap-2">
-          <Toggle
-            pressed={draft.bold ?? false}
-            onPressedChange={(v) => setDraft({ ...draft, bold: v })}
-            size="sm"
-            className="h-8 w-8 data-[state=on]:bg-primary/20"
-          >
-            <Bold className="h-3.5 w-3.5" />
-          </Toggle>
-          <Toggle
-            pressed={draft.italic ?? false}
-            onPressedChange={(v) => setDraft({ ...draft, italic: v })}
-            size="sm"
-            className="h-8 w-8 data-[state=on]:bg-primary/20"
-          >
-            <Italic className="h-3.5 w-3.5" />
-          </Toggle>
-        </div>
+          {/* Glow intensity */}
+          <div className="space-y-1">
+            <Label className="text-xs">Brilho (glow): {glowIntensity}px</Label>
+            <Slider
+              value={[glowIntensity]}
+              onValueChange={([v]) => setDraft({ ...draft, glowIntensity: v })}
+              min={0}
+              max={30}
+              step={1}
+            />
+          </div>
 
-        {/* Preview */}
-        <div className="rounded-md bg-muted/50 p-2 flex items-center justify-center">
-          <span
-            style={{
-              fontFamily: draft.fontFamily || "system-ui",
-              color: draft.color || "hsl(var(--foreground))",
-              fontSize: draft.fontSize || "1rem",
-              fontWeight: draft.bold ? 700 : 600,
-              fontStyle: draft.italic ? "italic" : "normal",
-            }}
-          >
-            {draft.name || "QWork Nexus"}
-          </span>
-        </div>
+          {/* Font size */}
+          <div className="space-y-1">
+            <Label className="text-xs">Tamanho do texto: {fontSize}px</Label>
+            <Slider
+              value={[fontSize]}
+              onValueChange={([v]) => setDraft({ ...draft, fontSize: `${v}px` })}
+              min={12}
+              max={48}
+              step={1}
+            />
+          </div>
 
-        <div className="flex gap-2 justify-end">
-          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setOpen(false)}>
-            <X className="h-3 w-3 mr-1" /> Cancelar
-          </Button>
-          <Button size="sm" className="h-7 text-xs" onClick={handleSave}>
-            <Check className="h-3 w-3 mr-1" /> Aplicar
-          </Button>
+          {/* Bold / Italic */}
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant={draft.bold ? "default" : "outline"}
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => setDraft({ ...draft, bold: !draft.bold })}
+            >
+              <Bold className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              type="button"
+              variant={draft.italic ? "default" : "outline"}
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => setDraft({ ...draft, italic: !draft.italic })}
+            >
+              <Italic className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+
+          {/* Logo size */}
+          <div className="space-y-1">
+            <Label className="text-xs">Tamanho do logo: {logoSizeNum}px</Label>
+            <Slider
+              value={[logoSizeNum]}
+              onValueChange={([v]) => setDraft({ ...draft, logoSizeNum: v })}
+              min={16}
+              max={80}
+              step={2}
+            />
+          </div>
+
+          {/* Preview */}
+          <div className="rounded-lg bg-muted/30 p-3">
+            <Label className="text-[10px] text-muted-foreground">Preview</Label>
+            <div className="flex items-center gap-2 mt-1">
+              <div
+                className="shrink-0 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold text-xs"
+                style={{ width: logoSizeNum, height: logoSizeNum }}
+              >
+                Q
+              </div>
+              <span
+                style={{
+                  fontFamily: draft.fontFamily || undefined,
+                  color: draft.color || undefined,
+                  fontSize: draft.fontSize || undefined,
+                  fontWeight: draft.bold ? 700 : 400,
+                  fontStyle: draft.italic ? "italic" : undefined,
+                  textShadow: glowIntensity > 0 ? `0 0 ${glowIntensity}px ${draft.color || "#fff"}` : undefined,
+                }}
+              >
+                {draft.name || "QWork Nexus"}
+              </span>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setOpen(false)}>
+              Cancelar
+            </Button>
+            <Button size="sm" className="h-7 text-xs" onClick={handleSave}>
+              Aplicar
+            </Button>
+          </div>
         </div>
       </PopoverContent>
     </Popover>
