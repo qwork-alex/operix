@@ -89,9 +89,9 @@ export function AppSidebar() {
   const mainNav = allNav.filter((item) => !role || item.roles.includes(role));
 
   const logoElement = logoUrl ? (
-    <img src={logoUrl} alt="Logo" className="h-8 w-8 shrink-0 rounded-lg object-contain" />
+    <img src={logoUrl} alt="Logo" className={`${logoSizeClass} shrink-0 rounded-lg object-contain max-h-12`} />
   ) : (
-    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary font-bold text-primary-foreground text-sm">
+    <div className={`flex ${logoSizeClass} shrink-0 items-center justify-center rounded-lg bg-primary font-bold text-primary-foreground text-sm max-h-12`}>
       Q
     </div>
   );

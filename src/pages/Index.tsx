@@ -46,6 +46,7 @@ const Dashboard = () => {
           value={isLoading ? "..." : `${data?.performance ?? 0}%`}
           change={0}
           icon={<TrendingUp className="h-5 w-5" />}
+          glowClass="glow-purple"
         />
       </div>
 
