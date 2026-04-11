@@ -108,28 +108,78 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-  // Fetch payment statuses linked to these service orders
+  // Fetch payment statuses — match by BOTH service_order_id AND by week (list_name) + license_plate
   const soIds = orders.map(o => o.id);
+  const weeks = [...new Set(orders.map(o => o.week).filter(Boolean))];
+
   const { data: paymentMap = {} } = useQuery({
-    queryKey: ["payment_status_map", soIds],
+    queryKey: ["payment_status_map", soIds, weeks],
     queryFn: async () => {
       if (!soIds.length) return {};
-      const { data, error } = await supabase
-        .from("payment_orders")
-        .select("service_order_id, status")
-        .in("service_order_id", soIds);
-      if (error) throw error;
-      const map: Record<string, PaymentStatus> = {};
-      for (const po of data || []) {
-        if (!po.service_order_id) continue;
-        const s = po.status?.toLowerCase();
-        if (s === "paid" || s === "pago") map[po.service_order_id] = "paid";
-        else if (s === "partial" || s === "parcial") {
-          if (map[po.service_order_id] !== "paid") map[po.service_order_id] = "partial";
-        } else {
-          if (!map[po.service_order_id]) map[po.service_order_id] = "pending";
-        }
+
+      // Fetch all payment orders that match by service_order_id OR by list_name (week)
+      const queries: Promise<any>[] = [];
+
+      // Query 1: By service_order_id
+      queries.push(
+        supabase
+          .from("payment_orders")
+          .select("service_order_id, status, list_name, license_plate")
+          .in("service_order_id", soIds)
+      );
+
+      // Query 2: By week (list_name) for cross-matching
+      if (weeks.length > 0) {
+        queries.push(
+          supabase
+            .from("payment_orders")
+            .select("service_order_id, status, list_name, license_plate")
+            .in("list_name", weeks as string[])
+        );
       }
+
+      const results = await Promise.all(queries);
+      const allPOs: { service_order_id: string | null; status: string; list_name: string | null; license_plate: string | null }[] = [];
+
+      for (const res of results) {
+        if (res.data) allPOs.push(...res.data);
+      }
+
+      // Deduplicate
+      const seen = new Set<string>();
+      const uniquePOs = allPOs.filter(po => {
+        const key = `${po.service_order_id}-${po.list_name}-${po.license_plate}-${po.status}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      const map: Record<string, PaymentStatus> = {};
+
+      for (const so of orders) {
+        // Find matching POs: by service_order_id OR by week + plate
+        const normalizedSOPlate = (so.license_plate || "").replace(/[\s\-]/g, "").toUpperCase();
+
+        const matchingPOs = uniquePOs.filter(po => {
+          // Match by direct link
+          if (po.service_order_id === so.id) return true;
+          // Match by week + plate
+          if (so.week && po.list_name === so.week && normalizedSOPlate) {
+            const normalizedPOPlate = (po.license_plate || "").replace(/[\s\-]/g, "").toUpperCase();
+            return normalizedPOPlate === normalizedSOPlate;
+          }
+          return false;
+        });
+
+        if (!matchingPOs.length) continue;
+
+        const allPaid = matchingPOs.every(po => po.status === "paid");
+        const allPending = matchingPOs.every(po => po.status === "pending");
+        if (allPaid) map[so.id] = "paid";
+        else if (allPending) map[so.id] = "pending";
+        else map[so.id] = "partial";
+      }
+
       return map;
     },
     enabled: soIds.length > 0,
@@ -182,7 +232,26 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
     });
   };
 
-  const weeks = [...new Set(orders.map(o => o.week))];
+  const allWeeks = [...new Set(orders.map(o => o.week))];
+
+  // Compute group status for each week
+  const getWeekStatus = (week: string | null): PaymentStatus => {
+    const weekOrders = orders.filter(o => o.week === week);
+    if (!weekOrders.length) return "none";
+    const statuses = weekOrders.map(o => getPaymentStatus(o.id));
+    const allPaid = statuses.every(s => s === "paid");
+    const allPending = statuses.every(s => s === "pending" || s === "none");
+    if (allPaid) return "paid";
+    if (allPending) return "pending";
+    return "partial";
+  };
+
+  const groupStatusLabel: Record<PaymentStatus, string> = {
+    paid: "✓ Pago",
+    partial: "◐ Parcial",
+    pending: "● Pendente",
+    none: "— Sem dados",
+  };
 
   // --- Delete mutation ---
   const deleteMutation = useMutation({
@@ -326,8 +395,16 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
     );
   }
 
+  // Group orders by week
+  const groupedOrders = allWeeks.map(week => ({
+    week,
+    orders: orders.filter(o => o.week === week),
+    status: getWeekStatus(week),
+    total: orders.filter(o => o.week === week).reduce((s, o) => s + (Number(o.total) || 0), 0),
+  }));
+
   return (
-    <div className="space-y-2">
+    <div className="space-y-4">
       {/* Bulk actions bar */}
       {selected.size > 0 && (
         <div className="flex items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2">
@@ -346,199 +423,203 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
         </div>
       )}
 
-      {/* Group selection by week */}
-      {weeks.length > 1 && (
-        <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
-          <span>Selecionar por semana:</span>
-          {weeks.map(w => {
-            const weekOrders = orders.filter(o => o.week === w);
-            const allSelected = weekOrders.every(o => selected.has(o.id));
-            return (
+      {/* Grouped by week */}
+      {groupedOrders.map(group => (
+        <div key={group.week || "__none__"} className="space-y-1">
+          {/* Week group header */}
+          <div className="flex items-center justify-between rounded-lg bg-secondary/40 px-4 py-2">
+            <div className="flex items-center gap-3">
               <Button
-                key={w || "__none__"}
-                variant={allSelected ? "secondary" : "outline"}
+                variant={group.orders.every(o => selected.has(o.id)) ? "secondary" : "outline"}
                 size="sm"
                 className="h-6 text-[10px] px-2"
-                onClick={() => toggleWeek(w)}
+                onClick={() => toggleWeek(group.week)}
               >
-                {w || "Sem semana"} ({weekOrders.length})
+                {group.week || "Sem semana"}
               </Button>
-            );
-          })}
-        </div>
-      )}
+              <span className="text-xs text-muted-foreground">
+                {group.orders.length} itens · {formatCurrency(group.total)}
+              </span>
+              <span className={cn("text-xs font-medium", paymentTextStyle[group.status])}>
+                {groupStatusLabel[group.status]}
+              </span>
+            </div>
+          </div>
 
-      <div className="rounded-lg border border-border/50 overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-secondary/30">
-              <TableHead className="w-10" />
-              <TableHead>{t("label.client")}</TableHead>
-              <TableHead>{t("label.platform")}</TableHead>
-              <TableHead>{t("label.technician")}</TableHead>
-              <TableHead>{t("label.week")}</TableHead>
-              <TableHead>{t("label.car")}</TableHead>
-              <TableHead>{t("label.plate")}</TableHead>
-              <TableHead>{t("label.services")}</TableHead>
-              <TableHead className="text-right">{t("label.total")}</TableHead>
-              <TableHead>Pagamento</TableHead>
-              <TableHead>{t("label.actions")}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {orders.map((o) => {
-              const isEditing = editingId === o.id && editForm;
-              const ps = getPaymentStatus(o.id);
-
-              if (isEditing) {
-                const computedTotal =
-                  (Number(editForm.service_1_price) || 0) +
-                  (Number(editForm.service_2_price) || 0) +
-                  (Number(editForm.service_3_price) || 0) +
-                  (Number(editForm.service_4_price) || 0);
-
-                return (
-                  <TableRow key={o.id} className={cn("relative", paymentTextStyle[ps])}>
-                    <TableCell className="p-1">
-                      <Checkbox checked={selected.has(o.id)} onCheckedChange={() => toggleOne(o.id)} />
-                    </TableCell>
-                    <TableCell className="p-1 min-w-[170px]">
-                      <Select value={editForm.client_id} onValueChange={(value) => updateField("client_id", value)}>
-                        <SelectTrigger className="h-7 text-xs bg-background">
-                          <SelectValue placeholder={t("label.client")} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={EMPTY_RELATION_VALUE}>—</SelectItem>
-                          {clients.map((client) => (
-                            <SelectItem key={client.id} value={client.id}>
-                              {client.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell className="p-1">
-                      <Input className="h-7 text-xs" value={editForm.platform} onChange={(e) => updateField("platform", e.target.value)} />
-                    </TableCell>
-                    <TableCell className="p-1 min-w-[170px]">
-                      <Select value={editForm.technician_id} onValueChange={(value) => updateField("technician_id", value)}>
-                        <SelectTrigger className="h-7 text-xs bg-background">
-                          <SelectValue placeholder={t("label.technician")} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={EMPTY_RELATION_VALUE}>—</SelectItem>
-                          {technicians.map((technician) => (
-                            <SelectItem key={technician.id} value={technician.id}>
-                              {technician.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell className="p-1">
-                      <Input className="h-7 text-xs w-16" value={editForm.week} onChange={(e) => updateField("week", e.target.value)} />
-                    </TableCell>
-                    <TableCell className="p-1">
-                      <Input className="h-7 text-xs" value={editForm.car_name} onChange={(e) => updateField("car_name", e.target.value)} />
-                    </TableCell>
-                    <TableCell className="p-1">
-                      <Input className="h-7 text-xs w-24 font-mono" value={editForm.license_plate} onChange={(e) => updateField("license_plate", e.target.value)} />
-                    </TableCell>
-                    <TableCell className="p-1">
-                      <div className="space-y-1">
-                        {[1, 2, 3, 4].map((i) => (
-                          <div key={i} className="flex gap-1">
-                            <Input
-                              className="h-6 text-[11px] px-1 w-20"
-                              value={(editForm as any)[`service_${i}_name`]}
-                              placeholder={`S${i}`}
-                              onChange={(e) => updateField(`service_${i}_name` as keyof EditState, e.target.value)}
-                            />
-                            <Input
-                              className="h-6 text-[11px] px-1 w-14 text-right tabular-nums"
-                              type="number"
-                              step="0.01"
-                              value={(editForm as any)[`service_${i}_price`]}
-                              onChange={(e) => updateField(`service_${i}_price` as keyof EditState, Number(e.target.value) || 0)}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right font-semibold text-primary tabular-nums">
-                      {formatCurrency(computedTotal)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={cn("text-[10px]", paymentBadgeStyle[ps])}>
-                        {paymentLabel[ps]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-primary"
-                          onClick={() => updateMutation.mutate(o.id)}
-                          disabled={updateMutation.isPending}
-                        >
-                          {updateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={cancelEdit}>
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              }
-
-              const services = [o.service_1_name, o.service_2_name, o.service_3_name, o.service_4_name].filter(Boolean);
-              const rowAlert = ps !== "paid" ? getRowAlertLevel(o.created_at) : "none";
-              const daysOld = Math.floor((Date.now() - new Date(o.created_at).getTime()) / 86400000);
-              return (
-                <TableRow key={o.id} className={cn(paymentTextStyle[ps], alertStyle[rowAlert])}>
-                  <TableCell className="w-10">
-                    <Checkbox checked={selected.has(o.id)} onCheckedChange={() => toggleOne(o.id)} />
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    <div className="flex items-center gap-1.5">
-                      <AlertIcon level={rowAlert} days={daysOld} />
-                      {o.client_name || o.clients?.name || "—"}
-                    </div>
-                  </TableCell>
-                  <TableCell>{o.platform || "—"}</TableCell>
-                  <TableCell>{o.technician_name || o.technicians?.name || "—"}</TableCell>
-                  <TableCell>{o.week || "—"}</TableCell>
-                  <TableCell>{o.car_name || "—"}</TableCell>
-                  <TableCell className="font-mono text-xs">{formatLicensePlate(o.license_plate) || "—"}</TableCell>
-                  <TableCell>
-                    <span className="text-xs">{services.length ? services.join(", ") : "—"}</span>
-                  </TableCell>
-                  <TableCell className="text-right font-semibold tabular-nums">
-                    {o.total != null ? formatCurrency(Number(o.total)) : "—"}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={cn("text-[10px]", paymentBadgeStyle[ps])}>
-                      {paymentLabel[ps]}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(o)}>
-                        <Pencil className="h-3 w-3" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteMutation.mutate(o.id)}>
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </TableCell>
+          {/* Table for this week */}
+          <div className="rounded-lg border border-border/50 overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-secondary/30">
+                  <TableHead className="w-10" />
+                  <TableHead>{t("label.client")}</TableHead>
+                  <TableHead>{t("label.platform")}</TableHead>
+                  <TableHead>{t("label.technician")}</TableHead>
+                  <TableHead>{t("label.week")}</TableHead>
+                  <TableHead>{t("label.car")}</TableHead>
+                  <TableHead>{t("label.plate")}</TableHead>
+                  <TableHead>{t("label.services")}</TableHead>
+                  <TableHead className="text-right">{t("label.total")}</TableHead>
+                  <TableHead>Pagamento</TableHead>
+                  <TableHead>{t("label.actions")}</TableHead>
                 </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </div>
+              </TableHeader>
+              <TableBody>
+                {group.orders.map((o) => {
+                  const isEditing = editingId === o.id && editForm;
+                  const ps = getPaymentStatus(o.id);
+
+                  if (isEditing) {
+                    const computedTotal =
+                      (Number(editForm.service_1_price) || 0) +
+                      (Number(editForm.service_2_price) || 0) +
+                      (Number(editForm.service_3_price) || 0) +
+                      (Number(editForm.service_4_price) || 0);
+
+                    return (
+                      <TableRow key={o.id} className={cn("relative", paymentTextStyle[ps])}>
+                        <TableCell className="p-1">
+                          <Checkbox checked={selected.has(o.id)} onCheckedChange={() => toggleOne(o.id)} />
+                        </TableCell>
+                        <TableCell className="p-1 min-w-[170px]">
+                          <Select value={editForm.client_id} onValueChange={(value) => updateField("client_id", value)}>
+                            <SelectTrigger className="h-7 text-xs bg-background">
+                              <SelectValue placeholder={t("label.client")} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={EMPTY_RELATION_VALUE}>—</SelectItem>
+                              {clients.map((client) => (
+                                <SelectItem key={client.id} value={client.id}>
+                                  {client.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell className="p-1">
+                          <Input className="h-7 text-xs" value={editForm.platform} onChange={(e) => updateField("platform", e.target.value)} />
+                        </TableCell>
+                        <TableCell className="p-1 min-w-[170px]">
+                          <Select value={editForm.technician_id} onValueChange={(value) => updateField("technician_id", value)}>
+                            <SelectTrigger className="h-7 text-xs bg-background">
+                              <SelectValue placeholder={t("label.technician")} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={EMPTY_RELATION_VALUE}>—</SelectItem>
+                              {technicians.map((technician) => (
+                                <SelectItem key={technician.id} value={technician.id}>
+                                  {technician.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell className="p-1">
+                          <Input className="h-7 text-xs w-16" value={editForm.week} onChange={(e) => updateField("week", e.target.value)} />
+                        </TableCell>
+                        <TableCell className="p-1">
+                          <Input className="h-7 text-xs" value={editForm.car_name} onChange={(e) => updateField("car_name", e.target.value)} />
+                        </TableCell>
+                        <TableCell className="p-1">
+                          <Input className="h-7 text-xs w-24 font-mono" value={editForm.license_plate} onChange={(e) => updateField("license_plate", e.target.value)} />
+                        </TableCell>
+                        <TableCell className="p-1">
+                          <div className="space-y-1">
+                            {[1, 2, 3, 4].map((i) => (
+                              <div key={i} className="flex gap-1">
+                                <Input
+                                  className="h-6 text-[11px] px-1 w-20"
+                                  value={(editForm as any)[`service_${i}_name`]}
+                                  placeholder={`S${i}`}
+                                  onChange={(e) => updateField(`service_${i}_name` as keyof EditState, e.target.value)}
+                                />
+                                <Input
+                                  className="h-6 text-[11px] px-1 w-14 text-right tabular-nums"
+                                  type="number"
+                                  step="0.01"
+                                  value={(editForm as any)[`service_${i}_price`]}
+                                  onChange={(e) => updateField(`service_${i}_price` as keyof EditState, Number(e.target.value) || 0)}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right font-semibold text-primary tabular-nums">
+                          {formatCurrency(computedTotal)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={cn("text-[10px]", paymentBadgeStyle[ps])}>
+                            {paymentLabel[ps]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-primary"
+                              onClick={() => updateMutation.mutate(o.id)}
+                              disabled={updateMutation.isPending}
+                            >
+                              {updateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={cancelEdit}>
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  }
+
+                  const services = [o.service_1_name, o.service_2_name, o.service_3_name, o.service_4_name].filter(Boolean);
+                  const rowAlert = ps !== "paid" ? getRowAlertLevel(o.created_at) : "none";
+                  const daysOld = Math.floor((Date.now() - new Date(o.created_at).getTime()) / 86400000);
+                  return (
+                    <TableRow key={o.id} className={cn(paymentTextStyle[ps], alertStyle[rowAlert])}>
+                      <TableCell className="w-10">
+                        <Checkbox checked={selected.has(o.id)} onCheckedChange={() => toggleOne(o.id)} />
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-1.5">
+                          <AlertIcon level={rowAlert} days={daysOld} />
+                          {o.client_name || o.clients?.name || "—"}
+                        </div>
+                      </TableCell>
+                      <TableCell>{o.platform || "—"}</TableCell>
+                      <TableCell>{o.technician_name || o.technicians?.name || "—"}</TableCell>
+                      <TableCell>{o.week || "—"}</TableCell>
+                      <TableCell>{o.car_name || "—"}</TableCell>
+                      <TableCell className="font-mono text-xs">{formatLicensePlate(o.license_plate) || "—"}</TableCell>
+                      <TableCell>
+                        <span className="text-xs">{services.length ? services.join(", ") : "—"}</span>
+                      </TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">
+                        {o.total != null ? formatCurrency(Number(o.total)) : "—"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={cn("text-[10px]", paymentBadgeStyle[ps])}>
+                          {paymentLabel[ps]}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(o)}>
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteMutation.mutate(o.id)}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      ))}
 
       <BulkDeleteDialog
         open={showDeleteDialog}
