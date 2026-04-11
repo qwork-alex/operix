@@ -158,10 +158,9 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
       const { error } = await supabase.from("payment_orders").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
       if (error) throw error;
 
-      // Sync: find matching service order by week (list_name) + license_plate
       const po = orders.find(o => o.id === id);
-      if (po?.license_plate && po?.list_name) {
-        await syncServiceOrderStatus(po.list_name, po.license_plate);
+      if (po) {
+        await syncServiceOrderStatus(po, status);
       }
     },
     onSuccess: () => {
@@ -188,9 +187,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
       // Sync all items of this week to service orders
       const listOrders = orders.filter(o => o.list_name === listName);
       for (const po of listOrders) {
-        if (po.license_plate && po.list_name) {
-          await syncServiceOrderStatus(po.list_name, po.license_plate);
-        }
+        await syncServiceOrderStatus(po, status);
       }
     },
     onSuccess: () => {
@@ -603,46 +600,81 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
   );
 }
 
-/** Sync a single PO item's effective status to the matching service order by week + plate */
-async function syncServiceOrderStatus(listName: string, licensePlate: string) {
+const normPlate = (p: string | null) => (p || "").replace(/[\s\-]/g, "").toUpperCase();
+
+/** Sync PO status to matching SO — priority: service_order_id > week+plate */
+async function syncServiceOrderStatus(po: PaymentOrderRow, newStatus: string) {
   try {
-    // Normalize plate for matching
-    const normalizedPlate = licensePlate.replace(/[\s\-]/g, "").toUpperCase();
+    const soIds: string[] = [];
 
-    // Get all POs for this week+plate to calculate effective status
-    const { data: allPOs } = await supabase
-      .from("payment_orders")
-      .select("status")
-      .eq("list_name", listName)
-      .ilike("license_plate", `%${normalizedPlate}%`);
+    // Priority 1: direct link via service_order_id
+    if ((po as any).service_order_id) {
+      soIds.push((po as any).service_order_id);
+    }
 
-    // Find matching service order
-    const { data: matchingSOs } = await supabase
-      .from("service_orders")
-      .select("id, week, license_plate")
-      .eq("week", listName);
+    // Priority 2: fallback via week (list_name) + normalized license_plate
+    if (po.list_name && po.license_plate) {
+      const normalizedPlate = normPlate(po.license_plate);
+      if (normalizedPlate) {
+        const { data: matchingSOs } = await supabase
+          .from("service_orders")
+          .select("id, license_plate")
+          .eq("week", po.list_name);
 
-    if (!matchingSOs?.length) return;
+        if (matchingSOs?.length) {
+          for (const so of matchingSOs) {
+            if (normPlate(so.license_plate) === normalizedPlate && !soIds.includes(so.id)) {
+              soIds.push(so.id);
+            }
+          }
+        }
+      }
+    }
 
-    // Match by normalized plate
-    const matched = matchingSOs.filter(so => {
-      const soPlate = (so.license_plate || "").replace(/[\s\-]/g, "").toUpperCase();
-      return soPlate === normalizedPlate;
-    });
+    if (!soIds.length) return;
 
-    if (!matched.length || !allPOs?.length) return;
+    // For each matched SO, calculate effective status from ALL matching POs
+    for (const soId of soIds) {
+      // Get the SO to know its week + plate
+      const { data: so } = await supabase
+        .from("service_orders")
+        .select("id, week, license_plate")
+        .eq("id", soId)
+        .single();
 
-    // Calculate effective status from all POs
-    const allPaid = allPOs.every(po => po.status === "paid");
-    const allPending = allPOs.every(po => po.status === "pending");
-    const effectiveStatus = allPaid ? "paid" : allPending ? "pending" : "partial";
+      if (!so) continue;
 
-    // Update SO status to reflect payment status
-    for (const so of matched) {
+      // Collect all POs linked to this SO (by service_order_id OR week+plate)
+      const soNormPlate = normPlate(so.license_plate);
+      const res1 = await supabase.from("payment_orders").select("status").eq("service_order_id", soId);
+      let res2: { data: any[] | null } = { data: null };
+      if (so.week && soNormPlate) {
+        res2 = await supabase.from("payment_orders").select("status, license_plate").eq("list_name", so.week);
+      }
+
+      const statuses: string[] = [];
+      // Direct matches
+      (res1.data || []).forEach((r: any) => statuses.push(r.status));
+      // Week+plate matches
+      if (res2.data) {
+        res2.data.forEach((r: any) => {
+          if (normPlate(r.license_plate) === soNormPlate) {
+            statuses.push(r.status);
+          }
+        });
+      }
+
+      // Dedupe isn't critical — we just need the aggregate
+      if (!statuses.length) continue;
+
+      const allPaid = statuses.every(s => s === "paid");
+      const allPending = statuses.every(s => s === "pending");
+      const effectiveStatus = allPaid ? "paid" : allPending ? "pending" : "partial";
+
       await supabase
         .from("service_orders")
         .update({ status: effectiveStatus, updated_at: new Date().toISOString() })
-        .eq("id", so.id);
+        .eq("id", soId);
     }
   } catch (err) {
     console.error("[Sync] Failed to sync SO status:", err);
