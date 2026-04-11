@@ -126,6 +126,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
           .from("payment_orders")
           .select("service_order_id, status, list_name, license_plate")
           .in("service_order_id", soIds)
+          .then(res => res)
       );
 
       // Query 2: By week (list_name) for cross-matching
@@ -135,6 +136,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
             .from("payment_orders")
             .select("service_order_id, status, list_name, license_plate")
             .in("list_name", weeks as string[])
+            .then(res => res)
         );
       }
 
