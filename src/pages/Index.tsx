@@ -49,17 +49,15 @@ const Dashboard = () => {
         />
       </div>
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2">
-          <RevenueChart />
-        </div>
-        <ServicePieChart />
-      </div>
+      {/* Revenue Chart - full width */}
+      <RevenueChart />
 
-      {/* Map + Activity */}
+      {/* Map - full width */}
+      <ActiveMap />
+
+      {/* Service Status + Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ActiveMap />
+        <ServicePieChart />
         <RecentActivity />
       </div>
     </div>
