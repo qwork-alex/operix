@@ -60,10 +60,6 @@ export function TopBar() {
     <header className="flex h-14 items-center justify-between border-b border-border/50 px-4 glass-panel">
       <div className="flex items-center gap-2">
         <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
-        <div className="hidden sm:flex items-center gap-2 ml-2 px-3 py-1.5 rounded-md bg-muted/50 text-muted-foreground text-sm">
-          <Search className="h-3.5 w-3.5" />
-          <span className="text-xs">{t("action.search")}</span>
-        </div>
       </div>
 
       <div className="flex items-center gap-1">
