@@ -34,12 +34,16 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon" className="border-r border-border/50">
-      <div className="flex h-14 items-center px-4 border-b border-border/50">
-        <Link to="/" className="flex items-center gap-2 overflow-hidden">
+      <div className={`flex h-14 items-center border-b border-border/50 ${collapsed ? "justify-center px-0" : "px-4"}`}>
+        <Link to="/" className={`flex items-center gap-2 overflow-hidden ${collapsed ? "flex-col gap-0.5" : ""}`}>
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary font-bold text-primary-foreground text-sm">
             Q
           </div>
-          {!collapsed && (
+          {collapsed ? (
+            <span className="text-[8px] font-semibold tracking-tight text-muted-foreground whitespace-nowrap leading-none">
+              QWork
+            </span>
+          ) : (
             <span className="text-base font-semibold tracking-tight text-foreground whitespace-nowrap">
               QWork Nexus
             </span>
