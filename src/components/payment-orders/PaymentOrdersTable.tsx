@@ -646,15 +646,11 @@ async function syncServiceOrderStatus(po: PaymentOrderRow, newStatus: string) {
 
       // Collect all POs linked to this SO (by service_order_id OR week+plate)
       const soNormPlate = normPlate(so.license_plate);
-      const queries: Promise<any>[] = [
-        supabase.from("payment_orders").select("status").eq("service_order_id", soId),
-      ];
+      const res1 = await supabase.from("payment_orders").select("status").eq("service_order_id", soId);
+      let res2: { data: any[] | null } = { data: null };
       if (so.week && soNormPlate) {
-        queries.push(
-          supabase.from("payment_orders").select("status, license_plate").eq("list_name", so.week)
-        );
+        res2 = await supabase.from("payment_orders").select("status, license_plate").eq("list_name", so.week);
       }
-      const results = await Promise.all(queries);
 
       const statuses: string[] = [];
       // Direct matches
