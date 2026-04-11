@@ -11,6 +11,7 @@ import { useGeolocation } from "@/hooks/useGeolocation";
 const Dashboard = () => {
   const { data, isLoading } = useDashboardStats();
   const { t, formatCurrency } = useLanguage();
+  useGeolocation(); // Track user location on dashboard visit
 
   return (
     <div className="space-y-6">
