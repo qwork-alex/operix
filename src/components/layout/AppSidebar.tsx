@@ -63,8 +63,9 @@ export function AppSidebar() {
   const displayName = brandConfig.name || "QWork Nexus";
   const shortName = brandConfig.name?.split(" ")[0] || "QWork";
 
-  const logoSizeMap = { small: "h-6 w-6", medium: "h-8 w-8", large: "h-10 w-10" };
-  const logoSizeClass = logoSizeMap[brandConfig.logoSize || "medium"];
+  const logoSizeNum = brandConfig.logoSizeNum ?? 32;
+  const logoPixels = collapsed ? Math.min(logoSizeNum, 24) : logoSizeNum;
+  const glowIntensity = brandConfig.glowIntensity ?? 0;
 
   const nameStyle: React.CSSProperties = {
     fontFamily: brandConfig.fontFamily || undefined,
@@ -72,6 +73,7 @@ export function AppSidebar() {
     fontSize: collapsed ? "8px" : (brandConfig.fontSize || undefined),
     fontWeight: brandConfig.bold ? 700 : 600,
     fontStyle: brandConfig.italic ? "italic" : undefined,
+    textShadow: glowIntensity > 0 ? `0 0 ${glowIntensity}px ${brandConfig.color || "#fff"}` : undefined,
   };
 
   const allNav = [
@@ -89,9 +91,9 @@ export function AppSidebar() {
   const mainNav = allNav.filter((item) => !role || item.roles.includes(role));
 
   const logoElement = logoUrl ? (
-    <img src={logoUrl} alt="Logo" className={`${logoSizeClass} shrink-0 rounded-lg object-contain max-h-12`} />
+    <img src={logoUrl} alt="Logo" className="shrink-0 rounded-lg object-contain" style={{ height: logoPixels, width: logoPixels, maxHeight: 80 }} />
   ) : (
-    <div className={`flex ${logoSizeClass} shrink-0 items-center justify-center rounded-lg bg-primary font-bold text-primary-foreground text-sm max-h-12`}>
+    <div className="flex shrink-0 items-center justify-center rounded-lg bg-primary font-bold text-primary-foreground text-sm" style={{ height: logoPixels, width: logoPixels, maxHeight: 80 }}>
       Q
     </div>
   );

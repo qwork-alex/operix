@@ -61,8 +61,8 @@ export function TopBar() {
     : "?";
 
   const displayName = brandConfig.name || "QWork Nexus";
-  const logoSizeMap = { small: "h-5 w-5", medium: "h-6 w-6", large: "h-7 w-7" };
-  const logoSizeClass = logoSizeMap[brandConfig.logoSize || "medium"];
+  const logoSizeNum = brandConfig.logoSizeNum ?? 24;
+  const glowIntensity = brandConfig.glowIntensity ?? 0;
 
   return (
     <header className="flex h-14 items-center justify-between border-b border-border/50 px-4 glass-panel">
@@ -71,9 +71,9 @@ export function TopBar() {
         {collapsed && (
           <div className="flex items-center gap-2 animate-fade-in">
             {logoUrl ? (
-              <img src={logoUrl} alt="Logo" className={`${logoSizeClass} shrink-0 rounded object-contain`} />
+              <img src={logoUrl} alt="Logo" className="shrink-0 rounded object-contain" style={{ height: logoSizeNum, width: logoSizeNum }} />
             ) : (
-              <div className={`flex ${logoSizeClass} shrink-0 items-center justify-center rounded bg-primary font-bold text-primary-foreground text-[10px]`}>
+              <div className="flex shrink-0 items-center justify-center rounded bg-primary font-bold text-primary-foreground text-[10px]" style={{ height: logoSizeNum, width: logoSizeNum }}>
                 Q
               </div>
             )}
@@ -84,6 +84,7 @@ export function TopBar() {
                 color: brandConfig.color || undefined,
                 fontWeight: brandConfig.bold ? 700 : 600,
                 fontStyle: brandConfig.italic ? "italic" : undefined,
+                textShadow: glowIntensity > 0 ? `0 0 ${glowIntensity}px ${brandConfig.color || "#fff"}` : undefined,
               }}
             >
               {displayName}
@@ -94,7 +95,10 @@ export function TopBar() {
 
       <div className="flex items-center gap-1">
         {role && (
-          <span className="hidden sm:inline text-[10px] uppercase tracking-widest text-muted-foreground/60 mr-2 px-2 py-0.5 rounded bg-muted/30">
+          <span
+            className="hidden sm:inline text-[10px] uppercase tracking-widest text-muted-foreground/60 mr-2 px-2 py-0.5 rounded bg-muted/30"
+            style={{ textShadow: role === "admin" ? "0 0 8px rgba(255,255,255,0.4)" : undefined }}
+          >
             {t(`role.${role}`, role)}
           </span>
         )}
