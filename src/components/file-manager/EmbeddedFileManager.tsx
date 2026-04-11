@@ -612,8 +612,9 @@ function PinchZoomContainer({ children }: { children: React.ReactNode }) {
   const [origin, setOrigin] = useState({ x: 0, y: 0 });
   const lastDistance = useRef<number | null>(null);
 
-  const getDistance = (touches: TouchList) => {
-    const [a, b] = [touches[0], touches[1]];
+  const getDistance = (touches: React.TouchList) => {
+    const a = touches[0];
+    const b = touches[1];
     return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
   };
 
