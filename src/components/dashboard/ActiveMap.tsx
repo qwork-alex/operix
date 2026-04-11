@@ -200,6 +200,27 @@ export function ActiveMap() {
       }
     }
 
+    // Add geolocation checkin markers
+    for (const checkin of geoCheckins) {
+      const p = checkin.payload as any;
+      const marker = L.marker([p.lat, p.lng], {
+        icon: L.divIcon({
+          html: '<div class="neon-marker" style="background:#22d3ee;border-color:rgba(34,211,238,0.6);box-shadow:0 0 10px 3px rgba(34,211,238,0.55)"></div>',
+          className: "",
+          iconSize: L.point(14, 14),
+          iconAnchor: L.point(7, 7),
+        }),
+      });
+      marker.bindPopup(
+        `<div style="font-family:system-ui;font-size:12px;line-height:1.5">
+          <strong>${p.city || "Check-in"}</strong><br/>
+          ${new Date(checkin.created_at).toLocaleDateString()}
+        </div>`,
+        { className: "leaflet-dark-popup" }
+      );
+      clusterGroup.addLayer(marker);
+    }
+
     map.addLayer(clusterGroup);
     mapInstance.current = map;
 
