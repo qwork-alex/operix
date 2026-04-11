@@ -1,6 +1,8 @@
 import { useEffect, useRef, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/hooks/useLanguage";
 import { Skeleton } from "@/components/ui/skeleton";
 import L from "leaflet";
@@ -73,6 +75,7 @@ const clusterCss = `
 
 export function ActiveMap() {
   const { t } = useLanguage();
+  const { user } = useAuth();
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<L.Map | null>(null);
   const styleRef = useRef<HTMLStyleElement | null>(null);
@@ -87,6 +90,22 @@ export function ActiveMap() {
         .limit(500);
       if (error) throw error;
       return data;
+    },
+  });
+
+  // Fetch geolocation checkins from backend_event_logs
+  const { data: geoCheckins = [] } = useQuery({
+    queryKey: ["geo-checkins"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("backend_event_logs")
+        .select("payload, actor_user_id, created_at")
+        .eq("table_name", "geolocation")
+        .eq("action", "CHECKIN")
+        .order("created_at", { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      return (data ?? []).filter((d: any) => d.payload?.lat && d.payload?.lng);
     },
   });
 
