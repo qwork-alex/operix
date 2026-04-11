@@ -133,12 +133,10 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
           .in("list_name", weeks as string[]);
       }
 
-      const results = await Promise.all(queries);
-      const allPOs: { service_order_id: string | null; status: string; list_name: string | null; license_plate: string | null }[] = [];
-
-      for (const res of results) {
-        if (res.data) allPOs.push(...res.data);
-      }
+      const allPOs: { service_order_id: string | null; status: string; list_name: string | null; license_plate: string | null }[] = [
+        ...(res1.data || []),
+        ...(res2.data || []),
+      ];
 
       // Deduplicate
       const seen = new Set<string>();
