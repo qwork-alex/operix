@@ -542,7 +542,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
         </DialogContent>
       </Dialog>
 
-      {/* Preview dialog */}
+      {/* Preview dialog with pinch-zoom support */}
       <Dialog open={!!previewDoc} onOpenChange={() => setPreviewDoc(null)}>
         <DialogContent className="bg-card border-border max-w-3xl max-h-[80vh]">
           <DialogHeader>
@@ -560,7 +560,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
               )}
             </DialogTitle>
           </DialogHeader>
-          <div className="overflow-auto max-h-[65vh]">
+          <PinchZoomContainer>
             {previewDoc?.mime_type?.startsWith("image/") ? (
               <img
                 src={previewDoc.url}
@@ -598,7 +598,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
                 </a>
               </div>
             )}
-          </div>
+          </PinchZoomContainer>
         </DialogContent>
       </Dialog>
     </div>
