@@ -654,10 +654,10 @@ async function syncServiceOrderStatus(po: PaymentOrderRow, newStatus: string) {
 
       const statuses: string[] = [];
       // Direct matches
-      (results[0].data || []).forEach((r: any) => statuses.push(r.status));
+      (res1.data || []).forEach((r: any) => statuses.push(r.status));
       // Week+plate matches
-      if (results[1]) {
-        (results[1].data || []).forEach((r: any) => {
+      if (res2.data) {
+        res2.data.forEach((r: any) => {
           if (normPlate(r.license_plate) === soNormPlate) {
             statuses.push(r.status);
           }
