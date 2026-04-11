@@ -153,6 +153,8 @@ export function BrandNameEditor({ config, onSave, children }: BrandNameEditorPro
             </SelectContent>
           </Select>
         </div>
+
+        <div className="flex items-center gap-2">
           <Toggle
             pressed={draft.bold ?? false}
             onPressedChange={(v) => setDraft({ ...draft, bold: v })}
