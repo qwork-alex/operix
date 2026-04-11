@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, ReactNode, useRef } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -19,34 +19,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<AuthContextType["profile"]>(null);
   const [loading, setLoading] = useState(true);
+  const mounted = useRef(true);
 
   const fetchUserData = async (userId: string) => {
-    const { data } = await supabase
-      .from("profiles")
-      .select("full_name, email, avatar_url")
-      .eq("id", userId)
-      .maybeSingle();
-    if (data) setProfile(data);
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("full_name, email, avatar_url")
+        .eq("id", userId)
+        .maybeSingle();
+      if (error) {
+        console.error("[Auth] Profile fetch error:", error.message);
+        return;
+      }
+      if (mounted.current && data) setProfile(data);
+    } catch (err) {
+      console.error("[Auth] fetchUserData error:", err);
+    }
   };
 
   useEffect(() => {
-    let mounted = true;
+    mounted.current = true;
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!mounted) return;
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) fetchUserData(session.user.id);
+    // 1. Get existing session first
+    supabase.auth.getSession().then(({ data: { session: s } }) => {
+      if (!mounted.current) return;
+      setSession(s);
+      setUser(s?.user ?? null);
+      if (s?.user) fetchUserData(s.user.id);
       setLoading(false);
+    }).catch((err) => {
+      console.error("[Auth] getSession error:", err);
+      if (mounted.current) setLoading(false);
     });
 
+    // 2. Listen for auth changes — no awaits inside callback
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        if (!mounted) return;
-        setSession(session);
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          setTimeout(() => fetchUserData(session.user.id), 0);
+      (_event, s) => {
+        if (!mounted.current) return;
+        setSession(s);
+        setUser(s?.user ?? null);
+        if (s?.user) {
+          // Fire-and-forget profile fetch (no await)
+          setTimeout(() => fetchUserData(s.user.id), 0);
         } else {
           setProfile(null);
         }
@@ -55,59 +70,74 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 
     return () => {
-      mounted = false;
+      mounted.current = false;
       subscription.unsubscribe();
     };
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (!error) {
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      // Fire-and-forget logging
       supabase.from("backend_event_logs").insert({
-        table_name: "auth", action: "LOGIN", payload: { email } as any,
-      }).then();
-    } else {
-      supabase.from("backend_event_logs").insert({
-        table_name: "auth", action: "LOGIN_FAILED", payload: { email, reason: error.message } as any,
-      }).then();
+        table_name: "auth",
+        action: error ? "LOGIN_FAILED" : "LOGIN",
+        payload: error
+          ? { email, reason: error.message } as any
+          : { email } as any,
+      }).then(() => {}, (err) => console.error("[Auth] Log error:", err));
+      return { error: error as Error | null };
+    } catch (err) {
+      console.error("[Auth] signIn error:", err);
+      return { error: err as Error };
     }
-    return { error: error as Error | null };
   };
 
   const signUp = async (email: string, password: string, fullName: string) => {
-    const inviteToken = localStorage.getItem("invite_token") || sessionStorage.getItem("invite_token") || undefined;
-    const metadata: Record<string, string> = { full_name: fullName };
-    if (inviteToken) {
-      metadata.invite_token = inviteToken;
+    try {
+      const inviteToken = localStorage.getItem("invite_token") || sessionStorage.getItem("invite_token") || undefined;
+      const metadata: Record<string, string> = { full_name: fullName };
+      if (inviteToken) {
+        metadata.invite_token = inviteToken;
+      }
+
+      const redirectUrl = inviteToken
+        ? `${window.location.origin}/join?token=${inviteToken}`
+        : window.location.origin;
+
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: metadata,
+          emailRedirectTo: redirectUrl,
+        },
+      });
+
+      if (!error) {
+        supabase.from("backend_event_logs").insert({
+          table_name: "auth", action: "SIGNUP",
+          payload: { email, full_name: fullName, invite_token: inviteToken || null } as any,
+        }).then(() => {}, (err) => console.error("[Auth] Log error:", err));
+      }
+      return { error: error as Error | null };
+    } catch (err) {
+      console.error("[Auth] signUp error:", err);
+      return { error: err as Error };
     }
-
-    // If invite token exists, redirect back to /join after email confirmation
-    const redirectUrl = inviteToken
-      ? `${window.location.origin}/join?token=${inviteToken}`
-      : window.location.origin;
-
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: metadata,
-        emailRedirectTo: redirectUrl,
-      },
-    });
-
-    if (!error) {
-      supabase.from("backend_event_logs").insert({
-        table_name: "auth", action: "SIGNUP", payload: { email, full_name: fullName, invite_token: inviteToken || null } as any,
-      }).then();
-    }
-    return { error: error as Error | null };
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    setSession(null);
-    setUser(null);
-    setProfile(null);
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error("[Auth] signOut error:", err);
+    }
+    if (mounted.current) {
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+    }
   };
 
   return (
