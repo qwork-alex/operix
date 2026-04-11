@@ -118,26 +118,19 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
       if (!soIds.length) return {};
 
       // Fetch all payment orders that match by service_order_id OR by list_name (week)
-      const queries: Promise<any>[] = [];
-
       // Query 1: By service_order_id
-      queries.push(
-        supabase
-          .from("payment_orders")
-          .select("service_order_id, status, list_name, license_plate")
-          .in("service_order_id", soIds)
-          .then(res => res)
-      );
+      const res1 = await supabase
+        .from("payment_orders")
+        .select("service_order_id, status, list_name, license_plate")
+        .in("service_order_id", soIds);
 
       // Query 2: By week (list_name) for cross-matching
+      let res2: typeof res1 = { data: [], error: null } as any;
       if (weeks.length > 0) {
-        queries.push(
-          supabase
-            .from("payment_orders")
-            .select("service_order_id, status, list_name, license_plate")
-            .in("list_name", weeks as string[])
-            .then(res => res)
-        );
+        res2 = await supabase
+          .from("payment_orders")
+          .select("service_order_id, status, list_name, license_plate")
+          .in("list_name", weeks as string[]);
       }
 
       const results = await Promise.all(queries);
