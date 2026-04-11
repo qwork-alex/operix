@@ -230,7 +230,7 @@ export function ActiveMap() {
         mapInstance.current = null;
       }
     };
-  }, [cities, isLoading, t]);
+  }, [cities, geoCheckins, isLoading, t]);
 
   // Cleanup style on unmount
   useEffect(() => {

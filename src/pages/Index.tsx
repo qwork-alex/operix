@@ -6,6 +6,7 @@ import { ActiveMap } from "@/components/dashboard/ActiveMap";
 import { RecentActivity } from "@/components/dashboard/RecentActivity";
 import { useDashboardStats } from "@/hooks/useDashboardData";
 import { useLanguage } from "@/hooks/useLanguage";
+import { useGeolocation } from "@/hooks/useGeolocation";
 
 const Dashboard = () => {
   const { data, isLoading } = useDashboardStats();
