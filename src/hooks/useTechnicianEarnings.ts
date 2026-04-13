@@ -7,7 +7,7 @@ interface TechEarningsMap {
 
 /**
  * Fetches technician percentages from profit_rules + profit_rule_items.
- * Supports both group-based and legacy technician-based rules.
+ * Rules use group_ids[] and technician_id to link.
  * Looks for the "technician" type item in the active rule.
  */
 export function useTechnicianEarnings() {
@@ -17,7 +17,7 @@ export function useTechnicianEarnings() {
       // Get all active rules with their items
       const { data: rules, error } = await supabase
         .from("profit_rules")
-        .select("technician_id, group_id, is_active, profit_rule_items(percentage, participant_type)")
+        .select("technician_id, group_ids, is_active, profit_rule_items(percentage, participant_type)")
         .eq("is_active", true);
 
       if (error) throw error;
@@ -31,9 +31,8 @@ export function useTechnicianEarnings() {
 
       const map: TechEarningsMap = {};
       for (const rule of rules || []) {
-        // Legacy: technician-based rules
-        if (rule.technician_id) {
-          const techName = techMap.get(rule.technician_id);
+        if ((rule as any).technician_id) {
+          const techName = techMap.get((rule as any).technician_id);
           if (!techName) continue;
           const items = (rule as any).profit_rule_items || [];
           const techItem = items.find((i: any) => i.participant_type === "technician");

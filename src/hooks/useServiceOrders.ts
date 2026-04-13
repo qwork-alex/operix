@@ -129,12 +129,21 @@ export function useServiceOrders(filters?: {
           if (groupIds.length > 0) {
             const { data: profitRules } = await supabase
               .from("profit_rules")
-              .select("group_id, profit_rule_items(participant_name, percentage, participant_type)")
-              .eq("is_active", true)
-              .in("group_id", groupIds as string[]);
+              .select("group_ids, profit_rule_items(participant_name, percentage, participant_type)")
+              .eq("is_active", true);
 
             if (profitRules && profitRules.length > 0) {
-              const ruleMap = new Map(profitRules.map((r: any) => [r.group_id, r.profit_rule_items || []]));
+              // Build map: group_id -> rule items (using group_ids array)
+              const ruleMap = new Map<string, any[]>();
+              for (const r of profitRules) {
+                const ruleGroupIds = (r as any).group_ids || [];
+                const items = (r as any).profit_rule_items || [];
+                for (const gid of ruleGroupIds) {
+                  if (groupIds.includes(gid)) {
+                    ruleMap.set(gid, items);
+                  }
+                }
+              }
               const distributions: any[] = [];
               for (const so of data) {
                 const items = ruleMap.get(so.group_id!);
