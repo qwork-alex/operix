@@ -102,25 +102,14 @@ export function usePaymentOrders(filters?: {
     mutationFn: async ({ id, ...updates }: Partial<PaymentOrder> & { id: string }) => {
       if (!id) throw new Error("Payment order id is required for update.");
 
-      const { data: existing, error: existingError } = await supabase
-        .from("payment_orders")
-        .select("id, created_by, created_at")
-        .eq("id", id)
-        .single();
-
-      if (existingError) throw existingError;
-
-      const created_by = updates.created_by ?? existing.created_by ?? user?.id;
-      const created_at = updates.created_at ?? existing.created_at ?? new Date().toISOString();
       const updated_at = new Date().toISOString();
+      const payload = { ...updates, updated_at };
 
-      const requiredAudit = { id, created_by, created_at, updated_at };
-      if (!hasRequiredAuditFields(requiredAudit)) {
-        throw new Error("Missing required audit fields (id, created_by, created_at, updated_at).");
-      }
+      // Remove join fields that aren't columns
+      delete (payload as any).clients;
+      delete (payload as any).technicians;
 
-      const payload = { ...updates, created_by, created_at, updated_at };
-      console.log("Saving payload:", payload);
+      console.log("Updating payload:", payload);
 
       const { data, error } = await supabase
         .from("payment_orders")
