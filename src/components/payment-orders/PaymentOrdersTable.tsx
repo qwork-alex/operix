@@ -316,12 +316,22 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
     );
   }
 
-  const groupedOrders = listNames.map(listName => ({
-    listName,
-    orders: orders.filter(o => o.list_name === listName),
-    status: getListStatus(listName),
-    total: orders.filter(o => o.list_name === listName).reduce((s, o) => s + (o.total || 0), 0),
-  }));
+  const groupedOrders = listNames.map(listName => {
+    const groupOrders = orders.filter(o => o.list_name === listName);
+    // Calculate max services used in this group for dynamic column rendering
+    const maxServices = groupOrders.reduce((max, o) => {
+      const raw = Array.isArray(o.services) ? (o.services as unknown as ServiceEntry[]) : [];
+      const filled = raw.filter(s => s.name || s.price).length;
+      return Math.max(max, filled);
+    }, 0) || 1; // at least 1 column
+    return {
+      listName,
+      orders: groupOrders,
+      status: getListStatus(listName),
+      total: groupOrders.reduce((s, o) => s + (o.total || 0), 0),
+      maxServices: Math.min(maxServices, MAX_SERVICES),
+    };
+  });
 
   return (
     <div className="space-y-2">
