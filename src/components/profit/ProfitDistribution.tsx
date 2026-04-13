@@ -288,7 +288,7 @@ export function ProfitDistribution() {
         if (ruleError) throw ruleError;
         ruleId = rule.id;
       }
-      const ruleId = savedRule.id;
+      
 
       // Upsert items
       await supabase.from("profit_rule_items").delete().eq("rule_id", ruleId);
