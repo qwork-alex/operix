@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -51,12 +51,13 @@ interface ServiceOrdersTableProps {
   isLoading: boolean;
 }
 
-type PaymentStatus = "paid" | "partial" | "pending" | "none";
+type PaymentStatus = "paid" | "partial" | "pending" | "draft" | "none";
 
 const paymentTextStyle: Record<PaymentStatus, string> = {
   paid: "text-emerald-400",
   partial: "text-amber-400",
   pending: "text-red-400",
+  draft: "",
   none: "",
 };
 
@@ -64,6 +65,7 @@ const paymentBadgeStyle: Record<PaymentStatus, string> = {
   paid: "bg-emerald-500/10 text-emerald-500 border-emerald-500/30",
   partial: "bg-amber-500/10 text-amber-500 border-amber-500/30",
   pending: "bg-red-500/10 text-red-500 border-red-500/30",
+  draft: "bg-muted text-muted-foreground",
   none: "bg-muted text-muted-foreground",
 };
 
@@ -71,6 +73,7 @@ const paymentLabel: Record<PaymentStatus, string> = {
   paid: "Pago",
   partial: "Parcial",
   pending: "Pendente",
+  draft: "Rascunho",
   none: "Sem pagamento",
 };
 
@@ -110,77 +113,15 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-  // Fetch payment statuses — match by BOTH service_order_id AND by week (list_name) + license_plate
-  const soIds = orders.map(o => o.id);
-  const weeks = [...new Set(orders.map(o => o.week).filter(Boolean))];
-
-  const { data: paymentMap = {} } = useQuery({
-    queryKey: ["payment_status_map", soIds, weeks],
-    queryFn: async () => {
-      if (!soIds.length) return {};
-
-      // Fetch all payment orders that match by service_order_id OR by list_name (week)
-      // Query 1: By service_order_id
-      const res1 = await supabase
-        .from("payment_orders")
-        .select("service_order_id, status, list_name, license_plate")
-        .in("service_order_id", soIds);
-
-      // Query 2: By week (list_name) for cross-matching
-      let res2: typeof res1 = { data: [], error: null } as any;
-      if (weeks.length > 0) {
-        res2 = await supabase
-          .from("payment_orders")
-          .select("service_order_id, status, list_name, license_plate")
-          .in("list_name", weeks as string[]);
-      }
-
-      const allPOs: { service_order_id: string | null; status: string; list_name: string | null; license_plate: string | null }[] = [
-        ...(res1.data || []),
-        ...(res2.data || []),
-      ];
-
-      // Deduplicate
-      const seen = new Set<string>();
-      const uniquePOs = allPOs.filter(po => {
-        const key = `${po.service_order_id}-${po.list_name}-${po.license_plate}-${po.status}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-
-      const map: Record<string, PaymentStatus> = {};
-
-      for (const so of orders) {
-        // Find matching POs: by service_order_id OR by week + plate
-        const normalizedSOPlate = (so.license_plate || "").replace(/[\s\-]/g, "").toUpperCase();
-
-        const matchingPOs = uniquePOs.filter(po => {
-          // Match by direct link
-          if (po.service_order_id === so.id) return true;
-          // Match by week + plate
-          if (so.week && po.list_name === so.week && normalizedSOPlate) {
-            const normalizedPOPlate = (po.license_plate || "").replace(/[\s\-]/g, "").toUpperCase();
-            return normalizedPOPlate === normalizedSOPlate;
-          }
-          return false;
-        });
-
-        if (!matchingPOs.length) continue;
-
-        const allPaid = matchingPOs.every(po => po.status === "paid");
-        const allPending = matchingPOs.every(po => po.status === "pending");
-        if (allPaid) map[so.id] = "paid";
-        else if (allPending) map[so.id] = "pending";
-        else map[so.id] = "partial";
-      }
-
-      return map;
-    },
-    enabled: soIds.length > 0,
-  });
-
-  const getPaymentStatus = (soId: string): PaymentStatus => paymentMap[soId] || "none";
+  // Use DB-stored status as single source of truth (synced by DB trigger)
+  const getPaymentStatus = (o: ServiceOrderRow): PaymentStatus => {
+    const s = o.status?.toLowerCase();
+    if (s === "paid") return "paid";
+    if (s === "partial") return "partial";
+    if (s === "pending") return "pending";
+    if (s === "draft") return "draft";
+    return "none";
+  };
 
   const alertStyle: Record<AlertLevel, string> = {
     none: "",
@@ -233,9 +174,9 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
   const getWeekStatus = (week: string | null): PaymentStatus => {
     const weekOrders = orders.filter(o => o.week === week);
     if (!weekOrders.length) return "none";
-    const statuses = weekOrders.map(o => getPaymentStatus(o.id));
+    const statuses = weekOrders.map(o => getPaymentStatus(o));
     const allPaid = statuses.every(s => s === "paid");
-    const allPending = statuses.every(s => s === "pending" || s === "none");
+    const allPending = statuses.every(s => s === "pending" || s === "none" || s === "draft");
     if (allPaid) return "paid";
     if (allPending) return "pending";
     return "partial";
@@ -245,6 +186,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
     paid: "✓ Pago",
     partial: "◐ Parcial",
     pending: "● Pendente",
+    draft: "— Rascunho",
     none: "— Sem dados",
   };
 
@@ -467,7 +409,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
               <TableBody>
                 {group.orders.map((o) => {
                   const isEditing = editingId === o.id && editForm;
-                  const ps = getPaymentStatus(o.id);
+                  const ps = getPaymentStatus(o);
 
                   if (isEditing) {
                     const computedTotal =

@@ -159,16 +159,12 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
       const { error } = await supabase.from("payment_orders").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
       if (error) throw error;
-
-      const po = orders.find(o => o.id === id);
-      if (po) {
-        await syncServiceOrderStatus(po, status);
-      }
+      // DB trigger auto-syncs service_orders status
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payment_orders"] });
-      queryClient.invalidateQueries({ queryKey: ["payment_status_map"] });
       queryClient.invalidateQueries({ queryKey: ["service_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["financial-summary"] });
       toast.success(t("toast.updated"));
     },
     onError: (err) => toast.error((err as Error).message),
@@ -180,22 +176,19 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
       const listOrderIds = orders.filter(o => o.list_name === listName).map(o => o.id);
       if (!listOrderIds.length) return;
 
-      const { error } = await supabase
-        .from("payment_orders")
-        .update({ status, updated_at: new Date().toISOString() })
-        .in("id", listOrderIds);
-      if (error) throw error;
-
-      // Sync all items of this week to service orders
-      const listOrders = orders.filter(o => o.list_name === listName);
-      for (const po of listOrders) {
-        await syncServiceOrderStatus(po, status);
+      // Update one by one to trigger the DB trigger for each row
+      for (const id of listOrderIds) {
+        const { error } = await supabase
+          .from("payment_orders")
+          .update({ status, updated_at: new Date().toISOString() })
+          .eq("id", id);
+        if (error) throw error;
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payment_orders"] });
-      queryClient.invalidateQueries({ queryKey: ["payment_status_map"] });
       queryClient.invalidateQueries({ queryKey: ["service_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["financial-summary"] });
       toast.success("Status do lote atualizado");
     },
     onError: (err) => toast.error((err as Error).message),
@@ -615,85 +608,4 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
       />
     </div>
   );
-}
-
-const normPlate = (p: string | null) => (p || "").replace(/[\s\-]/g, "").toUpperCase();
-
-/** Sync PO status to matching SO — priority: service_order_id > week+plate */
-async function syncServiceOrderStatus(po: PaymentOrderRow, newStatus: string) {
-  try {
-    const soIds: string[] = [];
-
-    // Priority 1: direct link via service_order_id
-    if ((po as any).service_order_id) {
-      soIds.push((po as any).service_order_id);
-    }
-
-    // Priority 2: fallback via week (list_name) + normalized license_plate
-    if (po.list_name && po.license_plate) {
-      const normalizedPlate = normPlate(po.license_plate);
-      if (normalizedPlate) {
-        const { data: matchingSOs } = await supabase
-          .from("service_orders")
-          .select("id, license_plate")
-          .eq("week", po.list_name);
-
-        if (matchingSOs?.length) {
-          for (const so of matchingSOs) {
-            if (normPlate(so.license_plate) === normalizedPlate && !soIds.includes(so.id)) {
-              soIds.push(so.id);
-            }
-          }
-        }
-      }
-    }
-
-    if (!soIds.length) return;
-
-    // For each matched SO, calculate effective status from ALL matching POs
-    for (const soId of soIds) {
-      // Get the SO to know its week + plate
-      const { data: so } = await supabase
-        .from("service_orders")
-        .select("id, week, license_plate")
-        .eq("id", soId)
-        .single();
-
-      if (!so) continue;
-
-      // Collect all POs linked to this SO (by service_order_id OR week+plate)
-      const soNormPlate = normPlate(so.license_plate);
-      const res1 = await supabase.from("payment_orders").select("status").eq("service_order_id", soId);
-      let res2: { data: any[] | null } = { data: null };
-      if (so.week && soNormPlate) {
-        res2 = await supabase.from("payment_orders").select("status, license_plate").eq("list_name", so.week);
-      }
-
-      const statuses: string[] = [];
-      // Direct matches
-      (res1.data || []).forEach((r: any) => statuses.push(r.status));
-      // Week+plate matches
-      if (res2.data) {
-        res2.data.forEach((r: any) => {
-          if (normPlate(r.license_plate) === soNormPlate) {
-            statuses.push(r.status);
-          }
-        });
-      }
-
-      // Dedupe isn't critical — we just need the aggregate
-      if (!statuses.length) continue;
-
-      const allPaid = statuses.every(s => s === "paid");
-      const allPending = statuses.every(s => s === "pending");
-      const effectiveStatus = allPaid ? "paid" : allPending ? "pending" : "partial";
-
-      await supabase
-        .from("service_orders")
-        .update({ status: effectiveStatus, updated_at: new Date().toISOString() })
-        .eq("id", soId);
-    }
-  } catch (err) {
-    console.error("[Sync] Failed to sync SO status:", err);
-  }
 }
