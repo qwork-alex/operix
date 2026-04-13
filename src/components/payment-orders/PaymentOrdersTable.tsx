@@ -316,12 +316,22 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
     );
   }
 
-  const groupedOrders = listNames.map(listName => ({
-    listName,
-    orders: orders.filter(o => o.list_name === listName),
-    status: getListStatus(listName),
-    total: orders.filter(o => o.list_name === listName).reduce((s, o) => s + (o.total || 0), 0),
-  }));
+  const groupedOrders = listNames.map(listName => {
+    const groupOrders = orders.filter(o => o.list_name === listName);
+    // Calculate max services used in this group for dynamic column rendering
+    const maxServices = groupOrders.reduce((max, o) => {
+      const raw = Array.isArray(o.services) ? (o.services as unknown as ServiceEntry[]) : [];
+      const filled = raw.filter(s => s.name || s.price).length;
+      return Math.max(max, filled);
+    }, 0) || 1; // at least 1 column
+    return {
+      listName,
+      orders: groupOrders,
+      status: getListStatus(listName),
+      total: groupOrders.reduce((s, o) => s + (o.total || 0), 0),
+      maxServices: Math.min(maxServices, MAX_SERVICES),
+    };
+  });
 
   return (
     <div className="space-y-2">
@@ -387,7 +397,8 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
                   <TableHead>{t("label.technician")}</TableHead>
                   <TableHead>{t("label.car")}</TableHead>
                   <TableHead>{t("label.plate")}</TableHead>
-                  {[1, 2, 3, 4].map(n => (
+                  {/* Dynamic service columns: edit mode shows all 4, view mode shows group.maxServices */}
+                  {Array.from({ length: editingId && group.orders.some(o => o.id === editingId) ? MAX_SERVICES : group.maxServices }, (_, i) => i + 1).map(n => (
                     <TableHead key={`sh${n}`} colSpan={2} className="text-center">
                       {t("label.service")} {n}
                     </TableHead>
@@ -468,8 +479,10 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
                     );
                   }
 
-                  const rawServices = Array.isArray(o.services) ? (o.services as unknown as ServiceEntry[]) : [];
-                  const services = padServices(rawServices);
+                   const rawServices = Array.isArray(o.services) ? (o.services as unknown as ServiceEntry[]) : [];
+                  const groupHasEdit = editingId != null && group.orders.some(go => go.id === editingId);
+                  const visibleCols = groupHasEdit ? MAX_SERVICES : group.maxServices;
+                  const services = padServices(rawServices).slice(0, visibleCols);
                   const rowAlert = getRowAlertLevel(o.created_at, o.status);
                   const daysOld = Math.floor((Date.now() - new Date(o.created_at).getTime()) / 86400000);
 
