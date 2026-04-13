@@ -141,6 +141,7 @@ export function usePaymentOrders(filters?: {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payment_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["service_orders"] });
       queryClient.invalidateQueries({ queryKey: ["financial-summary"] });
       toast.success("Payment order deleted");
     },
