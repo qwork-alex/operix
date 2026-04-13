@@ -347,7 +347,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
   const handleDownload = async (doc: any) => {
     if (!doc.storage_path) return;
     try {
-      const { blobUrl } = await fetchDocumentBlobUrl(doc, 120);
+      const { blobUrl } = await fetchDocumentBlobUrl(doc, 3600);
       const a = document.createElement("a");
       a.href = blobUrl;
       a.download = doc.name;
@@ -377,7 +377,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
     setPreviewDoc({ ...doc, mime_type: resolvedMime, status: "loading" });
 
     try {
-      const { blobUrl, mimeType } = await fetchDocumentBlobUrl(doc, 120);
+      const { blobUrl, mimeType } = await fetchDocumentBlobUrl(doc, 3600);
       console.log("[FileManager] Preview: blob URL created", blobUrl.substring(0, 60));
 
       setPreviewDoc({ ...doc, url: blobUrl, mime_type: mimeType, status: "ready", _blobUrl: true });
@@ -394,7 +394,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
   const handlePrint = async (doc: any) => {
     if (!doc.storage_path) return;
     try {
-      const { blobUrl, mimeType } = await fetchDocumentBlobUrl(doc, 120);
+      const { blobUrl, mimeType } = await fetchDocumentBlobUrl(doc, 3600);
 
       const iframe = document.createElement("iframe");
       iframe.style.position = "fixed";
@@ -451,7 +451,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
   const handleOpenInNewTab = async (doc: any) => {
     if (!doc.storage_path) return;
     try {
-      const { blobUrl } = await fetchDocumentBlobUrl(doc, 120);
+      const { blobUrl } = await fetchDocumentBlobUrl(doc, 3600);
       const opened = window.open(blobUrl, "_blank", "noopener,noreferrer");
       console.log("[FileManager] Opened blob in new tab:", { file: doc.name, opened: Boolean(opened) });
 
@@ -820,12 +820,14 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
               />
             ) : previewDoc?.mime_type && isPdfMime(previewDoc.mime_type) ? (
               <div className="relative">
-                <iframe
-                  src={previewDoc.url + "#toolbar=1"}
+              <iframe
+                  src={previewDoc.url}
                   className="w-full h-[60vh] rounded border-0"
                   title={previewDoc.name}
+                  onLoad={() => console.log("[FileManager] PDF iframe loaded:", previewDoc.name)}
                   onError={() => {
-                    toast.error(t("fm.previewError"));
+                    console.error("[FileManager] PDF iframe error:", previewDoc.name);
+                    setPreviewDoc(prev => prev ? { ...prev, status: "error", error: "PDF rendering failed." } : null);
                   }}
                 />
               </div>
