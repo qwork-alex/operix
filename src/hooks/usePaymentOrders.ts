@@ -42,13 +42,6 @@ export function usePaymentOrders(filters?: {
   const { user } = useAuth();
   const { isAdmin } = useRole();
 
-  const hasRequiredAuditFields = (payload: {
-    id?: string;
-    created_by?: string | null;
-    created_at?: string;
-    updated_at?: string;
-  }) => Boolean(payload.id && payload.created_by && payload.created_at && payload.updated_at);
-
   const query = useQuery({
     queryKey: ["payment_orders", filters, isAdmin, user?.id],
     queryFn: async () => {
@@ -77,16 +70,10 @@ export function usePaymentOrders(filters?: {
       if (!user?.id) throw new Error("You must be authenticated to save payment orders.");
 
       const payload = orders.map(o => ({
-        id: o.id ?? crypto.randomUUID(),
         ...o,
         created_by: o.created_by ?? user.id,
-        created_at: o.created_at ?? new Date().toISOString(),
-        updated_at: new Date().toISOString(),
         status: o.status || "pending",
       }));
-
-      const invalid = payload.find((p) => !hasRequiredAuditFields(p));
-      if (invalid) throw new Error("Missing required audit fields (id, created_by, created_at, updated_at).");
 
       console.log("Saving payload:", payload);
 
@@ -102,6 +89,8 @@ export function usePaymentOrders(filters?: {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payment_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["service_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["financial-summary"] });
       toast.success("Payment orders saved successfully");
     },
     onError: (err) => {
@@ -113,25 +102,14 @@ export function usePaymentOrders(filters?: {
     mutationFn: async ({ id, ...updates }: Partial<PaymentOrder> & { id: string }) => {
       if (!id) throw new Error("Payment order id is required for update.");
 
-      const { data: existing, error: existingError } = await supabase
-        .from("payment_orders")
-        .select("id, created_by, created_at")
-        .eq("id", id)
-        .single();
-
-      if (existingError) throw existingError;
-
-      const created_by = updates.created_by ?? existing.created_by ?? user?.id;
-      const created_at = updates.created_at ?? existing.created_at ?? new Date().toISOString();
       const updated_at = new Date().toISOString();
+      const payload = { ...updates, updated_at };
 
-      const requiredAudit = { id, created_by, created_at, updated_at };
-      if (!hasRequiredAuditFields(requiredAudit)) {
-        throw new Error("Missing required audit fields (id, created_by, created_at, updated_at).");
-      }
+      // Remove join fields that aren't columns
+      delete (payload as any).clients;
+      delete (payload as any).technicians;
 
-      const payload = { ...updates, created_by, created_at, updated_at };
-      console.log("Saving payload:", payload);
+      console.log("Updating payload:", payload);
 
       const { data, error } = await supabase
         .from("payment_orders")
@@ -163,6 +141,7 @@ export function usePaymentOrders(filters?: {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payment_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["service_orders"] });
       queryClient.invalidateQueries({ queryKey: ["financial-summary"] });
       toast.success("Payment order deleted");
     },
