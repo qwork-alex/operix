@@ -397,7 +397,8 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
                   <TableHead>{t("label.technician")}</TableHead>
                   <TableHead>{t("label.car")}</TableHead>
                   <TableHead>{t("label.plate")}</TableHead>
-                  {[1, 2, 3, 4].map(n => (
+                  {/* Dynamic service columns: edit mode shows all 4, view mode shows group.maxServices */}
+                  {Array.from({ length: editingId && group.orders.some(o => o.id === editingId) ? MAX_SERVICES : group.maxServices }, (_, i) => i + 1).map(n => (
                     <TableHead key={`sh${n}`} colSpan={2} className="text-center">
                       {t("label.service")} {n}
                     </TableHead>
