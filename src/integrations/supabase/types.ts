@@ -981,28 +981,31 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
+          group_id: string | null
           id: string
           is_active: boolean
           rule_name: string
-          technician_id: string
+          technician_id: string | null
           updated_at: string
         }
         Insert: {
           created_at?: string
           created_by?: string | null
+          group_id?: string | null
           id?: string
           is_active?: boolean
           rule_name: string
-          technician_id: string
+          technician_id?: string | null
           updated_at?: string
         }
         Update: {
           created_at?: string
           created_by?: string | null
+          group_id?: string | null
           id?: string
           is_active?: boolean
           rule_name?: string
-          technician_id?: string
+          technician_id?: string | null
           updated_at?: string
         }
         Relationships: [
