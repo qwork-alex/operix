@@ -7,16 +7,17 @@ interface TechEarningsMap {
 
 /**
  * Fetches technician percentages from profit_rules + profit_rule_items.
- * Looks for the "technician" type item in the active rule for each technician.
+ * Supports both group-based and legacy technician-based rules.
+ * Looks for the "technician" type item in the active rule.
  */
 export function useTechnicianEarnings() {
   return useQuery({
     queryKey: ["technician_earnings_map"],
     queryFn: async () => {
-      // Get all active rules with their items and technician name
+      // Get all active rules with their items
       const { data: rules, error } = await supabase
         .from("profit_rules")
-        .select("technician_id, is_active, profit_rule_items(percentage, participant_type)")
+        .select("technician_id, group_id, is_active, profit_rule_items(percentage, participant_type)")
         .eq("is_active", true);
 
       if (error) throw error;
@@ -30,13 +31,15 @@ export function useTechnicianEarnings() {
 
       const map: TechEarningsMap = {};
       for (const rule of rules || []) {
-        const techName = techMap.get(rule.technician_id);
-        if (!techName) continue;
-
-        const items = (rule as any).profit_rule_items || [];
-        const techItem = items.find((i: any) => i.participant_type === "technician");
-        if (techItem) {
-          map[techName.toLowerCase()] = Number(techItem.percentage) || 0;
+        // Legacy: technician-based rules
+        if (rule.technician_id) {
+          const techName = techMap.get(rule.technician_id);
+          if (!techName) continue;
+          const items = (rule as any).profit_rule_items || [];
+          const techItem = items.find((i: any) => i.participant_type === "technician");
+          if (techItem) {
+            map[techName.toLowerCase()] = Number(techItem.percentage) || 0;
+          }
         }
       }
       return map;
