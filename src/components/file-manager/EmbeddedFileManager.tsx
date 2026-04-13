@@ -287,22 +287,46 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
   };
 
   const handlePreview = async (doc: any) => {
-    if (!doc.storage_path) return;
+    if (!doc.storage_path) {
+      console.warn("[FileManager] Preview skipped: no storage_path for", doc.name);
+      toast.error("File not available — storage path missing.");
+      return;
+    }
     setPreviewLoading(true);
     try {
       const url = await getFreshSignedUrl(doc.storage_path, 600);
       if (url) {
+        // Verify URL is accessible before rendering
+        try {
+          const headResp = await fetch(url, { method: "HEAD" });
+          if (!headResp.ok) {
+            console.warn("[FileManager] Signed URL returned", headResp.status, "for", doc.storage_path);
+            // Try a fresh URL in case the first was stale
+            const retryUrl = await getFreshSignedUrl(doc.storage_path, 600);
+            if (retryUrl) {
+              const resolvedMime = getMimeType(doc.name, doc.mime_type);
+              setPreviewDoc({ ...doc, url: retryUrl, mime_type: resolvedMime });
+            } else {
+              toast.error("File could not be accessed. It may have been deleted.");
+            }
+            return;
+          }
+        } catch {
+          // HEAD check failed (CORS etc.) — proceed anyway, browser may still render
+          console.warn("[FileManager] HEAD check failed for", doc.storage_path, "— proceeding with URL");
+        }
         const resolvedMime = getMimeType(doc.name, doc.mime_type);
         setPreviewDoc({ ...doc, url, mime_type: resolvedMime });
       } else {
         // Fallback: open in new tab
-        toast.error(t("fm.previewError"));
+        toast.error("Preview unavailable. Opening in new tab...");
         const fallbackUrl = await getFreshSignedUrl(doc.storage_path, 60);
         if (fallbackUrl) window.open(fallbackUrl, "_blank");
+        else toast.error("File not accessible — it may have been deleted from storage.");
       }
     } catch (err) {
       console.error("[FileManager] Preview error:", err);
-      toast.error(t("fm.previewError"));
+      toast.error("Preview failed. Try opening the file in a new tab.");
     } finally {
       setPreviewLoading(false);
     }
