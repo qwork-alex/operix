@@ -159,16 +159,12 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
       const { error } = await supabase.from("payment_orders").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
       if (error) throw error;
-
-      const po = orders.find(o => o.id === id);
-      if (po) {
-        await syncServiceOrderStatus(po, status);
-      }
+      // DB trigger auto-syncs service_orders status
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payment_orders"] });
-      queryClient.invalidateQueries({ queryKey: ["payment_status_map"] });
       queryClient.invalidateQueries({ queryKey: ["service_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["financial-summary"] });
       toast.success(t("toast.updated"));
     },
     onError: (err) => toast.error((err as Error).message),
