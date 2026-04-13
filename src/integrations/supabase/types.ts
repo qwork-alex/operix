@@ -795,6 +795,7 @@ export type Database = {
           client_name: string | null
           created_at: string
           created_by: string | null
+          group_id: string | null
           id: string
           license_plate: string | null
           list_name: string | null
@@ -813,6 +814,7 @@ export type Database = {
           client_name?: string | null
           created_at?: string
           created_by?: string | null
+          group_id?: string | null
           id?: string
           license_plate?: string | null
           list_name?: string | null
@@ -831,6 +833,7 @@ export type Database = {
           client_name?: string | null
           created_at?: string
           created_by?: string | null
+          group_id?: string | null
           id?: string
           license_plate?: string | null
           list_name?: string | null
@@ -1000,6 +1003,7 @@ export type Database = {
           client_name: string
           created_at: string
           created_by: string | null
+          group_id: string | null
           id: string
           license_plate: string | null
           platform: string | null
@@ -1024,6 +1028,7 @@ export type Database = {
           client_name?: string
           created_at?: string
           created_by?: string | null
+          group_id?: string | null
           id?: string
           license_plate?: string | null
           platform?: string | null
@@ -1048,6 +1053,7 @@ export type Database = {
           client_name?: string
           created_at?: string
           created_by?: string | null
+          group_id?: string | null
           id?: string
           license_plate?: string | null
           platform?: string | null
