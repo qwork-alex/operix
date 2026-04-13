@@ -77,16 +77,10 @@ export function usePaymentOrders(filters?: {
       if (!user?.id) throw new Error("You must be authenticated to save payment orders.");
 
       const payload = orders.map(o => ({
-        id: o.id ?? crypto.randomUUID(),
         ...o,
         created_by: o.created_by ?? user.id,
-        created_at: o.created_at ?? new Date().toISOString(),
-        updated_at: new Date().toISOString(),
         status: o.status || "pending",
       }));
-
-      const invalid = payload.find((p) => !hasRequiredAuditFields(p));
-      if (invalid) throw new Error("Missing required audit fields (id, created_by, created_at, updated_at).");
 
       console.log("Saving payload:", payload);
 
@@ -102,6 +96,8 @@ export function usePaymentOrders(filters?: {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payment_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["service_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["financial-summary"] });
       toast.success("Payment orders saved successfully");
     },
     onError: (err) => {
