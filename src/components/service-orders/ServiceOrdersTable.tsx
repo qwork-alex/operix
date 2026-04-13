@@ -409,7 +409,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
               <TableBody>
                 {group.orders.map((o) => {
                   const isEditing = editingId === o.id && editForm;
-                  const ps = getPaymentStatus(o.id);
+                  const ps = getPaymentStatus(o);
 
                   if (isEditing) {
                     const computedTotal =
