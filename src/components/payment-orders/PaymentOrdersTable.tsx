@@ -276,7 +276,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
   });
 
   const startEdit = (o: PaymentOrderRow) => {
-    const rawServices = Array.isArray(o.services) ? (o.services as ServiceEntry[]) : [];
+    const rawServices = Array.isArray(o.services) ? (o.services as unknown as ServiceEntry[]) : [];
     setEditingId(o.id);
     setEditForm({
       client_id: o.client_id || EMPTY_RELATION_VALUE,
@@ -468,7 +468,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
                     );
                   }
 
-                  const rawServices = Array.isArray(o.services) ? (o.services as ServiceEntry[]) : [];
+                  const rawServices = Array.isArray(o.services) ? (o.services as unknown as ServiceEntry[]) : [];
                   const services = padServices(rawServices);
                   const rowAlert = getRowAlertLevel(o.created_at, o.status);
                   const daysOld = Math.floor((Date.now() - new Date(o.created_at).getTime()) / 86400000);
