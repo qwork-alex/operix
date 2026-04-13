@@ -229,6 +229,9 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
     mutationFn: async (id: string) => {
       if (!editForm) return;
 
+      // Find the original row to preserve existing data
+      const originalRow = orders.find(o => o.id === id);
+
       const filledServices = editForm.services
         .map(s => ({ name: s.name.trim(), price: Number(s.price) || 0 }))
         .filter(s => s.name);
@@ -240,26 +243,54 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
 
       const resolvedClientId = editForm.client_id === EMPTY_RELATION_VALUE ? null : editForm.client_id;
       const resolvedTechId = editForm.technician_id === EMPTY_RELATION_VALUE ? null : editForm.technician_id;
-      const clientName = resolvedClientId
-        ? (clients.find(c => c.id === resolvedClientId)?.name || null)
-        : null;
-      const techName = resolvedTechId
-        ? (technicians.find(t => t.id === resolvedTechId)?.name || null)
-        : null;
 
-      const payload = {
-        client_id: resolvedClientId,
-        client_name: clientName,
-        technician_id: resolvedTechId,
-        technician_name: techName,
-        platform: toNullableText(editForm.platform),
-        list_name: toNullableText(editForm.list_name),
-        car_name: toNullableText(editForm.car_name),
-        license_plate: formatLicensePlate(editForm.license_plate),
+      // Resolve name from relation, or preserve existing name from DB
+      const clientName = resolvedClientId
+        ? (clients.find(c => c.id === resolvedClientId)?.name || originalRow?.client_name || null)
+        : (originalRow?.client_name || null);
+      const techName = resolvedTechId
+        ? (technicians.find(t => t.id === resolvedTechId)?.name || originalRow?.technician_name || null)
+        : (originalRow?.technician_name || null);
+
+      // Build partial payload — only changed fields
+      const payload: Record<string, any> = {
+        updated_at: new Date().toISOString(),
         services: filledServices as unknown as Json,
         total: computedTotal,
-        updated_at: new Date().toISOString(),
       };
+
+      // Only include fields that actually changed
+      if (resolvedClientId !== (originalRow?.client_id ?? null)) {
+        payload.client_id = resolvedClientId;
+      }
+      if (clientName !== (originalRow?.client_name ?? null)) {
+        payload.client_name = clientName;
+      }
+      if (resolvedTechId !== (originalRow?.technician_id ?? null)) {
+        payload.technician_id = resolvedTechId;
+      }
+      if (techName !== (originalRow?.technician_name ?? null)) {
+        payload.technician_name = techName;
+      }
+
+      const platformVal = toNullableText(editForm.platform);
+      if (platformVal !== (originalRow?.platform ?? null)) {
+        payload.platform = platformVal;
+      }
+      const listVal = toNullableText(editForm.list_name);
+      if (listVal !== (originalRow?.list_name ?? null)) {
+        payload.list_name = listVal;
+      }
+      const carVal = toNullableText(editForm.car_name);
+      if (carVal !== (originalRow?.car_name ?? null)) {
+        payload.car_name = carVal;
+      }
+      const plateVal = formatLicensePlate(editForm.license_plate);
+      if (plateVal !== (originalRow?.license_plate ?? null)) {
+        payload.license_plate = plateVal;
+      }
+
+      console.log("[PaymentOrders] Partial update payload:", JSON.stringify(payload));
 
       const { error } = await supabase.from("payment_orders").update(payload).eq("id", id);
       if (error) throw error;
