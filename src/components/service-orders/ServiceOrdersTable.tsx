@@ -174,9 +174,9 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
   const getWeekStatus = (week: string | null): PaymentStatus => {
     const weekOrders = orders.filter(o => o.week === week);
     if (!weekOrders.length) return "none";
-    const statuses = weekOrders.map(o => getPaymentStatus(o.id));
+    const statuses = weekOrders.map(o => getPaymentStatus(o));
     const allPaid = statuses.every(s => s === "paid");
-    const allPending = statuses.every(s => s === "pending" || s === "none");
+    const allPending = statuses.every(s => s === "pending" || s === "none" || s === "draft");
     if (allPaid) return "paid";
     if (allPending) return "pending";
     return "partial";
@@ -186,6 +186,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
     paid: "✓ Pago",
     partial: "◐ Parcial",
     pending: "● Pendente",
+    draft: "— Rascunho",
     none: "— Sem dados",
   };
 
