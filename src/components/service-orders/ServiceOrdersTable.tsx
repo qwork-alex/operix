@@ -19,6 +19,7 @@ import { getRowAlertLevel, type AlertLevel } from "@/hooks/useAgingAlerts";
 import { AlertTriangle, Clock } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { BulkDeleteDialog } from "@/components/shared/BulkDeleteDialog";
+import { useTechnicianEarnings, getTechEarnings } from "@/hooks/useTechnicianEarnings";
 
 interface ServiceOrderRow {
   id: string;
@@ -102,6 +103,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
   const { user } = useAuth();
   const { data: clients = [] } = useClients();
   const { data: technicians = [] } = useTechnicians();
+  const { data: earningsMap } = useTechnicianEarnings();
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditState | null>(null);
@@ -297,8 +299,12 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
 
       const resolvedClientId = editForm.client_id === EMPTY_RELATION_VALUE ? null : editForm.client_id;
       const resolvedTechId = editForm.technician_id === EMPTY_RELATION_VALUE ? null : editForm.technician_id;
-      const clientName = resolvedClientId ? (clients.find(c => c.id === resolvedClientId)?.name || "") : "";
-      const techName = resolvedTechId ? (technicians.find(t => t.id === resolvedTechId)?.name || "") : "";
+      const clientName = resolvedClientId
+        ? (clients.find(c => c.id === resolvedClientId)?.name || existing.client_name || "")
+        : (existing.client_name || "");
+      const techName = resolvedTechId
+        ? (technicians.find(t => t.id === resolvedTechId)?.name || existing.technician_name || "")
+        : (existing.technician_name || "");
 
       const payload = {
         ...existing,
@@ -453,6 +459,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
                   <TableHead>{t("label.plate")}</TableHead>
                   <TableHead>{t("label.services")}</TableHead>
                   <TableHead className="text-right">{t("label.total")}</TableHead>
+                  <TableHead className="text-right">Tec. %</TableHead>
                   <TableHead>Pagamento</TableHead>
                   <TableHead>{t("label.actions")}</TableHead>
                 </TableRow>
@@ -540,6 +547,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
                         <TableCell className="text-right font-semibold text-primary tabular-nums">
                           {formatCurrency(computedTotal)}
                         </TableCell>
+                        <TableCell className="text-right text-[10px] text-muted-foreground">—</TableCell>
                         <TableCell>
                           <Badge variant="outline" className={cn("text-[10px]", paymentBadgeStyle[ps])}>
                             {paymentLabel[ps]}
@@ -568,6 +576,8 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
                   const services = [o.service_1_name, o.service_2_name, o.service_3_name, o.service_4_name].filter(Boolean);
                   const rowAlert = ps !== "paid" ? getRowAlertLevel(o.created_at) : "none";
                   const daysOld = Math.floor((Date.now() - new Date(o.created_at).getTime()) / 86400000);
+                  const techName = o.technician_name || o.technicians?.name;
+                  const techEarn = getTechEarnings(techName, o.total, earningsMap);
                   return (
                     <TableRow key={o.id} className={cn(paymentTextStyle[ps], alertStyle[rowAlert])}>
                       <TableCell className="w-10">
@@ -589,6 +599,13 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
                       </TableCell>
                       <TableCell className="text-right font-semibold tabular-nums">
                         {o.total != null ? formatCurrency(Number(o.total)) : "—"}
+                      </TableCell>
+                      <TableCell className="text-right text-[10px] tabular-nums">
+                        {techEarn ? (
+                          <span className="text-muted-foreground">
+                            {techEarn.percentage}% · <span className="text-foreground font-medium">{formatCurrency(techEarn.earnings)}</span>
+                          </span>
+                        ) : "—"}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className={cn("text-[10px]", paymentBadgeStyle[ps])}>
