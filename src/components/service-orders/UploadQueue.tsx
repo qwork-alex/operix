@@ -1,4 +1,4 @@
-import { CheckCircle2, Loader2, AlertCircle, Clock, Upload } from "lucide-react";
+import { CheckCircle2, Loader2, AlertCircle, Clock, Upload, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/hooks/useLanguage";
@@ -15,9 +15,10 @@ const statusConfig: Record<QueueItemStatus, { icon: typeof Loader2; color: strin
 interface Props {
   queue: QueueItem[];
   onClearCompleted: () => void;
+  onRetry?: (item: QueueItem) => void;
 }
 
-export function UploadQueue({ queue, onClearCompleted }: Props) {
+export function UploadQueue({ queue, onClearCompleted, onRetry }: Props) {
   const { t } = useLanguage();
 
   if (queue.length === 0) return null;
@@ -47,6 +48,16 @@ export function UploadQueue({ queue, onClearCompleted }: Props) {
               <Icon className={cn("h-3.5 w-3.5 shrink-0", cfg.color, spinning && "animate-spin")} />
               <span className="truncate flex-1 text-foreground">{item.file.name}</span>
               <span className={cn("text-[10px] shrink-0", cfg.color)}>{t(cfg.labelKey)}</span>
+              {item.status === "error" && onRetry && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-5 px-1.5 text-[10px] text-primary"
+                  onClick={() => onRetry(item)}
+                >
+                  <RotateCcw className="h-3 w-3 mr-0.5" /> Retry
+                </Button>
+              )}
               {item.error && (
                 <span className="text-[10px] text-destructive truncate max-w-[120px]" title={item.error}>
                   {item.error}

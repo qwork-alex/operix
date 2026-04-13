@@ -20,6 +20,7 @@ import { getRowAlertLevel, type AlertLevel } from "@/hooks/useAgingAlerts";
 import { AlertTriangle, Clock } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { BulkDeleteDialog } from "@/components/shared/BulkDeleteDialog";
+import { useTechnicianEarnings, getTechEarnings } from "@/hooks/useTechnicianEarnings";
 
 const paymentTextColor = (status: string): string => {
   const s = status?.toLowerCase();
@@ -101,6 +102,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
   const { user } = useAuth();
   const { data: clients = [] } = useClients();
   const { data: technicians = [] } = useTechnicians();
+  const { data: earningsMap } = useTechnicianEarnings();
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditState | null>(null);
@@ -250,8 +252,12 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
 
       const resolvedClientId = editForm.client_id === EMPTY_RELATION_VALUE ? null : editForm.client_id;
       const resolvedTechId = editForm.technician_id === EMPTY_RELATION_VALUE ? null : editForm.technician_id;
-      const clientName = resolvedClientId ? (clients.find(c => c.id === resolvedClientId)?.name || null) : null;
-      const techName = resolvedTechId ? (technicians.find(t => t.id === resolvedTechId)?.name || null) : null;
+      const clientName = resolvedClientId
+        ? (clients.find(c => c.id === resolvedClientId)?.name || existing.client_name || null)
+        : (existing.client_name || null);
+      const techName = resolvedTechId
+        ? (technicians.find(t => t.id === resolvedTechId)?.name || existing.technician_name || null)
+        : (existing.technician_name || null);
 
       const payload = {
         ...existing,
@@ -428,6 +434,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
                   <TableHead>{t("label.plate")}</TableHead>
                   <TableHead>{t("label.services")}</TableHead>
                   <TableHead className="text-right">{t("label.total")}</TableHead>
+                  <TableHead className="text-right">Tec. %</TableHead>
                   <TableHead>{t("label.status")}</TableHead>
                   <TableHead>{t("label.actions")}</TableHead>
                 </TableRow>
@@ -512,6 +519,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
                         <TableCell className="text-right font-medium tabular-nums text-primary">
                           {formatCurrency(computedTotal)}
                         </TableCell>
+                        <TableCell className="text-right text-[10px] text-muted-foreground">—</TableCell>
                         <TableCell>
                           <Badge variant="outline" className={statusStyle[o.status] || statusStyle.pending}>
                             {t(`status.${o.status}`, o.status)}
@@ -540,6 +548,8 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
                   const services = Array.isArray(o.services) ? (o.services as { name: string; price: number }[]) : [];
                   const rowAlert = getRowAlertLevel(o.created_at, o.status);
                   const daysOld = Math.floor((Date.now() - new Date(o.created_at).getTime()) / 86400000);
+                  const techName = o.technician_name || o.technicians?.name;
+                  const techEarn = getTechEarnings(techName, o.total, earningsMap);
                   return (
                     <TableRow key={o.id} className={cn("text-xs", paymentTextColor(o.status), poAlertStyle[rowAlert])}>
                       <TableCell className="w-10">
@@ -558,6 +568,13 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
                       <TableCell className="font-mono text-[11px]">{formatLicensePlate(o.license_plate) || "—"}</TableCell>
                       <TableCell className="max-w-[180px] truncate">{services.map((service) => service.name).join(", ") || "—"}</TableCell>
                       <TableCell className="text-right font-medium tabular-nums">{formatCurrency(o.total || 0)}</TableCell>
+                      <TableCell className="text-right text-[10px] tabular-nums">
+                        {techEarn ? (
+                          <span className="text-muted-foreground">
+                            {techEarn.percentage}% · <span className="text-foreground font-medium">{formatCurrency(techEarn.earnings)}</span>
+                          </span>
+                        ) : "—"}
+                      </TableCell>
                       <TableCell>
                         <Select value={o.status} onValueChange={(v) => statusMutation.mutate({ id: o.id, status: v })}>
                           <SelectTrigger className={cn("h-7 w-[110px] text-[10px] border", statusStyle[o.status] || statusStyle.pending)}>
