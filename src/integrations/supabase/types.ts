@@ -981,7 +981,7 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
-          group_id: string | null
+          group_ids: string[] | null
           id: string
           is_active: boolean
           rule_name: string
@@ -991,7 +991,7 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by?: string | null
-          group_id?: string | null
+          group_ids?: string[] | null
           id?: string
           is_active?: boolean
           rule_name: string
@@ -1001,7 +1001,7 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string | null
-          group_id?: string | null
+          group_ids?: string[] | null
           id?: string
           is_active?: boolean
           rule_name?: string
