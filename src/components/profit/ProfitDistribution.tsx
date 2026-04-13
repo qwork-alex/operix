@@ -37,6 +37,9 @@ interface ProfitRule {
   _dirty?: boolean;
 }
 
+const normalizeTechnicianName = (value?: string | null) =>
+  (value || "").trim().toLowerCase().replace(/\s+/g, " ");
+
 const PARTICIPANT_TYPES = [
   { value: "technician", label: "Técnico" },
   { value: "partner", label: "Sócio" },
@@ -55,7 +58,26 @@ export function ProfitDistribution() {
   const [groupSearch, setGroupSearch] = useState<Record<string, string>>({});
 
   // ── Queries ──
-  const { data: rules = [], isLoading: rulesLoading } = useQuery({
+  const { data: technicians = [] } = useQuery({
+    queryKey: ["technicians"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("technicians").select("id, name").order("name");
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const technicianIdByName = useMemo(
+    () => new Map(technicians.map((tech) => [normalizeTechnicianName(tech.name), tech.id])),
+    [technicians]
+  );
+
+  const resolveTechnicianId = useCallback(
+    (ruleName: string) => technicianIdByName.get(normalizeTechnicianName(ruleName)) || "",
+    [technicianIdByName]
+  );
+
+  const { data: fetchedRules = [], isLoading: rulesLoading } = useQuery({
     queryKey: ["profit-rules"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -67,7 +89,7 @@ export function ProfitDistribution() {
         id: r.id,
         rule_name: r.rule_name,
         technician_id: r.technician_id || "",
-        group_ids: r.group_ids || [],
+        group_ids: Array.isArray(r.group_ids) ? r.group_ids.filter(Boolean) : [],
         is_active: r.is_active,
         items: (r.profit_rule_items || []).map((item: any) => ({
           id: item.id,
@@ -79,6 +101,15 @@ export function ProfitDistribution() {
     },
   });
 
+  const rules = useMemo(
+    () =>
+      fetchedRules.map((rule) => ({
+        ...rule,
+        technician_id: rule.technician_id || resolveTechnicianId(rule.rule_name),
+      })),
+    [fetchedRules, resolveTechnicianId]
+  );
+
   const { data: serviceOrders = [], isLoading: soLoading } = useQuery({
     queryKey: ["service_orders"],
     queryFn: async () => {
@@ -88,15 +119,6 @@ export function ProfitDistribution() {
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
-    },
-  });
-
-  const { data: technicians = [] } = useQuery({
-    queryKey: ["technicians"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("technicians").select("id, name").order("name");
-      if (error) throw error;
-      return data || [];
     },
   });
 
@@ -161,6 +183,20 @@ export function ProfitDistribution() {
 
   const getRuleSOs = (rule: ProfitRule) =>
     rule.group_ids.flatMap(gid => getGroupSOs(gid));
+
+  const handleRuleNameChange = (ruleId: string, value: string) => {
+    const nextTechnicianId = resolveTechnicianId(value);
+
+    updateLocalRule(ruleId, (rule) => ({
+      ...rule,
+      rule_name: value,
+      technician_id: nextTechnicianId,
+      group_ids:
+        nextTechnicianId && rule.technician_id && nextTechnicianId !== rule.technician_id
+          ? []
+          : rule.group_ids,
+    }));
+  };
 
   const hasUnsavedChanges = useCallback((ruleId: string) => {
     return localRules.some(lr => lr.id === ruleId);
@@ -250,12 +286,22 @@ export function ProfitDistribution() {
   // ── Save single rule ──
   const saveRuleMutation = useMutation({
     mutationFn: async (rule: ProfitRule) => {
-      if (!isRuleValid(rule)) throw new Error("Regra inválida: nome, técnico, grupos e 100% são obrigatórios");
+      const technician_id = rule.technician_id || resolveTechnicianId(rule.rule_name);
+      const group_ids = Array.from(new Set(rule.group_ids.filter(Boolean)));
+      const participants = rule.items.map((item) => ({
+        participant_name: item.participant_name.trim(),
+        percentage: Number(item.percentage) || 0,
+        participant_type: item.participant_type,
+      }));
+
+      if (!technician_id || !rule.rule_name.trim() || group_ids.length === 0 || getItemsTotal(rule.items) !== 100) {
+        throw new Error("Regra inválida: nome, técnico, grupos e 100% são obrigatórios");
+      }
 
       console.log("Saving rule:", {
-        technician_id: rule.technician_id,
-        group_ids: rule.group_ids,
-        participants: rule.items,
+        technician_id,
+        group_ids,
+        participants,
         isNew: !!rule._isNew,
       });
 
@@ -266,8 +312,8 @@ export function ProfitDistribution() {
           .from("profit_rules")
           .insert({
             rule_name: rule.rule_name,
-            technician_id: rule.technician_id,
-            group_ids: rule.group_ids,
+            technician_id,
+            group_ids,
             is_active: rule.is_active,
           } as any)
           .select("id")
@@ -279,8 +325,8 @@ export function ProfitDistribution() {
           .from("profit_rules")
           .update({
             rule_name: rule.rule_name,
-            technician_id: rule.technician_id,
-            group_ids: rule.group_ids,
+            technician_id,
+            group_ids,
             is_active: rule.is_active,
             updated_at: new Date().toISOString(),
           } as any)
@@ -292,7 +338,7 @@ export function ProfitDistribution() {
 
       // Upsert items
       await supabase.from("profit_rule_items").delete().eq("rule_id", ruleId);
-      const items = rule.items.map(i => ({
+      const items = participants.map(i => ({
         rule_id: ruleId,
         participant_name: i.participant_name,
         percentage: i.percentage,
@@ -302,13 +348,13 @@ export function ProfitDistribution() {
       if (itemsError) throw itemsError;
 
       // Generate distributions for all linked groups
-      const allSOs = rule.group_ids.flatMap(gid => getGroupSOs(gid));
+      const allSOs = group_ids.flatMap(gid => getGroupSOs(gid));
       if (allSOs.length > 0) {
         const soIds = allSOs.map((so: any) => so.id);
         await supabase.from("service_order_distributions").delete().in("service_order_id", soIds);
 
         const distributions = allSOs.flatMap((so: any) =>
-          rule.items.map(item => ({
+          participants.map(item => ({
             service_order_id: so.id,
             participant_name: item.participant_name,
             percentage: item.percentage,
@@ -320,26 +366,30 @@ export function ProfitDistribution() {
         }
 
         // Update technician earnings on SOs
-        const techItem = rule.items.find(i => i.participant_type === "technician");
+        const techItem = participants.find(i => i.participant_type === "technician");
         if (techItem) {
           for (const so of allSOs) {
             const total = Number((so as any).total || 0);
-            await supabase.from("service_orders").update({
+            const { error: soError } = await supabase.from("service_orders").update({
+              technician_id,
               technician_percentage: techItem.percentage,
               technician_earning: Math.round(total * techItem.percentage / 100 * 100) / 100,
               updated_at: new Date().toISOString(),
             }).eq("id", (so as any).id);
+            if (soError) throw soError;
           }
         }
       }
 
       return ruleId;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["profit-rules"] });
-      queryClient.invalidateQueries({ queryKey: ["service_orders"] });
-      queryClient.invalidateQueries({ queryKey: ["technician_earnings_map"] });
-      setLocalRules([]);
+    onSuccess: async (_ruleId, savedRule) => {
+      setLocalRules(prev => prev.filter(rule => rule.id !== savedRule.id));
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["profit-rules"] }),
+        queryClient.invalidateQueries({ queryKey: ["service_orders"] }),
+        queryClient.invalidateQueries({ queryKey: ["technician_earnings_map"] }),
+      ]);
       toast.success("Regra salva com sucesso");
     },
     onError: (err: any) => toast.error(err?.message || "Erro ao salvar regra"),
@@ -393,7 +443,11 @@ export function ProfitDistribution() {
     if (!techName) return [];
     const gids = new Set<string>();
     serviceOrders.forEach((so: any) => {
-      if (so.technician_name === techName && so.group_id) gids.add(so.group_id);
+      const matchesTechnician =
+        so.technician_id === techId ||
+        normalizeTechnicianName(so.technician_name) === normalizeTechnicianName(techName);
+
+      if (matchesTechnician && so.group_id) gids.add(so.group_id);
     });
     return Array.from(gids);
   };
@@ -408,7 +462,7 @@ export function ProfitDistribution() {
     const search = (groupSearch[rule.id] || "").toLowerCase();
 
     // Available groups for this technician
-    const techGroups = rule.technician_id ? getGroupsForTechnician(rule.technician_id) : Array.from(availableGroups.keys());
+    const techGroups = rule.technician_id ? getGroupsForTechnician(rule.technician_id) : [];
     const filteredGroups = techGroups.filter(gid => {
       if (rule.group_ids.includes(gid)) return false; // already selected
       if (search && !gid.toLowerCase().includes(search)) return false;
@@ -422,23 +476,13 @@ export function ProfitDistribution() {
             <div className="flex items-center gap-2 flex-wrap">
               <Input
                 value={rule.rule_name}
-                onChange={(e) => updateLocalRule(rule.id, r => ({ ...r, rule_name: e.target.value }))}
-                placeholder="Nome da regra"
+                onChange={(e) => handleRuleNameChange(rule.id, e.target.value)}
+                placeholder="Nome da regra / técnico"
                 className="h-8 text-sm font-semibold max-w-[250px]"
               />
-              <Select
-                value={rule.technician_id || ""}
-                onValueChange={(v) => updateLocalRule(rule.id, r => ({ ...r, technician_id: v, group_ids: [] }))}
-              >
-                <SelectTrigger className="h-8 text-xs w-[200px]">
-                  <SelectValue placeholder="Selecionar técnico" />
-                </SelectTrigger>
-                <SelectContent>
-                  {technicians.map(t => (
-                    <SelectItem key={t.id} value={t.id} className="text-xs">{t.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Badge variant={rule.technician_id ? "secondary" : "outline"} className="h-8 px-2 text-[10px]">
+                {techName ? `Técnico: ${techName}` : "Técnico não resolvido"}
+              </Badge>
               <div className="flex items-center gap-1.5">
                 <Switch
                   checked={rule.is_active}
@@ -566,6 +610,11 @@ export function ProfitDistribution() {
               )}
               {filteredGroups.length === 0 && rule.technician_id && (
                 <p className="text-[10px] text-muted-foreground">Nenhum grupo disponível</p>
+              )}
+              {!rule.technician_id && (
+                <p className="text-[10px] text-muted-foreground">
+                  O nome da regra deve corresponder a um técnico existente para carregar os grupos.
+                </p>
               )}
             </div>
           </div>
