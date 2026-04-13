@@ -942,6 +942,79 @@ export type Database = {
         }
         Relationships: []
       }
+      profit_rule_items: {
+        Row: {
+          created_at: string
+          id: string
+          participant_name: string
+          participant_type: string
+          percentage: number
+          rule_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          participant_name: string
+          participant_type?: string
+          percentage?: number
+          rule_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          participant_name?: string
+          participant_type?: string
+          percentage?: number
+          rule_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profit_rule_items_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "profit_rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profit_rules: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          rule_name: string
+          technician_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          rule_name: string
+          technician_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          rule_name?: string
+          technician_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profit_rules_technician_id_fkey"
+            columns: ["technician_id"]
+            isOneToOne: false
+            referencedRelation: "technicians"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reconciliations: {
         Row: {
           confidence_score: number
@@ -989,6 +1062,51 @@ export type Database = {
           },
           {
             foreignKeyName: "reconciliations_service_order_id_fkey"
+            columns: ["service_order_id"]
+            isOneToOne: false
+            referencedRelation: "service_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      service_order_distributions: {
+        Row: {
+          calculated_value: number
+          created_at: string
+          id: string
+          participant_name: string
+          percentage: number
+          rule_item_id: string | null
+          service_order_id: string
+        }
+        Insert: {
+          calculated_value?: number
+          created_at?: string
+          id?: string
+          participant_name: string
+          percentage?: number
+          rule_item_id?: string | null
+          service_order_id: string
+        }
+        Update: {
+          calculated_value?: number
+          created_at?: string
+          id?: string
+          participant_name?: string
+          percentage?: number
+          rule_item_id?: string | null
+          service_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_order_distributions_rule_item_id_fkey"
+            columns: ["rule_item_id"]
+            isOneToOne: false
+            referencedRelation: "profit_rule_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_order_distributions_service_order_id_fkey"
             columns: ["service_order_id"]
             isOneToOne: false
             referencedRelation: "service_orders"
