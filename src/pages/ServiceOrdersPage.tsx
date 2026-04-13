@@ -107,6 +107,13 @@ export default function ServiceOrdersPage() {
         status: "draft",
         group_id: r.week ?? null,
       };
+
+      // Calculate technician earnings from profit distribution rules
+      const techName = payload.technician_name || r.technician;
+      const techEarn = getTechEarnings(techName, payload.total, earningsMap);
+      payload.technician_percentage = techEarn?.percentage ?? 0;
+      payload.technician_earning = techEarn?.earnings ?? 0;
+
       return payload as ServiceOrderInsert;
     });
 
