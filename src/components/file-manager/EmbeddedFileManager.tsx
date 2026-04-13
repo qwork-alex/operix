@@ -694,7 +694,13 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
       </Dialog>
 
       {/* Preview dialog with pinch-zoom, print, and open-in-new-tab */}
-      <Dialog open={!!previewDoc} onOpenChange={() => setPreviewDoc(null)}>
+      <Dialog open={!!previewDoc} onOpenChange={(open) => {
+        if (!open && previewDoc?._blobUrl && previewDoc?.url) {
+          URL.revokeObjectURL(previewDoc.url);
+          console.log("[FileManager] Preview blob URL revoked");
+        }
+        setPreviewDoc(null);
+      }}>
         <DialogContent className="bg-card border-border max-w-3xl max-h-[80vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between gap-2">
