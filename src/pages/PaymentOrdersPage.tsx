@@ -92,6 +92,7 @@ export default function PaymentOrdersPage() {
         services: (r.services || []) as unknown as Json,
         total: r.total ?? null,
         status: "pending",
+        group_id: r.list_name ?? null,
       };
       return payload as PaymentOrderInsert;
     });
