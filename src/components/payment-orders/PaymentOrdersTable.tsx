@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Trash2, Pencil, Save, X, Loader2, Plus, CheckCircle2 } from "lucide-react";
+import { Trash2, Pencil, Save, X, Loader2, CheckCircle2 } from "lucide-react";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useAuth } from "@/hooks/useAuth";
 import { useClients, useTechnicians } from "@/hooks/useServiceOrders";
@@ -20,7 +20,21 @@ import { getRowAlertLevel, type AlertLevel } from "@/hooks/useAgingAlerts";
 import { AlertTriangle, Clock } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { BulkDeleteDialog } from "@/components/shared/BulkDeleteDialog";
-import { useTechnicianEarnings, getTechEarnings } from "@/hooks/useTechnicianEarnings";
+
+const MAX_SERVICES = 4;
+
+interface ServiceEntry {
+  name: string;
+  price: number;
+}
+
+function padServices(services: ServiceEntry[]): ServiceEntry[] {
+  const result = services.slice(0, MAX_SERVICES);
+  while (result.length < MAX_SERVICES) {
+    result.push({ name: "", price: 0 });
+  }
+  return result;
+}
 
 const paymentTextColor = (status: string): string => {
   const s = status?.toLowerCase();
@@ -87,7 +101,7 @@ interface EditState {
   technician_id: string;
   car_name: string;
   license_plate: string;
-  services: { name: string; price: number }[];
+  services: ServiceEntry[];
 }
 
 const EMPTY_RELATION_VALUE = "__none__";
@@ -102,14 +116,12 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
   const { user } = useAuth();
   const { data: clients = [] } = useClients();
   const { data: technicians = [] } = useTechnicians();
-  const { data: earningsMap } = useTechnicianEarnings();
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditState | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-  // --- Selection logic ---
   const toggleOne = (id: string) => {
     setSelected(prev => {
       const next = new Set(prev);
@@ -132,7 +144,6 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
 
   const listNames = [...new Set(orders.map(o => o.list_name))];
 
-  // Compute group status for each list
   const getListStatus = (listName: string | null): "paid" | "partial" | "pending" => {
     const listOrders = orders.filter(o => o.list_name === listName);
     if (!listOrders.length) return "pending";
@@ -159,7 +170,6 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
       const { error } = await supabase.from("payment_orders").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
       if (error) throw error;
-      // DB trigger auto-syncs service_orders status
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payment_orders"] });
@@ -170,18 +180,12 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
     onError: (err) => toast.error((err as Error).message),
   });
 
-  // Batch status change mutation
   const batchStatusMutation = useMutation({
     mutationFn: async ({ listName, status }: { listName: string; status: string }) => {
       const listOrderIds = orders.filter(o => o.list_name === listName).map(o => o.id);
       if (!listOrderIds.length) return;
-
-      // Update one by one to trigger the DB trigger for each row
       for (const id of listOrderIds) {
-        const { error } = await supabase
-          .from("payment_orders")
-          .update({ status, updated_at: new Date().toISOString() })
-          .eq("id", id);
+        const { error } = await supabase.from("payment_orders").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
         if (error) throw error;
       }
     },
@@ -225,35 +229,25 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
     mutationFn: async (id: string) => {
       if (!editForm) return;
 
-      const services = editForm.services.map((service) => ({
-        name: service.name.trim(),
-        price: Number(service.price) || 0,
-      }));
-      const filledServices = services.filter((service) => service.name);
-      const computedTotal = filledServices.reduce((sum, service) => sum + service.price, 0);
+      const filledServices = editForm.services
+        .map(s => ({ name: s.name.trim(), price: Number(s.price) || 0 }))
+        .filter(s => s.name);
+      const computedTotal = filledServices.reduce((sum, s) => sum + s.price, 0);
 
       if (computedTotal === 0) {
         throw new Error(t("validate.inlineError") + ": " + t("validate.zeroTotal").replace("{n}", ""));
       }
 
-      const { data: existing, error: existingError } = await supabase
-        .from("payment_orders")
-        .select("*")
-        .eq("id", id)
-        .single();
-      if (existingError) throw existingError;
-
       const resolvedClientId = editForm.client_id === EMPTY_RELATION_VALUE ? null : editForm.client_id;
       const resolvedTechId = editForm.technician_id === EMPTY_RELATION_VALUE ? null : editForm.technician_id;
       const clientName = resolvedClientId
-        ? (clients.find(c => c.id === resolvedClientId)?.name || existing.client_name || null)
-        : (existing.client_name || null);
+        ? (clients.find(c => c.id === resolvedClientId)?.name || null)
+        : null;
       const techName = resolvedTechId
-        ? (technicians.find(t => t.id === resolvedTechId)?.name || existing.technician_name || null)
-        : (existing.technician_name || null);
+        ? (technicians.find(t => t.id === resolvedTechId)?.name || null)
+        : null;
 
       const payload = {
-        ...existing,
         client_id: resolvedClientId,
         client_name: clientName,
         technician_id: resolvedTechId,
@@ -264,13 +258,8 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
         license_plate: formatLicensePlate(editForm.license_plate),
         services: filledServices as unknown as Json,
         total: computedTotal,
-        created_by: existing.created_by ?? user?.id ?? null,
-        created_at: existing.created_at ?? new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
-
-      delete (payload as any).clients;
-      delete (payload as any).technicians;
 
       const { error } = await supabase.from("payment_orders").update(payload).eq("id", id);
       if (error) throw error;
@@ -287,7 +276,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
   });
 
   const startEdit = (o: PaymentOrderRow) => {
-    const services = Array.isArray(o.services) ? (o.services as { name: string; price: number }[]) : [];
+    const rawServices = Array.isArray(o.services) ? (o.services as unknown as ServiceEntry[]) : [];
     setEditingId(o.id);
     setEditForm({
       client_id: o.client_id || EMPTY_RELATION_VALUE,
@@ -296,7 +285,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
       technician_id: o.technician_id || EMPTY_RELATION_VALUE,
       car_name: o.car_name || "",
       license_plate: o.license_plate || "",
-      services: services.length > 0 ? [...services] : [{ name: "", price: 0 }],
+      services: padServices(rawServices),
     });
   };
 
@@ -305,17 +294,14 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
     setEditForm(null);
   };
 
+  /** Update a single service at a specific index */
   const updateService = (idx: number, field: "name" | "price", value: string | number) => {
-    setEditForm((prev) => {
+    setEditForm(prev => {
       if (!prev) return prev;
       const updated = [...prev.services];
       updated[idx] = { ...updated[idx], [field]: value };
       return { ...prev, services: updated };
     });
-  };
-
-  const addService = () => {
-    setEditForm((prev) => (prev ? { ...prev, services: [...prev.services, { name: "", price: 0 }] } : prev));
   };
 
   if (isLoading) {
@@ -330,7 +316,6 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
     );
   }
 
-  // Group orders by list_name for rendering
   const groupedOrders = listNames.map(listName => ({
     listName,
     orders: orders.filter(o => o.list_name === listName),
@@ -340,16 +325,10 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
 
   return (
     <div className="space-y-2">
-      {/* Bulk actions bar */}
       {selected.size > 0 && (
         <div className="flex items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2">
           <span className="text-sm font-medium">{selected.size} selecionado(s)</span>
-          <Button
-            variant="destructive"
-            size="sm"
-            className="h-7 text-xs"
-            onClick={() => setShowDeleteDialog(true)}
-          >
+          <Button variant="destructive" size="sm" className="h-7 text-xs" onClick={() => setShowDeleteDialog(true)}>
             <Trash2 className="h-3 w-3 mr-1" /> Excluir selecionados
           </Button>
           <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setSelected(new Set())}>
@@ -358,10 +337,8 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
         </div>
       )}
 
-      {/* Groups with batch status control */}
       {groupedOrders.map(group => (
         <div key={group.listName || "__none__"} className="space-y-1">
-          {/* Group header */}
           <div className="flex items-center justify-between rounded-lg bg-secondary/40 px-4 py-2">
             <div className="flex items-center gap-3">
               <Button
@@ -379,41 +356,26 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
                 {groupStatusLabel[group.status]}
               </span>
             </div>
-
-            {/* Batch status change */}
             <div className="flex items-center gap-1">
               <span className="text-[10px] text-muted-foreground mr-1">Alterar lote:</span>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-6 text-[10px] px-2 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
+              <Button variant="outline" size="sm" className="h-6 text-[10px] px-2 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
                 onClick={() => group.listName && batchStatusMutation.mutate({ listName: group.listName, status: "paid" })}
-                disabled={batchStatusMutation.isPending || !group.listName}
-              >
+                disabled={batchStatusMutation.isPending || !group.listName}>
                 <CheckCircle2 className="h-3 w-3 mr-0.5" /> Pago
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-6 text-[10px] px-2 border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
+              <Button variant="outline" size="sm" className="h-6 text-[10px] px-2 border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
                 onClick={() => group.listName && batchStatusMutation.mutate({ listName: group.listName, status: "partial" })}
-                disabled={batchStatusMutation.isPending || !group.listName}
-              >
+                disabled={batchStatusMutation.isPending || !group.listName}>
                 Parcial
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-6 text-[10px] px-2 border-red-500/30 text-red-400 hover:bg-red-500/10"
+              <Button variant="outline" size="sm" className="h-6 text-[10px] px-2 border-red-500/30 text-red-400 hover:bg-red-500/10"
                 onClick={() => group.listName && batchStatusMutation.mutate({ listName: group.listName, status: "pending" })}
-                disabled={batchStatusMutation.isPending || !group.listName}
-              >
+                disabled={batchStatusMutation.isPending || !group.listName}>
                 Pendente
               </Button>
             </div>
           </div>
 
-          {/* Table for this group */}
           <div className="rounded-lg border border-border/50 overflow-auto">
             <Table>
               <TableHeader>
@@ -425,9 +387,12 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
                   <TableHead>{t("label.technician")}</TableHead>
                   <TableHead>{t("label.car")}</TableHead>
                   <TableHead>{t("label.plate")}</TableHead>
-                  <TableHead>{t("label.services")}</TableHead>
+                  {[1, 2, 3, 4].map(n => (
+                    <TableHead key={`sh${n}`} colSpan={2} className="text-center">
+                      {t("label.service")} {n}
+                    </TableHead>
+                  ))}
                   <TableHead className="text-right">{t("label.total")}</TableHead>
-                  <TableHead className="text-right">Tec. %</TableHead>
                   <TableHead>{t("label.status")}</TableHead>
                   <TableHead>{t("label.actions")}</TableHead>
                 </TableRow>
@@ -437,82 +402,53 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
                   const isEditing = editingId === o.id && editForm;
 
                   if (isEditing) {
-                    const computedTotal = editForm.services.reduce((sum, service) => sum + (Number(service.price) || 0), 0);
+                    const computedTotal = editForm.services.reduce((sum, s) => sum + (Number(s.price) || 0), 0);
                     return (
                       <TableRow key={o.id} className="bg-primary/5 text-xs relative">
                         <TableCell className="p-1">
                           <Checkbox checked={selected.has(o.id)} onCheckedChange={() => toggleOne(o.id)} />
                         </TableCell>
-                        <TableCell className="p-1 min-w-[170px]">
-                          <Select value={editForm.client_id} onValueChange={(value) => setEditForm((prev) => (prev ? { ...prev, client_id: value } : prev))}>
-                            <SelectTrigger className="h-7 text-xs bg-background">
-                              <SelectValue placeholder={t("label.client")} />
-                            </SelectTrigger>
+                        <TableCell className="p-1 min-w-[140px]">
+                          <Select value={editForm.client_id} onValueChange={v => setEditForm(prev => prev ? { ...prev, client_id: v } : prev)}>
+                            <SelectTrigger className="h-7 text-xs bg-background"><SelectValue placeholder={t("label.client")} /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value={EMPTY_RELATION_VALUE}>—</SelectItem>
-                              {clients.map((client) => (
-                                <SelectItem key={client.id} value={client.id}>
-                                  {client.name}
-                                </SelectItem>
-                              ))}
+                              {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                             </SelectContent>
                           </Select>
                         </TableCell>
                         <TableCell className="p-1">
-                          <Input className="h-7 text-xs" value={editForm.platform} onChange={(e) => setEditForm((prev) => (prev ? { ...prev, platform: e.target.value } : prev))} />
+                          <Input className="h-7 text-xs" value={editForm.platform} onChange={e => setEditForm(prev => prev ? { ...prev, platform: e.target.value } : prev)} />
                         </TableCell>
                         <TableCell className="p-1">
-                          <Input className="h-7 text-xs" value={editForm.list_name} onChange={(e) => setEditForm((prev) => (prev ? { ...prev, list_name: e.target.value } : prev))} />
+                          <Input className="h-7 text-xs" value={editForm.list_name} onChange={e => setEditForm(prev => prev ? { ...prev, list_name: e.target.value } : prev)} />
                         </TableCell>
-                        <TableCell className="p-1 min-w-[170px]">
-                          <Select value={editForm.technician_id} onValueChange={(value) => setEditForm((prev) => (prev ? { ...prev, technician_id: value } : prev))}>
-                            <SelectTrigger className="h-7 text-xs bg-background">
-                              <SelectValue placeholder={t("label.technician")} />
-                            </SelectTrigger>
+                        <TableCell className="p-1 min-w-[140px]">
+                          <Select value={editForm.technician_id} onValueChange={v => setEditForm(prev => prev ? { ...prev, technician_id: v } : prev)}>
+                            <SelectTrigger className="h-7 text-xs bg-background"><SelectValue placeholder={t("label.technician")} /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value={EMPTY_RELATION_VALUE}>—</SelectItem>
-                              {technicians.map((technician) => (
-                                <SelectItem key={technician.id} value={technician.id}>
-                                  {technician.name}
-                                </SelectItem>
-                              ))}
+                              {technicians.map(tech => <SelectItem key={tech.id} value={tech.id}>{tech.name}</SelectItem>)}
                             </SelectContent>
                           </Select>
                         </TableCell>
                         <TableCell className="p-1">
-                          <Input className="h-7 text-xs" value={editForm.car_name} onChange={(e) => setEditForm((prev) => (prev ? { ...prev, car_name: e.target.value } : prev))} />
+                          <Input className="h-7 text-xs" value={editForm.car_name} onChange={e => setEditForm(prev => prev ? { ...prev, car_name: e.target.value } : prev)} />
                         </TableCell>
                         <TableCell className="p-1">
-                          <Input className="h-7 text-xs w-24 font-mono" value={editForm.license_plate} onChange={(e) => setEditForm((prev) => (prev ? { ...prev, license_plate: e.target.value } : prev))} />
+                          <Input className="h-7 text-xs w-24 font-mono" value={editForm.license_plate} onChange={e => setEditForm(prev => prev ? { ...prev, license_plate: e.target.value } : prev)} />
                         </TableCell>
-                        <TableCell className="p-1">
-                          <div className="space-y-1">
-                            {editForm.services.map((service, serviceIndex) => (
-                              <div key={serviceIndex} className="flex gap-1">
-                                <Input
-                                  className="h-6 text-[11px] px-1 w-20"
-                                  value={service.name}
-                                  placeholder={t("extract.serviceName")}
-                                  onChange={(e) => updateService(serviceIndex, "name", e.target.value)}
-                                />
-                                <Input
-                                  className="h-6 text-[11px] px-1 w-14 text-right tabular-nums"
-                                  type="number"
-                                  step="0.01"
-                                  value={service.price}
-                                  onChange={(e) => updateService(serviceIndex, "price", Number(e.target.value) || 0)}
-                                />
-                              </div>
-                            ))}
-                            <Button variant="ghost" size="sm" className="h-5 text-[10px] px-1" onClick={addService}>
-                              <Plus className="h-3 w-3 mr-0.5" /> {t("extract.addService")}
-                            </Button>
-                          </div>
-                        </TableCell>
+                        {editForm.services.map((service, si) => (
+                          <EditServiceCellPair
+                            key={si}
+                            service={service}
+                            onNameChange={v => updateService(si, "name", v)}
+                            onPriceChange={v => updateService(si, "price", Number(v) || 0)}
+                          />
+                        ))}
                         <TableCell className="text-right font-medium tabular-nums text-primary">
                           {formatCurrency(computedTotal)}
                         </TableCell>
-                        <TableCell className="text-right text-[10px] text-muted-foreground">—</TableCell>
                         <TableCell>
                           <Badge variant="outline" className={statusStyle[o.status] || statusStyle.pending}>
                             {t(`status.${o.status}`, o.status)}
@@ -520,13 +456,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-primary"
-                              onClick={() => updateMutation.mutate(o.id)}
-                              disabled={updateMutation.isPending}
-                            >
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-primary" onClick={() => updateMutation.mutate(o.id)} disabled={updateMutation.isPending}>
                               {updateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
                             </Button>
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={cancelEdit}>
@@ -538,11 +468,11 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
                     );
                   }
 
-                  const services = Array.isArray(o.services) ? (o.services as { name: string; price: number }[]) : [];
+                  const rawServices = Array.isArray(o.services) ? (o.services as unknown as ServiceEntry[]) : [];
+                  const services = padServices(rawServices);
                   const rowAlert = getRowAlertLevel(o.created_at, o.status);
                   const daysOld = Math.floor((Date.now() - new Date(o.created_at).getTime()) / 86400000);
-                  const techName = o.technician_name || o.technicians?.name;
-                  const techEarn = getTechEarnings(techName, o.total, earningsMap);
+
                   return (
                     <TableRow key={o.id} className={cn("text-xs", paymentTextColor(o.status), poAlertStyle[rowAlert])}>
                       <TableCell className="w-10">
@@ -559,17 +489,12 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
                       <TableCell>{o.technician_name || o.technicians?.name || "—"}</TableCell>
                       <TableCell>{o.car_name || "—"}</TableCell>
                       <TableCell className="font-mono text-[11px]">{formatLicensePlate(o.license_plate) || "—"}</TableCell>
-                      <TableCell className="max-w-[180px] truncate">{services.map((service) => service.name).join(", ") || "—"}</TableCell>
+                      {services.map((s, si) => (
+                        <ReadServiceCellPair key={si} service={s} formatCurrency={formatCurrency} />
+                      ))}
                       <TableCell className="text-right font-medium tabular-nums">{formatCurrency(o.total || 0)}</TableCell>
-                      <TableCell className="text-right text-[10px] tabular-nums">
-                        {techEarn ? (
-                          <span className="text-muted-foreground">
-                            {techEarn.percentage}% · <span className="text-foreground font-medium">{formatCurrency(techEarn.earnings)}</span>
-                          </span>
-                        ) : "—"}
-                      </TableCell>
                       <TableCell>
-                        <Select value={o.status} onValueChange={(v) => statusMutation.mutate({ id: o.id, status: v })}>
+                        <Select value={o.status} onValueChange={v => statusMutation.mutate({ id: o.id, status: v })}>
                           <SelectTrigger className={cn("h-7 w-[110px] text-[10px] border", statusStyle[o.status] || statusStyle.pending)}>
                             <SelectValue />
                           </SelectTrigger>
@@ -607,5 +532,34 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
         isPending={bulkDeleteMutation.isPending}
       />
     </div>
+  );
+}
+
+/** Read-only service name + price cells */
+function ReadServiceCellPair({ service, formatCurrency }: { service: ServiceEntry; formatCurrency: (n: number) => string }) {
+  return (
+    <>
+      <TableCell className="text-[11px] truncate max-w-[80px]">{service.name || "—"}</TableCell>
+      <TableCell className="text-[11px] text-right tabular-nums">{service.price ? formatCurrency(service.price) : "—"}</TableCell>
+    </>
+  );
+}
+
+/** Editable service name + price cells */
+function EditServiceCellPair({ service, onNameChange, onPriceChange }: {
+  service: ServiceEntry;
+  onNameChange: (v: string) => void;
+  onPriceChange: (v: number) => void;
+}) {
+  return (
+    <>
+      <TableCell className="p-1">
+        <Input className="h-6 text-[11px] px-1 w-20" value={service.name} placeholder="—" onChange={e => onNameChange(e.target.value)} />
+      </TableCell>
+      <TableCell className="p-1">
+        <Input className="h-6 text-[11px] px-1 w-14 text-right tabular-nums" type="number" step="0.01"
+          value={service.price || ""} placeholder="0" onChange={e => onPriceChange(Number(e.target.value) || 0)} />
+      </TableCell>
+    </>
   );
 }
