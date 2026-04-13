@@ -347,7 +347,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
   const handleDownload = async (doc: any) => {
     if (!doc.storage_path) return;
     try {
-      const { blobUrl } = await fetchDocumentBlobUrl(doc, 120);
+      const { blobUrl } = await fetchDocumentBlobUrl(doc, 3600);
       const a = document.createElement("a");
       a.href = blobUrl;
       a.download = doc.name;
@@ -394,7 +394,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
   const handlePrint = async (doc: any) => {
     if (!doc.storage_path) return;
     try {
-      const { blobUrl, mimeType } = await fetchDocumentBlobUrl(doc, 120);
+      const { blobUrl, mimeType } = await fetchDocumentBlobUrl(doc, 3600);
 
       const iframe = document.createElement("iframe");
       iframe.style.position = "fixed";
