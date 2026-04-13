@@ -114,14 +114,41 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
       const total = computeTotal(newServices);
       return { ...r, services: newServices, total, total_mismatch: false };
     }));
+
+    // Trigger bulk edit banner for service fields
+    if (rows.length > 1) {
+      setLastEditIdx(rowIdx);
+      const label = `${t("label.service")} ${serviceIdx + 1} (${field === "name" ? t("label.service") : t("label.total")})`;
+      setPendingBulk({ field: `service_${serviceIdx}_${field}`, value, label, serviceIndex: serviceIdx, serviceField: field });
+    }
   };
 
   const applyBulk = () => {
     if (!pendingBulk) return;
-    setRows(prev => prev.map((r, i) => {
-      if (i === lastEditIdx) return r;
-      return { ...r, [pendingBulk.field]: pendingBulk.value };
-    }));
+
+    // Service-specific bulk edit: only update the exact service index + field
+    if (pendingBulk.serviceIndex != null && pendingBulk.serviceField) {
+      const si = pendingBulk.serviceIndex;
+      const sf = pendingBulk.serviceField;
+      const val = pendingBulk.value;
+      setRows(prev => prev.map((r, i) => {
+        if (i === lastEditIdx) return r;
+        // Skip rows where service index doesn't exist
+        if (!r.services || si >= r.services.length) return r;
+        const newServices = r.services.map((s, idx) => {
+          if (idx !== si) return s;
+          return { ...s, [sf]: val };
+        });
+        const total = computeTotal(newServices);
+        return { ...r, services: newServices, total, total_mismatch: false };
+      }));
+    } else {
+      // Regular field bulk edit
+      setRows(prev => prev.map((r, i) => {
+        if (i === lastEditIdx) return r;
+        return { ...r, [pendingBulk.field]: pendingBulk.value };
+      }));
+    }
     setPendingBulk(null);
   };
 
