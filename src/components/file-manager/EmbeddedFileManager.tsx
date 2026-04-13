@@ -287,22 +287,46 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
   };
 
   const handlePreview = async (doc: any) => {
-    if (!doc.storage_path) return;
+    if (!doc.storage_path) {
+      console.warn("[FileManager] Preview skipped: no storage_path for", doc.name);
+      toast.error("File not available — storage path missing.");
+      return;
+    }
     setPreviewLoading(true);
     try {
       const url = await getFreshSignedUrl(doc.storage_path, 600);
       if (url) {
+        // Verify URL is accessible before rendering
+        try {
+          const headResp = await fetch(url, { method: "HEAD" });
+          if (!headResp.ok) {
+            console.warn("[FileManager] Signed URL returned", headResp.status, "for", doc.storage_path);
+            // Try a fresh URL in case the first was stale
+            const retryUrl = await getFreshSignedUrl(doc.storage_path, 600);
+            if (retryUrl) {
+              const resolvedMime = getMimeType(doc.name, doc.mime_type);
+              setPreviewDoc({ ...doc, url: retryUrl, mime_type: resolvedMime });
+            } else {
+              toast.error("File could not be accessed. It may have been deleted.");
+            }
+            return;
+          }
+        } catch {
+          // HEAD check failed (CORS etc.) — proceed anyway, browser may still render
+          console.warn("[FileManager] HEAD check failed for", doc.storage_path, "— proceeding with URL");
+        }
         const resolvedMime = getMimeType(doc.name, doc.mime_type);
         setPreviewDoc({ ...doc, url, mime_type: resolvedMime });
       } else {
         // Fallback: open in new tab
-        toast.error(t("fm.previewError"));
+        toast.error("Preview unavailable. Opening in new tab...");
         const fallbackUrl = await getFreshSignedUrl(doc.storage_path, 60);
         if (fallbackUrl) window.open(fallbackUrl, "_blank");
+        else toast.error("File not accessible — it may have been deleted from storage.");
       }
     } catch (err) {
       console.error("[FileManager] Preview error:", err);
-      toast.error(t("fm.previewError"));
+      toast.error("Preview failed. Try opening the file in a new tab.");
     } finally {
       setPreviewLoading(false);
     }
@@ -815,6 +839,15 @@ function PinchZoomContainer({ children }: { children: React.ReactNode }) {
 }
 
 
+const ALLOWED_MIME_TYPES = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "image/bmp",
+];
+
 export async function storeFileInDocuments(
   file: File,
   entityType: "service_order" | "payment_order",
@@ -822,13 +855,39 @@ export async function storeFileInDocuments(
   module: string = "orders"
 ) {
   try {
+    // Validate file
+    if (!file || file.size === 0) {
+      console.error("[FileManager] Upload rejected: empty file", file?.name);
+      return;
+    }
+    const resolvedMime = file.type || getMimeType(file.name);
+    if (!ALLOWED_MIME_TYPES.includes(resolvedMime)) {
+      console.warn("[FileManager] Upload rejected: unsupported type", resolvedMime, file.name);
+      return;
+    }
+
     const storagePath = `${entityType}/${Date.now()}_${file.name}`;
+    console.log("[FileManager] Uploading:", { storagePath, size: file.size, mime: resolvedMime });
+
     const { error: uploadErr } = await supabase.storage
       .from("uploads")
-      .upload(storagePath, file);
+      .upload(storagePath, file, {
+        contentType: resolvedMime,
+        upsert: false,
+      });
     if (uploadErr) {
       console.error("[FileManager] Storage upload failed:", uploadErr.message);
       return;
+    }
+
+    // Verify upload succeeded by requesting a signed URL
+    const { data: verifyData, error: verifyErr } = await supabase.storage
+      .from("uploads")
+      .createSignedUrl(storagePath, 60);
+    if (verifyErr || !verifyData?.signedUrl) {
+      console.error("[FileManager] Upload verification failed:", verifyErr?.message);
+    } else {
+      console.log("[FileManager] Upload verified, signed URL OK:", storagePath);
     }
 
     const { error } = await supabase.from("documents").insert({
@@ -837,12 +896,13 @@ export async function storeFileInDocuments(
       parent_id: null,
       uploaded_by: userId || null,
       storage_path: storagePath,
-      mime_type: file.type || getMimeType(file.name),
+      mime_type: resolvedMime,
       size_bytes: file.size,
       entity_type: entityType,
       module,
     });
     if (error) console.error("[FileManager] Document record insert failed:", error.message);
+    else console.log("[FileManager] Document record saved:", file.name);
   } catch (err) {
     console.error("[FileManager] storeFileInDocuments error:", err);
   }
