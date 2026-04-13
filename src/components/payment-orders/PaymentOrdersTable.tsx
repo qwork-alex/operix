@@ -252,8 +252,19 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
         ? (technicians.find(t => t.id === resolvedTechId)?.name || originalRow?.technician_name || null)
         : (originalRow?.technician_name || null);
 
-      // Build partial payload — only changed fields
-      const payload: Record<string, any> = {
+      const payload: Partial<{
+        client_id: string | null;
+        client_name: string | null;
+        technician_id: string | null;
+        technician_name: string | null;
+        platform: string | null;
+        list_name: string | null;
+        car_name: string | null;
+        license_plate: string | null;
+        services: Json;
+        total: number;
+        updated_at: string;
+      }> = {
         updated_at: new Date().toISOString(),
         services: filledServices as unknown as Json,
         total: computedTotal,
