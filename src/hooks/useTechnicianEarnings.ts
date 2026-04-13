@@ -6,31 +6,37 @@ interface TechEarningsMap {
 }
 
 /**
- * Fetches technician percentages from profit_distributions.
- * Notes format: groupId::groupName::userName::userType
- * We look for userType === "technician" and use tech_share as their %.
+ * Fetches technician percentages from profit_rules + profit_rule_items.
+ * Looks for the "technician" type item in the active rule for each technician.
  */
 export function useTechnicianEarnings() {
   return useQuery({
     queryKey: ["technician_earnings_map"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("profit_distributions")
-        .select("notes, tech_share")
-        .eq("scope", "rule");
+      // Get all active rules with their items and technician name
+      const { data: rules, error } = await supabase
+        .from("profit_rules")
+        .select("technician_id, is_active, profit_rule_items(percentage, participant_type)")
+        .eq("is_active", true);
+
       if (error) throw error;
 
+      // Get technician names
+      const { data: technicians } = await supabase
+        .from("technicians")
+        .select("id, name");
+
+      const techMap = new Map((technicians || []).map(t => [t.id, t.name]));
+
       const map: TechEarningsMap = {};
-      for (const row of data || []) {
-        if (!row.notes) continue;
-        const parts = row.notes.split("::");
-        // format: groupId::groupName::userName::userType
-        if (parts.length >= 4) {
-          const userName = parts[2];
-          const userType = parts[3];
-          if (userType === "technician" && userName) {
-            map[userName.toLowerCase()] = Number(row.tech_share) || 0;
-          }
+      for (const rule of rules || []) {
+        const techName = techMap.get(rule.technician_id);
+        if (!techName) continue;
+
+        const items = (rule as any).profit_rule_items || [];
+        const techItem = items.find((i: any) => i.participant_type === "technician");
+        if (techItem) {
+          map[techName.toLowerCase()] = Number(techItem.percentage) || 0;
         }
       }
       return map;

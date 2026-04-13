@@ -121,6 +121,44 @@ export function useServiceOrders(filters?: {
         console.error("[ServiceOrders] Insert error:", error);
         throw error;
       }
+
+      // Auto-generate service_order_distributions from active profit rules
+      if (data && data.length > 0) {
+        try {
+          const techIds = [...new Set(data.map(so => so.technician_id).filter(Boolean))];
+          if (techIds.length > 0) {
+            const { data: profitRules } = await supabase
+              .from("profit_rules")
+              .select("technician_id, profit_rule_items(participant_name, percentage, participant_type)")
+              .eq("is_active", true)
+              .in("technician_id", techIds as string[]);
+
+            if (profitRules && profitRules.length > 0) {
+              const ruleMap = new Map(profitRules.map((r: any) => [r.technician_id, r.profit_rule_items || []]));
+              const distributions: any[] = [];
+              for (const so of data) {
+                const items = ruleMap.get(so.technician_id!);
+                if (!items || !so.technician_id) continue;
+                const total = Number(so.total || 0);
+                for (const item of items) {
+                  distributions.push({
+                    service_order_id: so.id,
+                    participant_name: item.participant_name,
+                    percentage: item.percentage,
+                    calculated_value: Math.round(total * Number(item.percentage) / 100 * 100) / 100,
+                  });
+                }
+              }
+              if (distributions.length > 0) {
+                await supabase.from("service_order_distributions").insert(distributions);
+              }
+            }
+          }
+        } catch (distErr) {
+          console.warn("[ServiceOrders] Distribution auto-create warning:", distErr);
+        }
+      }
+
       return data;
     },
     onSuccess: () => {
