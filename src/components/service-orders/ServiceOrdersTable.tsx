@@ -51,12 +51,13 @@ interface ServiceOrdersTableProps {
   isLoading: boolean;
 }
 
-type PaymentStatus = "paid" | "partial" | "pending" | "none";
+type PaymentStatus = "paid" | "partial" | "pending" | "draft" | "none";
 
 const paymentTextStyle: Record<PaymentStatus, string> = {
   paid: "text-emerald-400",
   partial: "text-amber-400",
   pending: "text-red-400",
+  draft: "",
   none: "",
 };
 
@@ -64,6 +65,7 @@ const paymentBadgeStyle: Record<PaymentStatus, string> = {
   paid: "bg-emerald-500/10 text-emerald-500 border-emerald-500/30",
   partial: "bg-amber-500/10 text-amber-500 border-amber-500/30",
   pending: "bg-red-500/10 text-red-500 border-red-500/30",
+  draft: "bg-muted text-muted-foreground",
   none: "bg-muted text-muted-foreground",
 };
 
@@ -71,6 +73,7 @@ const paymentLabel: Record<PaymentStatus, string> = {
   paid: "Pago",
   partial: "Parcial",
   pending: "Pendente",
+  draft: "Rascunho",
   none: "Sem pagamento",
 };
 
