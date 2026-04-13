@@ -248,6 +248,9 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
         ? (technicians.find(t => t.id === resolvedTechId)?.name || existing.technician_name || "")
         : (existing.technician_name || "");
 
+      // Calculate technician earnings from profit distribution rules
+      const techEarn = getTechEarnings(techName, total, earningsMap);
+
       const payload = {
         ...existing,
         client_id: resolvedClientId,
@@ -267,6 +270,8 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
         service_4_name: toNullableText(editForm.service_4_name),
         service_4_price: Number(editForm.service_4_price) || 0,
         total,
+        technician_percentage: techEarn?.percentage ?? 0,
+        technician_earning: techEarn?.earnings ?? 0,
         created_by: existing.created_by ?? user?.id ?? null,
         created_at: existing.created_at ?? new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -519,7 +524,12 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
                   const rowAlert = ps !== "paid" ? getRowAlertLevel(o.created_at) : "none";
                   const daysOld = Math.floor((Date.now() - new Date(o.created_at).getTime()) / 86400000);
                   const techName = o.technician_name || o.technicians?.name;
-                  const techEarn = getTechEarnings(techName, o.total, earningsMap);
+                  // Use DB-persisted values if available, fallback to live calculation
+                  const dbPct = (o as any).technician_percentage;
+                  const dbEarn = (o as any).technician_earning;
+                  const techEarn = (dbPct != null && dbPct > 0)
+                    ? { percentage: dbPct, earnings: dbEarn ?? 0 }
+                    : getTechEarnings(techName, o.total, earningsMap);
                   return (
                     <TableRow key={o.id} className={cn(paymentTextStyle[ps], alertStyle[rowAlert])}>
                       <TableCell className="w-10">

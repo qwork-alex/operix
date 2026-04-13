@@ -22,6 +22,7 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { useTechnicianEarnings, getTechEarnings } from "@/hooks/useTechnicianEarnings";
 
 export default function ServiceOrdersPage() {
   const { t } = useLanguage();
