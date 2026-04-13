@@ -113,77 +113,15 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-  // Fetch payment statuses — match by BOTH service_order_id AND by week (list_name) + license_plate
-  const soIds = orders.map(o => o.id);
-  const weeks = [...new Set(orders.map(o => o.week).filter(Boolean))];
-
-  const { data: paymentMap = {} } = useQuery({
-    queryKey: ["payment_status_map", soIds, weeks],
-    queryFn: async () => {
-      if (!soIds.length) return {};
-
-      // Fetch all payment orders that match by service_order_id OR by list_name (week)
-      // Query 1: By service_order_id
-      const res1 = await supabase
-        .from("payment_orders")
-        .select("service_order_id, status, list_name, license_plate")
-        .in("service_order_id", soIds);
-
-      // Query 2: By week (list_name) for cross-matching
-      let res2: typeof res1 = { data: [], error: null } as any;
-      if (weeks.length > 0) {
-        res2 = await supabase
-          .from("payment_orders")
-          .select("service_order_id, status, list_name, license_plate")
-          .in("list_name", weeks as string[]);
-      }
-
-      const allPOs: { service_order_id: string | null; status: string; list_name: string | null; license_plate: string | null }[] = [
-        ...(res1.data || []),
-        ...(res2.data || []),
-      ];
-
-      // Deduplicate
-      const seen = new Set<string>();
-      const uniquePOs = allPOs.filter(po => {
-        const key = `${po.service_order_id}-${po.list_name}-${po.license_plate}-${po.status}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-
-      const map: Record<string, PaymentStatus> = {};
-
-      for (const so of orders) {
-        // Find matching POs: by service_order_id OR by week + plate
-        const normalizedSOPlate = (so.license_plate || "").replace(/[\s\-]/g, "").toUpperCase();
-
-        const matchingPOs = uniquePOs.filter(po => {
-          // Match by direct link
-          if (po.service_order_id === so.id) return true;
-          // Match by week + plate
-          if (so.week && po.list_name === so.week && normalizedSOPlate) {
-            const normalizedPOPlate = (po.license_plate || "").replace(/[\s\-]/g, "").toUpperCase();
-            return normalizedPOPlate === normalizedSOPlate;
-          }
-          return false;
-        });
-
-        if (!matchingPOs.length) continue;
-
-        const allPaid = matchingPOs.every(po => po.status === "paid");
-        const allPending = matchingPOs.every(po => po.status === "pending");
-        if (allPaid) map[so.id] = "paid";
-        else if (allPending) map[so.id] = "pending";
-        else map[so.id] = "partial";
-      }
-
-      return map;
-    },
-    enabled: soIds.length > 0,
-  });
-
-  const getPaymentStatus = (soId: string): PaymentStatus => paymentMap[soId] || "none";
+  // Use DB-stored status as single source of truth (synced by DB trigger)
+  const getPaymentStatus = (o: ServiceOrderRow): PaymentStatus => {
+    const s = o.status?.toLowerCase();
+    if (s === "paid") return "paid";
+    if (s === "partial") return "partial";
+    if (s === "pending") return "pending";
+    if (s === "draft") return "draft";
+    return "none";
+  };
 
   const alertStyle: Record<AlertLevel, string> = {
     none: "",
