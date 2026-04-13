@@ -42,13 +42,6 @@ export function usePaymentOrders(filters?: {
   const { user } = useAuth();
   const { isAdmin } = useRole();
 
-  const hasRequiredAuditFields = (payload: {
-    id?: string;
-    created_by?: string | null;
-    created_at?: string;
-    updated_at?: string;
-  }) => Boolean(payload.id && payload.created_by && payload.created_at && payload.updated_at);
-
   const query = useQuery({
     queryKey: ["payment_orders", filters, isAdmin, user?.id],
     queryFn: async () => {
