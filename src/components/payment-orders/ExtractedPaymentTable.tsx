@@ -23,6 +23,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+const MAX_SERVICES = 4;
+
 interface Props {
   orders: ExtractedPaymentOrder[];
   confidence: "high" | "medium" | "low";
@@ -44,8 +46,24 @@ const fieldConfBorder: Record<FieldConfidence, string> = {
   low: "border-red-500/50 bg-red-500/5",
 };
 
+/** Pad services array to exactly MAX_SERVICES entries */
+function padServices(services: { name: string; price: number; confidence?: FieldConfidence }[]): { name: string; price: number; confidence?: FieldConfidence }[] {
+  const result = services.slice(0, MAX_SERVICES);
+  while (result.length < MAX_SERVICES) {
+    result.push({ name: "", price: 0 });
+  }
+  return result;
+}
+
+/** Compute total from services */
+function computeTotal(services: { name: string; price: number }[]): number {
+  return services.reduce((sum, s) => sum + (s.price || 0), 0);
+}
+
 export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDiscard, isSaving }: Props) {
-  const [rows, setRows] = useState<ExtractedPaymentOrder[]>(orders);
+  const [rows, setRows] = useState<ExtractedPaymentOrder[]>(() =>
+    orders.map(o => ({ ...o, services: padServices(o.services || []) }))
+  );
   const [stage, setStage] = useState<Stage>("review");
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [errorRows, setErrorRows] = useState<Set<number>>(new Set());
@@ -57,39 +75,45 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
   const fieldLabels: Record<string, string> = {
     client: t("label.client"), platform: t("label.platform"), list_name: t("extract.listName"),
     technician: t("label.technician"), car_name: t("label.car"), license_plate: t("label.plate"),
-    services: t("label.services"),
   };
 
-  const update = (idx: number, field: keyof ExtractedPaymentOrder, value: any) => {
+  const updateField = (idx: number, field: keyof ExtractedPaymentOrder, value: any) => {
     setValidationErrors([]);
     setErrorRows(new Set());
     if (stage !== "review") setStage("review");
     setRows(prev => prev.map((r, i) => {
       if (i !== idx) return r;
       const updated = { ...r, [field]: value };
-      // Auto-format license plate
       if (field === "license_plate" && typeof value === "string") {
         updated.license_plate = formatLicensePlate(value);
-      }
-      if (field === "services") {
-        updated.total = (value as { name: string; price: number }[]).reduce((s, sv) => s + (sv.price || 0), 0);
       }
       if (updated.field_confidence) {
         updated.field_confidence = { ...updated.field_confidence, [field]: "high" };
       }
-      updated.total_mismatch = false;
       return updated;
     }));
 
-    // Offer bulk edit for shared fields (including services)
     const bulkFields = ["client", "platform", "list_name", "technician", "car_name", "license_plate"];
-    const isBulkField = bulkFields.includes(field as string);
-    // Also offer bulk for service edits (name or price changes)
-    const isServiceBulk = field === "services";
-    if (rows.length > 1 && (isBulkField || isServiceBulk)) {
+    if (rows.length > 1 && bulkFields.includes(field as string)) {
       setLastEditIdx(idx);
       setPendingBulk({ field: field as string, value, label: fieldLabels[field as string] || (field as string) });
     }
+  };
+
+  /** Update a single service at a specific index — no cross-contamination */
+  const updateService = (rowIdx: number, serviceIdx: number, field: "name" | "price", value: string | number) => {
+    setValidationErrors([]);
+    setErrorRows(new Set());
+    if (stage !== "review") setStage("review");
+    setRows(prev => prev.map((r, i) => {
+      if (i !== rowIdx) return r;
+      const newServices = r.services.map((s, si) => {
+        if (si !== serviceIdx) return s;
+        return { ...s, [field]: value, confidence: "high" as FieldConfidence };
+      });
+      const total = computeTotal(newServices);
+      return { ...r, services: newServices, total, total_mismatch: false };
+    }));
   };
 
   const applyBulk = () => {
@@ -117,7 +141,7 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
       if (!row.technician?.trim()) { errors.push(t("validate.missingTechnician").replace("{n}", n)); badRows.add(i); }
       const hasService = (row.services || []).some(s => s.name?.trim());
       if (!hasService) { errors.push(t("validate.missingService").replace("{n}", n)); badRows.add(i); }
-      const computed = (row.services || []).reduce((s, sv) => s + (sv.price || 0), 0);
+      const computed = computeTotal(row.services || []);
       if (row.total != null && Math.abs(computed - (row.total || 0)) > 0.01) {
         errors.push(t("validate.totalMismatch").replace("{n}", n).replace("{expected}", String(computed)).replace("{actual}", String(row.total)));
         badRows.add(i);
@@ -152,7 +176,12 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
   const doSave = () => {
     setShowOverrideDialog(false);
     setStage("save");
-    onSave(rows);
+    // Strip empty services before saving
+    const cleaned = rows.map(r => ({
+      ...r,
+      services: r.services.filter(s => s.name?.trim()),
+    }));
+    onSave(cleaned);
   };
 
   if (rows.length === 0) {
@@ -175,7 +204,6 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
       <ExtractionStages current={stage} />
       <BulkEditBanner pending={pendingBulk} onApply={applyBulk} onDismiss={() => setPendingBulk(null)} />
 
-      {/* Review summary banner */}
       {(uncertainCount > 0 || hasMismatches) && (
         <div className={cn(
           "flex items-start gap-3 rounded-lg border p-3",
@@ -255,7 +283,11 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
               <TableHead>{t("label.technician")}</TableHead>
               <TableHead>{t("label.car")}</TableHead>
               <TableHead>{t("label.plate")}</TableHead>
-              <TableHead>{t("label.services")}</TableHead>
+              {[1, 2, 3, 4].map(n => (
+                <TableHead key={`sh${n}`} colSpan={2} className="text-center">
+                  {t("label.service")} {n}
+                </TableHead>
+              ))}
               <TableHead className="text-right">{t("label.total")}</TableHead>
               <TableHead className="w-8"></TableHead>
             </TableRow>
@@ -263,44 +295,24 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
           <TableBody>
             {rows.map((row, i) => {
               const fc = row.field_confidence || {};
+              const services = padServices(row.services || []);
               return (
                 <TableRow key={i} className={cn("text-xs", row.total_mismatch && "bg-red-500/5", errorRows.has(i) && "bg-destructive/10 ring-1 ring-inset ring-destructive/30")}>
                   <TableCell className={cn("text-muted-foreground", errorRows.has(i) && "text-destructive font-bold")}>{i + 1}</TableCell>
-                  <TableCell><ConfEditCell value={row.client || ""} confidence={fc.client} onChange={v => update(i, "client", v)} /></TableCell>
-                  <TableCell><ConfEditCell value={row.platform || ""} confidence={fc.platform} onChange={v => update(i, "platform", v)} /></TableCell>
-                  <TableCell><ConfEditCell value={row.list_name || ""} confidence={fc.list_name} onChange={v => update(i, "list_name", v)} /></TableCell>
-                  <TableCell><ConfEditCell value={row.technician || ""} confidence={fc.technician} onChange={v => update(i, "technician", v)} /></TableCell>
-                  <TableCell><ConfEditCell value={row.car_name || ""} confidence={fc.car_name} onChange={v => update(i, "car_name", v)} /></TableCell>
-                  <TableCell><ConfEditCell value={row.license_plate || ""} confidence={fc.license_plate} onChange={v => update(i, "license_plate", v)} /></TableCell>
-                  <TableCell className="max-w-[200px]">
-                    <div className="space-y-1">
-                      {(row.services || []).map((s, si) => (
-                        <div key={si} className="flex gap-1 items-center">
-                          <Input
-                            className={cn("h-6 text-[11px] px-1 w-24", s.confidence && s.confidence !== "high" ? fieldConfBorder[s.confidence] : "")}
-                            value={s.name}
-                            placeholder={t("extract.serviceName")}
-                            onChange={e => {
-                              const newServices = [...(row.services || [])];
-                              newServices[si] = { ...newServices[si], name: e.target.value, confidence: "high" };
-                              update(i, "services", newServices);
-                            }}
-                          />
-                          <Input
-                            className={cn("h-6 text-[11px] px-1 w-16 text-right", s.confidence && s.confidence !== "high" ? fieldConfBorder[s.confidence] : "")}
-                            type="number"
-                            step="0.01"
-                            value={s.price || 0}
-                            onChange={e => {
-                              const newServices = [...(row.services || [])];
-                              newServices[si] = { ...newServices[si], price: parseFloat(e.target.value) || 0, confidence: "high" };
-                              update(i, "services", newServices);
-                            }}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </TableCell>
+                  <TableCell><ConfEditCell value={row.client || ""} confidence={fc.client} onChange={v => updateField(i, "client", v)} /></TableCell>
+                  <TableCell><ConfEditCell value={row.platform || ""} confidence={fc.platform} onChange={v => updateField(i, "platform", v)} /></TableCell>
+                  <TableCell><ConfEditCell value={row.list_name || ""} confidence={fc.list_name} onChange={v => updateField(i, "list_name", v)} /></TableCell>
+                  <TableCell><ConfEditCell value={row.technician || ""} confidence={fc.technician} onChange={v => updateField(i, "technician", v)} /></TableCell>
+                  <TableCell><ConfEditCell value={row.car_name || ""} confidence={fc.car_name} onChange={v => updateField(i, "car_name", v)} /></TableCell>
+                  <TableCell><ConfEditCell value={row.license_plate || ""} confidence={fc.license_plate} onChange={v => updateField(i, "license_plate", v)} /></TableCell>
+                  {services.map((s, si) => (
+                    <ServiceCellPair
+                      key={si}
+                      service={s}
+                      onNameChange={v => updateService(i, si, "name", v)}
+                      onPriceChange={v => updateService(i, si, "price", v)}
+                    />
+                  ))}
                   <TableCell className={cn("text-right font-medium tabular-nums", row.total_mismatch ? "text-destructive" : "")}>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -340,6 +352,42 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+/** Renders name + price inputs for a single service slot */
+function ServiceCellPair({
+  service,
+  onNameChange,
+  onPriceChange,
+}: {
+  service: { name: string; price: number; confidence?: FieldConfidence };
+  onNameChange: (v: string) => void;
+  onPriceChange: (v: number) => void;
+}) {
+  const conf = service.confidence || "high";
+  const borderClass = conf !== "high" ? fieldConfBorder[conf] : "";
+  return (
+    <>
+      <TableCell className="p-1">
+        <Input
+          className={cn("h-6 text-[11px] px-1 w-20", borderClass)}
+          value={service.name}
+          placeholder="—"
+          onChange={e => onNameChange(e.target.value)}
+        />
+      </TableCell>
+      <TableCell className="p-1">
+        <Input
+          className={cn("h-6 text-[11px] px-1 w-16 text-right tabular-nums", borderClass)}
+          type="number"
+          step="0.01"
+          value={service.price || ""}
+          placeholder="0"
+          onChange={e => onPriceChange(parseFloat(e.target.value) || 0)}
+        />
+      </TableCell>
+    </>
   );
 }
 
