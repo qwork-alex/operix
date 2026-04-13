@@ -697,16 +697,16 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
                     {t("fm.print")}
                   </Button>
                 )}
-                {previewDoc?.url && (
-                  <a
-                    href={previewDoc.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-xs text-primary underline"
+                {previewDoc && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-[11px]"
+                    onClick={() => handleOpenInNewTab(previewDoc)}
                   >
-                    <ExternalLink className="h-3 w-3" />
+                    <ExternalLink className="h-3 w-3 mr-1" />
                     {t("fm.openInNewTab")}
-                  </a>
+                  </Button>
                 )}
               </div>
             </DialogTitle>
