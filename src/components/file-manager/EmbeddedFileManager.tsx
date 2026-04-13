@@ -271,15 +271,27 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
   const handleDownload = async (doc: any) => {
     if (!doc.storage_path) return;
     try {
-      const url = await getFreshSignedUrl(doc.storage_path, 300);
-      if (url) {
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = doc.name;
-        a.click();
-      } else {
-        toast.error(t("fm.previewError"));
+      const url = await getFreshSignedUrl(doc.storage_path, 120);
+      if (!url) { toast.error(t("fm.previewError")); return; }
+      console.log("[FileManager] Download: fetching blob from signed URL", url.substring(0, 80));
+      // Fetch as blob to bypass ERR_BLOCKED_BY_CLIENT
+      const response = await fetch(url);
+      if (!response.ok) {
+        console.error("[FileManager] Download fetch failed:", response.status);
+        // Fallback: open in new tab
+        window.open(url, "_blank");
+        return;
       }
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = doc.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
+      console.log("[FileManager] Download complete:", doc.name);
     } catch (err) {
       console.error("[FileManager] Download error:", err);
       toast.error(t("fm.previewError"));
@@ -295,35 +307,14 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
     setPreviewLoading(true);
     try {
       const url = await getFreshSignedUrl(doc.storage_path, 600);
-      if (url) {
-        // Verify URL is accessible before rendering
-        try {
-          const headResp = await fetch(url, { method: "HEAD" });
-          if (!headResp.ok) {
-            console.warn("[FileManager] Signed URL returned", headResp.status, "for", doc.storage_path);
-            // Try a fresh URL in case the first was stale
-            const retryUrl = await getFreshSignedUrl(doc.storage_path, 600);
-            if (retryUrl) {
-              const resolvedMime = getMimeType(doc.name, doc.mime_type);
-              setPreviewDoc({ ...doc, url: retryUrl, mime_type: resolvedMime });
-            } else {
-              toast.error("File could not be accessed. It may have been deleted.");
-            }
-            return;
-          }
-        } catch {
-          // HEAD check failed (CORS etc.) — proceed anyway, browser may still render
-          console.warn("[FileManager] HEAD check failed for", doc.storage_path, "— proceeding with URL");
-        }
-        const resolvedMime = getMimeType(doc.name, doc.mime_type);
-        setPreviewDoc({ ...doc, url, mime_type: resolvedMime });
-      } else {
-        // Fallback: open in new tab
-        toast.error("Preview unavailable. Opening in new tab...");
-        const fallbackUrl = await getFreshSignedUrl(doc.storage_path, 60);
-        if (fallbackUrl) window.open(fallbackUrl, "_blank");
-        else toast.error("File not accessible — it may have been deleted from storage.");
+      console.log("[FileManager] Preview: signed URL generated", url ? url.substring(0, 80) : "null");
+      if (!url) {
+        toast.error("File not accessible — it may have been deleted from storage.");
+        return;
       }
+      const resolvedMime = getMimeType(doc.name, doc.mime_type);
+      console.log("[FileManager] Preview: mime=", resolvedMime, "file=", doc.name);
+      setPreviewDoc({ ...doc, url, mime_type: resolvedMime });
     } catch (err) {
       console.error("[FileManager] Preview error:", err);
       toast.error("Preview failed. Try opening the file in a new tab.");
@@ -335,52 +326,46 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
   const handlePrint = async (doc: any) => {
     if (!doc.storage_path) return;
     try {
-      const url = await getFreshSignedUrl(doc.storage_path, 300);
-      if (!url) {
-        toast.error(t("fm.previewError"));
-        return;
-      }
+      const url = await getFreshSignedUrl(doc.storage_path, 120);
+      if (!url) { toast.error(t("fm.previewError")); return; }
+      console.log("[FileManager] Print: signed URL generated", url.substring(0, 80));
       const resolvedMime = getMimeType(doc.name, doc.mime_type);
 
+      // Fetch as blob and create object URL to avoid cross-origin blocks
+      const response = await fetch(url);
+      if (!response.ok) {
+        console.error("[FileManager] Print fetch failed:", response.status);
+        window.open(url, "_blank");
+        return;
+      }
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(new Blob([blob], { type: resolvedMime }));
+
+      const iframe = document.createElement("iframe");
+      iframe.style.position = "fixed";
+      iframe.style.left = "-9999px";
+      iframe.style.width = "1px";
+      iframe.style.height = "1px";
+      document.body.appendChild(iframe);
+
       if (isPdfMime(resolvedMime)) {
-        // PDF: open in hidden iframe then print
-        const iframe = document.createElement("iframe");
-        iframe.style.position = "fixed";
-        iframe.style.left = "-9999px";
-        iframe.style.width = "1px";
-        iframe.style.height = "1px";
-        iframe.src = url;
-        document.body.appendChild(iframe);
+        iframe.src = blobUrl;
         iframe.onload = () => {
-          try {
-            iframe.contentWindow?.print();
-          } catch {
-            window.open(url, "_blank");
-          }
-          setTimeout(() => document.body.removeChild(iframe), 5000);
+          try { iframe.contentWindow?.print(); } catch { window.open(blobUrl, "_blank"); }
+          setTimeout(() => { document.body.removeChild(iframe); URL.revokeObjectURL(blobUrl); }, 10000);
         };
+        iframe.onerror = () => { document.body.removeChild(iframe); URL.revokeObjectURL(blobUrl); window.open(url, "_blank"); };
       } else if (isImageMime(resolvedMime)) {
-        // Image: render in hidden iframe for printing
-        const iframe = document.createElement("iframe");
-        iframe.style.position = "fixed";
-        iframe.style.left = "-9999px";
-        iframe.style.width = "1px";
-        iframe.style.height = "1px";
-        document.body.appendChild(iframe);
         const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
         if (iframeDoc) {
           iframeDoc.open();
-          iframeDoc.write(`
-            <!DOCTYPE html>
-            <html><head><title>Print</title>
-            <style>body{margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh}img{max-width:100%;height:auto}</style>
-            </head><body><img src="${url}" onload="window.print()"/></body></html>
-          `);
+          iframeDoc.write(`<!DOCTYPE html><html><head><title>Print</title><style>body{margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh}img{max-width:100%;height:auto}</style></head><body><img src="${blobUrl}" onload="window.print()"/></body></html>`);
           iframeDoc.close();
         }
-        setTimeout(() => document.body.removeChild(iframe), 10000);
+        setTimeout(() => { document.body.removeChild(iframe); URL.revokeObjectURL(blobUrl); }, 15000);
       } else {
-        // Other: open in new tab
+        document.body.removeChild(iframe);
+        URL.revokeObjectURL(blobUrl);
         window.open(url, "_blank");
       }
     } catch (err) {
@@ -392,8 +377,10 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
   const handleOpenInNewTab = async (doc: any) => {
     if (!doc.storage_path) return;
     try {
-      const url = await getFreshSignedUrl(doc.storage_path, 300);
+      const url = await getFreshSignedUrl(doc.storage_path, 120);
+      console.log("[FileManager] Open in new tab: signed URL", url ? url.substring(0, 80) : "null");
       if (url) window.open(url, "_blank");
+      else toast.error("Could not generate file URL.");
     } catch (err) {
       console.error("[FileManager] Open in new tab error:", err);
     }
