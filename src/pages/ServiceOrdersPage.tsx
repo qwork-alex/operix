@@ -41,6 +41,7 @@ export default function ServiceOrdersPage() {
   const { extract } = useExtractServiceOrder();
   const { data: clients = [] } = useClients();
   const { data: technicians = [] } = useTechnicians();
+  const { data: earningsMap } = useTechnicianEarnings();
   const { queue, isProcessing, addFiles, clearCompleted } = useFileQueue();
 
   const platforms = [...new Set((orders as any[]).map((o) => o.platform).filter(Boolean))];
