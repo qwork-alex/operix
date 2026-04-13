@@ -103,6 +103,7 @@ export default function ServiceOrdersPage() {
         service_4_price: r.service_4_price ?? null,
         total: r.total ?? null,
         status: "draft",
+        group_id: r.week ?? null,
       };
       return payload as ServiceOrderInsert;
     });

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
@@ -78,6 +78,22 @@ export function useServiceOrders(filters?: {
       return data;
     },
   });
+
+  // Real-time: refresh service orders when payment_orders change (status sync via trigger)
+  useEffect(() => {
+    const channel = supabase
+      .channel('so-po-sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'payment_orders' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["service_orders"] });
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [queryClient]);
 
   const saveMutation = useMutation({
     mutationFn: async (orders: ServiceOrderInsert[]) => {
