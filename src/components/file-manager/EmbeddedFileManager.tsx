@@ -451,7 +451,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
   const handleOpenInNewTab = async (doc: any) => {
     if (!doc.storage_path) return;
     try {
-      const { blobUrl } = await fetchDocumentBlobUrl(doc, 120);
+      const { blobUrl } = await fetchDocumentBlobUrl(doc, 3600);
       const opened = window.open(blobUrl, "_blank", "noopener,noreferrer");
       console.log("[FileManager] Opened blob in new tab:", { file: doc.name, opened: Boolean(opened) });
 
