@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -28,20 +27,10 @@ interface RuleItem {
 interface ProfitRule {
   id: string;
   rule_name: string;
-  technician_id: string;
+  group_id: string;
   is_active: boolean;
   items: RuleItem[];
-  _isNew?: boolean; // client-only flag for unsaved rules
-}
-
-interface CorrectionEntry {
-  orderId: string;
-  car_name: string;
-  license_plate: string;
-  client_name: string;
-  platform: string;
-  week: string;
-  total: number;
+  _isNew?: boolean;
 }
 
 const PARTICIPANT_TYPES = [
@@ -52,21 +41,12 @@ const PARTICIPANT_TYPES = [
   { value: "other", label: "Outros" },
 ] as const;
 
-const TYPE_COLORS: Record<string, string> = {
-  technician: "bg-primary text-primary-foreground",
-  partner: "bg-accent text-accent-foreground",
-  company: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
-  client: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
-  other: "bg-muted text-muted-foreground",
-};
-
 // ─── Component ───
 
 export function ProfitDistribution() {
   const { formatCurrency } = useLanguage();
   const queryClient = useQueryClient();
 
-  // ── Local state for new/editing rules ──
   const [localRules, setLocalRules] = useState<ProfitRule[]>([]);
 
   // ── Queries ──
@@ -81,7 +61,7 @@ export function ProfitDistribution() {
       return (data || []).map((r: any) => ({
         id: r.id,
         rule_name: r.rule_name,
-        technician_id: r.technician_id,
+        group_id: r.group_id || "",
         is_active: r.is_active,
         items: (r.profit_rule_items || []).map((item: any) => ({
           id: item.id,
@@ -98,21 +78,27 @@ export function ProfitDistribution() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("service_orders")
-        .select("*, clients(name)")
+        .select("*")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
     },
   });
 
-  const { data: technicians = [] } = useQuery({
-    queryKey: ["technicians"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("technicians").select("id, name");
-      if (error) throw error;
-      return data;
-    },
-  });
+  // Get distinct group_ids from service orders
+  const availableGroups = useMemo(() => {
+    const groups = new Map<string, { count: number; total: number }>();
+    serviceOrders.forEach((so: any) => {
+      const gid = so.group_id;
+      if (!gid) return;
+      const existing = groups.get(gid) || { count: 0, total: 0 };
+      groups.set(gid, {
+        count: existing.count + 1,
+        total: existing.total + Number(so.total || 0),
+      });
+    });
+    return groups;
+  }, [serviceOrders]);
 
   // Combine DB rules with local unsaved rules
   const allRules = useMemo(() => {
@@ -130,27 +116,24 @@ export function ProfitDistribution() {
 
   // ── Helpers ──
   const getItemsTotal = (items: RuleItem[]) => items.reduce((s, i) => s + i.percentage, 0);
-  const isRuleValid = (rule: ProfitRule) => getItemsTotal(rule.items) === 100 && rule.technician_id && rule.rule_name.trim();
+  const isRuleValid = (rule: ProfitRule) =>
+    getItemsTotal(rule.items) === 100 && rule.group_id.trim() && rule.rule_name.trim();
 
-  const getTechName = (techId: string) => technicians.find(t => t.id === techId)?.name || "—";
+  const groupHasRule = (groupId: string, excludeRuleId?: string) =>
+    allRules.some(r => r.group_id === groupId && r.is_active && r.id !== excludeRuleId);
 
-  // Get service orders for a specific technician
-  const getTechServiceOrders = (techId: string) =>
-    serviceOrders.filter((so: any) => so.technician_id === techId);
+  const getGroupSOs = (groupId: string) =>
+    serviceOrders.filter((so: any) => so.group_id === groupId);
 
-  const getTechRevenue = (techId: string) =>
-    getTechServiceOrders(techId).reduce((s: number, so: any) => s + Number(so.total || 0), 0);
-
-  // Check if technician already has an active rule (excluding current rule)
-  const techHasRule = (techId: string, excludeRuleId?: string) =>
-    allRules.some(r => r.technician_id === techId && r.is_active && r.id !== excludeRuleId);
+  const getGroupRevenue = (groupId: string) =>
+    getGroupSOs(groupId).reduce((s: number, so: any) => s + Number(so.total || 0), 0);
 
   // ── Rule CRUD (local state) ──
   const addRule = () => {
     const newRule: ProfitRule = {
       id: crypto.randomUUID(),
       rule_name: "",
-      technician_id: "",
+      group_id: "",
       is_active: true,
       items: [
         { id: crypto.randomUUID(), participant_name: "", percentage: 100, participant_type: "technician" },
@@ -164,7 +147,6 @@ export function ProfitDistribution() {
     setLocalRules(prev => {
       const exists = prev.find(r => r.id === ruleId);
       if (exists) return prev.map(r => r.id === ruleId ? updater(r) : r);
-      // Copy from DB rules to local for editing
       const dbRule = rules.find(r => r.id === ruleId);
       if (dbRule) return [...prev, updater({ ...dbRule })];
       return prev;
@@ -207,10 +189,10 @@ export function ProfitDistribution() {
   // ── Save single rule ──
   const saveRuleMutation = useMutation({
     mutationFn: async (rule: ProfitRule) => {
-      if (!isRuleValid(rule)) throw new Error("Regra inválida: nome, técnico e 100% são obrigatórios");
+      if (!isRuleValid(rule)) throw new Error("Regra inválida: nome, group_id e 100% são obrigatórios");
 
-      if (techHasRule(rule.technician_id, rule.id)) {
-        throw new Error("Este técnico já possui uma regra ativa");
+      if (groupHasRule(rule.group_id, rule.id)) {
+        throw new Error("Este grupo já possui uma regra ativa");
       }
 
       // Upsert rule
@@ -219,20 +201,19 @@ export function ProfitDistribution() {
         .upsert({
           id: rule._isNew ? undefined : rule.id,
           rule_name: rule.rule_name,
-          technician_id: rule.technician_id,
+          group_id: rule.group_id,
+          technician_id: null,
           is_active: rule.is_active,
           updated_at: new Date().toISOString(),
-        }, { onConflict: "id" })
+        } as any, { onConflict: "id" })
         .select("id")
         .single();
 
       if (ruleError) throw ruleError;
       const ruleId = savedRule.id;
 
-      // Delete old items
+      // Delete old items, insert new
       await supabase.from("profit_rule_items").delete().eq("rule_id", ruleId);
-
-      // Insert new items
       const items = rule.items.map(i => ({
         rule_id: ruleId,
         participant_name: i.participant_name,
@@ -242,15 +223,13 @@ export function ProfitDistribution() {
       const { error: itemsError } = await supabase.from("profit_rule_items").insert(items);
       if (itemsError) throw itemsError;
 
-      // Auto-generate distributions for all SOs of this technician
-      const techSOs = serviceOrders.filter((so: any) => so.technician_id === rule.technician_id);
-      if (techSOs.length > 0) {
-        // Delete old distributions for these SOs
-        const soIds = techSOs.map((so: any) => so.id);
+      // Auto-generate distributions for all SOs in this group
+      const groupSOs = serviceOrders.filter((so: any) => so.group_id === rule.group_id);
+      if (groupSOs.length > 0) {
+        const soIds = groupSOs.map((so: any) => so.id);
         await supabase.from("service_order_distributions").delete().in("service_order_id", soIds);
 
-        // Create new distributions
-        const distributions = techSOs.flatMap((so: any) =>
+        const distributions = groupSOs.flatMap((so: any) =>
           rule.items.map(item => ({
             service_order_id: so.id,
             participant_name: item.participant_name,
@@ -262,10 +241,10 @@ export function ProfitDistribution() {
           await supabase.from("service_order_distributions").insert(distributions);
         }
 
-        // Update technician_percentage and technician_earning on service_orders
+        // Update technician_percentage/earning on SOs that have a technician item
         const techItem = rule.items.find(i => i.participant_type === "technician");
         if (techItem) {
-          for (const so of techSOs) {
+          for (const so of groupSOs) {
             const total = Number(so.total || 0);
             await supabase.from("service_orders").update({
               technician_percentage: techItem.percentage,
@@ -282,7 +261,6 @@ export function ProfitDistribution() {
       queryClient.invalidateQueries({ queryKey: ["profit-rules"] });
       queryClient.invalidateQueries({ queryKey: ["service_orders"] });
       queryClient.invalidateQueries({ queryKey: ["technician_earnings_map"] });
-      // Clear local edits for saved rules
       setLocalRules([]);
       toast.success("Regra salva com sucesso");
     },
@@ -318,75 +296,10 @@ export function ProfitDistribution() {
     onError: (err: any) => toast.error(err?.message || "Erro ao excluir"),
   });
 
-  // ── Correction entries: SOs without technician ──
-  const correctionEntries = useMemo<CorrectionEntry[]>(() => {
-    return serviceOrders
-      .filter((so: any) => !so.technician_id && Number(so.total || 0) > 0)
-      .map((so: any) => ({
-        orderId: so.id,
-        car_name: so.car_name || "—",
-        license_plate: so.license_plate || "—",
-        client_name: so.client_name || (so as any).clients?.name || "—",
-        platform: so.platform || "—",
-        week: so.week || "—",
-        total: Number(so.total || 0),
-      }));
-  }, [serviceOrders]);
-
-  const [correctionTechIds, setCorrectionTechIds] = useState<Record<string, string>>({});
-
-  const assignTechnician = async (orderId: string) => {
-    const techId = correctionTechIds[orderId];
-    if (!techId) { toast.error("Selecione um técnico"); return; }
-
-    const tech = technicians.find(t => t.id === techId);
-    const { error } = await supabase
-      .from("service_orders")
-      .update({
-        technician_id: techId,
-        technician_name: tech?.name || "",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", orderId);
-
-    if (error) { toast.error("Erro ao atribuir técnico"); return; }
-
-    // Auto-apply profit rule if exists
-    const rule = allRules.find(r => r.technician_id === techId && r.is_active);
-    if (rule) {
-      const so = serviceOrders.find((s: any) => s.id === orderId);
-      const total = Number(so?.total || 0);
-      const techItem = rule.items.find(i => i.participant_type === "technician");
-
-      // Update technician earnings
-      if (techItem) {
-        await supabase.from("service_orders").update({
-          technician_percentage: techItem.percentage,
-          technician_earning: Math.round(total * techItem.percentage / 100 * 100) / 100,
-        }).eq("id", orderId);
-      }
-
-      // Create distributions
-      await supabase.from("service_order_distributions").delete().eq("service_order_id", orderId);
-      const dists = rule.items.map(item => ({
-        service_order_id: orderId,
-        participant_name: item.participant_name,
-        percentage: item.percentage,
-        calculated_value: Math.round(total * item.percentage / 100 * 100) / 100,
-      }));
-      await supabase.from("service_order_distributions").insert(dists);
-    }
-
-    setCorrectionTechIds(prev => { const n = { ...prev }; delete n[orderId]; return n; });
-    queryClient.invalidateQueries({ queryKey: ["service_orders"] });
-    toast.success("Técnico atribuído e distribuição aplicada");
-  };
-
-  // ── Total revenue from service orders ──
+  // ── Total revenue ──
   const totalSORevenue = useMemo(() =>
     serviceOrders.reduce((s: number, so: any) => s + Number(so.total || 0), 0), [serviceOrders]);
 
-  // ── Loading ──
   if (rulesLoading || soLoading) {
     return (
       <div className="space-y-4">
@@ -407,7 +320,7 @@ export function ProfitDistribution() {
           <div>
             <h1 className="text-lg font-semibold text-foreground">Distribuição de Lucros</h1>
             <p className="text-xs text-muted-foreground">
-              Regras vinculadas a técnicos · Cálculos baseados em Ordens de Serviço reais
+              Regras vinculadas a grupos (group_id) · Cálculos baseados em Ordens de Serviço reais
             </p>
           </div>
         </div>
@@ -443,10 +356,10 @@ export function ProfitDistribution() {
       {allRules.map((rule) => {
         const itemsTotal = getItemsTotal(rule.items);
         const valid = itemsTotal === 100;
-        const techRevenue = rule.technician_id ? getTechRevenue(rule.technician_id) : 0;
-        const techSOs = rule.technician_id ? getTechServiceOrders(rule.technician_id) : [];
+        const groupRevenue = rule.group_id ? getGroupRevenue(rule.group_id) : 0;
+        const groupSOs = rule.group_id ? getGroupSOs(rule.group_id) : [];
         const isLocal = localRules.some(lr => lr.id === rule.id);
-        const hasChanges = isLocal || rule._isNew;
+        const groupInfo = rule.group_id ? availableGroups.get(rule.group_id) : null;
 
         return (
           <Card key={rule.id} className="border-border/50">
@@ -459,22 +372,30 @@ export function ProfitDistribution() {
                     placeholder="Nome da regra"
                     className="h-8 text-sm font-semibold max-w-[250px]"
                   />
+                  {/* Group ID selector */}
                   <Select
-                    value={rule.technician_id || ""}
-                    onValueChange={(v) => updateLocalRule(rule.id, r => ({ ...r, technician_id: v }))}
+                    value={rule.group_id || ""}
+                    onValueChange={(v) => updateLocalRule(rule.id, r => ({ ...r, group_id: v }))}
                   >
-                    <SelectTrigger className="h-8 text-xs w-[200px]">
-                      <SelectValue placeholder="Selecionar técnico" />
+                    <SelectTrigger className="h-8 text-xs w-[220px]">
+                      <SelectValue placeholder="Selecionar grupo (group_id)" />
                     </SelectTrigger>
                     <SelectContent>
-                      {technicians.map((t) => (
-                        <SelectItem key={t.id} value={t.id} className="text-xs">
-                          {t.name}
-                          {techHasRule(t.id, rule.id) ? " (já tem regra)" : ""}
+                      {Array.from(availableGroups.entries()).map(([gid, info]) => (
+                        <SelectItem key={gid} value={gid} className="text-xs">
+                          {gid} ({info.count} OS)
+                          {groupHasRule(gid, rule.id) ? " — já tem regra" : ""}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  {/* Manual group_id input */}
+                  <Input
+                    value={rule.group_id}
+                    onChange={(e) => updateLocalRule(rule.id, r => ({ ...r, group_id: e.target.value }))}
+                    placeholder="ou digitar group_id"
+                    className="h-8 text-xs max-w-[180px]"
+                  />
                   <div className="flex items-center gap-1.5">
                     <Switch
                       checked={rule.is_active}
@@ -483,15 +404,14 @@ export function ProfitDistribution() {
                     <span className="text-[10px] text-muted-foreground">{rule.is_active ? "Ativa" : "Inativa"}</span>
                   </div>
                 </div>
-                {rule.technician_id && (
+                {rule.group_id && (
                   <p className="text-[10px] text-muted-foreground">
-                    Técnico: <span className="font-medium text-foreground">{getTechName(rule.technician_id)}</span>
-                    {" · "}{techSOs.length} OS · Receita: {formatCurrency(techRevenue)}
+                    Grupo: <span className="font-medium text-foreground font-mono">{rule.group_id}</span>
+                    {" · "}{groupSOs.length} OS · Receita: {formatCurrency(groupRevenue)}
                   </p>
                 )}
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                {/* Save button INSIDE the rule */}
                 <Button
                   size="sm"
                   disabled={!isRuleValid(rule) || saveRuleMutation.isPending}
@@ -590,7 +510,7 @@ export function ProfitDistribution() {
                           </Select>
                         </TableCell>
                         <TableCell className="text-right font-medium">
-                          {formatCurrency(techRevenue * item.percentage / 100)}
+                          {formatCurrency(groupRevenue * item.percentage / 100)}
                         </TableCell>
                         <TableCell>
                           <Button
@@ -654,7 +574,7 @@ export function ProfitDistribution() {
               </div>
 
               {/* Distribution per SO */}
-              {valid && techSOs.length > 0 && rule.is_active && (
+              {valid && groupSOs.length > 0 && rule.is_active && (
                 <div className="mt-4 pt-4 border-t border-border/30">
                   <h3 className="text-xs font-semibold text-foreground mb-2 flex items-center gap-2">
                     <Users className="h-3.5 w-3.5" />
@@ -666,6 +586,7 @@ export function ProfitDistribution() {
                         <TableRow className="text-[11px]">
                           <TableHead>Veículo</TableHead>
                           <TableHead>Placa</TableHead>
+                          <TableHead>Técnico</TableHead>
                           <TableHead className="text-right">Total OS</TableHead>
                           {rule.items.map(item => (
                             <TableHead key={item.id} className="text-right">
@@ -675,12 +596,13 @@ export function ProfitDistribution() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {techSOs.map((so: any) => {
+                        {groupSOs.map((so: any) => {
                           const soTotal = Number(so.total || 0);
                           return (
                             <TableRow key={so.id} className="text-xs">
                               <TableCell>{so.car_name || "—"}</TableCell>
                               <TableCell className="font-mono">{so.license_plate || "—"}</TableCell>
+                              <TableCell>{so.technician_name || "—"}</TableCell>
                               <TableCell className="text-right font-medium">{formatCurrency(soTotal)}</TableCell>
                               {rule.items.map(item => (
                                 <TableCell key={item.id} className="text-right">
@@ -690,13 +612,12 @@ export function ProfitDistribution() {
                             </TableRow>
                           );
                         })}
-                        {/* Totals row */}
                         <TableRow className="text-xs font-semibold border-t-2">
-                          <TableCell colSpan={2}>TOTAL</TableCell>
-                          <TableCell className="text-right">{formatCurrency(techRevenue)}</TableCell>
+                          <TableCell colSpan={3}>TOTAL</TableCell>
+                          <TableCell className="text-right">{formatCurrency(groupRevenue)}</TableCell>
                           {rule.items.map(item => (
                             <TableCell key={item.id} className="text-right">
-                              {formatCurrency(Math.round(techRevenue * item.percentage / 100 * 100) / 100)}
+                              {formatCurrency(Math.round(groupRevenue * item.percentage / 100 * 100) / 100)}
                             </TableCell>
                           ))}
                         </TableRow>
@@ -726,10 +647,8 @@ export function ProfitDistribution() {
               <p className="text-lg font-bold text-foreground">{serviceOrders.length}</p>
             </div>
             <div className="rounded-lg border border-border/50 p-3 text-center">
-              <p className="text-[10px] text-muted-foreground">Técnicos Ativos</p>
-              <p className="text-lg font-bold text-foreground">
-                {new Set(serviceOrders.map((so: any) => so.technician_id).filter(Boolean)).size}
-              </p>
+              <p className="text-[10px] text-muted-foreground">Grupos com OS</p>
+              <p className="text-lg font-bold text-foreground">{availableGroups.size}</p>
             </div>
             <div className="rounded-lg border border-border/50 p-3 text-center">
               <p className="text-[10px] text-muted-foreground">Regras Criadas</p>
@@ -738,79 +657,6 @@ export function ProfitDistribution() {
           </div>
         </CardContent>
       </Card>
-
-      {/* ═══ CORREÇÃO DE DISTRIBUIÇÃO ═══ */}
-      {correctionEntries.length > 0 && (
-        <Card className="border-destructive/30">
-          <CardHeader>
-            <CardTitle className="text-sm font-semibold text-destructive flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4" />
-              Correção de Distribuição
-            </CardTitle>
-            <p className="text-[11px] text-muted-foreground">
-              Ordens sem técnico atribuído. Atribua para aplicar a regra de distribuição automaticamente.
-            </p>
-          </CardHeader>
-          <CardContent>
-            <div className="rounded-lg border border-border/50 overflow-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="text-[11px]">
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Plataforma</TableHead>
-                    <TableHead>Semana</TableHead>
-                    <TableHead>Veículo</TableHead>
-                    <TableHead>Placa</TableHead>
-                    <TableHead className="text-right">Valor</TableHead>
-                    <TableHead className="w-[200px]">Técnico</TableHead>
-                    <TableHead className="w-[100px]" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {correctionEntries.map(entry => (
-                    <TableRow key={entry.orderId} className="text-xs">
-                      <TableCell>{entry.client_name}</TableCell>
-                      <TableCell>{entry.platform}</TableCell>
-                      <TableCell>{entry.week}</TableCell>
-                      <TableCell>{entry.car_name}</TableCell>
-                      <TableCell className="font-mono">{entry.license_plate}</TableCell>
-                      <TableCell className="text-right font-medium">{formatCurrency(entry.total)}</TableCell>
-                      <TableCell>
-                        <Select
-                          value={correctionTechIds[entry.orderId] || ""}
-                          onValueChange={(v) => setCorrectionTechIds(prev => ({ ...prev, [entry.orderId]: v }))}
-                        >
-                          <SelectTrigger className="h-8 text-xs">
-                            <SelectValue placeholder="Selecionar técnico" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {technicians.map((t) => (
-                              <SelectItem key={t.id} value={t.id} className="text-xs">
-                                {t.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs"
-                          disabled={!correctionTechIds[entry.orderId]}
-                          onClick={() => assignTechnician(entry.orderId)}
-                        >
-                          Atribuir
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }
