@@ -252,20 +252,42 @@ export function ProfitDistribution() {
     mutationFn: async (rule: ProfitRule) => {
       if (!isRuleValid(rule)) throw new Error("Regra inválida: nome, técnico, grupos e 100% são obrigatórios");
 
-      const { data: savedRule, error: ruleError } = await supabase
-        .from("profit_rules")
-        .upsert({
-          id: rule._isNew ? undefined : rule.id,
-          rule_name: rule.rule_name,
-          technician_id: rule.technician_id,
-          group_ids: rule.group_ids,
-          is_active: rule.is_active,
-          updated_at: new Date().toISOString(),
-        } as any, { onConflict: "id" })
-        .select("id")
-        .single();
+      console.log("Saving rule:", {
+        technician_id: rule.technician_id,
+        group_ids: rule.group_ids,
+        participants: rule.items,
+        isNew: !!rule._isNew,
+      });
 
-      if (ruleError) throw ruleError;
+      let ruleId: string;
+
+      if (rule._isNew) {
+        const { data: savedRule, error: ruleError } = await supabase
+          .from("profit_rules")
+          .insert({
+            rule_name: rule.rule_name,
+            technician_id: rule.technician_id,
+            group_ids: rule.group_ids,
+            is_active: rule.is_active,
+          } as any)
+          .select("id")
+          .single();
+        if (ruleError) throw ruleError;
+        ruleId = savedRule.id;
+      } else {
+        const { error: ruleError } = await supabase
+          .from("profit_rules")
+          .update({
+            rule_name: rule.rule_name,
+            technician_id: rule.technician_id,
+            group_ids: rule.group_ids,
+            is_active: rule.is_active,
+            updated_at: new Date().toISOString(),
+          } as any)
+          .eq("id", rule.id);
+        if (ruleError) throw ruleError;
+        ruleId = rule.id;
+      }
       const ruleId = savedRule.id;
 
       // Upsert items
