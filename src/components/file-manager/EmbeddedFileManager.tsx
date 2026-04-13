@@ -24,6 +24,18 @@ interface Props {
   sessionFileNames?: string[];
 }
 
+interface PreviewState {
+  id?: string;
+  name: string;
+  storage_path?: string | null;
+  mime_type?: string | null;
+  url?: string;
+  status: "loading" | "ready" | "error";
+  error?: string;
+  _blobUrl?: boolean;
+  [key: string]: any;
+}
+
 /** Get a fresh signed URL, never reuse stale ones */
 async function getFreshSignedUrl(storagePath: string, expiresIn = 600): Promise<string | null> {
   try {
@@ -43,7 +55,7 @@ async function getFreshSignedUrl(storagePath: string, expiresIn = 600): Promise<
 
 /** Detect correct Content-Type from filename */
 function getMimeType(fileName: string, storedMime?: string | null): string {
-  if (storedMime) return storedMime;
+  const normalizedStoredMime = storedMime === "image/jpg" ? "image/jpeg" : storedMime;
   const ext = fileName.split(".").pop()?.toLowerCase() || "";
   const map: Record<string, string> = {
     pdf: "application/pdf",
@@ -55,7 +67,11 @@ function getMimeType(fileName: string, storedMime?: string | null): string {
     svg: "image/svg+xml",
     bmp: "image/bmp",
   };
-  return map[ext] || "application/octet-stream";
+  const inferredMime = map[ext];
+
+  if (inferredMime) return inferredMime;
+  if (normalizedStoredMime && normalizedStoredMime !== "application/octet-stream") return normalizedStoredMime;
+  return "application/octet-stream";
 }
 
 function isImageMime(mime: string) {
@@ -64,6 +80,58 @@ function isImageMime(mime: string) {
 
 function isPdfMime(mime: string) {
   return mime === "application/pdf";
+}
+
+function revokeBlobUrl(url?: string | null) {
+  if (url?.startsWith("blob:")) {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function fetchDocumentBlobUrl(
+  doc: { name: string; storage_path?: string | null; mime_type?: string | null },
+  expiresIn = 120,
+) {
+  if (!doc.storage_path) {
+    throw new Error("File not available — storage path missing.");
+  }
+
+  const signedUrl = await getFreshSignedUrl(doc.storage_path, expiresIn);
+  console.log("[FileManager] Signed URL generated:", {
+    file: doc.name,
+    expiresIn,
+    url: signedUrl ? signedUrl.substring(0, 120) : null,
+  });
+
+  if (!signedUrl) {
+    throw new Error("Could not generate a fresh file URL.");
+  }
+
+  const mimeType = getMimeType(doc.name, doc.mime_type);
+  const response = await fetch(signedUrl);
+
+  console.log("[FileManager] Fetch status:", {
+    file: doc.name,
+    status: response.status,
+    ok: response.ok,
+    expiresIn,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch file (${response.status}).`);
+  }
+
+  const blob = await response.blob();
+  const typedBlob = blob.type === mimeType ? blob : new Blob([blob], { type: mimeType });
+  const blobUrl = URL.createObjectURL(typedBlob);
+
+  console.log("[FileManager] Blob created:", {
+    file: doc.name,
+    type: typedBlob.type || mimeType,
+    size: typedBlob.size,
+  });
+
+  return { blobUrl, mimeType, signedUrl };
 }
 
 export function EmbeddedFileManager({ entityType, module: moduleName = "orders", sessionFileNames = [] }: Props) {
@@ -79,7 +147,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
   const [showFolderDialog, setShowFolderDialog] = useState(false);
   const [showMoveDialog, setShowMoveDialog] = useState(false);
   const [moveTarget, setMoveTarget] = useState<any>(null);
-  const [previewDoc, setPreviewDoc] = useState<any>(null);
+  const [previewDoc, setPreviewDoc] = useState<PreviewState | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [filterMode, setFilterMode] = useState<"all" | "session">("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -268,29 +336,25 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
     else setPath([...path, { id, name }]);
   };
 
+  const clearPreviewDoc = useCallback(() => {
+    if (previewDoc?._blobUrl && previewDoc.url) {
+      revokeBlobUrl(previewDoc.url);
+      console.log("[FileManager] Preview blob URL revoked");
+    }
+    setPreviewDoc(null);
+  }, [previewDoc]);
+
   const handleDownload = async (doc: any) => {
     if (!doc.storage_path) return;
     try {
-      const url = await getFreshSignedUrl(doc.storage_path, 120);
-      if (!url) { toast.error(t("fm.previewError")); return; }
-      console.log("[FileManager] Download: fetching blob from signed URL", url.substring(0, 80));
-      // Fetch as blob to bypass ERR_BLOCKED_BY_CLIENT
-      const response = await fetch(url);
-      if (!response.ok) {
-        console.error("[FileManager] Download fetch failed:", response.status);
-        // Fallback: open in new tab
-        window.open(url, "_blank");
-        return;
-      }
-      const blob = await response.blob();
-      const blobUrl = URL.createObjectURL(blob);
+      const { blobUrl } = await fetchDocumentBlobUrl(doc, 120);
       const a = document.createElement("a");
       a.href = blobUrl;
       a.download = doc.name;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
+      setTimeout(() => revokeBlobUrl(blobUrl), 1000);
       console.log("[FileManager] Download complete:", doc.name);
     } catch (err) {
       console.error("[FileManager] Download error:", err);
@@ -304,34 +368,24 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
       toast.error("File not available — storage path missing.");
       return;
     }
-    setPreviewLoading(true);
-    try {
-      const url = await getFreshSignedUrl(doc.storage_path, 600);
-      console.log("[FileManager] Preview: signed URL generated", url ? url.substring(0, 80) : "null");
-      if (!url) {
-        toast.error("File not accessible — it may have been deleted from storage.");
-        return;
-      }
-      const resolvedMime = getMimeType(doc.name, doc.mime_type);
-      console.log("[FileManager] Preview: fetching blob, mime=", resolvedMime, "file=", doc.name);
+    if (previewDoc?._blobUrl && previewDoc.url) {
+      revokeBlobUrl(previewDoc.url);
+    }
 
-      // Fetch as blob to bypass ERR_BLOCKED_BY_CLIENT
-      const response = await fetch(url);
-      if (!response.ok) {
-        console.error("[FileManager] Preview fetch failed:", response.status);
-        // Fallback: open in new tab
-        window.open(url, "_blank");
-        toast.error("Preview blocked — opened in new tab.");
-        return;
-      }
-      const blob = await response.blob();
-      const blobUrl = URL.createObjectURL(new Blob([blob], { type: resolvedMime }));
+    setPreviewLoading(true);
+    const resolvedMime = getMimeType(doc.name, doc.mime_type);
+    setPreviewDoc({ ...doc, mime_type: resolvedMime, status: "loading" });
+
+    try {
+      const { blobUrl, mimeType } = await fetchDocumentBlobUrl(doc, 120);
       console.log("[FileManager] Preview: blob URL created", blobUrl.substring(0, 60));
 
-      setPreviewDoc({ ...doc, url: blobUrl, mime_type: resolvedMime, _blobUrl: true });
+      setPreviewDoc({ ...doc, url: blobUrl, mime_type: mimeType, status: "ready", _blobUrl: true });
     } catch (err) {
       console.error("[FileManager] Preview error:", err);
-      toast.error("Preview failed. Try opening the file in a new tab.");
+      const message = err instanceof Error ? err.message : "Preview failed.";
+      setPreviewDoc({ ...doc, mime_type: resolvedMime, status: "error", error: message });
+      toast.error("Preview failed. Please try again.");
     } finally {
       setPreviewLoading(false);
     }
@@ -340,20 +394,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
   const handlePrint = async (doc: any) => {
     if (!doc.storage_path) return;
     try {
-      const url = await getFreshSignedUrl(doc.storage_path, 120);
-      if (!url) { toast.error(t("fm.previewError")); return; }
-      console.log("[FileManager] Print: signed URL generated", url.substring(0, 80));
-      const resolvedMime = getMimeType(doc.name, doc.mime_type);
-
-      // Fetch as blob and create object URL to avoid cross-origin blocks
-      const response = await fetch(url);
-      if (!response.ok) {
-        console.error("[FileManager] Print fetch failed:", response.status);
-        window.open(url, "_blank");
-        return;
-      }
-      const blob = await response.blob();
-      const blobUrl = URL.createObjectURL(new Blob([blob], { type: resolvedMime }));
+      const { blobUrl, mimeType } = await fetchDocumentBlobUrl(doc, 120);
 
       const iframe = document.createElement("iframe");
       iframe.style.position = "fixed";
@@ -362,25 +403,44 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
       iframe.style.height = "1px";
       document.body.appendChild(iframe);
 
-      if (isPdfMime(resolvedMime)) {
+      const cleanup = () => {
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe);
+        }
+        revokeBlobUrl(blobUrl);
+      };
+
+      if (isPdfMime(mimeType)) {
         iframe.src = blobUrl;
         iframe.onload = () => {
-          try { iframe.contentWindow?.print(); } catch { window.open(blobUrl, "_blank"); }
-          setTimeout(() => { document.body.removeChild(iframe); URL.revokeObjectURL(blobUrl); }, 10000);
+          console.log("[FileManager] Print iframe loaded:", doc.name);
+          window.setTimeout(() => {
+            try {
+              iframe.contentWindow?.focus();
+              iframe.contentWindow?.print();
+            } catch (error) {
+              console.error("[FileManager] Print trigger failed:", error);
+              toast.error(t("fm.previewError"));
+            }
+          }, 300);
+          window.setTimeout(cleanup, 10000);
         };
-        iframe.onerror = () => { document.body.removeChild(iframe); URL.revokeObjectURL(blobUrl); window.open(url, "_blank"); };
-      } else if (isImageMime(resolvedMime)) {
+        iframe.onerror = () => {
+          console.error("[FileManager] Print iframe failed:", doc.name);
+          cleanup();
+          toast.error(t("fm.previewError"));
+        };
+      } else if (isImageMime(mimeType)) {
         const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
         if (iframeDoc) {
           iframeDoc.open();
-          iframeDoc.write(`<!DOCTYPE html><html><head><title>Print</title><style>body{margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh}img{max-width:100%;height:auto}</style></head><body><img src="${blobUrl}" onload="window.print()"/></body></html>`);
+          iframeDoc.write(`<!DOCTYPE html><html><head><title>Print</title><style>body{margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#fff}img{max-width:100%;height:auto}</style></head><body><img src="${blobUrl}" onload="setTimeout(() => window.print(), 150)" /></body></html>`);
           iframeDoc.close();
         }
-        setTimeout(() => { document.body.removeChild(iframe); URL.revokeObjectURL(blobUrl); }, 15000);
+        window.setTimeout(cleanup, 15000);
       } else {
-        document.body.removeChild(iframe);
-        URL.revokeObjectURL(blobUrl);
-        window.open(url, "_blank");
+        cleanup();
+        toast.error(t("fm.previewError"));
       }
     } catch (err) {
       console.error("[FileManager] Print error:", err);
@@ -391,12 +451,20 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
   const handleOpenInNewTab = async (doc: any) => {
     if (!doc.storage_path) return;
     try {
-      const url = await getFreshSignedUrl(doc.storage_path, 120);
-      console.log("[FileManager] Open in new tab: signed URL", url ? url.substring(0, 80) : "null");
-      if (url) window.open(url, "_blank");
-      else toast.error("Could not generate file URL.");
+      const { blobUrl } = await fetchDocumentBlobUrl(doc, 120);
+      const opened = window.open(blobUrl, "_blank", "noopener,noreferrer");
+      console.log("[FileManager] Opened blob in new tab:", { file: doc.name, opened: Boolean(opened) });
+
+      if (!opened) {
+        revokeBlobUrl(blobUrl);
+        toast.error("Popup blocked. Please allow popups and try again.");
+        return;
+      }
+
+      window.setTimeout(() => revokeBlobUrl(blobUrl), 300000);
     } catch (err) {
       console.error("[FileManager] Open in new tab error:", err);
+      toast.error("Could not open file.");
     }
   };
 
@@ -695,11 +763,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
 
       {/* Preview dialog with pinch-zoom, print, and open-in-new-tab */}
       <Dialog open={!!previewDoc} onOpenChange={(open) => {
-        if (!open && previewDoc?._blobUrl && previewDoc?.url) {
-          URL.revokeObjectURL(previewDoc.url);
-          console.log("[FileManager] Preview blob URL revoked");
-        }
-        setPreviewDoc(null);
+        if (!open) clearPreviewDoc();
       }}>
         <DialogContent className="bg-card border-border max-w-3xl max-h-[80vh]">
           <DialogHeader>
@@ -732,18 +796,26 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
             </DialogTitle>
           </DialogHeader>
           <PinchZoomContainer>
-            {previewDoc?.mime_type && isImageMime(previewDoc.mime_type) ? (
+            {previewDoc?.status === "loading" ? (
+              <div className="flex h-[60vh] flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                <p>{t("fm.preview")}&hellip;</p>
+              </div>
+            ) : previewDoc?.status === "error" ? (
+              <div className="flex h-[60vh] flex-col items-center justify-center gap-3 text-center text-sm text-muted-foreground">
+                <p>{previewDoc.error || t("fm.previewError")}</p>
+                <Button variant="outline" size="sm" className="h-8 text-[11px]" onClick={() => handleDownload(previewDoc)}>
+                  <Download className="mr-1 h-3 w-3" />
+                  {t("fm.download")}
+                </Button>
+              </div>
+            ) : previewDoc?.mime_type && isImageMime(previewDoc.mime_type) ? (
               <img
                 src={previewDoc.url}
                 alt={previewDoc.name}
                 className="max-w-full rounded"
                 onError={() => {
-                  // Fallback: open in new tab on image load error
-                  if (previewDoc?.url) {
-                    window.open(previewDoc.url, "_blank");
-                    setPreviewDoc(null);
-                    toast.error(t("fm.previewError"));
-                  }
+                  toast.error(t("fm.previewError"));
                 }}
               />
             ) : previewDoc?.mime_type && isPdfMime(previewDoc.mime_type) ? (
@@ -753,17 +825,17 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
                   className="w-full h-[60vh] rounded border-0"
                   title={previewDoc.name}
                   onError={() => {
-                    if (previewDoc?.url) window.open(previewDoc.url, "_blank");
+                    toast.error(t("fm.previewError"));
                   }}
                 />
               </div>
             ) : (
               <div className="text-center py-8 text-sm text-muted-foreground">
                 <p className="mb-2">{t("fm.previewError")}</p>
-                <a href={previewDoc?.url} target="_blank" rel="noopener noreferrer" className="text-primary underline inline-flex items-center gap-1">
-                  <ExternalLink className="h-3 w-3" />
+                <Button variant="link" size="sm" className="text-primary" onClick={() => handleDownload(previewDoc)}>
+                  <ExternalLink className="mr-1 h-3 w-3" />
                   {t("fm.download")}
-                </a>
+                </Button>
               </div>
             )}
           </PinchZoomContainer>
@@ -867,7 +939,7 @@ export async function storeFileInDocuments(
       console.error("[FileManager] Upload rejected: empty file", file?.name);
       return;
     }
-    const resolvedMime = file.type || getMimeType(file.name);
+    const resolvedMime = getMimeType(file.name, file.type);
     if (!ALLOWED_MIME_TYPES.includes(resolvedMime)) {
       console.warn("[FileManager] Upload rejected: unsupported type", resolvedMime, file.name);
       return;
