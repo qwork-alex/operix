@@ -79,6 +79,22 @@ export function useServiceOrders(filters?: {
     },
   });
 
+  // Real-time: refresh service orders when payment_orders change (status sync via trigger)
+  useEffect(() => {
+    const channel = supabase
+      .channel('so-po-sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'payment_orders' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["service_orders"] });
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [queryClient]);
+
   const saveMutation = useMutation({
     mutationFn: async (orders: ServiceOrderInsert[]) => {
       if (!user?.id) throw new Error("You must be authenticated to save service orders.");
