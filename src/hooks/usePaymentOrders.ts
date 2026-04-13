@@ -151,36 +151,72 @@ export function usePaymentOrders(filters?: {
   return { ...query, saveMutation, updateMutation, deleteMutation };
 }
 
+const VALID_EXTRACT_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp", "image/gif", "image/bmp"];
+
 export function useExtractPaymentOrder() {
   const [isExtracting, setIsExtracting] = useState(false);
 
   const extract = async (file: File): Promise<PaymentExtractionResult> => {
     setIsExtracting(true);
     try {
+      // Validate file before processing
+      if (!file || file.size === 0) {
+        throw new Error("File is empty or invalid. Please select a valid document.");
+      }
+      const mimeType = file.type || guessMimeType(file.name);
+      if (!VALID_EXTRACT_TYPES.includes(mimeType)) {
+        throw new Error(`Unsupported file type: ${mimeType}. Please upload PDF, JPG, or PNG.`);
+      }
+
+      console.log("[Extract] Starting extraction:", { name: file.name, size: file.size, type: mimeType });
+
+      // Upload to storage with correct contentType
       const filePath = `payment-orders/${Date.now()}_${file.name}`;
       const { error: uploadError } = await supabase.storage
         .from("uploads")
-        .upload(filePath, file);
+        .upload(filePath, file, { contentType: mimeType, upsert: false });
       if (uploadError) {
         console.error("[Extract] Upload failed:", uploadError);
         throw new Error(`File upload failed: ${uploadError.message}. Please check the file and try again.`);
       }
+      console.log("[Extract] File uploaded to storage:", filePath);
 
+      // Convert to base64 for OCR
       const base64 = await fileToBase64(file);
+      console.log("[Extract] Base64 ready, invoking OCR edge function...");
 
-      const { data, error } = await supabase.functions.invoke("extract-payment-order", {
-        body: { imageBase64: base64, mimeType: file.type, fileName: file.name },
-      });
+      // Call OCR with retry (1 retry on network failure)
+      let lastError: Error | null = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const { data, error } = await supabase.functions.invoke("extract-payment-order", {
+            body: { imageBase64: base64, mimeType, fileName: file.name },
+          });
 
-      if (error) {
-        console.error("[Extract] Edge function error:", error);
-        throw new Error(`OCR extraction failed: ${error.message}. Try re-uploading the document.`);
+          if (error) {
+            console.error(`[Extract] Edge function error (attempt ${attempt + 1}):`, error);
+            lastError = new Error(`OCR extraction failed: ${error.message}. Try re-uploading the document.`);
+            if (attempt === 0) { await new Promise(r => setTimeout(r, 1500)); continue; }
+            throw lastError;
+          }
+          if (data?.error) {
+            console.error("[Extract] AI processing error:", data.error);
+            throw new Error(`AI could not process this document: ${data.error}`);
+          }
+
+          console.log("[Extract] OCR success:", { orders: data?.orders?.length, confidence: data?.confidence });
+          return data as PaymentExtractionResult;
+        } catch (retryErr) {
+          lastError = retryErr as Error;
+          if (attempt === 0 && (lastError.message.includes("fetch") || lastError.message.includes("network"))) {
+            console.warn("[Extract] Retrying after network error...");
+            await new Promise(r => setTimeout(r, 1500));
+            continue;
+          }
+          throw lastError;
+        }
       }
-      if (data?.error) {
-        console.error("[Extract] AI processing error:", data.error);
-        throw new Error(`AI could not process this document: ${data.error}`);
-      }
-      return data as PaymentExtractionResult;
+      throw lastError || new Error("OCR extraction failed after retries.");
     } catch (err) {
       console.error("[Extract] Payment order extraction error:", err);
       throw err;
@@ -192,6 +228,15 @@ export function useExtractPaymentOrder() {
   return { extract, isExtracting };
 }
 
+function guessMimeType(fileName: string): string {
+  const ext = fileName.split(".").pop()?.toLowerCase() || "";
+  const map: Record<string, string> = {
+    pdf: "application/pdf", jpg: "image/jpeg", jpeg: "image/jpeg",
+    png: "image/png", gif: "image/gif", webp: "image/webp", bmp: "image/bmp",
+  };
+  return map[ext] || "application/octet-stream";
+}
+
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -199,7 +244,7 @@ function fileToBase64(file: File): Promise<string> {
       const result = reader.result as string;
       resolve(result.split(",")[1]);
     };
-    reader.onerror = reject;
+    reader.onerror = () => reject(new Error("Failed to read file. The file may be corrupted."));
     reader.readAsDataURL(file);
   });
 }

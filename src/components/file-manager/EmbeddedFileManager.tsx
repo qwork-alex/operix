@@ -815,6 +815,15 @@ function PinchZoomContainer({ children }: { children: React.ReactNode }) {
 }
 
 
+const ALLOWED_MIME_TYPES = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "image/bmp",
+];
+
 export async function storeFileInDocuments(
   file: File,
   entityType: "service_order" | "payment_order",
@@ -822,13 +831,39 @@ export async function storeFileInDocuments(
   module: string = "orders"
 ) {
   try {
+    // Validate file
+    if (!file || file.size === 0) {
+      console.error("[FileManager] Upload rejected: empty file", file?.name);
+      return;
+    }
+    const resolvedMime = file.type || getMimeType(file.name);
+    if (!ALLOWED_MIME_TYPES.includes(resolvedMime)) {
+      console.warn("[FileManager] Upload rejected: unsupported type", resolvedMime, file.name);
+      return;
+    }
+
     const storagePath = `${entityType}/${Date.now()}_${file.name}`;
+    console.log("[FileManager] Uploading:", { storagePath, size: file.size, mime: resolvedMime });
+
     const { error: uploadErr } = await supabase.storage
       .from("uploads")
-      .upload(storagePath, file);
+      .upload(storagePath, file, {
+        contentType: resolvedMime,
+        upsert: false,
+      });
     if (uploadErr) {
       console.error("[FileManager] Storage upload failed:", uploadErr.message);
       return;
+    }
+
+    // Verify upload succeeded by requesting a signed URL
+    const { data: verifyData, error: verifyErr } = await supabase.storage
+      .from("uploads")
+      .createSignedUrl(storagePath, 60);
+    if (verifyErr || !verifyData?.signedUrl) {
+      console.error("[FileManager] Upload verification failed:", verifyErr?.message);
+    } else {
+      console.log("[FileManager] Upload verified, signed URL OK:", storagePath);
     }
 
     const { error } = await supabase.from("documents").insert({
@@ -837,12 +872,13 @@ export async function storeFileInDocuments(
       parent_id: null,
       uploaded_by: userId || null,
       storage_path: storagePath,
-      mime_type: file.type || getMimeType(file.name),
+      mime_type: resolvedMime,
       size_bytes: file.size,
       entity_type: entityType,
       module,
     });
     if (error) console.error("[FileManager] Document record insert failed:", error.message);
+    else console.log("[FileManager] Document record saved:", file.name);
   } catch (err) {
     console.error("[FileManager] storeFileInDocuments error:", err);
   }
