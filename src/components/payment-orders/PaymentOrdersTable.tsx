@@ -176,22 +176,19 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
       const listOrderIds = orders.filter(o => o.list_name === listName).map(o => o.id);
       if (!listOrderIds.length) return;
 
-      const { error } = await supabase
-        .from("payment_orders")
-        .update({ status, updated_at: new Date().toISOString() })
-        .in("id", listOrderIds);
-      if (error) throw error;
-
-      // Sync all items of this week to service orders
-      const listOrders = orders.filter(o => o.list_name === listName);
-      for (const po of listOrders) {
-        await syncServiceOrderStatus(po, status);
+      // Update one by one to trigger the DB trigger for each row
+      for (const id of listOrderIds) {
+        const { error } = await supabase
+          .from("payment_orders")
+          .update({ status, updated_at: new Date().toISOString() })
+          .eq("id", id);
+        if (error) throw error;
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payment_orders"] });
-      queryClient.invalidateQueries({ queryKey: ["payment_status_map"] });
       queryClient.invalidateQueries({ queryKey: ["service_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["financial-summary"] });
       toast.success("Status do lote atualizado");
     },
     onError: (err) => toast.error((err as Error).message),
