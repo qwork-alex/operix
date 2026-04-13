@@ -6,6 +6,10 @@ export interface PendingBulkEdit {
   field: string;
   value: any;
   label: string;
+  /** For service fields: the index (0-3) of the service slot being edited */
+  serviceIndex?: number;
+  /** For service fields: which sub-field ("name" | "price") */
+  serviceField?: "name" | "price";
 }
 
 interface BulkEditBannerProps {
