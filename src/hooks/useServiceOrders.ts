@@ -122,23 +122,23 @@ export function useServiceOrders(filters?: {
         throw error;
       }
 
-      // Auto-generate service_order_distributions from active profit rules
+      // Auto-generate service_order_distributions from active profit rules (group-based)
       if (data && data.length > 0) {
         try {
-          const techIds = [...new Set(data.map(so => so.technician_id).filter(Boolean))];
-          if (techIds.length > 0) {
+          const groupIds = [...new Set(data.map(so => so.group_id).filter(Boolean))];
+          if (groupIds.length > 0) {
             const { data: profitRules } = await supabase
               .from("profit_rules")
-              .select("technician_id, profit_rule_items(participant_name, percentage, participant_type)")
+              .select("group_id, profit_rule_items(participant_name, percentage, participant_type)")
               .eq("is_active", true)
-              .in("technician_id", techIds as string[]);
+              .in("group_id", groupIds as string[]);
 
             if (profitRules && profitRules.length > 0) {
-              const ruleMap = new Map(profitRules.map((r: any) => [r.technician_id, r.profit_rule_items || []]));
+              const ruleMap = new Map(profitRules.map((r: any) => [r.group_id, r.profit_rule_items || []]));
               const distributions: any[] = [];
               for (const so of data) {
-                const items = ruleMap.get(so.technician_id!);
-                if (!items || !so.technician_id) continue;
+                const items = ruleMap.get(so.group_id!);
+                if (!items || !so.group_id) continue;
                 const total = Number(so.total || 0);
                 for (const item of items) {
                   distributions.push({
