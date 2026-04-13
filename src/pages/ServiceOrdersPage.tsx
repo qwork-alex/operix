@@ -22,6 +22,7 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { useTechnicianEarnings, getTechEarnings } from "@/hooks/useTechnicianEarnings";
 
 export default function ServiceOrdersPage() {
   const { t } = useLanguage();
@@ -40,6 +41,7 @@ export default function ServiceOrdersPage() {
   const { extract } = useExtractServiceOrder();
   const { data: clients = [] } = useClients();
   const { data: technicians = [] } = useTechnicians();
+  const { data: earningsMap } = useTechnicianEarnings();
   const { queue, isProcessing, addFiles, clearCompleted } = useFileQueue();
 
   const platforms = [...new Set((orders as any[]).map((o) => o.platform).filter(Boolean))];
@@ -105,6 +107,13 @@ export default function ServiceOrdersPage() {
         status: "draft",
         group_id: r.week ?? null,
       };
+
+      // Calculate technician earnings from profit distribution rules
+      const techName = payload.technician_name || r.technician;
+      const techEarn = getTechEarnings(techName, payload.total, earningsMap);
+      payload.technician_percentage = techEarn?.percentage ?? 0;
+      payload.technician_earning = techEarn?.earnings ?? 0;
+
       return payload as ServiceOrderInsert;
     });
 
