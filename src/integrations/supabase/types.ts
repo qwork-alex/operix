@@ -1016,8 +1016,10 @@ export type Database = {
           service_4_name: string | null
           service_4_price: number | null
           status: string
+          technician_earning: number | null
           technician_id: string | null
           technician_name: string
+          technician_percentage: number | null
           total: number | null
           updated_at: string
           week: string | null
@@ -1041,8 +1043,10 @@ export type Database = {
           service_4_name?: string | null
           service_4_price?: number | null
           status?: string
+          technician_earning?: number | null
           technician_id?: string | null
           technician_name?: string
+          technician_percentage?: number | null
           total?: number | null
           updated_at?: string
           week?: string | null
@@ -1066,8 +1070,10 @@ export type Database = {
           service_4_name?: string | null
           service_4_price?: number | null
           status?: string
+          technician_earning?: number | null
           technician_id?: string | null
           technician_name?: string
+          technician_percentage?: number | null
           total?: number | null
           updated_at?: string
           week?: string | null
