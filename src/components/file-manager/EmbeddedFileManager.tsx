@@ -313,8 +313,22 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
         return;
       }
       const resolvedMime = getMimeType(doc.name, doc.mime_type);
-      console.log("[FileManager] Preview: mime=", resolvedMime, "file=", doc.name);
-      setPreviewDoc({ ...doc, url, mime_type: resolvedMime });
+      console.log("[FileManager] Preview: fetching blob, mime=", resolvedMime, "file=", doc.name);
+
+      // Fetch as blob to bypass ERR_BLOCKED_BY_CLIENT
+      const response = await fetch(url);
+      if (!response.ok) {
+        console.error("[FileManager] Preview fetch failed:", response.status);
+        // Fallback: open in new tab
+        window.open(url, "_blank");
+        toast.error("Preview blocked — opened in new tab.");
+        return;
+      }
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(new Blob([blob], { type: resolvedMime }));
+      console.log("[FileManager] Preview: blob URL created", blobUrl.substring(0, 60));
+
+      setPreviewDoc({ ...doc, url: blobUrl, mime_type: resolvedMime, _blobUrl: true });
     } catch (err) {
       console.error("[FileManager] Preview error:", err);
       toast.error("Preview failed. Try opening the file in a new tab.");
@@ -680,7 +694,13 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
       </Dialog>
 
       {/* Preview dialog with pinch-zoom, print, and open-in-new-tab */}
-      <Dialog open={!!previewDoc} onOpenChange={() => setPreviewDoc(null)}>
+      <Dialog open={!!previewDoc} onOpenChange={(open) => {
+        if (!open && previewDoc?._blobUrl && previewDoc?.url) {
+          URL.revokeObjectURL(previewDoc.url);
+          console.log("[FileManager] Preview blob URL revoked");
+        }
+        setPreviewDoc(null);
+      }}>
         <DialogContent className="bg-card border-border max-w-3xl max-h-[80vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between gap-2">
