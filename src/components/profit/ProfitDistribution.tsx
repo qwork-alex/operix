@@ -12,9 +12,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   PieChart as PieChartIcon, Plus, Save, Trash2, Loader2,
-  AlertTriangle, Check, Users, FolderPlus, X,
+  AlertTriangle, Check, Users, FolderPlus, X, ChevronDown,
 } from "lucide-react";
 
 // ─── Types ───
