@@ -7,9 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import {
   ChevronDown, ChevronRight, Plus, Trash2, TrendingUp, TrendingDown, AlertTriangle,
-  Pencil, Check, X,
+  Check, X, UserPlus, Users,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -22,7 +24,7 @@ interface TechFinancials {
   expenses: { id: string; label: string; amount: number }[];
   totalExpenses: number;
   result: number;
-  status: "healthy" | "warning" | "critical";
+  status: "positive" | "negative";
 }
 
 function useTechnicianFinancials() {
@@ -51,7 +53,6 @@ function useTechnicianFinancials() {
           .filter((po: any) => po.technician_id === tech.id || (po.technician_name || "").toLowerCase() === tech.name.toLowerCase())
           .reduce((s: number, po: any) => s + Number(po.total || 0), 0);
 
-        // Expenses tagged for this technician (via notes containing tech id or name)
         const techExpenses = expenseRecords
           .filter((r: any) => {
             const notes = r.notes || "";
@@ -61,11 +62,6 @@ function useTechnicianFinancials() {
 
         const totalExpenses = techExpenses.reduce((s: number, e: any) => s + e.amount, 0);
         const result = received - totalExpenses;
-        const margin = received > 0 ? (result / received) * 100 : 0;
-
-        let status: TechFinancials["status"] = "healthy";
-        if (margin < 10 || result < 0) status = "critical";
-        else if (margin < 30) status = "warning";
 
         return {
           name: tech.name,
@@ -76,10 +72,25 @@ function useTechnicianFinancials() {
           expenses: techExpenses,
           totalExpenses,
           result,
-          status,
+          status: result >= 0 ? "positive" : "negative",
         };
       }).sort((a, b) => b.receivedRevenue - a.receivedRevenue);
     },
+  });
+}
+
+function useAddTechnician() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ name }: { name: string }) => {
+      const { error } = await supabase.from("technicians").insert({ name });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["technician-financials"] });
+      toast.success("Técnico adicionado");
+    },
+    onError: (e) => toast.error("Erro: " + (e as Error).message),
   });
 }
 
@@ -98,7 +109,11 @@ function useAddTechExpense() {
       });
       if (error) throw error;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["technician-financials"] }); qc.invalidateQueries({ queryKey: ["reconciliation-summary"] }); toast.success("Despesa adicionada"); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["technician-financials"] });
+      qc.invalidateQueries({ queryKey: ["reconciliation-summary"] });
+      toast.success("Despesa adicionada");
+    },
     onError: (e) => toast.error("Erro: " + (e as Error).message),
   });
 }
@@ -110,45 +125,107 @@ function useDeleteTechExpense() {
       const { error } = await supabase.from("financial_records").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["technician-financials"] }); qc.invalidateQueries({ queryKey: ["reconciliation-summary"] }); toast.success("Despesa removida"); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["technician-financials"] });
+      qc.invalidateQueries({ queryKey: ["reconciliation-summary"] });
+      toast.success("Despesa removida");
+    },
     onError: (e) => toast.error("Erro: " + (e as Error).message),
   });
 }
 
-const DEFAULT_EXPENSE_TYPES = ["URSSAF", "Combustível", "Ferramentas", "Outros"];
+const DEFAULT_EXPENSE_TYPES = ["Combustível", "Hotel", "Seguro", "Ferramentas", "Outros"];
 
 export default function TechnicianDetailTab() {
   const { data: techData = [], isLoading } = useTechnicianFinancials();
   const { formatCurrency } = useLanguage();
+  const [showAddModal, setShowAddModal] = useState(false);
 
   if (isLoading) {
     return <div className="space-y-3">{[1, 2, 3].map(i => <div key={i} className="h-16 bg-muted/30 rounded-lg animate-pulse" />)}</div>;
   }
 
-  if (techData.length === 0) {
-    return (
-      <Card className="border-border/50 bg-muted/30">
-        <CardContent className="py-12 text-center">
-          <p className="text-muted-foreground">Nenhum técnico encontrado. Adicione técnicos para ver a análise.</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
+      {/* Header with Add button */}
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-medium text-muted-foreground">Análise por técnico</h3>
+        <Button variant="outline" size="sm" onClick={() => setShowAddModal(true)}>
+          <UserPlus className="h-4 w-4 mr-1" /> Adicionar técnico
+        </Button>
+      </div>
+
+      {/* Empty state */}
+      {techData.length === 0 && (
+        <Card className="border-border/50 bg-muted/30">
+          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+            <Users className="h-12 w-12 text-muted-foreground/40 mb-4" />
+            <h3 className="text-lg font-semibold text-foreground mb-2">Adicione técnicos para começar a análise financeira</h3>
+            <p className="text-sm text-muted-foreground max-w-md mb-4">
+              Os dados de receita serão calculados automaticamente a partir das ordens de serviço e pagamento.
+            </p>
+            <Button onClick={() => setShowAddModal(true)}>
+              <Plus className="h-4 w-4 mr-1" /> Adicionar técnico
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Alerts */}
-      {techData.some(t => t.status === "critical") && (
+      {techData.some(t => t.status === "negative") && (
         <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">
           <AlertTriangle className="h-4 w-4" />
-          {techData.filter(t => t.status === "critical").length} técnico(s) com margem crítica
+          {techData.filter(t => t.status === "negative").length} técnico(s) em dívida com a empresa
         </div>
       )}
 
+      {/* Technician cards */}
       {techData.map((tech) => (
         <TechnicianCard key={tech.technicianId} tech={tech} formatCurrency={formatCurrency} />
       ))}
+
+      {/* Add Technician Modal */}
+      <AddTechnicianModal open={showAddModal} onOpenChange={setShowAddModal} />
     </div>
+  );
+}
+
+function AddTechnicianModal({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const [name, setName] = useState("");
+  const addTech = useAddTechnician();
+
+  const handleSubmit = () => {
+    if (!name.trim()) return;
+    addTech.mutate({ name: name.trim() }, {
+      onSuccess: () => { setName(""); onOpenChange(false); },
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Adicionar técnico</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="space-y-2">
+            <Label>Nome do técnico *</Label>
+            <Input
+              placeholder="Nome completo"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button onClick={handleSubmit} disabled={!name.trim() || addTech.isPending}>
+            {addTech.isPending ? "Salvando..." : "Adicionar"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -160,8 +237,7 @@ function TechnicianCard({ tech, formatCurrency }: { tech: TechFinancials; format
   const addExpense = useAddTechExpense();
   const deleteExpense = useDeleteTechExpense();
 
-  const statusColor = tech.status === "healthy" ? "bg-emerald-500" : tech.status === "warning" ? "bg-amber-500" : "bg-red-500";
-  const statusEmoji = tech.status === "healthy" ? "🟢" : tech.status === "warning" ? "🟡" : "🔴";
+  const isPositive = tech.result >= 0;
 
   const handleAdd = () => {
     if (!newLabel || !newAmount) return;
@@ -177,19 +253,19 @@ function TechnicianCard({ tech, formatCurrency }: { tech: TechFinancials; format
         <Card className="border-border/50 cursor-pointer hover:border-primary/30 transition-colors">
           <CardContent className="py-3 px-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <span className="text-base">{statusEmoji}</span>
+              <span className="text-base">{isPositive ? "🟢" : "🔴"}</span>
               <span className="font-medium text-foreground">{tech.name}</span>
-              {tech.status !== "healthy" && (
-                <Badge variant={tech.status === "critical" ? "destructive" : "outline"} className="text-[10px]">
-                  {tech.status === "critical" ? "Margem crítica" : "Atenção"}
-                </Badge>
-              )}
+              <Badge variant={isPositive ? "outline" : "destructive"} className="text-[10px]">
+                {isPositive ? "Empresa deve pagar" : "Em dívida"}
+              </Badge>
             </div>
             <div className="flex items-center gap-4">
-              <span className={`text-sm font-medium tabular-nums ${tech.result >= 0 ? "text-emerald-400" : "text-destructive"}`}>
-                {formatCurrency(tech.result)}
+              <span className={`text-sm font-medium tabular-nums ${isPositive ? "text-emerald-400" : "text-destructive"}`}>
+                {formatCurrency(Math.abs(tech.result))}
               </span>
-              {open ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+              <Button variant="ghost" size="sm" className="h-7 text-xs">
+                {open ? <ChevronDown className="h-4 w-4" /> : "Ver detalhes"}
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -197,30 +273,32 @@ function TechnicianCard({ tech, formatCurrency }: { tech: TechFinancials; format
 
       <CollapsibleContent>
         <div className="ml-4 mt-2 space-y-3 border-l-2 border-border pl-4 pb-2">
-          {/* Block 1 — Revenue (read-only) */}
+          {/* Revenue (read-only) */}
           <Card className="border-border/50">
             <CardHeader className="pb-1 pt-3 px-4">
-              <CardTitle className="text-xs text-muted-foreground uppercase tracking-wider">Receita</CardTitle>
+              <CardTitle className="text-xs text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                <TrendingUp className="h-3 w-3" /> Receitas (automático)
+              </CardTitle>
             </CardHeader>
             <CardContent className="px-4 pb-3 space-y-1">
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Esperada (OS)</span>
+                <span className="text-muted-foreground">Receita esperada (OS)</span>
                 <span className="tabular-nums">{formatCurrency(tech.expectedRevenue)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Faturada (OP)</span>
+                <span className="text-muted-foreground">Receita recebida (OP)</span>
                 <span className="tabular-nums">{formatCurrency(tech.receivedRevenue)}</span>
               </div>
               <div className="flex justify-between text-sm font-medium border-t border-border/50 pt-1">
                 <span className="text-muted-foreground">Diferença</span>
-                <span className={`tabular-nums ${tech.difference > 0 ? "text-destructive" : "text-emerald-400"}`}>
-                  {tech.difference > 0 ? "-" : "+"}{formatCurrency(Math.abs(tech.difference))}
+                <span className={`tabular-nums ${tech.difference > 0 ? "text-destructive" : tech.difference < 0 ? "text-emerald-400" : "text-foreground"}`}>
+                  {tech.difference > 0 ? "-" : tech.difference < 0 ? "+" : ""}{formatCurrency(Math.abs(tech.difference))}
                 </span>
               </div>
             </CardContent>
           </Card>
 
-          {/* Block 2 — Expenses (editable) */}
+          {/* Expenses (editable) */}
           <Card className="border-border/50">
             <CardHeader className="pb-1 pt-3 px-4 flex flex-row items-center justify-between">
               <CardTitle className="text-xs text-muted-foreground uppercase tracking-wider">Despesas</CardTitle>
@@ -283,16 +361,23 @@ function TechnicianCard({ tech, formatCurrency }: { tech: TechFinancials; format
             </CardContent>
           </Card>
 
-          {/* Block 3 — Result */}
-          <Card className={`border-border/50 ${tech.result >= 0 ? "glow-green" : "glow-red"}`}>
-            <CardContent className="py-3 px-4 flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                {tech.result >= 0 ? <TrendingUp className="h-4 w-4 text-emerald-400" /> : <TrendingDown className="h-4 w-4 text-destructive" />}
-                <span className="text-sm font-medium text-muted-foreground">Resultado</span>
+          {/* Result */}
+          <Card className={`border-border/50 ${isPositive ? "glow-green" : "glow-red"}`}>
+            <CardContent className="py-3 px-4">
+              <div className="flex justify-between items-center mb-1">
+                <div className="flex items-center gap-2">
+                  {isPositive ? <TrendingUp className="h-4 w-4 text-emerald-400" /> : <TrendingDown className="h-4 w-4 text-destructive" />}
+                  <span className="text-sm font-medium text-muted-foreground">Resultado</span>
+                </div>
+                <span className={`text-lg font-bold tabular-nums ${isPositive ? "text-emerald-400" : "text-destructive"}`}>
+                  {formatCurrency(Math.abs(tech.result))}
+                </span>
               </div>
-              <span className={`text-lg font-bold tabular-nums ${tech.result >= 0 ? "text-emerald-400" : "text-destructive"}`}>
-                {formatCurrency(tech.result)}
-              </span>
+              <p className={`text-xs mt-1 ${isPositive ? "text-emerald-400/80" : "text-destructive/80"}`}>
+                {isPositive
+                  ? `Empresa deve pagar ao técnico: ${formatCurrency(tech.result)}`
+                  : `Técnico está em dívida com a empresa: ${formatCurrency(Math.abs(tech.result))}`}
+              </p>
             </CardContent>
           </Card>
         </div>
