@@ -220,20 +220,49 @@ serve(async (req) => {
     const results: any[] = [];
     const matchedPOIds = new Set<string>();
 
+    const debugDecisions: any[] = [];
+
     for (const so of serviceOrders) {
       const soTotal = Number(so.total || 0);
       let bestMatch: any = null;
       let bestResult: MatchResult | null = null;
+      const candidates: any[] = [];
 
       for (const po of paymentOrders) {
         if (matchedPOIds.has(po.id)) continue;
 
         const result = calculateScore(so, po);
+        // Log top candidates for each SO
+        if (result.score > 0) {
+          candidates.push({
+            po_plate: po.license_plate,
+            po_platform: po.platform,
+            po_services: extractPOServiceNames(po),
+            score: result.score,
+            reasons: result.reasons,
+          });
+        }
         if (!bestResult || result.score > bestResult.score) {
           bestResult = result;
           bestMatch = po;
         }
       }
+
+      // Debug log for every SO match decision
+      const decision = {
+        so_plate: so.license_plate,
+        so_platform: so.platform,
+        so_services: extractServiceNames(so),
+        so_total: soTotal,
+        best_po_plate: bestMatch?.license_plate || null,
+        best_po_platform: bestMatch?.platform || null,
+        best_score: bestResult?.score || 0,
+        best_reasons: bestResult?.reasons || [],
+        matched: (bestResult?.score || 0) >= 70,
+        top_candidates: candidates.sort((a, b) => b.score - a.score).slice(0, 3),
+      };
+      debugDecisions.push(decision);
+      console.log("MATCH_DECISION:", JSON.stringify(decision));
 
       const roundedScore = bestResult ? Math.round(bestResult.score * 10) / 10 : 0;
 
