@@ -372,6 +372,7 @@ serve(async (req) => {
       mismatched: results.filter(r => r.status === "mismatch").length,
       missing: results.filter(r => r.status === "missing").length,
       pending: results.filter(r => r.status === "pending").length,
+      debug_sample: debugDecisions.slice(0, 10),
     };
 
     console.log("Reconciliation complete:", JSON.stringify(summary));
