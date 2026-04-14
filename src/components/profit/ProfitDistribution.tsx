@@ -13,6 +13,16 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { BulkDeleteDialog } from "@/components/shared/BulkDeleteDialog";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
 import {
   PieChart as PieChartIcon, Plus, Save, Trash2, Loader2,
   AlertTriangle, Check, Users, FolderPlus, X, ChevronDown,
@@ -45,6 +55,42 @@ const PARTICIPANT_TYPES = [
   { value: "other", label: "Outros" },
 ] as const;
 
+// ─── Color System ───
+
+type ParticipantType = RuleItem["participant_type"];
+
+const TYPE_PALETTES: Record<ParticipantType, string[]> = {
+  client:     ["#FACC15", "#FBBF24", "#F59E0B"],
+  technician: ["#60A5FA", "#3B82F6", "#2563EB"],
+  partner:    ["#34D399", "#10B981", "#059669"],
+  company:    ["#A78BFA", "#8B5CF6", "#7C3AED"],
+  other:      ["#F87171", "#EF4444", "#DC2626"],
+};
+
+function getColor(type: ParticipantType, index: number): string {
+  const palette = TYPE_PALETTES[type] || TYPE_PALETTES.other;
+  return palette[index % palette.length];
+}
+
+function getGlowStyle(color: string): React.CSSProperties {
+  // Extract rgb for text-shadow
+  const r = parseInt(color.slice(1, 3), 16);
+  const g = parseInt(color.slice(3, 5), 16);
+  const b = parseInt(color.slice(5, 7), 16);
+  return {
+    color,
+    textShadow: `0 0 6px rgba(${r}, ${g}, ${b}, 0.25)`,
+  };
+}
+
+/** Compute stable index for a participant within its type group */
+function getTypeIndex(items: RuleItem[], itemId: string): number {
+  const item = items.find(i => i.id === itemId);
+  if (!item) return 0;
+  const sameType = items.filter(i => i.participant_type === item.participant_type);
+  return sameType.findIndex(i => i.id === itemId);
+}
+
 // ─── Component ───
 
 export function ProfitDistribution() {
@@ -53,6 +99,8 @@ export function ProfitDistribution() {
 
   const [localRules, setLocalRules] = useState<ProfitRule[]>([]);
   const [groupPopoverSearch, setGroupPopoverSearch] = useState<Record<string, string>>({});
+  const [deleteRuleTarget, setDeleteRuleTarget] = useState<string | null>(null);
+  const [showDeleteAll, setShowDeleteAll] = useState(false);
 
   // ── Queries ──
   const { data: fetchedRules = [], isLoading: rulesLoading } = useQuery({
@@ -165,7 +213,6 @@ export function ProfitDistribution() {
     return localRules.some(lr => lr.id === ruleId);
   }, [localRules]);
 
-  // Check if a group is assigned to another rule (not this one)
   const groupAssignedToOther = (groupId: string, currentRuleId: string) => {
     return allRules.some(r => r.id !== currentRuleId && r.is_active && r.group_ids.includes(groupId));
   };
@@ -254,33 +301,18 @@ export function ProfitDistribution() {
         participant_type: item.participant_type,
       }));
 
-      if (!rule.rule_name.trim()) {
-        throw new Error("Nome da regra é obrigatório");
-      }
-      if (group_ids.length === 0) {
-        throw new Error("Selecione pelo menos um grupo");
-      }
-      if (getItemsTotal(rule.items) !== 100) {
-        throw new Error("A soma das percentagens deve ser 100%");
-      }
+      if (!rule.rule_name.trim()) throw new Error("Nome da regra é obrigatório");
+      if (group_ids.length === 0) throw new Error("Selecione pelo menos um grupo");
+      if (getItemsTotal(rule.items) !== 100) throw new Error("A soma das percentagens deve ser 100%");
 
-      console.log("Saving rule:", {
-        rule_name: rule.rule_name,
-        group_ids,
-        participants,
-        isNew: !!rule._isNew,
-      });
+      console.log("Saving rule:", { rule_name: rule.rule_name, group_ids, participants, isNew: !!rule._isNew });
 
       let ruleId: string;
 
       if (rule._isNew) {
         const { data: savedRule, error: ruleError } = await supabase
           .from("profit_rules")
-          .insert({
-            rule_name: rule.rule_name,
-            group_ids,
-            is_active: rule.is_active,
-          } as any)
+          .insert({ rule_name: rule.rule_name, group_ids, is_active: rule.is_active } as any)
           .select("id")
           .single();
         if (ruleError) throw ruleError;
@@ -288,18 +320,12 @@ export function ProfitDistribution() {
       } else {
         const { error: ruleError } = await supabase
           .from("profit_rules")
-          .update({
-            rule_name: rule.rule_name,
-            group_ids,
-            is_active: rule.is_active,
-            updated_at: new Date().toISOString(),
-          } as any)
+          .update({ rule_name: rule.rule_name, group_ids, is_active: rule.is_active, updated_at: new Date().toISOString() } as any)
           .eq("id", rule.id);
         if (ruleError) throw ruleError;
         ruleId = rule.id;
       }
 
-      // Upsert items
       await supabase.from("profit_rule_items").delete().eq("rule_id", ruleId);
       const items = participants.map(i => ({
         rule_id: ruleId,
@@ -310,7 +336,6 @@ export function ProfitDistribution() {
       const { error: itemsError } = await supabase.from("profit_rule_items").insert(items);
       if (itemsError) throw itemsError;
 
-      // Generate distributions for all linked groups
       const allSOs = group_ids.flatMap(gid => getGroupSOs(gid));
       if (allSOs.length > 0) {
         const soIds = allSOs.map((so: any) => so.id);
@@ -328,7 +353,6 @@ export function ProfitDistribution() {
           await supabase.from("service_order_distributions").insert(distributions);
         }
 
-        // Update technician earnings on SOs if a technician participant exists
         const techItem = participants.find(i => i.participant_type === "technician");
         if (techItem) {
           for (const so of allSOs) {
@@ -363,6 +387,7 @@ export function ProfitDistribution() {
       if (error) throw error;
     },
     onSuccess: () => {
+      setDeleteRuleTarget(null);
       queryClient.invalidateQueries({ queryKey: ["profit-rules"] });
       queryClient.invalidateQueries({ queryKey: ["technician_earnings_map"] });
       toast.success("Regra excluída");
@@ -378,6 +403,7 @@ export function ProfitDistribution() {
     },
     onSuccess: () => {
       setLocalRules([]);
+      setShowDeleteAll(false);
       queryClient.invalidateQueries({ queryKey: ["profit-rules"] });
       queryClient.invalidateQueries({ queryKey: ["technician_earnings_map"] });
       toast.success("Todas as regras excluídas");
@@ -475,7 +501,7 @@ export function ProfitDistribution() {
                 variant="destructive"
                 size="icon"
                 className="h-8 w-8"
-                onClick={() => { if (confirm("Excluir esta regra permanentemente?")) deleteRuleMutation.mutate(rule.id); }}
+                onClick={() => setDeleteRuleTarget(rule.id)}
                 disabled={deleteRuleMutation.isPending}
                 title="Excluir"
               >
@@ -595,62 +621,72 @@ export function ProfitDistribution() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rule.items.map((item) => (
-                  <TableRow key={item.id} className="text-xs">
-                    <TableCell>
-                      <Input
-                        value={item.participant_name}
-                        onChange={(e) => updateItem(rule.id, item.id, "participant_name", e.target.value)}
-                        placeholder="Nome do participante"
-                        className="h-8 text-xs"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Input
-                          type="number"
-                          min={0}
-                          max={100}
-                          value={item.percentage}
-                          onChange={(e) => updateItem(rule.id, item.id, "percentage", Number(e.target.value))}
-                          className="h-8 w-20 text-xs"
-                        />
-                        <span className="text-muted-foreground">%</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Select
-                        value={item.participant_type}
-                        onValueChange={(v) => updateItem(rule.id, item.id, "participant_type", v)}
-                      >
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {PARTICIPANT_TYPES.map(t => (
-                            <SelectItem key={t.value} value={t.value} className="text-xs">
-                              {t.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      {formatCurrency(totalRevenue * item.percentage / 100)}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-destructive hover:text-destructive"
-                        onClick={() => deleteItem(rule.id, item.id)}
-                        disabled={rule.items.length <= 1}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {rule.items.map((item) => {
+                  const typeIdx = getTypeIndex(rule.items, item.id);
+                  const itemColor = getColor(item.participant_type, typeIdx);
+                  const glowStyle = getGlowStyle(itemColor);
+                  return (
+                    <TableRow key={item.id} className="text-xs">
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: itemColor }} />
+                          <Input
+                            value={item.participant_name}
+                            onChange={(e) => updateItem(rule.id, item.id, "participant_name", e.target.value)}
+                            placeholder="Nome do participante"
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={item.percentage}
+                            onChange={(e) => updateItem(rule.id, item.id, "percentage", Number(e.target.value))}
+                            className="h-8 w-20 text-xs"
+                          />
+                          <span className="text-muted-foreground">%</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Select
+                          value={item.participant_type}
+                          onValueChange={(v) => updateItem(rule.id, item.id, "participant_type", v)}
+                        >
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {PARTICIPANT_TYPES.map(t => (
+                              <SelectItem key={t.value} value={t.value} className="text-xs">
+                                {t.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        <span style={glowStyle}>
+                          {formatCurrency(totalRevenue * item.percentage / 100)}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          onClick={() => deleteItem(rule.id, item.id)}
+                          disabled={rule.items.length <= 1}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
@@ -668,34 +704,33 @@ export function ProfitDistribution() {
               </span>
             </div>
             <div className="h-3 rounded-full bg-muted flex overflow-hidden">
-              {rule.items.map((item) => (
-                <div
-                  key={item.id}
-                  className={`h-full transition-all ${
-                    item.participant_type === "technician" ? "bg-primary" :
-                    item.participant_type === "partner" ? "bg-accent" :
-                    item.participant_type === "company" ? "bg-secondary" :
-                    item.participant_type === "client" ? "bg-muted-foreground" :
-                    "bg-muted-foreground/40"
-                  }`}
-                  style={{ width: `${Math.min(item.percentage, 100)}%` }}
-                  title={`${item.participant_name}: ${item.percentage}%`}
-                />
-              ))}
+              {rule.items.map((item) => {
+                const typeIdx = getTypeIndex(rule.items, item.id);
+                const itemColor = getColor(item.participant_type, typeIdx);
+                return (
+                  <div
+                    key={item.id}
+                    className="h-full transition-all"
+                    style={{
+                      width: `${Math.min(item.percentage, 100)}%`,
+                      backgroundColor: itemColor,
+                    }}
+                    title={`${item.participant_name}: ${item.percentage}%`}
+                  />
+                );
+              })}
             </div>
             <div className="flex flex-wrap gap-3 mt-2">
-              {rule.items.map(item => (
-                <div key={item.id} className="flex items-center gap-1.5 text-[10px]">
-                  <div className={`h-2 w-2 rounded-full ${
-                    item.participant_type === "technician" ? "bg-primary" :
-                    item.participant_type === "partner" ? "bg-accent" :
-                    item.participant_type === "company" ? "bg-secondary" :
-                    item.participant_type === "client" ? "bg-muted-foreground" :
-                    "bg-muted-foreground/40"
-                  }`} />
-                  <span className="text-muted-foreground">{item.participant_name || "—"} ({item.percentage}%)</span>
-                </div>
-              ))}
+              {rule.items.map(item => {
+                const typeIdx = getTypeIndex(rule.items, item.id);
+                const itemColor = getColor(item.participant_type, typeIdx);
+                return (
+                  <div key={item.id} className="flex items-center gap-1.5 text-[10px]">
+                    <div className="h-2 w-2 rounded-full" style={{ backgroundColor: itemColor }} />
+                    <span className="text-muted-foreground">{item.participant_name || "—"} ({item.percentage}%)</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -722,11 +757,17 @@ export function ProfitDistribution() {
                             <TableHead>Veículo</TableHead>
                             <TableHead>Placa</TableHead>
                             <TableHead className="text-right">Total OS</TableHead>
-                            {rule.items.map(item => (
-                              <TableHead key={item.id} className="text-right">
-                                {item.participant_name || item.participant_type} ({item.percentage}%)
-                              </TableHead>
-                            ))}
+                            {rule.items.map(item => {
+                              const typeIdx = getTypeIndex(rule.items, item.id);
+                              const itemColor = getColor(item.participant_type, typeIdx);
+                              return (
+                                <TableHead key={item.id} className="text-right">
+                                  <span style={getGlowStyle(itemColor)}>
+                                    {item.participant_name || item.participant_type} ({item.percentage}%)
+                                  </span>
+                                </TableHead>
+                              );
+                            })}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -737,22 +778,34 @@ export function ProfitDistribution() {
                                 <TableCell>{so.car_name || "—"}</TableCell>
                                 <TableCell className="font-mono">{so.license_plate || "—"}</TableCell>
                                 <TableCell className="text-right font-medium">{formatCurrency(soTotal)}</TableCell>
-                                {rule.items.map(item => (
-                                  <TableCell key={item.id} className="text-right">
-                                    {formatCurrency(Math.round(soTotal * item.percentage / 100 * 100) / 100)}
-                                  </TableCell>
-                                ))}
+                                {rule.items.map(item => {
+                                  const typeIdx = getTypeIndex(rule.items, item.id);
+                                  const itemColor = getColor(item.participant_type, typeIdx);
+                                  return (
+                                    <TableCell key={item.id} className="text-right">
+                                      <span style={getGlowStyle(itemColor)}>
+                                        {formatCurrency(Math.round(soTotal * item.percentage / 100 * 100) / 100)}
+                                      </span>
+                                    </TableCell>
+                                  );
+                                })}
                               </TableRow>
                             );
                           })}
                           <TableRow className="text-xs font-semibold border-t-2">
                             <TableCell colSpan={2}>TOTAL</TableCell>
                             <TableCell className="text-right">{formatCurrency(groupRev)}</TableCell>
-                            {rule.items.map(item => (
-                              <TableCell key={item.id} className="text-right">
-                                {formatCurrency(Math.round(groupRev * item.percentage / 100 * 100) / 100)}
-                              </TableCell>
-                            ))}
+                            {rule.items.map(item => {
+                              const typeIdx = getTypeIndex(rule.items, item.id);
+                              const itemColor = getColor(item.participant_type, typeIdx);
+                              return (
+                                <TableCell key={item.id} className="text-right">
+                                  <span style={getGlowStyle(itemColor)}>
+                                    {formatCurrency(Math.round(groupRev * item.percentage / 100 * 100) / 100)}
+                                  </span>
+                                </TableCell>
+                              );
+                            })}
                           </TableRow>
                         </TableBody>
                       </Table>
@@ -767,11 +820,15 @@ export function ProfitDistribution() {
                   <span className="text-sm font-bold">{formatCurrency(totalRevenue)}</span>
                 </div>
                 <div className="flex flex-wrap gap-3 mt-2">
-                  {rule.items.map(item => (
-                    <span key={item.id} className="text-[10px] text-muted-foreground">
-                      {item.participant_name || item.participant_type}: {formatCurrency(Math.round(totalRevenue * item.percentage / 100 * 100) / 100)}
-                    </span>
-                  ))}
+                  {rule.items.map(item => {
+                    const typeIdx = getTypeIndex(rule.items, item.id);
+                    const itemColor = getColor(item.participant_type, typeIdx);
+                    return (
+                      <span key={item.id} className="text-[10px]" style={getGlowStyle(itemColor)}>
+                        {item.participant_name || item.participant_type}: {formatCurrency(Math.round(totalRevenue * item.percentage / 100 * 100) / 100)}
+                      </span>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -783,6 +840,58 @@ export function ProfitDistribution() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* Delete single rule confirmation */}
+      <AlertDialog open={!!deleteRuleTarget} onOpenChange={(v) => !v && setDeleteRuleTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-5 w-5" />
+              Confirmar exclusão
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir esta regra? Esta ação <strong className="text-destructive">não pode ser desfeita</strong>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteRuleTarget(null)}>Cancelar</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              onClick={() => deleteRuleTarget && deleteRuleMutation.mutate(deleteRuleTarget)}
+              disabled={deleteRuleMutation.isPending}
+            >
+              {deleteRuleMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Trash2 className="h-4 w-4 mr-1" />}
+              Excluir
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete all rules confirmation */}
+      <AlertDialog open={showDeleteAll} onOpenChange={(v) => !v && setShowDeleteAll(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-5 w-5" />
+              Excluir TODAS as regras
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir <strong className="text-foreground">TODAS as regras</strong>? Esta ação <strong className="text-destructive">não pode ser desfeita</strong>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowDeleteAll(false)}>Cancelar</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              onClick={() => deleteAllMutation.mutate()}
+              disabled={deleteAllMutation.isPending}
+            >
+              {deleteAllMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Trash2 className="h-4 w-4 mr-1" />}
+              Excluir Todas
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
@@ -801,10 +910,10 @@ export function ProfitDistribution() {
             <Button
               variant="destructive"
               size="sm"
-              onClick={() => { if (confirm("Excluir TODAS as regras?")) deleteAllMutation.mutate(); }}
+              onClick={() => setShowDeleteAll(true)}
               disabled={deleteAllMutation.isPending}
             >
-              {deleteAllMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Trash2 className="h-4 w-4 mr-1" />}
+              <Trash2 className="h-4 w-4 mr-1" />
               Excluir Todas
             </Button>
           )}
