@@ -30,16 +30,12 @@ interface RuleItem {
 interface ProfitRule {
   id: string;
   rule_name: string;
-  technician_id: string;
   group_ids: string[];
   is_active: boolean;
   items: RuleItem[];
   _isNew?: boolean;
   _dirty?: boolean;
 }
-
-const normalizeTechnicianName = (value?: string | null) =>
-  (value || "").trim().toLowerCase().replace(/\s+/g, " ");
 
 const PARTICIPANT_TYPES = [
   { value: "technician", label: "Técnico" },
