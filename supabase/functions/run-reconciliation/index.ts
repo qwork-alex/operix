@@ -57,6 +57,16 @@ function extractPOServiceNames(po: any): string[] {
     .filter(Boolean) as string[];
 }
 
+function serviceNamesMatch(a: string, b: string): boolean {
+  if (a === b) return true;
+  // Prevent "montagem" matching "desmontagem" — require that the shorter string
+  // is at least 80% of the longer string's length for substring matching
+  const shorter = a.length <= b.length ? a : b;
+  const longer = a.length > b.length ? a : b;
+  if (shorter.length / longer.length < 0.8) return false;
+  return longer.includes(shorter);
+}
+
 function serviceOverlap(soNames: string[], poNames: string[]): { matched: number; total: number } {
   if (soNames.length === 0 && poNames.length === 0) return { matched: 0, total: 0 };
   const total = Math.max(soNames.length, poNames.length);
@@ -64,7 +74,7 @@ function serviceOverlap(soNames: string[], poNames: string[]): { matched: number
   const used = new Set<number>();
   for (const sn of soNames) {
     for (let i = 0; i < poNames.length; i++) {
-      if (!used.has(i) && (sn === poNames[i] || sn.includes(poNames[i]) || poNames[i].includes(sn))) {
+      if (!used.has(i) && serviceNamesMatch(sn, poNames[i])) {
         matched++;
         used.add(i);
         break;
