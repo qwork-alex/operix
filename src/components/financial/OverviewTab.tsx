@@ -1,6 +1,5 @@
 import {
   TrendingUp, DollarSign, ArrowRightLeft, Percent, Wallet, CheckCircle,
-  Users, Monitor, BarChart3, Crown,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useLanguage } from "@/hooks/useLanguage";
@@ -28,15 +27,15 @@ export default function OverviewTab({ summary: s, hasNoData }: OverviewTabProps)
     { name: "Pending", value: s.pending },
   ].filter((d: any) => d.value > 0);
 
-  const topTechnicians = Object.values(s.byTechnician as Record<string, any>)
+  const topTechnicians = (Array.isArray(s.byTechnician) ? s.byTechnician : Object.values(s.byTechnician as Record<string, any>))
     .sort((a: any, b: any) => b.received - a.received)
     .slice(0, 5);
 
-  const topClients = Object.values(s.byClient as Record<string, any>)
+  const topClients = (Array.isArray(s.byClient) ? s.byClient : Object.values(s.byClient as Record<string, any>))
     .sort((a: any, b: any) => b.received - a.received)
     .slice(0, 5);
 
-  const topPlatforms = Object.values(s.byPlatform as Record<string, any>)
+  const topPlatforms = (Array.isArray(s.byPlatform) ? s.byPlatform : Object.values(s.byPlatform as Record<string, any>))
     .sort((a: any, b: any) => b.received - a.received)
     .slice(0, 5);
 
@@ -70,7 +69,7 @@ export default function OverviewTab({ summary: s, hasNoData }: OverviewTabProps)
           </CardContent>
         </Card>
 
-        <Card className={`border-border/50 glow-red ${s.totalDifference > 0 ? "bg-destructive/5" : s.totalDifference < 0 ? "bg-emerald-500/5" : ""}`}>
+        <Card className={`border-border/50 ${s.totalDifference > 0 ? "glow-red" : s.totalDifference < 0 ? "glow-green" : ""}`}>
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
               <ArrowRightLeft className="h-3.5 w-3.5" /> Diferença
@@ -168,42 +167,55 @@ export default function OverviewTab({ summary: s, hasNoData }: OverviewTabProps)
         </Card>
       </div>
 
-      {/* Rankings */}
+      {/* Rankings — Horizontal Bar Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <RankingCard title="Top técnicos" icon={<Crown className="h-4 w-4" />} items={topTechnicians} formatCurrency={formatCurrency} />
-        <RankingCard title="Top clientes" icon={<Users className="h-4 w-4" />} items={topClients} formatCurrency={formatCurrency} />
-        <RankingCard title="Top plataformas" icon={<Monitor className="h-4 w-4" />} items={topPlatforms} formatCurrency={formatCurrency} />
+        <RankingBarChart title="Top técnicos" data={topTechnicians} formatCurrency={formatCurrency} />
+        <RankingBarChart title="Top clientes" data={topClients} formatCurrency={formatCurrency} />
+        <RankingBarChart title="Top plataformas" data={topPlatforms} formatCurrency={formatCurrency} />
       </div>
     </div>
   );
 }
 
-function RankingCard({ title, icon, items, formatCurrency }: { title: string; icon: React.ReactNode; items: any[]; formatCurrency: (v: number) => string }) {
+function RankingBarChart({ title, data, formatCurrency }: { title: string; data: any[]; formatCurrency: (v: number) => string }) {
+  if (data.length === 0) {
+    return (
+      <Card className="border-border/50">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-xs text-muted-foreground text-center py-4">Sem dados</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const chartData = data.map((item: any) => ({
+    name: (item.name || "").length > 12 ? (item.name || "").slice(0, 12) + "…" : (item.name || ""),
+    Esperado: item.expected ?? 0,
+    Recebido: item.received ?? 0,
+  }));
+
   return (
     <Card className="border-border/50">
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium flex items-center gap-1">
-          {icon} {title}
-        </CardTitle>
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
       </CardHeader>
       <CardContent>
-        {items.length > 0 ? (
-          <div className="space-y-3">
-            {items.map((item: any, i: number) => (
-              <div key={item.name} className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs font-bold w-5 text-center ${i === 0 ? "text-amber-400" : i === 1 ? "text-muted-foreground" : "text-muted-foreground/60"}`}>
-                    {i + 1}
-                  </span>
-                  <span className="text-sm text-foreground truncate max-w-[120px]">{item.name}</span>
-                </div>
-                <span className="text-sm font-medium tabular-nums text-foreground">{formatCurrency(item.received)}</span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-xs text-muted-foreground text-center py-4">Sem dados</p>
-        )}
+        <ResponsiveContainer width="100%" height={200}>
+          <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 10, top: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
+            <XAxis type="number" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} />
+            <YAxis type="category" dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} width={80} />
+            <Tooltip
+              contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, color: "hsl(var(--foreground))", fontSize: 12 }}
+              formatter={(value: number) => formatCurrency(value)}
+            />
+            <Bar dataKey="Esperado" fill="hsl(var(--chart-1))" radius={[0, 4, 4, 0]} barSize={10} />
+            <Bar dataKey="Recebido" fill="hsl(var(--chart-2))" radius={[0, 4, 4, 0]} barSize={10} />
+          </BarChart>
+        </ResponsiveContainer>
       </CardContent>
     </Card>
   );
