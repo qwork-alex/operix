@@ -27,6 +27,12 @@ export interface ReconciliationDetail {
     value_similarity?: number;
     type?: string;
     match_type?: string;
+    adjusted_value?: number;
+    correction_date?: string;
+    validated?: boolean;
+    validated_at?: string;
+    cleared?: boolean;
+    cleared_at?: string;
   };
   // Computed fields
   adjusted_value?: number | null;
