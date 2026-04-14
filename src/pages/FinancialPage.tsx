@@ -529,6 +529,7 @@ export default function FinancialPage() {
           </Card>
         </TabsContent>
       </Tabs>
+      </>}
     </div>
   );
 }
