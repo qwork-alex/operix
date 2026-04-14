@@ -60,7 +60,10 @@ export default function FinancialPage() {
     }
   };
 
-  const pieData = [
+  // UI GUARD: detect no-data state
+  const hasNoData = s.serviceOrderCount === 0 && s.paymentOrderCount === 0;
+
+  const pieData = hasNoData ? [] : [
     { name: "Matched", value: s.matched },
     { name: "Mismatch", value: s.mismatched },
     { name: "Missing", value: s.missing },
@@ -112,7 +115,21 @@ export default function FinancialPage() {
         </div>
       )}
 
-      {/* KPI Row 1 */}
+      {/* No-data empty state */}
+      {hasNoData && (
+        <Card className="border-border/50 bg-muted/30">
+          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+            <BarChart3 className="h-12 w-12 text-muted-foreground/40 mb-4" />
+            <h3 className="text-lg font-semibold text-foreground mb-2">Sem dados para análise</h3>
+            <p className="text-sm text-muted-foreground max-w-md">
+              Nenhuma ordem de serviço ou pagamento encontrada. Importe dados nas respetivas páginas para iniciar a reconciliação financeira.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {!hasNoData && <>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="border-border/50 glow-gold">
           <CardHeader className="pb-2">
@@ -512,6 +529,7 @@ export default function FinancialPage() {
           </Card>
         </TabsContent>
       </Tabs>
+      </>}
     </div>
   );
 }
