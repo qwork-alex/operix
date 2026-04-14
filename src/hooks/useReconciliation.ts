@@ -61,7 +61,6 @@ export function useRunReconciliation() {
   return useMutation({
     mutationFn: async () => {
       // Clean orphaned financial_records before reconciling
-      // (records pointing to deleted orders)
       const [soIds, poIds] = await Promise.all([
         supabase.from("service_orders").select("id"),
         supabase.from("payment_orders").select("id"),
@@ -69,7 +68,6 @@ export function useRunReconciliation() {
       const validSOIds = new Set((soIds.data ?? []).map((r: any) => r.id));
       const validPOIds = new Set((poIds.data ?? []).map((r: any) => r.id));
 
-      // Fetch financial records referencing orders
       const { data: frData } = await supabase.from("financial_records")
         .select("id, source, service_order_id, payment_order_id")
         .in("source", ["service_orders", "payment_orders"]);
@@ -89,16 +87,35 @@ export function useRunReconciliation() {
         console.log(`Cleaned ${orphanIds.length} orphaned financial records`);
       }
 
+      // Hard reset: clear previous auto reconciliation results before running
+      await (supabase as any).from("reconciliations").delete().eq("matched_by", "auto");
+      console.log("Pre-run: cleared all auto reconciliation results");
+
       const { data, error } = await supabase.functions.invoke("run-reconciliation");
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
+
+      console.log("Reconciliation result:", JSON.stringify({
+        so_count: data.debug?.so_count,
+        po_count: data.debug?.po_count,
+        matched: data.matched,
+        mismatched: data.mismatched,
+        missing: data.missing,
+        status: data.status,
+      }));
+
       return data;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["reconciliations"] });
       queryClient.invalidateQueries({ queryKey: ["financial-summary"] });
       queryClient.invalidateQueries({ queryKey: ["reconciliation-summary"] });
-      toast.success(`Reconciliação: ${data.matched} corretos, ${data.mismatched} divergentes, ${data.missing} ausentes`);
+
+      if (data.status === "no_data") {
+        toast.info(data.message || "Sem dados para reconciliar");
+      } else {
+        toast.success(`Reconciliação: ${data.matched} corretos, ${data.mismatched} divergentes, ${data.missing} ausentes`);
+      }
     },
     onError: (err) => {
       toast.error("Reconciliação falhou: " + (err as Error).message);

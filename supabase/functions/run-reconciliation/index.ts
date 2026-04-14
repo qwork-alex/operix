@@ -277,12 +277,21 @@ serve(async (req) => {
 
     console.log(`Reconciliation: ${serviceOrders.length} SOs, ${paymentOrders.length} POs`);
 
-    if (serviceOrders.length === 0 && paymentOrders.length === 0) {
+    // GUARD: If either side has no data, clear stale results and return empty
+    if (serviceOrders.length === 0 || paymentOrders.length === 0) {
       await supabase.from("reconciliations").delete().eq("matched_by", "auto");
-      return new Response(JSON.stringify({
+      const emptyResult = {
         total: 0, matched: 0, mismatched: 0, missing: 0, pending: 0,
-        message: "No service or payment orders found"
-      }), {
+        status: "no_data",
+        message: serviceOrders.length === 0 && paymentOrders.length === 0
+          ? "No service or payment orders found"
+          : serviceOrders.length === 0
+            ? "No service orders found — cannot reconcile"
+            : "No payment orders found — cannot reconcile",
+        debug: { so_count: serviceOrders.length, po_count: paymentOrders.length },
+      };
+      console.log("RECONCILIATION_EMPTY:", JSON.stringify(emptyResult));
+      return new Response(JSON.stringify(emptyResult), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

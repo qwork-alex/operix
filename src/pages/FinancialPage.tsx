@@ -60,7 +60,10 @@ export default function FinancialPage() {
     }
   };
 
-  const pieData = [
+  // UI GUARD: detect no-data state
+  const hasNoData = s.serviceOrderCount === 0 && s.paymentOrderCount === 0;
+
+  const pieData = hasNoData ? [] : [
     { name: "Matched", value: s.matched },
     { name: "Mismatch", value: s.mismatched },
     { name: "Missing", value: s.missing },
