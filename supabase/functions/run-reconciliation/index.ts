@@ -59,8 +59,6 @@ function extractPOServiceNames(po: any): string[] {
 
 function serviceNamesMatch(a: string, b: string): boolean {
   if (a === b) return true;
-  // Prevent "montagem" matching "desmontagem" — require that the shorter string
-  // is at least 80% of the longer string's length for substring matching
   const shorter = a.length <= b.length ? a : b;
   const longer = a.length > b.length ? a : b;
   if (shorter.length / longer.length < 0.8) return false;
@@ -84,18 +82,28 @@ function serviceOverlap(soNames: string[], poNames: string[]): { matched: number
   return { matched, total };
 }
 
-// --- Scoring engine ---
+// --- Match type determination ---
+type MatchType = "exact_match" | "grouped_match" | "partial_match" | "mismatch" | "no_match";
 
 interface MatchResult {
   score: number;
   reasons: string[];
   daysDiff: number | null;
   valueDiff: number;
+  plateMatch: boolean;
+  serviceMatch: boolean;
+  platformMatch: boolean;
+  clientMatch: boolean;
+  blocked: boolean;
+  matchType: MatchType;
 }
+
+// --- Scoring engine (upgraded with client dimension + fail-safe) ---
 
 function calculateScore(so: any, po: any): MatchResult {
   let score = 0;
   const reasons: string[] = [];
+  let blocked = false;
 
   const soPlate = normalizePlate(so.license_plate);
   const poPlate = normalizePlate(po.license_plate);
@@ -103,49 +111,80 @@ function calculateScore(so: any, po: any): MatchResult {
   const poTotal = Number(po.total || 0);
   const valueDiff = Math.abs(soTotal - poTotal);
 
-  // 1. Direct link (bonus 30 pts)
-  if (po.service_order_id === so.id) {
-    score += 30;
-    reasons.push("direct_link");
-  }
-
-  // 2. Plate match (25 pts)
-  if (soPlate && poPlate && soPlate === poPlate) {
+  // --- PLATE (mandatory dimension) ---
+  const plateMatch = !!(soPlate && poPlate && soPlate === poPlate);
+  if (plateMatch) {
     score += 25;
     reasons.push("plate_exact");
   }
 
-  // 3. Service match (30 pts match / -40 pts mismatch)
+  // --- SERVICE (mandatory dimension — mismatch blocks) ---
   const soServices = extractServiceNames(so);
   const poServices = extractPOServiceNames(po);
   const overlap = serviceOverlap(soServices, poServices);
+  let serviceMatch = false;
+
   if (overlap.total > 0) {
     if (overlap.matched === overlap.total) {
-      score += 30;
+      score += 40;
       reasons.push("service_exact");
+      serviceMatch = true;
     } else if (overlap.matched > 0) {
-      score += Math.round((overlap.matched / overlap.total) * 20);
+      score += Math.round((overlap.matched / overlap.total) * 25);
       reasons.push("service_partial");
+      serviceMatch = true;
     } else {
       score -= 40;
       reasons.push("service_mismatch");
+      blocked = true;
     }
   }
 
-  // 4. Platform match (20 pts match / -15 pts mismatch)
+  // --- PLATFORM (mandatory dimension — mismatch blocks) ---
   const soPlatform = normalizePlatform(so.platform);
   const poPlatform = normalizePlatform(po.platform);
+  let platformMatch = false;
+
   if (soPlatform && poPlatform) {
     if (soPlatform === poPlatform) {
-      score += 20;
+      score += 30;
       reasons.push("platform_match");
+      platformMatch = true;
     } else {
-      score -= 15;
+      score -= 30;
       reasons.push("platform_mismatch");
+      blocked = true;
     }
   }
 
-  // 5. Value proximity (10 pts)
+  // --- CLIENT (confidence dimension — not mandatory) ---
+  const soClient = normLower(so.client_name);
+  const poClient = normLower(po.client_name);
+  let clientMatch = false;
+
+  if (soClient && poClient) {
+    if (soClient === poClient) {
+      score += 20;
+      reasons.push("client_exact");
+      clientMatch = true;
+    } else if (soClient.includes(poClient) || poClient.includes(soClient)) {
+      score += 10;
+      reasons.push("client_partial");
+      clientMatch = true;
+    } else {
+      score -= 25;
+      reasons.push("client_mismatch");
+    }
+  }
+
+  // --- DIRECT LINK bonus ---
+  if (po.service_order_id === so.id) {
+    score += 30;
+    reasons.push("direct_link");
+    blocked = false; // direct link overrides blocks
+  }
+
+  // --- VALUE proximity ---
   if (valueDiff < 5) {
     score += 10;
     reasons.push("value_exact");
@@ -154,31 +193,20 @@ function calculateScore(so: any, po: any): MatchResult {
     reasons.push("value_close");
   }
 
-  // 6. Client match (5 pts)
-  const soClient = normLower(so.client_name);
-  const poClient = normLower(po.client_name);
-  if (soClient && poClient && soClient === poClient) {
-    score += 5;
-    reasons.push("client_exact");
-  } else if (soClient && poClient && (soClient.includes(poClient) || poClient.includes(soClient))) {
-    score += 3;
-    reasons.push("client_partial");
-  }
-
-  // 7. Date proximity (5 pts)
+  // --- DATE proximity ---
   const daysDiff = dateDistanceDays(so.created_at, po.created_at);
   if (isFinite(daysDiff) && daysDiff < 7) {
     score += 5;
     reasons.push("date_close");
   }
 
-  // 8. Technician match (3 pts)
+  // --- TECHNICIAN ---
   if (so.technician_id && po.technician_id && so.technician_id === po.technician_id) {
     score += 3;
     reasons.push("technician_match");
   }
 
-  // 9. Car name match (2 pts)
+  // --- CAR NAME ---
   const soCar = normLower(so.car_name);
   const poCar = normLower(po.car_name);
   if (soCar && poCar && soCar === poCar) {
@@ -186,12 +214,47 @@ function calculateScore(so: any, po: any): MatchResult {
     reasons.push("car_match");
   }
 
+  // --- Determine match type ---
+  let matchType: MatchType;
+  if (blocked) {
+    matchType = "mismatch";
+  } else if (plateMatch && serviceMatch && platformMatch && valueDiff < 5) {
+    matchType = "exact_match";
+  } else if (plateMatch && serviceMatch && platformMatch) {
+    matchType = "partial_match";
+  } else if (serviceMatch && platformMatch) {
+    matchType = "partial_match";
+  } else {
+    matchType = "no_match";
+  }
+
   return {
     score,
     reasons,
     daysDiff: isFinite(daysDiff) ? Math.round(daysDiff * 10) / 10 : null,
     valueDiff,
+    plateMatch,
+    serviceMatch,
+    platformMatch,
+    clientMatch,
+    blocked,
+    matchType,
   };
+}
+
+// --- Many-to-many grouping ---
+
+interface GroupKey {
+  plate: string;
+  platform: string;
+  client: string;
+}
+
+function makeGroupKey(item: any, isService: boolean): string {
+  const plate = normalizePlate(item.license_plate);
+  const platform = normalizePlatform(item.platform) || "unknown_platform";
+  const client = normLower(isService ? item.client_name : item.client_name) || "unknown_client";
+  return `${plate}|${platform}|${client}`;
 }
 
 // --- Main handler ---
@@ -227,71 +290,202 @@ serve(async (req) => {
 
     await supabase.from("reconciliations").delete().eq("matched_by", "auto");
 
-    const results: any[] = [];
-    const matchedPOIds = new Set<string>();
-
-    const debugDecisions: any[] = [];
+    // --- PHASE 1: Group SOs and POs by plate+platform+client for many-to-many ---
+    const soGroups = new Map<string, any[]>();
+    const poGroups = new Map<string, any[]>();
 
     for (const so of serviceOrders) {
-      const soTotal = Number(so.total || 0);
+      const key = makeGroupKey(so, true);
+      if (!soGroups.has(key)) soGroups.set(key, []);
+      soGroups.get(key)!.push(so);
+    }
+    for (const po of paymentOrders) {
+      const key = makeGroupKey(po, false);
+      if (!poGroups.has(key)) poGroups.set(key, []);
+      poGroups.get(key)!.push(po);
+    }
+
+    const results: any[] = [];
+    const matchedSOIds = new Set<string>();
+    const matchedPOIds = new Set<string>();
+    const debugDecisions: any[] = [];
+
+    // --- PHASE 2: Process grouped matches (same plate+platform+client) ---
+    for (const [groupKey, groupSOs] of soGroups.entries()) {
+      const groupPOs = poGroups.get(groupKey);
+      if (!groupPOs || groupPOs.length === 0) continue;
+
+      const soTotal = groupSOs.reduce((sum: number, so: any) => sum + Number(so.total || 0), 0);
+      const poTotal = groupPOs.reduce((sum: number, po: any) => sum + Number(po.total || 0), 0);
+      const groupDiff = soTotal - poTotal;
+
+      // Check service compatibility within the group
+      const allSOServices = groupSOs.flatMap((so: any) => extractServiceNames(so));
+      const allPOServices = groupPOs.flatMap((po: any) => extractPOServiceNames(po));
+      const groupOverlap = serviceOverlap(allSOServices, allPOServices);
+
+      const serviceBlocked = groupOverlap.total > 0 && groupOverlap.matched === 0;
+      if (serviceBlocked) continue; // Skip — services don't match at all
+
+      const isGroupedMatch = groupSOs.length > 1 || groupPOs.length > 1;
+
+      // For 1:1 within group, use standard scoring
+      if (groupSOs.length === 1 && groupPOs.length === 1) {
+        const so = groupSOs[0];
+        const po = groupPOs[0];
+        const result = calculateScore(so, po);
+
+        const decision = {
+          so_plate: so.license_plate,
+          so_platform: so.platform,
+          so_client: so.client_name,
+          so_services: extractServiceNames(so),
+          so_total: Number(so.total || 0),
+          po_plate: po.license_plate,
+          po_platform: po.platform,
+          po_client: po.client_name,
+          po_services: extractPOServiceNames(po),
+          score: result.score,
+          reasons: result.reasons,
+          match_type: result.matchType,
+          blocked: result.blocked,
+        };
+        debugDecisions.push(decision);
+        console.log("MATCH_DECISION:", JSON.stringify(decision));
+
+        if (result.blocked) continue;
+
+        const roundedScore = Math.round(result.score * 10) / 10;
+        if (roundedScore < 40) continue;
+
+        const diff = Number(so.total || 0) - Number(po.total || 0);
+        let status: string;
+        if (roundedScore >= 70 && Math.abs(diff) < 0.01) {
+          status = "matched";
+        } else if (roundedScore >= 70) {
+          status = "matched";
+        } else if (roundedScore >= 40 && Math.abs(diff) >= 0.01) {
+          status = "mismatch";
+        } else {
+          status = "pending";
+        }
+
+        results.push({
+          service_order_id: so.id,
+          payment_order_id: po.id,
+          matched_by: "auto",
+          confidence_score: roundedScore,
+          difference_amount: diff,
+          status,
+          notes: JSON.stringify({
+            match_reasons: result.reasons,
+            match_type: result.matchType,
+            explanation: buildExplanation(so, po, diff, status, result),
+            so_plate: so.license_plate, po_plate: po.license_plate,
+            so_platform: so.platform, po_platform: po.platform,
+            so_client: so.client_name, po_client: po.client_name,
+            so_total: Number(so.total || 0), po_total: Number(po.total || 0),
+            so_date: so.created_at, po_date: po.created_at,
+            days_diff: result.daysDiff, value_diff: result.valueDiff,
+          }),
+        });
+        matchedSOIds.add(so.id);
+        matchedPOIds.add(po.id);
+        continue;
+      }
+
+      // Many-to-many: create grouped match entries
+      const groupMatchType: MatchType = Math.abs(groupDiff) < 5 ? "grouped_match" : "partial_match";
+      const groupScore = groupOverlap.total > 0
+        ? Math.round(40 * (groupOverlap.matched / groupOverlap.total)) + 30 + 20 // service + platform + client (all same group)
+        : 50;
+
+      const groupStatus = groupMatchType === "grouped_match" && Math.abs(groupDiff) < 0.01
+        ? "matched"
+        : Math.abs(groupDiff) >= 0.01 ? "mismatch" : "matched";
+
+      const groupExplanation = `Grouped match: ${groupSOs.length} SO(s) ↔ ${groupPOs.length} PO(s) for plate ${normalizePlate(groupSOs[0].license_plate)}, platform ${normalizePlatform(groupSOs[0].platform) || 'N/A'}, client ${groupSOs[0].client_name || 'N/A'}. SO total: €${soTotal.toFixed(2)}, PO total: €${poTotal.toFixed(2)}, diff: €${Math.abs(groupDiff).toFixed(2)}.`;
+
+      console.log("GROUPED_MATCH:", JSON.stringify({
+        group_key: groupKey,
+        so_count: groupSOs.length,
+        po_count: groupPOs.length,
+        so_total: soTotal,
+        po_total: poTotal,
+        diff: groupDiff,
+        match_type: groupMatchType,
+      }));
+
+      // Link first SO to first PO for the reconciliation record, note all IDs
+      for (const so of groupSOs) {
+        const bestPO = groupPOs.find(po => !matchedPOIds.has(po.id)) || groupPOs[0];
+        results.push({
+          service_order_id: so.id,
+          payment_order_id: bestPO.id,
+          matched_by: "auto",
+          confidence_score: groupScore,
+          difference_amount: Number(so.total || 0) - Number(bestPO.total || 0),
+          status: groupStatus,
+          notes: JSON.stringify({
+            match_reasons: ["grouped_match", "plate_exact", "platform_match", "client_exact"],
+            match_type: groupMatchType,
+            explanation: groupExplanation,
+            so_plate: so.license_plate, po_plate: bestPO.license_plate,
+            so_platform: so.platform, po_platform: bestPO.platform,
+            so_client: so.client_name, po_client: bestPO.client_name,
+            so_total: Number(so.total || 0), po_total: Number(bestPO.total || 0),
+            group_so_ids: groupSOs.map((s: any) => s.id),
+            group_po_ids: groupPOs.map((p: any) => p.id),
+            group_so_total: soTotal, group_po_total: poTotal,
+          }),
+        });
+        matchedSOIds.add(so.id);
+      }
+      for (const po of groupPOs) {
+        matchedPOIds.add(po.id);
+      }
+    }
+
+    // --- PHASE 3: Fallback 1:1 matching for unmatched SOs (cross-group, best score) ---
+    const unmatchedSOs = serviceOrders.filter(so => !matchedSOIds.has(so.id));
+    const unmatchedPOs = paymentOrders.filter(po => !matchedPOIds.has(po.id));
+
+    for (const so of unmatchedSOs) {
       let bestMatch: any = null;
       let bestResult: MatchResult | null = null;
-      const candidates: any[] = [];
 
-      for (const po of paymentOrders) {
+      for (const po of unmatchedPOs) {
         if (matchedPOIds.has(po.id)) continue;
-
         const result = calculateScore(so, po);
-        // Log top candidates for each SO
-        if (result.score > 0) {
-          candidates.push({
-            po_plate: po.license_plate,
-            po_platform: po.platform,
-            po_services: extractPOServiceNames(po),
-            score: result.score,
-            reasons: result.reasons,
-          });
-        }
+        if (result.blocked) continue;
         if (!bestResult || result.score > bestResult.score) {
           bestResult = result;
           bestMatch = po;
         }
       }
 
-      // Debug log for every SO match decision
-      const decision = {
-        so_plate: so.license_plate,
-        so_platform: so.platform,
-        so_services: extractServiceNames(so),
-        so_total: soTotal,
-        best_po_plate: bestMatch?.license_plate || null,
-        best_po_platform: bestMatch?.platform || null,
-        best_score: bestResult?.score || 0,
-        best_reasons: bestResult?.reasons || [],
-        matched: (bestResult?.score || 0) >= 70,
-        top_candidates: candidates.sort((a, b) => b.score - a.score).slice(0, 3),
-      };
-      debugDecisions.push(decision);
-      console.log("MATCH_DECISION:", JSON.stringify(decision));
-
+      const soTotal = Number(so.total || 0);
       const roundedScore = bestResult ? Math.round(bestResult.score * 10) / 10 : 0;
 
-      if (bestMatch && bestResult && roundedScore >= 40) {
+      if (bestMatch && bestResult && !bestResult.blocked && roundedScore >= 40) {
         const poTotal = Number(bestMatch.total || 0);
         const diff = soTotal - poTotal;
 
         let status: string;
-        if (roundedScore >= 70 && Math.abs(diff) < 0.01) {
-          status = "matched";
-        } else if (roundedScore >= 40 && Math.abs(diff) >= 0.01) {
-          status = "mismatch";
-        } else if (roundedScore >= 70) {
-          status = "matched";
-        } else {
-          status = "pending";
-        }
+        if (roundedScore >= 70 && Math.abs(diff) < 0.01) status = "matched";
+        else if (roundedScore >= 70) status = "matched";
+        else if (roundedScore >= 40 && Math.abs(diff) >= 0.01) status = "mismatch";
+        else status = "pending";
 
-        const explanation = buildExplanation(so, bestMatch, diff, status, bestResult);
+        const decision = {
+          so_plate: so.license_plate, so_platform: so.platform, so_client: so.client_name,
+          so_services: extractServiceNames(so), so_total: soTotal,
+          po_plate: bestMatch.license_plate, po_platform: bestMatch.platform, po_client: bestMatch.client_name,
+          score: roundedScore, reasons: bestResult.reasons, match_type: bestResult.matchType,
+          phase: "fallback_1to1",
+        };
+        debugDecisions.push(decision);
+        console.log("FALLBACK_MATCH:", JSON.stringify(decision));
 
         results.push({
           service_order_id: so.id,
@@ -302,22 +496,18 @@ serve(async (req) => {
           status,
           notes: JSON.stringify({
             match_reasons: bestResult.reasons,
-            explanation,
-            so_plate: so.license_plate,
-            po_plate: bestMatch.license_plate,
-            so_platform: so.platform,
-            po_platform: bestMatch.platform,
-            so_client: so.client_name,
-            po_client: bestMatch.client_name,
-            so_total: soTotal,
-            po_total: poTotal,
-            so_date: so.created_at,
-            po_date: bestMatch.created_at,
-            days_diff: bestResult.daysDiff,
-            value_diff: bestResult.valueDiff,
+            match_type: bestResult.matchType,
+            explanation: buildExplanation(so, bestMatch, diff, status, bestResult),
+            so_plate: so.license_plate, po_plate: bestMatch.license_plate,
+            so_platform: so.platform, po_platform: bestMatch.platform,
+            so_client: so.client_name, po_client: bestMatch.client_name,
+            so_total: soTotal, po_total: poTotal,
+            so_date: so.created_at, po_date: bestMatch.created_at,
+            days_diff: bestResult.daysDiff, value_diff: bestResult.valueDiff,
           }),
         });
         matchedPOIds.add(bestMatch.id);
+        matchedSOIds.add(so.id);
       } else {
         results.push({
           service_order_id: so.id,
@@ -328,19 +518,17 @@ serve(async (req) => {
           status: "missing",
           notes: JSON.stringify({
             match_reasons: ["no_match"],
+            match_type: "no_match",
             explanation: `Service order (${so.license_plate || 'N/A'}, ${so.client_name || 'N/A'}, ${formatMoney(soTotal)}, platform: ${so.platform || 'N/A'}) has no corresponding payment order.`,
-            so_plate: so.license_plate,
-            so_platform: so.platform,
-            so_client: so.client_name,
-            so_total: soTotal,
-            so_date: so.created_at,
-            best_score: roundedScore,
+            so_plate: so.license_plate, so_platform: so.platform,
+            so_client: so.client_name, so_total: soTotal,
+            so_date: so.created_at, best_score: roundedScore,
           }),
         });
       }
     }
 
-    // Unmatched POs
+    // --- PHASE 4: Unmatched POs ---
     for (const po of paymentOrders) {
       if (matchedPOIds.has(po.id)) continue;
       const poTotal = Number(po.total || 0);
@@ -353,18 +541,16 @@ serve(async (req) => {
         status: "missing",
         notes: JSON.stringify({
           match_reasons: ["no_match"],
+          match_type: "no_match",
           explanation: `Payment order (${po.license_plate || 'N/A'}, ${po.client_name || 'N/A'}, ${formatMoney(poTotal)}, platform: ${po.platform || 'N/A'}) has no corresponding service order.`,
-          po_plate: po.license_plate,
-          po_platform: po.platform,
-          po_client: po.client_name,
-          po_total: poTotal,
-          po_date: po.created_at,
-          type: "missing_service",
+          po_plate: po.license_plate, po_platform: po.platform,
+          po_client: po.client_name, po_total: poTotal,
+          po_date: po.created_at, type: "missing_service",
         }),
       });
     }
 
-    // Insert results
+    // --- Insert results ---
     let insertedCount = 0;
     for (const r of results) {
       const { error } = await supabase.from("reconciliations").insert(r);
@@ -382,6 +568,9 @@ serve(async (req) => {
       mismatched: results.filter(r => r.status === "mismatch").length,
       missing: results.filter(r => r.status === "missing").length,
       pending: results.filter(r => r.status === "pending").length,
+      grouped: results.filter(r => {
+        try { return JSON.parse(r.notes)?.match_type === "grouped_match"; } catch { return false; }
+      }).length,
       debug_sample: debugDecisions.slice(0, 10),
     };
 
@@ -408,20 +597,25 @@ function buildExplanation(so: any, po: any, diff: number, status: string, result
   const parts: string[] = [];
   const soPlat = so.platform || 'N/A';
   const poPlat = po.platform || 'N/A';
+  const soClient = so.client_name || 'N/A';
+  const poClient = po.client_name || 'N/A';
 
   if (status === "matched") {
-    parts.push(`Matched: ${so.license_plate || 'N/A'} (${so.client_name || 'N/A'}, ${soPlat}) — values match at ${formatMoney(Number(so.total || 0))}.`);
+    parts.push(`Matched [${result.matchType}]: ${so.license_plate || 'N/A'} (${soClient}, ${soPlat}) — values match at ${formatMoney(Number(so.total || 0))}.`);
   } else if (status === "mismatch") {
-    parts.push(`Value mismatch for ${so.license_plate || 'N/A'} (${so.client_name || 'N/A'}, ${soPlat}): expected ${formatMoney(Number(so.total || 0))}, received ${formatMoney(Number(po.total || 0))}. Diff: ${formatMoney(Math.abs(diff))}.`);
+    parts.push(`Value mismatch for ${so.license_plate || 'N/A'} (${soClient}, ${soPlat}): expected ${formatMoney(Number(so.total || 0))}, received ${formatMoney(Number(po.total || 0))}. Diff: ${formatMoney(Math.abs(diff))}.`);
   } else {
-    parts.push(`Low confidence match for ${so.license_plate || 'N/A'} (${soPlat} vs ${poPlat}): ${result.reasons.join(', ')}.`);
+    parts.push(`Low confidence match for ${so.license_plate || 'N/A'} (${soPlat} vs ${poPlat}, ${soClient} vs ${poClient}): ${result.reasons.join(', ')}.`);
   }
 
   if (result.reasons.includes("platform_mismatch")) {
     parts.push(`Platform mismatch: SO=${soPlat}, PO=${poPlat}.`);
   }
   if (result.reasons.includes("service_mismatch")) {
-    parts.push(`Services do not match.`);
+    parts.push(`Services do not match — match blocked.`);
+  }
+  if (result.reasons.includes("client_mismatch")) {
+    parts.push(`Client mismatch: SO=${soClient}, PO=${poClient}.`);
   }
   if (result.daysDiff !== null && result.daysDiff > 0) {
     parts.push(`Date gap: ${result.daysDiff} days.`);
