@@ -56,7 +56,7 @@ export function ProfitDistribution() {
   const queryClient = useQueryClient();
 
   const [localRules, setLocalRules] = useState<ProfitRule[]>([]);
-  const [groupSearch, setGroupSearch] = useState<Record<string, string>>({});
+  const [groupPopoverSearch, setGroupPopoverSearch] = useState<Record<string, string>>({});
 
   // ── Queries ──
   const { data: technicians = [] } = useQuery({
