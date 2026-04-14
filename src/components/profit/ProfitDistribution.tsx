@@ -171,7 +171,7 @@ export function ProfitDistribution() {
   // ── Helpers ──
   const getItemsTotal = (items: RuleItem[]) => items.reduce((s, i) => s + i.percentage, 0);
   const isRuleValid = (rule: ProfitRule) =>
-    getItemsTotal(rule.items) === 100 && rule.technician_id && rule.rule_name.trim() && rule.group_ids.length > 0;
+    getItemsTotal(rule.items) === 100 && rule.rule_name.trim().length > 0 && rule.group_ids.length > 0;
 
   const getGroupSOs = (groupId: string) =>
     serviceOrders.filter((so: any) => so.group_id === groupId);
