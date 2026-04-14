@@ -295,8 +295,19 @@ export function ProfitDistribution() {
         participant_type: item.participant_type,
       }));
 
-      if (!technician_id || !rule.rule_name.trim() || group_ids.length === 0 || getItemsTotal(rule.items) !== 100) {
-        throw new Error("Regra inválida: nome, técnico, grupos e 100% são obrigatórios");
+      console.log("Technician resolved:", technician_id, "from rule name:", rule.rule_name);
+
+      if (!rule.rule_name.trim()) {
+        throw new Error("Nome da regra é obrigatório");
+      }
+      if (!technician_id) {
+        throw new Error("Técnico não encontrado para o nome: " + rule.rule_name);
+      }
+      if (group_ids.length === 0) {
+        throw new Error("Selecione pelo menos um grupo");
+      }
+      if (getItemsTotal(rule.items) !== 100) {
+        throw new Error("A soma das percentagens deve ser 100%");
       }
 
       console.log("Saving rule:", {
@@ -471,13 +482,9 @@ export function ProfitDistribution() {
                 placeholder="Nome da regra / técnico"
                 className="h-8 text-sm font-semibold max-w-[250px]"
               />
-              {rule.technician_id ? (
+              {rule.technician_id && techName ? (
                 <Badge variant="secondary" className="h-8 px-2 text-[10px]">
                   Técnico: {techName}
-                </Badge>
-              ) : rule.rule_name.trim() ? (
-                <Badge variant="destructive" className="h-8 px-2 text-[10px]">
-                  <AlertTriangle className="h-3 w-3 mr-1" /> Técnico inválido
                 </Badge>
               ) : null}
               <div className="flex items-center gap-1.5">
