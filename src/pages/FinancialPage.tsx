@@ -307,7 +307,12 @@ export default function FinancialPage() {
                                r.status === "mismatch" ? <XCircle className="h-3 w-3 mr-1" /> :
                                r.status === "missing" ? <AlertTriangle className="h-3 w-3 mr-1" /> :
                                <Link2 className="h-3 w-3 mr-1" />}
-                              {r.status}
+                              {r.status === "matched" && pn.match_type === "grouped_match" ? "Grupo conciliado"
+                               : r.status === "matched" ? "Conciliado"
+                               : r.status === "mismatch" && pn.match_type === "partial_match" ? "Pagamento parcial"
+                               : r.status === "mismatch" ? "Divergente"
+                               : r.status === "missing" ? "Sem correspondência"
+                               : r.status}
                             </Badge>
                             <Badge variant="outline" className="text-[10px]">
                               {r.matched_by === "auto" ? "Auto" : "Manual"}
