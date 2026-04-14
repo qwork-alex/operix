@@ -99,6 +99,12 @@
   .glow-purple {
     box-shadow: 0 0 20px hsl(270 70% 60% / 0.18), 0 0 40px hsl(270 70% 60% / 0.06);
   }
+  .glow-red {
+    box-shadow: 0 0 20px hsl(0 72% 55% / 0.15), 0 0 40px hsl(0 72% 55% / 0.05);
+  }
+  .glow-white {
+    box-shadow: 0 0 20px hsl(0 0% 100% / 0.06), 0 0 40px hsl(0 0% 100% / 0.03);
+  }
   .glass-panel {
     @apply bg-card/80 backdrop-blur-sm border border-border/50;
   }
