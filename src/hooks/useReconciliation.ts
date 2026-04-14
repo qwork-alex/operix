@@ -26,7 +26,12 @@ export interface ReconciliationDetail {
     days_diff?: number;
     value_similarity?: number;
     type?: string;
+    match_type?: string;
   };
+  // Computed fields
+  adjusted_value?: number | null;
+  cleared?: boolean;
+  aging_level?: "normal" | "warning" | "critical";
 }
 
 function parseNotes(notes: string | null): ReconciliationDetail["parsed_notes"] {
@@ -38,6 +43,38 @@ function parseNotes(notes: string | null): ReconciliationDetail["parsed_notes"] 
   }
 }
 
+function getAgingLevel(createdAt: string): "normal" | "warning" | "critical" {
+  const days = (Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24);
+  if (days >= 7) return "critical";
+  if (days >= 3) return "warning";
+  return "normal";
+}
+
+/** Deduplicate: if manual exists for same SO or PO, hide auto */
+function deduplicateReconciliations(rows: ReconciliationDetail[]): ReconciliationDetail[] {
+  const manualSOIds = new Set<string>();
+  const manualPOIds = new Set<string>();
+
+  for (const r of rows) {
+    if (r.matched_by === "manual") {
+      if (r.service_orders?.id) manualSOIds.add(r.service_orders.id);
+      if (r.payment_orders?.id) manualPOIds.add(r.payment_orders.id);
+    }
+  }
+
+  return rows.filter((r) => {
+    if (r.matched_by !== "auto") return true;
+    if (r.service_orders?.id && manualSOIds.has(r.service_orders.id)) return false;
+    if (r.payment_orders?.id && manualPOIds.has(r.payment_orders.id)) return false;
+    return true;
+  });
+}
+
+/** Remove ghost/orphan rows where both SO and PO are null */
+function removeGhostData(rows: ReconciliationDetail[]): ReconciliationDetail[] {
+  return rows.filter((r) => r.service_orders || r.payment_orders);
+}
+
 export function useReconciliations() {
   return useQuery({
     queryKey: ["reconciliations"],
@@ -47,12 +84,34 @@ export function useReconciliations() {
         .select("*, service_orders(id, license_plate, car_name, total, platform, week, client_name, technician_name, created_at), payment_orders(id, license_plate, car_name, total, platform, client_name, technician_name, created_at)")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data as any[]).map((r) => ({
+
+      const parsed = (data as any[]).map((r) => ({
         ...r,
         parsed_notes: parseNotes(r.notes),
+        aging_level: getAgingLevel(r.created_at),
+        cleared: false,
+        adjusted_value: null,
       })) as ReconciliationDetail[];
+
+      // Clean ghost data then deduplicate manual > auto
+      return deduplicateReconciliations(removeGhostData(parsed));
     },
   });
+}
+
+/** Split reconciliations into 3 views */
+export function useSplitReconciliations() {
+  const { data: all = [], ...rest } = useReconciliations();
+
+  const matched = all.filter(
+    (r) =>
+      r.status === "matched" ||
+      (r.status === "mismatch" && r.parsed_notes?.match_type === "partial_match")
+  );
+
+  const pending = all.filter((r) => r.status === "missing" || r.status === "pending");
+
+  return { matched, pending, all, ...rest };
 }
 
 export function useRunReconciliation() {
@@ -140,7 +199,10 @@ export function useManualMerge() {
 
       const notes = JSON.stringify({
         match_reasons: ["manual"],
+        match_type: status === "matched" ? "exact_match" : "partial_match",
         explanation: `Fusão manual: OS (${soRes.data?.license_plate || 'N/A'}, ${soRes.data?.client_name || 'N/A'}) ↔ OP (${poRes.data?.license_plate || 'N/A'}, ${poRes.data?.client_name || 'N/A'}). ${status === "matched" ? "Valores iguais." : `Diferença: €${Math.abs(diff).toFixed(2)}`}`,
+        so_total: soTotal,
+        po_total: poTotal,
       });
 
       // Delete any existing auto reconciliation for these IDs
@@ -169,6 +231,109 @@ export function useManualMerge() {
   });
 }
 
+/** Correct a reconciliation value without overwriting originals */
+export function useCorrectReconciliation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, adjustedValue }: { id: string; adjustedValue: number }) => {
+      // Read current notes, merge adjusted_value
+      const { data: current } = await (supabase as any)
+        .from("reconciliations")
+        .select("notes, difference_amount")
+        .eq("id", id)
+        .single();
+
+      const existingNotes = current?.notes ? JSON.parse(current.notes) : {};
+      const updatedNotes = JSON.stringify({
+        ...existingNotes,
+        adjusted_value: adjustedValue,
+        correction_date: new Date().toISOString(),
+      });
+
+      const { error } = await (supabase as any)
+        .from("reconciliations")
+        .update({ notes: updatedNotes, status: "matched" })
+        .eq("id", id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["reconciliations"] });
+      toast.success("Valor corrigido com sucesso");
+    },
+    onError: (err) => toast.error("Erro ao corrigir: " + (err as Error).message),
+  });
+}
+
+/** Validate (confirm) a reconciliation */
+export function useValidateReconciliation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id }: { id: string }) => {
+      const { data: current } = await (supabase as any)
+        .from("reconciliations")
+        .select("notes")
+        .eq("id", id)
+        .single();
+
+      const existingNotes = current?.notes ? JSON.parse(current.notes) : {};
+      const updatedNotes = JSON.stringify({
+        ...existingNotes,
+        validated: true,
+        validated_at: new Date().toISOString(),
+      });
+
+      const { error } = await (supabase as any)
+        .from("reconciliations")
+        .update({ notes: updatedNotes, status: "matched", matched_by: "validated" })
+        .eq("id", id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["reconciliations"] });
+      toast.success("Reconciliação validada");
+    },
+    onError: (err) => toast.error("Erro: " + (err as Error).message),
+  });
+}
+
+/** Clear from view — marks as resolved/cleared in notes but keeps data */
+export function useClearReconciliation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id }: { id: string }) => {
+      const { data: current } = await (supabase as any)
+        .from("reconciliations")
+        .select("notes")
+        .eq("id", id)
+        .single();
+
+      const existingNotes = current?.notes ? JSON.parse(current.notes) : {};
+      const updatedNotes = JSON.stringify({
+        ...existingNotes,
+        cleared: true,
+        cleared_at: new Date().toISOString(),
+      });
+
+      const { error } = await (supabase as any)
+        .from("reconciliations")
+        .update({ notes: updatedNotes })
+        .eq("id", id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["reconciliations"] });
+      toast.success("Removido da vista ativa");
+    },
+    onError: (err) => toast.error("Erro: " + (err as Error).message),
+  });
+}
+
 export function useReconciliationSummary() {
   return useQuery({
     queryKey: ["reconciliation-summary"],
@@ -176,7 +341,7 @@ export function useReconciliationSummary() {
       const [soRes, poRes, recRes, frRes] = await Promise.all([
         supabase.from("service_orders").select("total, status, client_id, client_name, technician_id, technician_name, platform, created_at"),
         supabase.from("payment_orders").select("total, status, client_id, client_name, technician_id, technician_name, platform, created_at"),
-        (supabase as any).from("reconciliations").select("status, difference_amount, confidence_score, matched_by"),
+        (supabase as any).from("reconciliations").select("status, difference_amount, confidence_score, matched_by, notes"),
         supabase.from("financial_records").select("amount, type, category, created_at, source, service_order_id, payment_order_id"),
       ]);
 
@@ -185,7 +350,6 @@ export function useReconciliationSummary() {
       const reconciliations = recRes.data ?? [];
       const financialRecords = frRes.data ?? [];
 
-      // Only count expenses from manual or fleet sources (not auto-synced revenue)
       const realExpenses = financialRecords.filter((r: any) => r.type === "expense");
       const expenses = realExpenses.reduce((s: number, r: any) => s + Number(r.amount || 0), 0);
 
@@ -198,6 +362,12 @@ export function useReconciliationSummary() {
       const mismatched = reconciliations.filter((r: any) => r.status === "mismatch").length;
       const missing = reconciliations.filter((r: any) => r.status === "missing").length;
       const pending = reconciliations.filter((r: any) => r.status === "pending").length;
+
+      // Count discrepancies needing attention (not cleared)
+      const activeDiscrepancies = reconciliations.filter((r: any) => {
+        const notes = r.notes ? (() => { try { return JSON.parse(r.notes); } catch { return {}; } })() : {};
+        return !notes.cleared && (r.status === "mismatch" || r.status === "missing");
+      }).length;
 
       const profit = receivedRevenue - expenses;
 
@@ -223,7 +393,6 @@ export function useReconciliationSummary() {
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([month, d]) => ({ month, expected: d.so, received: d.po, expenses: d.expenses }));
 
-      // Breakdown by client (using client_name directly)
       const byClient: Record<string, { name: string; expected: number; received: number }> = {};
       for (const so of serviceOrders) {
         const name = so.client_name || "Desconhecido";
@@ -236,7 +405,6 @@ export function useReconciliationSummary() {
         byClient[name].received += Number(po.total || 0);
       }
 
-      // Breakdown by technician
       const byTechnician: Record<string, { name: string; expected: number; received: number }> = {};
       for (const so of serviceOrders) {
         const name = so.technician_name || "Desconhecido";
@@ -249,7 +417,6 @@ export function useReconciliationSummary() {
         byTechnician[name].received += Number(po.total || 0);
       }
 
-      // Breakdown by platform
       const byPlatform: Record<string, { expected: number; received: number }> = {};
       for (const so of serviceOrders) {
         const p = so.platform || "Desconhecido";
@@ -262,9 +429,8 @@ export function useReconciliationSummary() {
         byPlatform[p].received += Number(po.total || 0);
       }
 
-      // Alerts
       const alerts: { type: string; message: string; severity: "high" | "medium" | "low" }[] = [];
-      
+
       if (serviceOrders.length === 0 && paymentOrders.length === 0) {
         alerts.push({ type: "empty", message: "Nenhuma ordem de serviço ou pagamento encontrada. Importe dados primeiro.", severity: "medium" });
       } else {
@@ -285,6 +451,7 @@ export function useReconciliationSummary() {
         expenses,
         profit,
         monthly,
+        activeDiscrepancies,
         byClient: Object.values(byClient).sort((a, b) => b.expected - a.expected),
         byTechnician: Object.values(byTechnician).sort((a, b) => b.expected - a.expected),
         byPlatform: Object.entries(byPlatform).map(([name, v]) => ({ name, ...v })).sort((a, b) => b.expected - a.expected),
