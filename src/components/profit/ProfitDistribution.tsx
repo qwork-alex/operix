@@ -12,9 +12,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   PieChart as PieChartIcon, Plus, Save, Trash2, Loader2,
-  AlertTriangle, Check, Users, FolderPlus, X,
+  AlertTriangle, Check, Users, FolderPlus, X, ChevronDown,
 } from "lucide-react";
 
 // ─── Types ───
@@ -55,7 +56,7 @@ export function ProfitDistribution() {
   const queryClient = useQueryClient();
 
   const [localRules, setLocalRules] = useState<ProfitRule[]>([]);
-  const [groupSearch, setGroupSearch] = useState<Record<string, string>>({});
+  const [groupPopoverSearch, setGroupPopoverSearch] = useState<Record<string, string>>({});
 
   // ── Queries ──
   const { data: technicians = [] } = useQuery({
@@ -437,20 +438,6 @@ export function ProfitDistribution() {
     );
   }
 
-  // Get groups for a technician (from service orders)
-  const getGroupsForTechnician = (techId: string) => {
-    const techName = technicians.find(t => t.id === techId)?.name;
-    if (!techName) return [];
-    const gids = new Set<string>();
-    serviceOrders.forEach((so: any) => {
-      const matchesTechnician =
-        so.technician_id === techId ||
-        normalizeTechnicianName(so.technician_name) === normalizeTechnicianName(techName);
-
-      if (matchesTechnician && so.group_id) gids.add(so.group_id);
-    });
-    return Array.from(gids);
-  };
 
   const renderRuleCard = (rule: ProfitRule) => {
     const itemsTotal = getItemsTotal(rule.items);
@@ -459,13 +446,17 @@ export function ProfitDistribution() {
     const allSOs = getRuleSOs(rule);
     const isDirty = hasUnsavedChanges(rule.id);
     const techName = technicians.find(t => t.id === rule.technician_id)?.name || "";
-    const search = (groupSearch[rule.id] || "").toLowerCase();
+    const popoverSearch = (groupPopoverSearch[rule.id] || "").toLowerCase();
 
-    // Available groups for this technician
-    const techGroups = rule.technician_id ? getGroupsForTechnician(rule.technician_id) : [];
-    const filteredGroups = techGroups.filter(gid => {
-      if (rule.group_ids.includes(gid)) return false; // already selected
-      if (search && !gid.toLowerCase().includes(search)) return false;
+    // All available groups (not just technician's)
+    const allGroupIds = Array.from(availableGroups.keys());
+    const unselectedGroups = allGroupIds.filter(gid => {
+      if (rule.group_ids.includes(gid)) return false;
+      if (popoverSearch) {
+        const info = availableGroups.get(gid);
+        const searchStr = `${gid} ${info?.week || ""} ${Array.from(info?.techNames || []).join(" ")}`.toLowerCase();
+        if (!searchStr.includes(popoverSearch)) return false;
+      }
       return true;
     });
 
@@ -480,9 +471,15 @@ export function ProfitDistribution() {
                 placeholder="Nome da regra / técnico"
                 className="h-8 text-sm font-semibold max-w-[250px]"
               />
-              <Badge variant={rule.technician_id ? "secondary" : "outline"} className="h-8 px-2 text-[10px]">
-                {techName ? `Técnico: ${techName}` : "Técnico não resolvido"}
-              </Badge>
+              {rule.technician_id ? (
+                <Badge variant="secondary" className="h-8 px-2 text-[10px]">
+                  Técnico: {techName}
+                </Badge>
+              ) : rule.rule_name.trim() ? (
+                <Badge variant="destructive" className="h-8 px-2 text-[10px]">
+                  <AlertTriangle className="h-3 w-3 mr-1" /> Técnico inválido
+                </Badge>
+              ) : null}
               <div className="flex items-center gap-1.5">
                 <Switch
                   checked={rule.is_active}
@@ -543,7 +540,7 @@ export function ProfitDistribution() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Selected groups */}
+          {/* Selected groups + dropdown multi-select */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium flex items-center gap-1.5">
@@ -560,7 +557,7 @@ export function ProfitDistribution() {
                   return (
                     <Badge key={gid} variant="outline" className="text-[10px] gap-1 pr-1">
                       <span className="font-mono">{gid}</span>
-                      {info && <span className="text-muted-foreground">({info.count} OS · {formatCurrency(info.total)})</span>}
+                      {info && <span className="text-muted-foreground">({info.week && `S${info.week} · `}{info.count} OS · {formatCurrency(info.total)})</span>}
                       <button
                         className="ml-0.5 rounded-full hover:bg-destructive/20 p-0.5"
                         onClick={() => toggleGroupInRule(rule.id, gid)}
@@ -572,51 +569,55 @@ export function ProfitDistribution() {
                 })}
               </div>
             )}
-            {/* Add groups */}
-            <div className="space-y-1">
-              <Input
-                value={groupSearch[rule.id] || ""}
-                onChange={(e) => setGroupSearch(prev => ({ ...prev, [rule.id]: e.target.value }))}
-                placeholder="Pesquisar grupo..."
-                className="h-7 text-xs max-w-[250px]"
-              />
-              {filteredGroups.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto">
-                  {filteredGroups.map(gid => {
+            {/* Dropdown multi-select for adding groups */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
+                  <Plus className="h-3.5 w-3.5" />
+                  Selecionar grupos
+                  <ChevronDown className="h-3.5 w-3.5 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[340px] p-2" align="start">
+                <Input
+                  value={groupPopoverSearch[rule.id] || ""}
+                  onChange={(e) => setGroupPopoverSearch(prev => ({ ...prev, [rule.id]: e.target.value }))}
+                  placeholder="Pesquisar grupo..."
+                  className="h-7 text-xs mb-2"
+                />
+                <div className="max-h-[220px] overflow-y-auto space-y-0.5">
+                  {unselectedGroups.length === 0 && (
+                    <p className="text-[10px] text-muted-foreground text-center py-4">Nenhum grupo disponível</p>
+                  )}
+                  {unselectedGroups.map(gid => {
                     const info = availableGroups.get(gid);
                     const isOther = groupAssignedToOther(gid, rule.id);
                     return (
                       <label
                         key={gid}
-                        className={`flex items-center gap-1.5 rounded-md border px-2 py-1 cursor-pointer hover:bg-muted/50 transition-colors text-[10px] ${
-                          isOther ? "border-amber-500/50" : "border-border"
+                        className={`flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer hover:bg-muted/50 transition-colors text-xs ${
+                          isOther ? "border border-amber-500/50" : ""
                         }`}
                       >
                         <Checkbox
                           checked={false}
                           onCheckedChange={() => toggleGroupInRule(rule.id, gid)}
                         />
-                        <span className="font-mono">{gid}</span>
-                        {info && (
-                          <span className="text-muted-foreground">
-                            {info.week && `S${info.week} · `}{info.count} OS · {formatCurrency(info.total)}
-                          </span>
-                        )}
-                        {isOther && <AlertTriangle className="h-3 w-3 text-amber-500" />}
+                        <div className="flex-1 min-w-0">
+                          <span className="font-mono text-[10px]">{gid}</span>
+                          {info && (
+                            <span className="text-muted-foreground text-[10px] ml-1.5">
+                              {info.week && `Semana ${info.week} · `}{info.count} OS · {formatCurrency(info.total)}
+                            </span>
+                          )}
+                        </div>
+                        {isOther && <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />}
                       </label>
                     );
                   })}
                 </div>
-              )}
-              {filteredGroups.length === 0 && rule.technician_id && (
-                <p className="text-[10px] text-muted-foreground">Nenhum grupo disponível</p>
-              )}
-              {!rule.technician_id && (
-                <p className="text-[10px] text-muted-foreground">
-                  O nome da regra deve corresponder a um técnico existente para carregar os grupos.
-                </p>
-              )}
-            </div>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Validation */}
