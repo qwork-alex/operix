@@ -438,20 +438,6 @@ export function ProfitDistribution() {
     );
   }
 
-  // Get groups for a technician (from service orders)
-  const getGroupsForTechnician = (techId: string) => {
-    const techName = technicians.find(t => t.id === techId)?.name;
-    if (!techName) return [];
-    const gids = new Set<string>();
-    serviceOrders.forEach((so: any) => {
-      const matchesTechnician =
-        so.technician_id === techId ||
-        normalizeTechnicianName(so.technician_name) === normalizeTechnicianName(techName);
-
-      if (matchesTechnician && so.group_id) gids.add(so.group_id);
-    });
-    return Array.from(gids);
-  };
 
   const renderRuleCard = (rule: ProfitRule) => {
     const itemsTotal = getItemsTotal(rule.items);
