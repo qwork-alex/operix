@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   TrendingUp, TrendingDown, AlertTriangle, CheckCircle, XCircle,
   RefreshCw, DollarSign, Percent, Link2, ArrowRightLeft, BarChart3,
-  Users, Monitor, Wallet
+  Users, Monitor, Wallet, Clock, Eye, EyeOff, Check, Pencil, History
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,8 +11,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { useLanguage } from "@/hooks/useLanguage";
-import { useReconciliations, useRunReconciliation, useManualMerge, useReconciliationSummary } from "@/hooks/useReconciliation";
+import {
+  useSplitReconciliations, useRunReconciliation, useManualMerge,
+  useReconciliationSummary, useCorrectReconciliation,
+  useValidateReconciliation, useClearReconciliation,
+  type ReconciliationDetail,
+} from "@/hooks/useReconciliation";
 import { useServiceOrders } from "@/hooks/useServiceOrders";
 import { usePaymentOrders } from "@/hooks/usePaymentOrders";
 import {
@@ -27,18 +33,188 @@ const STATUS_COLORS: Record<string, string> = {
   pending: "bg-accent/10 text-accent border-accent/30",
 };
 
+const AGING_STYLES: Record<string, string> = {
+  normal: "",
+  warning: "border-l-2 border-l-warning",
+  critical: "border-l-2 border-l-destructive",
+};
+
+const AGING_BADGE: Record<string, { label: string; className: string }> = {
+  normal: { label: "", className: "" },
+  warning: { label: "3-7d", className: "bg-warning/10 text-warning border-warning/30" },
+  critical: { label: "7d+", className: "bg-destructive/10 text-destructive border-destructive/30" },
+};
+
 const PIE_COLORS = [
   "hsl(152, 60%, 45%)", "hsl(0, 72%, 55%)", "hsl(38, 92%, 55%)", "hsl(210, 80%, 55%)"
 ];
 
+function ReconciliationRow({
+  r, formatCurrency, onCorrect, onValidate, onClear,
+}: {
+  r: ReconciliationDetail;
+  formatCurrency: (v: number) => string;
+  onCorrect: (id: string, value: number) => void;
+  onValidate: (id: string) => void;
+  onClear: (id: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [corrValue, setCorrValue] = useState("");
+  const pn = r.parsed_notes || {};
+  const soPlate = pn.so_plate || r.service_orders?.license_plate || "—";
+  const poPlate = pn.po_plate || r.payment_orders?.license_plate || "—";
+  const soClient = pn.so_client || r.service_orders?.client_name || "—";
+  const poClient = pn.po_client || r.payment_orders?.client_name || "—";
+  const soTotal = pn.so_total ?? Number(r.service_orders?.total || 0);
+  const poTotal = pn.po_total ?? Number(r.payment_orders?.total || 0);
+  const isValidated = pn.validated === true;
+  const agingLevel = r.aging_level || "normal";
+
+  return (
+    <div className={`rounded-lg border border-border/50 p-3 space-y-2 ${AGING_STYLES[agingLevel]}`}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge variant="outline" className={STATUS_COLORS[r.status] || ""}>
+            {r.status === "matched" ? <CheckCircle className="h-3 w-3 mr-1" /> :
+              r.status === "mismatch" ? <XCircle className="h-3 w-3 mr-1" /> :
+              r.status === "missing" ? <AlertTriangle className="h-3 w-3 mr-1" /> :
+              <Link2 className="h-3 w-3 mr-1" />}
+            {r.status === "matched" && pn.match_type === "grouped_match" ? "Grupo conciliado"
+              : r.status === "matched" ? "Conciliado"
+              : r.status === "mismatch" && pn.match_type === "partial_match" ? "Pagamento parcial"
+              : r.status === "mismatch" ? "Divergente"
+              : r.status === "missing" ? "Sem correspondência"
+              : r.status}
+          </Badge>
+          <Badge variant="outline" className="text-[10px]">
+            {r.matched_by === "auto" ? "Auto" : r.matched_by === "validated" ? "Validado" : "Manual"}
+          </Badge>
+          {agingLevel !== "normal" && (
+            <Badge variant="outline" className={`text-[10px] ${AGING_BADGE[agingLevel].className}`}>
+              <Clock className="h-2.5 w-2.5 mr-0.5" />
+              {AGING_BADGE[agingLevel].label}
+            </Badge>
+          )}
+          {isValidated && (
+            <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+              <Check className="h-2.5 w-2.5 mr-0.5" /> Validado
+            </Badge>
+          )}
+          <span className={`text-[10px] tabular-nums ${Number(r.confidence_score) >= 70 ? "text-emerald-400" : Number(r.confidence_score) >= 40 ? "text-warning" : "text-muted-foreground"}`}>
+            Score: {r.confidence_score}%
+          </span>
+        </div>
+        <span className={`text-sm font-bold tabular-nums ${
+          r.difference_amount > 0 ? "text-destructive" : r.difference_amount < 0 ? "text-emerald-400" : "text-foreground"
+        }`}>
+          {r.difference_amount > 0 ? "-" : r.difference_amount < 0 ? "+" : ""}{formatCurrency(Math.abs(Number(r.difference_amount)))}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 text-xs">
+        <div className="space-y-1">
+          <p className="text-[10px] font-medium text-muted-foreground uppercase">Ordem de Serviço</p>
+          {r.service_orders ? (
+            <>
+              <p><span className="text-muted-foreground">Placa:</span> {soPlate}</p>
+              <p><span className="text-muted-foreground">Cliente:</span> {soClient}</p>
+              <p><span className="text-muted-foreground">Valor:</span> {formatCurrency(soTotal)}</p>
+            </>
+          ) : <p className="text-muted-foreground italic">Sem OS correspondente</p>}
+        </div>
+        <div className="space-y-1">
+          <p className="text-[10px] font-medium text-muted-foreground uppercase">Ordem de Pagamento</p>
+          {r.payment_orders ? (
+            <>
+              <p><span className="text-muted-foreground">Placa:</span> {poPlate}</p>
+              <p><span className="text-muted-foreground">Cliente:</span> {poClient}</p>
+              <p><span className="text-muted-foreground">Valor:</span> {formatCurrency(poTotal)}</p>
+            </>
+          ) : <p className="text-muted-foreground italic">Sem pagamento correspondente</p>}
+        </div>
+      </div>
+
+      {pn.adjusted_value != null && (
+        <p className="text-[11px] text-emerald-400 bg-emerald-500/5 rounded p-1.5">
+          ✏️ Valor corrigido: {formatCurrency(pn.adjusted_value)}
+        </p>
+      )}
+
+      {pn.explanation && (
+        <p className="text-[11px] text-muted-foreground bg-muted/50 rounded p-2">
+          💡 {pn.explanation}
+        </p>
+      )}
+
+      {pn.match_reasons && pn.match_reasons.length > 0 && (
+        <div className="flex gap-1 flex-wrap">
+          {pn.match_reasons.map((reason: string, i: number) => (
+            <Badge key={i} variant="secondary" className="text-[9px] px-1.5 py-0">
+              {reason}
+            </Badge>
+          ))}
+        </div>
+      )}
+
+      {/* Line Actions */}
+      <div className="flex items-center gap-1.5 pt-1 border-t border-border/30">
+        {editing ? (
+          <div className="flex items-center gap-1.5">
+            <Input
+              type="number"
+              step="0.01"
+              placeholder="Valor correto"
+              className="h-7 w-28 text-xs"
+              value={corrValue}
+              onChange={(e) => setCorrValue(e.target.value)}
+            />
+            <Button size="sm" variant="outline" className="h-7 text-[10px] px-2"
+              onClick={() => {
+                const val = parseFloat(corrValue);
+                if (!isNaN(val)) onCorrect(r.id, val);
+                setEditing(false);
+                setCorrValue("");
+              }}>
+              Salvar
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7 text-[10px] px-2"
+              onClick={() => { setEditing(false); setCorrValue(""); }}>
+              ✕
+            </Button>
+          </div>
+        ) : (
+          <>
+            <Button size="sm" variant="ghost" className="h-7 text-[10px] px-2"
+              onClick={() => setEditing(true)}>
+              <Pencil className="h-3 w-3 mr-1" /> Corrigir
+            </Button>
+            {!isValidated && (
+              <Button size="sm" variant="ghost" className="h-7 text-[10px] px-2 text-emerald-400"
+                onClick={() => onValidate(r.id)}>
+                <Check className="h-3 w-3 mr-1" /> Validar
+              </Button>
+            )}
+            <Button size="sm" variant="ghost" className="h-7 text-[10px] px-2 text-muted-foreground"
+              onClick={() => onClear(r.id)}>
+              <EyeOff className="h-3 w-3 mr-1" /> Limpar
+            </Button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function FinancialPage() {
   const { t, formatCurrency } = useLanguage();
   const { data: summary, isLoading: summaryLoading } = useReconciliationSummary();
-  const { data: reconciliations = [], isLoading: recLoading } = useReconciliations();
+  const { matched, pending, all, isLoading: recLoading } = useSplitReconciliations();
   const runMutation = useRunReconciliation();
   const mergeMutation = useManualMerge();
+  const correctMutation = useCorrectReconciliation();
+  const validateMutation = useValidateReconciliation();
+  const clearMutation = useClearReconciliation();
 
-  // Manual merge state
   const [selectedSO, setSelectedSO] = useState<string | null>(null);
   const [selectedPO, setSelectedPO] = useState<string | null>(null);
   const { data: soData } = useServiceOrders();
@@ -49,7 +225,7 @@ export default function FinancialPage() {
     expectedRevenue: 0, receivedRevenue: 0, totalDifference: 0, discrepancyPct: 0,
     matched: 0, mismatched: 0, missing: 0, pending: 0, expenses: 0, profit: 0,
     monthly: [], byClient: [], byTechnician: [], byPlatform: [], alerts: [],
-    serviceOrderCount: 0, paymentOrderCount: 0,
+    serviceOrderCount: 0, paymentOrderCount: 0, activeDiscrepancies: 0,
   };
 
   const handleMerge = () => {
@@ -60,7 +236,11 @@ export default function FinancialPage() {
     }
   };
 
-  // UI GUARD: detect no-data state
+  // Split into active vs cleared (history)
+  const activeMatched = matched.filter((r) => !r.parsed_notes?.cleared);
+  const activePending = pending.filter((r) => !r.parsed_notes?.cleared);
+  const history = all.filter((r) => r.parsed_notes?.cleared || r.parsed_notes?.validated);
+
   const hasNoData = s.serviceOrderCount === 0 && s.paymentOrderCount === 0;
 
   const pieData = hasNoData ? [] : [
@@ -94,10 +274,19 @@ export default function FinancialPage() {
             <p className="text-xs text-muted-foreground">{t("fin.subtitle")}</p>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={() => runMutation.mutate()} disabled={runMutation.isPending}>
-          <RefreshCw className={`h-4 w-4 mr-1 ${runMutation.isPending ? "animate-spin" : ""}`} />
-          {t("fin.refreshAnalysis")}
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Discrepancy badge */}
+          {s.activeDiscrepancies > 0 && (
+            <Badge variant="destructive" className="text-xs">
+              <AlertTriangle className="h-3 w-3 mr-1" />
+              {s.activeDiscrepancies} discrepância{s.activeDiscrepancies > 1 ? "s" : ""}
+            </Badge>
+          )}
+          <Button variant="outline" size="sm" onClick={() => runMutation.mutate()} disabled={runMutation.isPending}>
+            <RefreshCw className={`h-4 w-4 mr-1 ${runMutation.isPending ? "animate-spin" : ""}`} />
+            {t("fin.refreshAnalysis")}
+          </Button>
+        </div>
       </div>
 
       {/* Alerts */}
@@ -130,6 +319,7 @@ export default function FinancialPage() {
 
       {!hasNoData && <>
 
+      {/* KPI Row 1 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="border-border/50 glow-gold">
           <CardHeader className="pb-2">
@@ -190,7 +380,7 @@ export default function FinancialPage() {
         </Card>
       </div>
 
-      {/* KPI Row 2: Expenses & Profit */}
+      {/* KPI Row 2 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Card className="border-border/50">
           <CardHeader className="pb-2">
@@ -218,18 +408,35 @@ export default function FinancialPage() {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="overview" className="space-y-4">
+      <Tabs defaultValue="reconciliation" className="space-y-4">
         <TabsList className="bg-muted">
           <TabsTrigger value="overview">{t("dashboard.revenueOverview")}</TabsTrigger>
-          <TabsTrigger value="reconciliations">{t("fin.discrepancyDetails")}</TabsTrigger>
+          <TabsTrigger value="reconciliation" className="relative">
+            Reconciliação
+            {activeMatched.length > 0 && (
+              <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 text-[9px] px-1">
+                {activeMatched.length}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="pending" className="relative">
+            Pendentes
+            {activePending.length > 0 && (
+              <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-warning/20 text-warning text-[9px] px-1">
+                {activePending.length}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="history">
+            <History className="h-3.5 w-3.5 mr-1" /> Histórico
+          </TabsTrigger>
           <TabsTrigger value="breakdown">{t("fin.breakdown")}</TabsTrigger>
           <TabsTrigger value="merge">{t("fin.manualMatch")}</TabsTrigger>
         </TabsList>
 
-        {/* Overview Tab */}
+        {/* Overview */}
         <TabsContent value="overview" className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* Monthly revenue chart */}
             <Card className="border-border/50 lg:col-span-2">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">{t("dashboard.monthlyRevExp")}</CardTitle>
@@ -250,7 +457,6 @@ export default function FinancialPage() {
               </CardContent>
             </Card>
 
-            {/* Reconciliation status pie */}
             <Card className="border-border/50">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">{t("fin.reconciliationStatus")}</CardTitle>
@@ -276,96 +482,105 @@ export default function FinancialPage() {
           </div>
         </TabsContent>
 
-        {/* Reconciliation Details Tab */}
-        <TabsContent value="reconciliations">
+        {/* RECONCILIATION VIEW — matched/partial */}
+        <TabsContent value="reconciliation">
           <Card className="border-border/50">
-            <CardContent className="pt-4">
-              {reconciliations.length === 0 ? (
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-emerald-400" />
+                Reconciliações ({activeMatched.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {activeMatched.length === 0 ? (
                 <div className="text-center py-8 text-sm text-muted-foreground">
                   <CheckCircle className="h-8 w-8 mx-auto mb-2 text-emerald-400" />
-                  {s.serviceOrderCount === 0 && s.paymentOrderCount === 0
-                    ? "Nenhuma ordem encontrada. Importe dados para iniciar a reconciliação."
-                    : t("fin.noDiscrepancies")}
+                  Nenhuma reconciliação ativa. Execute a análise para gerar resultados.
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {reconciliations.map((r: any) => {
+                  {activeMatched.map((r) => (
+                    <ReconciliationRow
+                      key={r.id}
+                      r={r}
+                      formatCurrency={formatCurrency}
+                      onCorrect={(id, val) => correctMutation.mutate({ id, adjustedValue: val })}
+                      onValidate={(id) => validateMutation.mutate({ id })}
+                      onClear={(id) => clearMutation.mutate({ id })}
+                    />
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* PENDING VIEW — missing/unmatched */}
+        <TabsContent value="pending">
+          <Card className="border-border/50">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-warning" />
+                Pendentes ({activePending.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {activePending.length === 0 ? (
+                <div className="text-center py-8 text-sm text-muted-foreground">
+                  <CheckCircle className="h-8 w-8 mx-auto mb-2 text-emerald-400" />
+                  Todos os registos estão conciliados.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {activePending.map((r) => (
+                    <ReconciliationRow
+                      key={r.id}
+                      r={r}
+                      formatCurrency={formatCurrency}
+                      onCorrect={(id, val) => correctMutation.mutate({ id, adjustedValue: val })}
+                      onValidate={(id) => validateMutation.mutate({ id })}
+                      onClear={(id) => clearMutation.mutate({ id })}
+                    />
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* HISTORY VIEW — cleared/validated */}
+        <TabsContent value="history">
+          <Card className="border-border/50">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <History className="h-4 w-4 text-muted-foreground" />
+                Histórico ({history.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {history.length === 0 ? (
+                <div className="text-center py-8 text-sm text-muted-foreground">
+                  Nenhum registo no histórico.
+                </div>
+              ) : (
+                <div className="space-y-2 opacity-80">
+                  {history.map((r) => {
                     const pn = r.parsed_notes || {};
                     const soPlate = pn.so_plate || r.service_orders?.license_plate || "—";
                     const poPlate = pn.po_plate || r.payment_orders?.license_plate || "—";
-                    const soClient = pn.so_client || r.service_orders?.client_name || "—";
-                    const poClient = pn.po_client || r.payment_orders?.client_name || "—";
-                    const soTotal = pn.so_total ?? Number(r.service_orders?.total || 0);
-                    const poTotal = pn.po_total ?? Number(r.payment_orders?.total || 0);
-
                     return (
-                      <div key={r.id} className="rounded-lg border border-border/50 p-3 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className={STATUS_COLORS[r.status] || ""}>
-                              {r.status === "matched" ? <CheckCircle className="h-3 w-3 mr-1" /> :
-                               r.status === "mismatch" ? <XCircle className="h-3 w-3 mr-1" /> :
-                               r.status === "missing" ? <AlertTriangle className="h-3 w-3 mr-1" /> :
-                               <Link2 className="h-3 w-3 mr-1" />}
-                              {r.status === "matched" && pn.match_type === "grouped_match" ? "Grupo conciliado"
-                               : r.status === "matched" ? "Conciliado"
-                               : r.status === "mismatch" && pn.match_type === "partial_match" ? "Pagamento parcial"
-                               : r.status === "mismatch" ? "Divergente"
-                               : r.status === "missing" ? "Sem correspondência"
-                               : r.status}
-                            </Badge>
-                            <Badge variant="outline" className="text-[10px]">
-                              {r.matched_by === "auto" ? "Auto" : "Manual"}
-                            </Badge>
-                            <span className={`text-[10px] tabular-nums ${Number(r.confidence_score) >= 70 ? "text-emerald-400" : Number(r.confidence_score) >= 40 ? "text-warning" : "text-muted-foreground"}`}>
-                              Score: {r.confidence_score}%
-                            </span>
-                          </div>
-                          <span className={`text-sm font-bold tabular-nums ${
-                            r.difference_amount > 0 ? "text-destructive" : r.difference_amount < 0 ? "text-emerald-400" : "text-foreground"
-                          }`}>
-                            {r.difference_amount > 0 ? "-" : r.difference_amount < 0 ? "+" : ""}{formatCurrency(Math.abs(Number(r.difference_amount)))}
-                          </span>
+                      <div key={r.id} className="rounded-lg border border-border/30 p-2.5 flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className={`text-[10px] ${STATUS_COLORS[r.status] || ""}`}>
+                            {r.status}
+                          </Badge>
+                          <span className="text-muted-foreground">{soPlate} ↔ {poPlate}</span>
+                          {pn.cleared && <Badge variant="secondary" className="text-[9px]">Limpo</Badge>}
+                          {pn.validated && <Badge variant="secondary" className="text-[9px] bg-emerald-500/10 text-emerald-400">Validado</Badge>}
                         </div>
-
-                        <div className="grid grid-cols-2 gap-3 text-xs">
-                          <div className="space-y-1">
-                            <p className="text-[10px] font-medium text-muted-foreground uppercase">Ordem de Serviço</p>
-                            {r.service_orders ? (
-                              <>
-                                <p><span className="text-muted-foreground">Placa:</span> {soPlate}</p>
-                                <p><span className="text-muted-foreground">Cliente:</span> {soClient}</p>
-                                <p><span className="text-muted-foreground">Valor:</span> {formatCurrency(soTotal)}</p>
-                              </>
-                            ) : <p className="text-muted-foreground italic">Sem OS correspondente</p>}
-                          </div>
-                          <div className="space-y-1">
-                            <p className="text-[10px] font-medium text-muted-foreground uppercase">Ordem de Pagamento</p>
-                            {r.payment_orders ? (
-                              <>
-                                <p><span className="text-muted-foreground">Placa:</span> {poPlate}</p>
-                                <p><span className="text-muted-foreground">Cliente:</span> {poClient}</p>
-                                <p><span className="text-muted-foreground">Valor:</span> {formatCurrency(poTotal)}</p>
-                              </>
-                            ) : <p className="text-muted-foreground italic">Sem pagamento correspondente</p>}
-                          </div>
-                        </div>
-
-                        {pn.explanation && (
-                          <p className="text-[11px] text-muted-foreground bg-muted/50 rounded p-2">
-                            💡 {pn.explanation}
-                          </p>
-                        )}
-
-                        {pn.match_reasons && pn.match_reasons.length > 0 && (
-                          <div className="flex gap-1 flex-wrap">
-                            {pn.match_reasons.map((reason: string, i: number) => (
-                              <Badge key={i} variant="secondary" className="text-[9px] px-1.5 py-0">
-                                {reason}
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
+                        <span className="tabular-nums text-muted-foreground">
+                          {formatCurrency(Math.abs(Number(r.difference_amount)))}
+                        </span>
                       </div>
                     );
                   })}
@@ -378,7 +593,6 @@ export default function FinancialPage() {
         {/* Breakdown Tab */}
         <TabsContent value="breakdown" className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* By Client */}
             <Card className="border-border/50">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium flex items-center gap-1">
@@ -400,7 +614,6 @@ export default function FinancialPage() {
               </CardContent>
             </Card>
 
-            {/* By Technician */}
             <Card className="border-border/50">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium flex items-center gap-1">
@@ -422,7 +635,6 @@ export default function FinancialPage() {
               </CardContent>
             </Card>
 
-            {/* By Platform */}
             <Card className="border-border/50">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium flex items-center gap-1">
@@ -470,7 +682,6 @@ export default function FinancialPage() {
               )}
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {/* Service Orders */}
                 <div>
                   <h3 className="text-xs font-medium text-muted-foreground mb-2">{t("nav.serviceOrders")}</h3>
                   <div className="rounded-lg border border-border/50 overflow-auto max-h-64">
@@ -487,9 +698,7 @@ export default function FinancialPage() {
                         {(soData ?? []).slice(0, 50).map((so: any) => (
                           <TableRow key={so.id} className={`text-xs cursor-pointer ${selectedSO === so.id ? "bg-primary/10" : ""}`}
                             onClick={() => setSelectedSO(selectedSO === so.id ? null : so.id)}>
-                            <TableCell>
-                              <Checkbox checked={selectedSO === so.id} />
-                            </TableCell>
+                            <TableCell><Checkbox checked={selectedSO === so.id} /></TableCell>
                             <TableCell>{so.license_plate || "—"}</TableCell>
                             <TableCell>{so.car_name || "—"}</TableCell>
                             <TableCell className="text-right tabular-nums">{formatCurrency(Number(so.total || 0))}</TableCell>
@@ -500,7 +709,6 @@ export default function FinancialPage() {
                   </div>
                 </div>
 
-                {/* Payment Orders */}
                 <div>
                   <h3 className="text-xs font-medium text-muted-foreground mb-2">{t("nav.paymentOrders")}</h3>
                   <div className="rounded-lg border border-border/50 overflow-auto max-h-64">
@@ -517,9 +725,7 @@ export default function FinancialPage() {
                         {(poData ?? []).slice(0, 50).map((po: any) => (
                           <TableRow key={po.id} className={`text-xs cursor-pointer ${selectedPO === po.id ? "bg-primary/10" : ""}`}
                             onClick={() => setSelectedPO(selectedPO === po.id ? null : po.id)}>
-                            <TableCell>
-                              <Checkbox checked={selectedPO === po.id} />
-                            </TableCell>
+                            <TableCell><Checkbox checked={selectedPO === po.id} /></TableCell>
                             <TableCell>{po.license_plate || "—"}</TableCell>
                             <TableCell>{po.car_name || "—"}</TableCell>
                             <TableCell className="text-right tabular-nums">{formatCurrency(Number(po.total || 0))}</TableCell>
