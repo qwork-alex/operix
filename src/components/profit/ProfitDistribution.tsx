@@ -30,16 +30,12 @@ interface RuleItem {
 interface ProfitRule {
   id: string;
   rule_name: string;
-  technician_id: string;
   group_ids: string[];
   is_active: boolean;
   items: RuleItem[];
   _isNew?: boolean;
   _dirty?: boolean;
 }
-
-const normalizeTechnicianName = (value?: string | null) =>
-  (value || "").trim().toLowerCase().replace(/\s+/g, " ");
 
 const PARTICIPANT_TYPES = [
   { value: "technician", label: "Técnico" },
@@ -59,25 +55,6 @@ export function ProfitDistribution() {
   const [groupPopoverSearch, setGroupPopoverSearch] = useState<Record<string, string>>({});
 
   // ── Queries ──
-  const { data: technicians = [] } = useQuery({
-    queryKey: ["technicians"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("technicians").select("id, name").order("name");
-      if (error) throw error;
-      return data || [];
-    },
-  });
-
-  const technicianIdByName = useMemo(
-    () => new Map(technicians.map((tech) => [normalizeTechnicianName(tech.name), tech.id])),
-    [technicians]
-  );
-
-  const resolveTechnicianId = useCallback(
-    (ruleName: string) => technicianIdByName.get(normalizeTechnicianName(ruleName)) || "",
-    [technicianIdByName]
-  );
-
   const { data: fetchedRules = [], isLoading: rulesLoading } = useQuery({
     queryKey: ["profit-rules"],
     queryFn: async () => {
@@ -89,7 +66,6 @@ export function ProfitDistribution() {
       return (data || []).map((r: any) => ({
         id: r.id,
         rule_name: r.rule_name,
-        technician_id: r.technician_id || "",
         group_ids: Array.isArray(r.group_ids) ? r.group_ids.filter(Boolean) : [],
         is_active: r.is_active,
         items: (r.profit_rule_items || []).map((item: any) => ({
@@ -102,14 +78,7 @@ export function ProfitDistribution() {
     },
   });
 
-  const rules = useMemo(
-    () =>
-      fetchedRules.map((rule) => ({
-        ...rule,
-        technician_id: rule.technician_id || resolveTechnicianId(rule.rule_name),
-      })),
-    [fetchedRules, resolveTechnicianId]
-  );
+  const rules = fetchedRules;
 
   const { data: serviceOrders = [], isLoading: soLoading } = useQuery({
     queryKey: ["service_orders"],
@@ -186,16 +155,9 @@ export function ProfitDistribution() {
     rule.group_ids.flatMap(gid => getGroupSOs(gid));
 
   const handleRuleNameChange = (ruleId: string, value: string) => {
-    const nextTechnicianId = resolveTechnicianId(value);
-
     updateLocalRule(ruleId, (rule) => ({
       ...rule,
       rule_name: value,
-      technician_id: nextTechnicianId,
-      group_ids:
-        nextTechnicianId && rule.technician_id && nextTechnicianId !== rule.technician_id
-          ? []
-          : rule.group_ids,
     }));
   };
 
@@ -213,7 +175,6 @@ export function ProfitDistribution() {
     const newRule: ProfitRule = {
       id: crypto.randomUUID(),
       rule_name: "",
-      technician_id: "",
       group_ids: [],
       is_active: true,
       items: [
@@ -241,7 +202,6 @@ export function ProfitDistribution() {
       if (has) {
         return { ...r, group_ids: r.group_ids.filter(g => g !== groupId) };
       }
-      // Check if assigned elsewhere
       if (groupAssignedToOther(groupId, ruleId)) {
         if (!confirm(`O grupo "${groupId}" já possui uma regra ativa. Substituir?`)) {
           return r;
@@ -287,7 +247,6 @@ export function ProfitDistribution() {
   // ── Save single rule ──
   const saveRuleMutation = useMutation({
     mutationFn: async (rule: ProfitRule) => {
-      const technician_id = rule.technician_id || resolveTechnicianId(rule.rule_name);
       const group_ids = Array.from(new Set(rule.group_ids.filter(Boolean)));
       const participants = rule.items.map((item) => ({
         participant_name: item.participant_name.trim(),
@@ -295,13 +254,8 @@ export function ProfitDistribution() {
         participant_type: item.participant_type,
       }));
 
-      console.log("Technician resolved:", technician_id, "from rule name:", rule.rule_name);
-
       if (!rule.rule_name.trim()) {
         throw new Error("Nome da regra é obrigatório");
-      }
-      if (!technician_id) {
-        throw new Error("Técnico não encontrado para o nome: " + rule.rule_name);
       }
       if (group_ids.length === 0) {
         throw new Error("Selecione pelo menos um grupo");
@@ -311,7 +265,7 @@ export function ProfitDistribution() {
       }
 
       console.log("Saving rule:", {
-        technician_id,
+        rule_name: rule.rule_name,
         group_ids,
         participants,
         isNew: !!rule._isNew,
@@ -324,7 +278,6 @@ export function ProfitDistribution() {
           .from("profit_rules")
           .insert({
             rule_name: rule.rule_name,
-            technician_id,
             group_ids,
             is_active: rule.is_active,
           } as any)
@@ -337,7 +290,6 @@ export function ProfitDistribution() {
           .from("profit_rules")
           .update({
             rule_name: rule.rule_name,
-            technician_id,
             group_ids,
             is_active: rule.is_active,
             updated_at: new Date().toISOString(),
@@ -346,7 +298,6 @@ export function ProfitDistribution() {
         if (ruleError) throw ruleError;
         ruleId = rule.id;
       }
-      
 
       // Upsert items
       await supabase.from("profit_rule_items").delete().eq("rule_id", ruleId);
@@ -377,18 +328,16 @@ export function ProfitDistribution() {
           await supabase.from("service_order_distributions").insert(distributions);
         }
 
-        // Update technician earnings on SOs
+        // Update technician earnings on SOs if a technician participant exists
         const techItem = participants.find(i => i.participant_type === "technician");
         if (techItem) {
           for (const so of allSOs) {
             const total = Number((so as any).total || 0);
-            const { error: soError } = await supabase.from("service_orders").update({
-              technician_id,
+            await supabase.from("service_orders").update({
               technician_percentage: techItem.percentage,
               technician_earning: Math.round(total * techItem.percentage / 100 * 100) / 100,
               updated_at: new Date().toISOString(),
             }).eq("id", (so as any).id);
-            if (soError) throw soError;
           }
         }
       }
@@ -449,17 +398,14 @@ export function ProfitDistribution() {
     );
   }
 
-
   const renderRuleCard = (rule: ProfitRule) => {
     const itemsTotal = getItemsTotal(rule.items);
     const valid = itemsTotal === 100;
     const totalRevenue = getRuleRevenue(rule);
     const allSOs = getRuleSOs(rule);
     const isDirty = hasUnsavedChanges(rule.id);
-    const techName = technicians.find(t => t.id === rule.technician_id)?.name || "";
     const popoverSearch = (groupPopoverSearch[rule.id] || "").toLowerCase();
 
-    // All available groups (not just technician's)
     const allGroupIds = Array.from(availableGroups.keys());
     const unselectedGroups = allGroupIds.filter(gid => {
       if (rule.group_ids.includes(gid)) return false;
@@ -479,14 +425,9 @@ export function ProfitDistribution() {
               <Input
                 value={rule.rule_name}
                 onChange={(e) => handleRuleNameChange(rule.id, e.target.value)}
-                placeholder="Nome da regra / técnico"
+                placeholder="Nome da regra"
                 className="h-8 text-sm font-semibold max-w-[250px]"
               />
-              {rule.technician_id && techName ? (
-                <Badge variant="secondary" className="h-8 px-2 text-[10px]">
-                  Técnico: {techName}
-                </Badge>
-              ) : null}
               <div className="flex items-center gap-1.5">
                 <Switch
                   checked={rule.is_active}
@@ -495,13 +436,10 @@ export function ProfitDistribution() {
                 <span className="text-[10px] text-muted-foreground">{rule.is_active ? "Ativa" : "Inativa"}</span>
               </div>
             </div>
-            {techName && (
-              <p className="text-[10px] text-muted-foreground">
-                Técnico: <span className="font-medium text-foreground">{techName}</span>
-                {" · "}{rule.group_ids.length} grupo{rule.group_ids.length !== 1 ? "s" : ""}
-                {" · "}{allSOs.length} OS · Receita: {formatCurrency(totalRevenue)}
-              </p>
-            )}
+            <p className="text-[10px] text-muted-foreground">
+              {rule.group_ids.length} grupo{rule.group_ids.length !== 1 ? "s" : ""}
+              {" · "}{allSOs.length} OS · Receita: {formatCurrency(totalRevenue)}
+            </p>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             {isDirty && (
@@ -576,7 +514,6 @@ export function ProfitDistribution() {
                 })}
               </div>
             )}
-            {/* Dropdown multi-select for adding groups */}
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
@@ -603,7 +540,7 @@ export function ProfitDistribution() {
                       <label
                         key={gid}
                         className={`flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer hover:bg-muted/50 transition-colors text-xs ${
-                          isOther ? "border border-amber-500/50" : ""
+                          isOther ? "border border-destructive/50" : ""
                         }`}
                       >
                         <Checkbox
@@ -618,7 +555,7 @@ export function ProfitDistribution() {
                             </span>
                           )}
                         </div>
-                        {isOther && <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />}
+                        {isOther && <AlertTriangle className="h-3 w-3 text-destructive shrink-0" />}
                       </label>
                     );
                   })}
@@ -637,9 +574,9 @@ export function ProfitDistribution() {
             </div>
           )}
           {valid && (
-            <div className="flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3">
-              <Check className="h-4 w-4 text-emerald-600 shrink-0" />
-              <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">
+            <div className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 p-3">
+              <Check className="h-4 w-4 text-primary shrink-0" />
+              <p className="text-xs text-primary font-medium">
                 Total: 100% — Regra válida
               </p>
             </div>
@@ -726,7 +663,7 @@ export function ProfitDistribution() {
           <div className="space-y-1">
             <div className="flex justify-between text-[10px] text-muted-foreground">
               <span>Distribuição total</span>
-              <span className={itemsTotal === 100 ? "text-emerald-600" : "text-destructive"}>
+              <span className={itemsTotal === 100 ? "text-primary" : "text-destructive"}>
                 {itemsTotal}%
               </span>
             </div>
@@ -737,8 +674,8 @@ export function ProfitDistribution() {
                   className={`h-full transition-all ${
                     item.participant_type === "technician" ? "bg-primary" :
                     item.participant_type === "partner" ? "bg-accent" :
-                    item.participant_type === "company" ? "bg-emerald-500" :
-                    item.participant_type === "client" ? "bg-amber-500" :
+                    item.participant_type === "company" ? "bg-secondary" :
+                    item.participant_type === "client" ? "bg-muted-foreground" :
                     "bg-muted-foreground/40"
                   }`}
                   style={{ width: `${Math.min(item.percentage, 100)}%` }}
@@ -752,8 +689,8 @@ export function ProfitDistribution() {
                   <div className={`h-2 w-2 rounded-full ${
                     item.participant_type === "technician" ? "bg-primary" :
                     item.participant_type === "partner" ? "bg-accent" :
-                    item.participant_type === "company" ? "bg-emerald-500" :
-                    item.participant_type === "client" ? "bg-amber-500" :
+                    item.participant_type === "company" ? "bg-secondary" :
+                    item.participant_type === "client" ? "bg-muted-foreground" :
                     "bg-muted-foreground/40"
                   }`} />
                   <span className="text-muted-foreground">{item.participant_name || "—"} ({item.percentage}%)</span>
@@ -855,7 +792,7 @@ export function ProfitDistribution() {
           <div>
             <h1 className="text-lg font-semibold text-foreground">Distribuição de Lucros</h1>
             <p className="text-xs text-muted-foreground">
-              Regras por técnico com múltiplos grupos · Cálculos baseados em Ordens de Serviço reais
+              Regras com múltiplos grupos · Cálculos baseados em Ordens de Serviço reais
             </p>
           </div>
         </div>
@@ -877,7 +814,6 @@ export function ProfitDistribution() {
         </div>
       </div>
 
-      {/* ═══ RULES ═══ */}
       {allRules.length === 0 && (
         <Card className="border-dashed border-2 border-muted-foreground/20">
           <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
@@ -890,7 +826,7 @@ export function ProfitDistribution() {
 
       {allRules.map(renderRuleCard)}
 
-      {/* ═══ SUMMARY ═══ */}
+      {/* Summary */}
       <Card className="border-border/50">
         <CardHeader>
           <CardTitle className="text-sm font-semibold">Resumo Geral</CardTitle>
