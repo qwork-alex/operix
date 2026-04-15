@@ -210,7 +210,7 @@ function getMissingSuggestion(current: string, next: string | null): string | nu
 }
 
 /* ── main component ── */
-export default function ExpenseSpreadsheet({ data, onChange, formatCurrency }: Props) {
+export default function ExpenseSpreadsheet({ data, onChange, formatCurrency, filterYear }: Props) {
   const [showAddCol, setShowAddCol] = useState(false);
   const [newColName, setNewColName] = useState("");
   const [periodDraft, setPeriodDraft] = useState("");
