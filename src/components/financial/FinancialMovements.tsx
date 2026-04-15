@@ -6,12 +6,45 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
+/* ── period normalization (shared logic) ── */
+const MONTH_LABELS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+const MONTH_MAP: Record<string, number> = {
+  janeiro: 1, fevereiro: 2, março: 3, marco: 3, abril: 4, maio: 5, junho: 6,
+  julho: 7, agosto: 8, setembro: 9, outubro: 10, novembro: 11, dezembro: 12,
+  jan: 1, fev: 2, mar: 3, abr: 4, mai: 5, jun: 6, jul: 7, ago: 8, set: 9, out: 10, nov: 11, dez: 12,
+};
+
+export function normalizePeriod(raw: string): string | null {
+  const t = raw.trim().toLowerCase();
+  const slashNum = t.match(/^(\d{1,2})\s*[\/\-]\s*(\d{2,4})$/);
+  if (slashNum) {
+    const m = parseInt(slashNum[1]);
+    let y = slashNum[2];
+    if (y.length === 4) y = y.slice(2);
+    if (m >= 1 && m <= 12) return `${MONTH_LABELS[m - 1]}/${y}`;
+  }
+  const textNum = t.match(/^([a-zçã]+)\s*[\/\-\s]\s*(\d{2,4})$/);
+  if (textNum) {
+    const m = MONTH_MAP[textNum[1]];
+    let y = textNum[2];
+    if (y.length === 4) y = y.slice(2);
+    if (m) return `${MONTH_LABELS[m - 1]}/${y}`;
+  }
+  return null;
+}
+
+export function getYearFromPeriod(period: string): string | null {
+  const m = period.match(/\/(\d{2})$/);
+  return m ? `20${m[1]}` : null;
+}
+
 export interface FinancialMovement {
   id: string;
   period: string;
   type: "loan" | "manual_entry";
   origin: string;
   amount: number;
+  paidAmount: number;
   status: "pending" | "paid" | "partial";
 }
 
@@ -20,11 +53,6 @@ interface Props {
   onChange: (movements: FinancialMovement[]) => void;
   formatCurrency: (v: number) => string;
 }
-
-const TYPE_LABELS: Record<string, string> = {
-  loan: "Empréstimo",
-  manual_entry: "Entrada manual",
-};
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "Pendente",
@@ -52,7 +80,11 @@ function EditableCell({ value, onChange }: { value: string; onChange: (v: string
       </div>
     );
   }
-  const commit = () => { onChange(draft); setEditing(false); };
+  const commit = () => {
+    const norm = normalizePeriod(draft);
+    onChange(norm || draft);
+    setEditing(false);
+  };
   return (
     <Input ref={ref} className="h-7 text-sm text-center border-primary/50 bg-background"
       value={draft} onChange={(e) => setDraft(e.target.value)}
@@ -94,13 +126,29 @@ export default function FinancialMovements({ movements, onChange, formatCurrency
       type: "loan",
       origin: "",
       amount: 0,
+      paidAmount: 0,
       status: "pending",
     };
     onChange([...movements, newMov]);
   };
 
   const updateField = (id: string, field: keyof FinancialMovement, value: any) => {
-    onChange(movements.map((m) => m.id === id ? { ...m, [field]: value } : m));
+    const updated = movements.map((m) => {
+      if (m.id !== id) return m;
+      const next = { ...m, [field]: value };
+      // Auto-adjust status based on paidAmount
+      if (field === "paidAmount") {
+        const paid = parseFloat(value) || 0;
+        if (paid <= 0) next.status = "pending";
+        else if (paid >= next.amount) next.status = "paid";
+        else next.status = "partial";
+      }
+      if (field === "status" && value !== "partial") {
+        next.paidAmount = value === "paid" ? next.amount : 0;
+      }
+      return next;
+    });
+    onChange(updated);
   };
 
   const removeMovement = (id: string) => {
@@ -109,8 +157,8 @@ export default function FinancialMovements({ movements, onChange, formatCurrency
   };
 
   const totalLoans = movements.filter((m) => m.type === "loan").reduce((s, m) => s + m.amount, 0);
-  const totalEntries = movements.filter((m) => m.type === "manual_entry").reduce((s, m) => s + m.amount, 0);
-  const pendingLoans = movements.filter((m) => m.type === "loan" && m.status === "pending").reduce((s, m) => s + m.amount, 0);
+  const pendingLoans = movements.filter((m) => m.type === "loan" && m.status !== "paid")
+    .reduce((s, m) => s + (m.amount - (m.paidAmount || 0)), 0);
 
   return (
     <div className="space-y-3">
@@ -120,9 +168,8 @@ export default function FinancialMovements({ movements, onChange, formatCurrency
         </Button>
         {movements.length > 0 && (
           <div className="flex items-center gap-3 ml-auto text-[10px] text-muted-foreground">
-            <span>Empréstimos: <strong className="text-foreground">{formatCurrency(totalLoans)}</strong></span>
+            <span>Total: <strong className="text-foreground">{formatCurrency(totalLoans)}</strong></span>
             <span>Pendentes: <strong className="text-amber-400">{formatCurrency(pendingLoans)}</strong></span>
-            <span>Entradas: <strong className="text-foreground">{formatCurrency(totalEntries)}</strong></span>
           </div>
         )}
       </div>
@@ -137,57 +184,60 @@ export default function FinancialMovements({ movements, onChange, formatCurrency
             <thead>
               <tr className="border-b border-border/50 bg-muted/30">
                 <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground w-24">Período</th>
-                <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground w-32">Tipo</th>
                 <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground">Origem</th>
                 <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground w-28">Valor</th>
+                <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground w-28">Valor pago</th>
+                <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground w-28">Restante</th>
                 <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground w-24">Status</th>
                 <th className="w-8" />
               </tr>
             </thead>
             <tbody>
-              {movements.map((mov) => (
-                <tr key={mov.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors group/row">
-                  <td className="px-1 py-0.5">
-                    <EditableCell value={mov.period} onChange={(v) => updateField(mov.id, "period", v)} />
-                  </td>
-                  <td className="px-1 py-0.5">
-                    <Select value={mov.type} onValueChange={(v) => updateField(mov.id, "type", v)}>
-                      <SelectTrigger className="h-7 text-xs border-0 bg-transparent justify-center">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="loan">Empréstimo</SelectItem>
-                        <SelectItem value="manual_entry">Entrada manual</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </td>
-                  <td className="px-1 py-0.5">
-                    <EditableCell value={mov.origin} onChange={(v) => updateField(mov.id, "origin", v)} />
-                  </td>
-                  <td className="px-1 py-0.5">
-                    <EditableAmount value={mov.amount} onChange={(v) => updateField(mov.id, "amount", v)} />
-                  </td>
-                  <td className="px-1 py-0.5 text-center">
-                    <Select value={mov.status} onValueChange={(v) => updateField(mov.id, "status", v)}>
-                      <SelectTrigger className="h-7 text-xs border-0 bg-transparent justify-center">
-                        <Badge variant="outline" className={`text-[10px] ${STATUS_COLORS[mov.status]}`}>
-                          {STATUS_LABELS[mov.status]}
-                        </Badge>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="pending">Pendente</SelectItem>
-                        <SelectItem value="paid">Pago</SelectItem>
-                        <SelectItem value="partial">Parcial</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </td>
-                  <td className="px-1 py-1">
-                    <button className="opacity-0 group-hover/row:opacity-100 transition-opacity text-destructive" onClick={() => removeMovement(mov.id)}>
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {movements.map((mov) => {
+                const remaining = Math.max(0, mov.amount - (mov.paidAmount || 0));
+                return (
+                  <tr key={mov.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors group/row">
+                    <td className="px-1 py-0.5">
+                      <EditableCell value={mov.period} onChange={(v) => updateField(mov.id, "period", v)} />
+                    </td>
+                    <td className="px-1 py-0.5">
+                      <EditableCell value={mov.origin} onChange={(v) => updateField(mov.id, "origin", v)} />
+                    </td>
+                    <td className="px-1 py-0.5">
+                      <EditableAmount value={mov.amount} onChange={(v) => updateField(mov.id, "amount", v)} />
+                    </td>
+                    <td className="px-1 py-0.5">
+                      <EditableAmount value={mov.paidAmount || 0} onChange={(v) => updateField(mov.id, "paidAmount", v)} />
+                    </td>
+                    <td className="px-3 py-1.5 text-center text-sm tabular-nums text-muted-foreground">
+                      {remaining > 0 ? (
+                        <span className="text-amber-400">{formatCurrency(remaining)}</span>
+                      ) : (
+                        <span className="text-emerald-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-1 py-0.5 text-center">
+                      <Select value={mov.status} onValueChange={(v) => updateField(mov.id, "status", v)}>
+                        <SelectTrigger className="h-7 text-xs border-0 bg-transparent justify-center">
+                          <Badge variant="outline" className={`text-[10px] ${STATUS_COLORS[mov.status]}`}>
+                            {STATUS_LABELS[mov.status]}
+                          </Badge>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pending">Pendente</SelectItem>
+                          <SelectItem value="paid">Pago</SelectItem>
+                          <SelectItem value="partial">Parcial</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </td>
+                    <td className="px-1 py-1">
+                      <button className="opacity-0 group-hover/row:opacity-100 transition-opacity text-destructive" onClick={() => removeMovement(mov.id)}>
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
