@@ -268,7 +268,7 @@ export default function TechnicianDetailTab({ showAddModal, onShowAddModal }: { 
 
       {/* Company balance — structured card */}
       {techDataList.length > 0 && (
-        <Card className="border-border/50 bg-muted/20">
+        <Card className={`border-border/50 bg-muted/20 ${companyTotal > 0 ? "shadow-[0_0_20px_-4px_hsl(var(--success)/0.15)]" : companyTotal < 0 ? "shadow-[0_0_20px_-4px_hsl(var(--destructive)/0.15)]" : ""}`}>
           <CardContent className="flex items-center justify-between py-4 px-5">
             <div className="flex items-center gap-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10">
@@ -299,7 +299,7 @@ function AddTechnicianModal({ open, onOpenChange }: { open: boolean; onOpenChang
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader><DialogTitle>Adicionar técnico</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>Adicionar</DialogTitle></DialogHeader>
         <div className="py-2">
           <div className="space-y-2">
             <Label>Nome</Label>
@@ -353,23 +353,21 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
     <>
       <Collapsible open={open} onOpenChange={setOpen}>
         <CollapsibleTrigger asChild>
-          <div className="group flex items-center justify-between px-4 py-3 rounded-lg border border-border/40 cursor-pointer hover:border-primary/30 hover:bg-muted/20 transition-all">
+          <div className="group grid grid-cols-[1fr_auto_auto] items-center px-4 py-3 rounded-lg border border-border/40 cursor-pointer hover:border-primary/30 hover:bg-muted/20 transition-all">
             <div className="flex items-center gap-3 min-w-0">
               <span className={`h-2 w-2 rounded-full shrink-0 ${isPositive ? "bg-emerald-400" : "bg-destructive"}`} />
               <span className="text-sm font-medium text-foreground truncate">{data.name}</span>
             </div>
-            <div className="flex items-center gap-3 shrink-0">
-              <span className={`text-sm font-semibold tabular-nums ${isPositive ? "text-emerald-400" : "text-destructive"}`}>
-                {globalResult < 0 ? "- " : ""}{formatCurrency(Math.abs(globalResult))}
-              </span>
-
+            <span className={`text-sm font-semibold tabular-nums justify-self-center ${isPositive ? "text-emerald-400" : "text-destructive"}`}>
+              {globalResult < 0 ? "- " : ""}{formatCurrency(Math.abs(globalResult))}
+            </span>
+            <div className="flex items-center gap-3 shrink-0 ml-4">
               <button
                 className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-destructive/10"
                 onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }}
               >
                 <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive transition-colors" />
               </button>
-
               {open ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
             </div>
           </div>
