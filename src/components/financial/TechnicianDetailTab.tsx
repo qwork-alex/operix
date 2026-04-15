@@ -10,10 +10,11 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import {
-  ChevronDown, ChevronRight, Plus, Trash2, TrendingUp, TrendingDown,
-  Check, X, UserPlus, Users, Pencil,
+  ChevronDown, Plus, TrendingUp, TrendingDown,
+  UserPlus, Users,
 } from "lucide-react";
 import { toast } from "sonner";
+import ExpenseSpreadsheet, { SpreadsheetData, getDefaultColumns } from "./ExpenseSpreadsheet";
 
 /* ── types ── */
 interface Expense { id: string; label: string; amount: number }
@@ -24,12 +25,8 @@ interface TechData {
   revenueExpected: number;
   revenueReceived: number;
   expenses: Expense[];
+  spreadsheet: SpreadsheetData;
 }
-
-const DEFAULT_EXPENSE_LABELS = [
-  "Combustível", "Hotel", "Seguro", "Ferramentas",
-  "Salário", "Encargos sociais", "Impostos", "Outros",
-];
 
 /* ── hooks ── */
 function useTechnicians() {
