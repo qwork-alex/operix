@@ -30,6 +30,7 @@ interface Props {
   data: SpreadsheetData;
   onChange: (data: SpreadsheetData) => void;
   formatCurrency: (v: number) => string;
+  filterYear?: string; // e.g. "25" to only show rows ending in /25
 }
 
 /* ── period helpers ── */
@@ -209,17 +210,18 @@ function getMissingSuggestion(current: string, next: string | null): string | nu
 }
 
 /* ── main component ── */
-export default function ExpenseSpreadsheet({ data, onChange, formatCurrency }: Props) {
+export default function ExpenseSpreadsheet({ data, onChange, formatCurrency, filterYear }: Props) {
   const [showAddCol, setShowAddCol] = useState(false);
   const [newColName, setNewColName] = useState("");
   const [periodDraft, setPeriodDraft] = useState("");
   const [autoFillPrompt, setAutoFillPrompt] = useState<{ period: string; year: string; startMonth: number } | null>(null);
 
   // Sort rows by period
-  const sortedRows = useMemo(() =>
-    [...data.rows].sort((a, b) => periodSortKey(a.period) - periodSortKey(b.period)),
-    [data.rows]
-  );
+  const sortedRows = useMemo(() => {
+    let rows = [...data.rows].sort((a, b) => periodSortKey(a.period) - periodSortKey(b.period));
+    if (filterYear) rows = rows.filter((r) => r.period.endsWith(`/${filterYear}`));
+    return rows;
+  }, [data.rows, filterYear]);
 
   // Group by year
   const yearGroups = useMemo(() => {
