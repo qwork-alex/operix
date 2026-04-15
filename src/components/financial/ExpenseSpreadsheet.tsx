@@ -1,9 +1,11 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Plus, Trash2, X } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Plus, Trash2, X, MoreVertical, ChevronDown, ChevronRight, Copy } from "lucide-react";
 import { toast } from "sonner";
 
 /* ── types ── */
@@ -40,7 +42,6 @@ const MONTH_MAP: Record<string, number> = {
 
 function normalizePeriod(raw: string): string | null {
   const t = raw.trim().toLowerCase();
-  // "01/2025" or "1/2025"
   const slashNum = t.match(/^(\d{1,2})\s*[\/\-]\s*(\d{2,4})$/);
   if (slashNum) {
     const m = parseInt(slashNum[1]);
@@ -48,7 +49,6 @@ function normalizePeriod(raw: string): string | null {
     if (y.length === 4) y = y.slice(2);
     if (m >= 1 && m <= 12) return `${MONTH_LABELS[m - 1]}/${y}`;
   }
-  // "jan/25" or "janeiro 2025"
   const textNum = t.match(/^([a-zçã]+)\s*[\/\-\s]\s*(\d{2,4})$/);
   if (textNum) {
     const m = MONTH_MAP[textNum[1]];
@@ -67,6 +67,12 @@ function parseNormalized(p: string): { month: number; year: string } | null {
   return { month: idx + 1, year: m[2] };
 }
 
+function periodSortKey(p: string): number {
+  const parsed = parseNormalized(p);
+  if (!parsed) return 0;
+  return parseInt(parsed.year) * 100 + parsed.month;
+}
+
 const DEFAULT_COLUMNS: SpreadsheetColumn[] = [
   { id: "salario", label: "Salário", type: "fixed" },
   { id: "encargos", label: "Encargos sociais", type: "fixed" },
@@ -83,14 +89,12 @@ function EditableCell({ value, onChange }: { value: number; onChange: (v: number
   const [draft, setDraft] = useState("");
   const ref = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (editing) ref.current?.focus();
-  }, [editing]);
+  useEffect(() => { if (editing) ref.current?.focus(); }, [editing]);
 
   if (!editing) {
     return (
       <div
-        className="h-full w-full px-2 py-1.5 cursor-text text-right tabular-nums text-sm text-foreground hover:bg-muted/40 transition-colors rounded"
+        className="h-full w-full px-2 py-1.5 cursor-text text-center tabular-nums text-sm text-foreground hover:bg-muted/40 transition-colors rounded"
         onClick={() => { setDraft(value ? String(value) : ""); setEditing(true); }}
       >
         {value || "—"}
@@ -98,23 +102,110 @@ function EditableCell({ value, onChange }: { value: number; onChange: (v: number
     );
   }
 
-  const commit = () => {
-    const n = parseFloat(draft) || 0;
-    onChange(n);
-    setEditing(false);
-  };
+  const commit = () => { onChange(parseFloat(draft) || 0); setEditing(false); };
 
   return (
-    <Input
-      ref={ref}
-      type="number"
-      className="h-7 text-sm text-right border-primary/50 bg-background"
-      value={draft}
-      onChange={(e) => setDraft(e.target.value)}
+    <Input ref={ref} type="number"
+      className="h-7 text-sm text-center border-primary/50 bg-background"
+      value={draft} onChange={(e) => setDraft(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") setEditing(false); }}
     />
   );
+}
+
+/* ── editable header ── */
+function EditableHeader({ label, onChange }: { label: string; onChange: (v: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(label);
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (editing) ref.current?.focus(); }, [editing]);
+
+  if (!editing) {
+    return <span className="cursor-text" onDoubleClick={() => { setDraft(label); setEditing(true); }}>{label}</span>;
+  }
+  const commit = () => { if (draft.trim()) onChange(draft.trim()); setEditing(false); };
+  return (
+    <Input ref={ref} className="h-6 text-xs w-24 text-center"
+      value={draft} onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") setEditing(false); }}
+    />
+  );
+}
+
+/* ── column header menu ── */
+function ColumnHeaderMenu({ col, onRename, onDelete, onDuplicate }: {
+  col: SpreadsheetColumn;
+  onRename: (id: string, label: string) => void;
+  onDelete: (id: string) => void;
+  onDuplicate: (id: string) => void;
+}) {
+  return (
+    <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground min-w-[100px] group">
+      <div className="flex items-center justify-center gap-1">
+        <EditableHeader label={col.label} onChange={(v) => onRename(col.id, v)} />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground">
+              <MoreVertical className="h-3 w-3" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-[140px]">
+            <DropdownMenuItem onClick={() => onDuplicate(col.id)}>
+              <Copy className="h-3 w-3 mr-2" /> Duplicar coluna
+            </DropdownMenuItem>
+            {col.type === "custom" && (
+              <DropdownMenuItem className="text-destructive" onClick={() => onDelete(col.id)}>
+                <Trash2 className="h-3 w-3 mr-2" /> Remover coluna
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </th>
+  );
+}
+
+/* ── insert period button between rows ── */
+function InsertPeriodButton({ suggestion, onInsert }: { suggestion: string | null; onInsert: (period: string) => void }) {
+  const [hovering, setHovering] = useState(false);
+  if (!suggestion) return null;
+  return (
+    <tr
+      className="h-0 relative"
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
+    >
+      <td colSpan={100} className="p-0 border-0 relative">
+        {hovering && (
+          <button
+            className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 flex items-center gap-1 px-2 py-0.5 text-[10px] rounded-full bg-primary/20 text-primary border border-primary/30 hover:bg-primary/30 transition-colors"
+            onClick={() => onInsert(suggestion)}
+          >
+            <Plus className="h-2.5 w-2.5" /> {suggestion}
+          </button>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+/* ── detect missing period between two ── */
+function getMissingSuggestion(current: string, next: string | null): string | null {
+  const cp = parseNormalized(current);
+  if (!cp) return null;
+  const expectedMonth = cp.month + 1;
+  let expectedYear = cp.year;
+  let expectedMonthIdx = expectedMonth;
+  if (expectedMonth > 12) {
+    expectedMonthIdx = 1;
+    expectedYear = String(parseInt(cp.year) + 1).slice(-2);
+  }
+  const expected = `${MONTH_LABELS[expectedMonthIdx - 1]}/${expectedYear}`;
+  if (!next) return expected; // after last row
+  if (next !== expected) return expected;
+  return null;
 }
 
 /* ── main component ── */
@@ -124,10 +215,29 @@ export default function ExpenseSpreadsheet({ data, onChange, formatCurrency }: P
   const [periodDraft, setPeriodDraft] = useState("");
   const [autoFillPrompt, setAutoFillPrompt] = useState<{ period: string; year: string; startMonth: number } | null>(null);
 
+  // Sort rows by period
+  const sortedRows = useMemo(() =>
+    [...data.rows].sort((a, b) => periodSortKey(a.period) - periodSortKey(b.period)),
+    [data.rows]
+  );
+
+  // Group by year
+  const yearGroups = useMemo(() => {
+    const groups: Record<string, SpreadsheetRow[]> = {};
+    sortedRows.forEach((row) => {
+      const p = parseNormalized(row.period);
+      const yearKey = p ? `20${p.year}` : "Outro";
+      if (!groups[yearKey]) groups[yearKey] = [];
+      groups[yearKey].push(row);
+    });
+    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+  }, [sortedRows]);
+
+  const [collapsedYears, setCollapsedYears] = useState<Record<string, boolean>>({});
+  const toggleYear = (y: string) => setCollapsedYears((prev) => ({ ...prev, [y]: !prev[y] }));
+
   const updateCell = useCallback((rowId: string, colId: string, value: number) => {
-    const rows = data.rows.map((r) =>
-      r.id === rowId ? { ...r, values: { ...r.values, [colId]: value } } : r
-    );
+    const rows = data.rows.map((r) => r.id === rowId ? { ...r, values: { ...r.values, [colId]: value } } : r);
     onChange({ ...data, rows });
   }, [data, onChange]);
 
@@ -135,32 +245,37 @@ export default function ExpenseSpreadsheet({ data, onChange, formatCurrency }: P
     if (!newColName.trim()) return;
     const id = `custom_${Date.now()}`;
     onChange({ ...data, columns: [...data.columns, { id, label: newColName.trim(), type: "custom" }] });
-    setNewColName("");
-    setShowAddCol(false);
+    setNewColName(""); setShowAddCol(false);
     toast.success("Coluna adicionada");
   };
 
   const removeColumn = (colId: string) => {
     const cols = data.columns.filter((c) => c.id !== colId);
-    const rows = data.rows.map((r) => {
-      const values = { ...r.values };
-      delete values[colId];
-      return { ...r, values };
-    });
+    const rows = data.rows.map((r) => { const v = { ...r.values }; delete v[colId]; return { ...r, values: v }; });
     onChange({ columns: cols, rows });
     toast.success("Coluna removida");
   };
 
-  const renameColumn = (colId: string, label: string) => {
-    const cols = data.columns.map((c) => (c.id === colId ? { ...c, label } : c));
-    onChange({ ...data, columns: cols });
+  const duplicateColumn = (colId: string) => {
+    const source = data.columns.find((c) => c.id === colId);
+    if (!source) return;
+    const newId = `custom_${Date.now()}`;
+    const newCol: SpreadsheetColumn = { id: newId, label: `${source.label} (cópia)`, type: "custom" };
+    const idx = data.columns.findIndex((c) => c.id === colId);
+    const cols = [...data.columns]; cols.splice(idx + 1, 0, newCol);
+    const rows = data.rows.map((r) => ({ ...r, values: { ...r.values, [newId]: r.values[colId] || 0 } }));
+    onChange({ columns: cols, rows });
+    toast.success("Coluna duplicada");
   };
 
-  const addRow = () => {
+  const renameColumn = (colId: string, label: string) => {
+    onChange({ ...data, columns: data.columns.map((c) => c.id === colId ? { ...c, label } : c) });
+  };
+
+  const addPeriod = () => {
     const norm = normalizePeriod(periodDraft);
     if (!norm) { toast.error("Formato inválido. Use: Jan/25, 01/2025 ou janeiro 2025"); return; }
     if (data.rows.some((r) => r.period === norm)) { toast.error("Período já existe"); return; }
-
     const parsed = parseNormalized(norm);
     if (parsed && parsed.month < 12) {
       setAutoFillPrompt({ period: norm, year: parsed.year, startMonth: parsed.month });
@@ -175,18 +290,13 @@ export default function ExpenseSpreadsheet({ data, onChange, formatCurrency }: P
     onChange({ ...data, rows: [...data.rows, newRow] });
   };
 
-  const autoFillYear = (replace: boolean) => {
+  const autoFillYear = () => {
     if (!autoFillPrompt) return;
     const { year, startMonth } = autoFillPrompt;
     let rows = [...data.rows];
-
     for (let m = startMonth; m <= 12; m++) {
       const p = `${MONTH_LABELS[m - 1]}/${year}`;
-      const exists = rows.find((r) => r.period === p);
-      if (exists && !replace) continue;
-      if (exists && replace) {
-        rows = rows.map((r) => (r.period === p ? { ...r, values: {} } : r));
-      } else {
+      if (!rows.find((r) => r.period === p)) {
         rows.push({ id: `row_${Date.now()}_${m}`, period: p, values: {} });
       }
     }
@@ -199,24 +309,25 @@ export default function ExpenseSpreadsheet({ data, onChange, formatCurrency }: P
     onChange({ ...data, rows: data.rows.filter((r) => r.id !== rowId) });
   };
 
-  const rowTotal = (row: SpreadsheetRow) =>
-    data.columns.reduce((s, c) => s + (row.values[c.id] || 0), 0);
+  const insertPeriod = (period: string) => {
+    if (data.rows.some((r) => r.period === period)) { toast.error("Período já existe"); return; }
+    commitAddRow(period);
+  };
 
+  const rowTotal = (row: SpreadsheetRow) => data.columns.reduce((s, c) => s + (row.values[c.id] || 0), 0);
   const grandTotal = data.rows.reduce((s, r) => s + rowTotal(r), 0);
 
   return (
     <div className="space-y-3">
       {/* toolbar */}
       <div className="flex items-center gap-2 flex-wrap">
-        <Input
-          placeholder="Período: jan/25, 01/2025..."
-          className="h-8 w-48 text-sm"
-          value={periodDraft}
+        <Input placeholder="Período: jan/25, 01/2025..."
+          className="h-8 w-48 text-sm" value={periodDraft}
           onChange={(e) => setPeriodDraft(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && addRow()}
+          onKeyDown={(e) => e.key === "Enter" && addPeriod()}
         />
-        <Button size="sm" variant="outline" className="h-8 text-xs" onClick={addRow}>
-          <Plus className="h-3 w-3 mr-1" /> Linha
+        <Button size="sm" variant="outline" className="h-8 text-xs" onClick={addPeriod}>
+          <Plus className="h-3 w-3 mr-1" /> Adicionar período
         </Button>
         <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setShowAddCol(true)}>
           <Plus className="h-3 w-3 mr-1" /> Coluna
@@ -235,64 +346,70 @@ export default function ExpenseSpreadsheet({ data, onChange, formatCurrency }: P
               <tr className="border-b border-border/50 bg-muted/30">
                 <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground w-24">Período</th>
                 {data.columns.map((col) => (
-                  <th key={col.id} className="px-2 py-2 text-right text-xs font-medium text-muted-foreground min-w-[100px] group">
-                    <div className="flex items-center justify-end gap-1">
-                      <EditableHeader label={col.label} onChange={(v) => renameColumn(col.id, v)} />
-                      {col.type === "custom" && (
-                        <button
-                          className="opacity-0 group-hover:opacity-100 transition-opacity text-destructive"
-                          onClick={() => removeColumn(col.id)}
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      )}
-                    </div>
-                  </th>
+                  <ColumnHeaderMenu key={col.id} col={col}
+                    onRename={renameColumn} onDelete={removeColumn} onDuplicate={duplicateColumn}
+                  />
                 ))}
-                <th className="px-3 py-2 text-right text-xs font-semibold text-foreground w-28">Total</th>
+                <th className="px-3 py-2 text-center text-xs font-semibold text-foreground w-28">Total</th>
                 <th className="w-8" />
               </tr>
             </thead>
             <tbody>
-              {data.rows.map((row) => (
-                <tr key={row.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors group/row">
-                  <td className="px-3 py-1 text-sm font-medium text-foreground">{row.period}</td>
-                  {data.columns.map((col) => (
-                    <td key={col.id} className="px-1 py-0.5">
-                      <EditableCell
-                        value={row.values[col.id] || 0}
-                        onChange={(v) => updateCell(row.id, col.id, v)}
-                      />
-                    </td>
-                  ))}
-                  <td className="px-3 py-1 text-right text-sm font-semibold tabular-nums text-foreground">
-                    {formatCurrency(rowTotal(row))}
-                  </td>
-                  <td className="px-1 py-1">
-                    <button
-                      className="opacity-0 group-hover/row:opacity-100 transition-opacity text-destructive"
-                      onClick={() => removeRow(row.id)}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {yearGroups.map(([year, rows]) => {
+                const isCollapsed = collapsedYears[year];
+                const yearTotal = rows.reduce((s, r) => s + rowTotal(r), 0);
+                return (
+                  <React.Fragment key={year}>
+                    {/* year header */}
+                    <tr className="bg-muted/40 border-b border-border/30 cursor-pointer hover:bg-muted/60 transition-colors"
+                      onClick={() => toggleYear(year)}>
+                      <td colSpan={data.columns.length + 2} className="px-3 py-1.5">
+                        <div className="flex items-center gap-2">
+                          {isCollapsed ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+                          <span className="text-xs font-semibold text-foreground">{year}</span>
+                          <span className="text-[10px] text-muted-foreground">({rows.length} meses)</span>
+                          <span className="ml-auto text-xs font-medium tabular-nums text-muted-foreground">{formatCurrency(yearTotal)}</span>
+                        </div>
+                      </td>
+                      <td />
+                    </tr>
+                    {!isCollapsed && rows.map((row, rowIdx) => (
+                      <React.Fragment key={row.id}>
+                        <tr className="border-b border-border/30 hover:bg-muted/20 transition-colors group/row">
+                          <td className="px-3 py-1 text-sm font-medium text-foreground text-left">{row.period}</td>
+                          {data.columns.map((col) => (
+                            <td key={col.id} className="px-1 py-0.5 text-center">
+                              <EditableCell value={row.values[col.id] || 0} onChange={(v) => updateCell(row.id, col.id, v)} />
+                            </td>
+                          ))}
+                          <td className="px-3 py-1 text-center text-sm font-semibold tabular-nums text-foreground">
+                            {formatCurrency(rowTotal(row))}
+                          </td>
+                          <td className="px-1 py-1">
+                            <button className="opacity-0 group-hover/row:opacity-100 transition-opacity text-destructive" onClick={() => removeRow(row.id)}>
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </td>
+                        </tr>
+                        {/* smart insert suggestion */}
+                        <InsertPeriodButton
+                          suggestion={getMissingSuggestion(row.period, rows[rowIdx + 1]?.period || null)}
+                          onInsert={insertPeriod}
+                        />
+                      </React.Fragment>
+                    ))}
+                  </React.Fragment>
+                );
+              })}
             </tbody>
             <tfoot>
               <tr className="border-t border-border/50 bg-muted/20">
-                <td className="px-3 py-2 text-xs font-semibold text-muted-foreground">Total geral</td>
+                <td className="px-3 py-2 text-xs font-semibold text-muted-foreground text-left">Total geral</td>
                 {data.columns.map((col) => {
                   const colTotal = data.rows.reduce((s, r) => s + (r.values[col.id] || 0), 0);
-                  return (
-                    <td key={col.id} className="px-2 py-2 text-right text-xs tabular-nums text-muted-foreground">
-                      {formatCurrency(colTotal)}
-                    </td>
-                  );
+                  return <td key={col.id} className="px-2 py-2 text-center text-xs tabular-nums text-muted-foreground">{formatCurrency(colTotal)}</td>;
                 })}
-                <td className="px-3 py-2 text-right text-sm font-bold tabular-nums text-foreground">
-                  {formatCurrency(grandTotal)}
-                </td>
+                <td className="px-3 py-2 text-center text-sm font-bold tabular-nums text-foreground">{formatCurrency(grandTotal)}</td>
                 <td />
               </tr>
             </tfoot>
@@ -306,12 +423,9 @@ export default function ExpenseSpreadsheet({ data, onChange, formatCurrency }: P
           <DialogHeader><DialogTitle>Adicionar coluna</DialogTitle></DialogHeader>
           <div className="space-y-2 py-2">
             <Label>Nome da coluna</Label>
-            <Input
-              placeholder="Ex: Combustível, Hotel..."
-              value={newColName}
-              onChange={(e) => setNewColName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addColumn()}
-            />
+            <Input placeholder="Ex: Combustível, Hotel..."
+              value={newColName} onChange={(e) => setNewColName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addColumn()} />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAddCol(false)}>Cancelar</Button>
@@ -331,9 +445,7 @@ export default function ExpenseSpreadsheet({ data, onChange, formatCurrency }: P
             <Button variant="outline" onClick={() => { if (autoFillPrompt) commitAddRow(autoFillPrompt.period); setAutoFillPrompt(null); }}>
               Não, apenas este mês
             </Button>
-            <Button onClick={() => autoFillYear(false)}>
-              Sim, preencher
-            </Button>
+            <Button onClick={() => autoFillYear()}>Sim, preencher</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -341,32 +453,5 @@ export default function ExpenseSpreadsheet({ data, onChange, formatCurrency }: P
   );
 }
 
-/* ── editable header ── */
-function EditableHeader({ label, onChange }: { label: string; onChange: (v: string) => void }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(label);
-  const ref = useRef<HTMLInputElement>(null);
-
-  useEffect(() => { if (editing) ref.current?.focus(); }, [editing]);
-
-  if (!editing) {
-    return (
-      <span className="cursor-text" onDoubleClick={() => { setDraft(label); setEditing(true); }}>
-        {label}
-      </span>
-    );
-  }
-
-  const commit = () => { if (draft.trim()) onChange(draft.trim()); setEditing(false); };
-
-  return (
-    <Input
-      ref={ref}
-      className="h-6 text-xs w-24 text-right"
-      value={draft}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") setEditing(false); }}
-    />
-  );
-}
+// Need React import for React.Fragment
+import React from "react";
