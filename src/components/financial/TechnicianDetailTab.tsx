@@ -326,8 +326,34 @@ function SpreadsheetSection({ data, formatCurrency }: { data: TechData; formatCu
   );
 }
 
+/* ── Movements section ── */
+function MovementsSection({ data, formatCurrency }: { data: TechData; formatCurrency: (v: number) => string }) {
+  const [localData, setLocalData] = useState<FinancialMovement[]>(data.movements);
+  const saveMovements = useSaveMovements();
+
+  const handleChange = useCallback((newData: FinancialMovement[]) => {
+    setLocalData(newData);
+    saveMovements.mutate({ techId: data.id, techName: data.name, movements: newData });
+  }, [data.id, data.name, saveMovements]);
+
+  return (
+    <Card className="border-border/50">
+      <CardHeader className="pb-1 pt-3 px-4">
+        <CardTitle className="text-xs text-muted-foreground uppercase tracking-wider">
+          Movimentações financeiras
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="px-4 pb-3">
+        <FinancialMovements movements={localData} onChange={handleChange} formatCurrency={formatCurrency} />
+      </CardContent>
+    </Card>
+  );
+}
+
 /* ── Result ── */
-function ResultSection({ result, totalExpenses, formatCurrency }: { result: number; totalExpenses: number; formatCurrency: (v: number) => string }) {
+function ResultSection({ result, totalExpenses, loansPending, loansReceived, formatCurrency }: {
+  result: number; totalExpenses: number; loansPending: number; loansReceived: number; formatCurrency: (v: number) => string;
+}) {
   const isPositive = result >= 0;
   return (
     <Card className={`border-border/50 ${isPositive ? "glow-green" : "glow-red"}`}>
@@ -340,6 +366,11 @@ function ResultSection({ result, totalExpenses, formatCurrency }: { result: numb
           <span className={`text-lg font-bold tabular-nums ${isPositive ? "text-emerald-400" : "text-destructive"}`}>
             {formatCurrency(Math.abs(result))}
           </span>
+        </div>
+        <div className="flex gap-4 text-[10px] text-muted-foreground mt-1">
+          <span>Despesas: {formatCurrency(totalExpenses)}</span>
+          {loansPending > 0 && <span className="text-amber-400">Empréstimos pendentes: {formatCurrency(loansPending)}</span>}
+          {loansReceived > 0 && <span>Empréstimos pagos: {formatCurrency(loansReceived)}</span>}
         </div>
         <p className={`text-xs mt-1 ${isPositive ? "text-emerald-400/80" : "text-destructive/80"}`}>
           {isPositive
