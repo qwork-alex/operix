@@ -30,6 +30,7 @@ interface Props {
   data: SpreadsheetData;
   onChange: (data: SpreadsheetData) => void;
   formatCurrency: (v: number) => string;
+  filterYear?: string; // e.g. "25" to only show rows ending in /25
 }
 
 /* ── period helpers ── */
