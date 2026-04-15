@@ -154,7 +154,7 @@ export default function FinancialPage() {
       <Tabs value={mainTab} onValueChange={setMainTab} className="space-y-4">
         <TabsList className="bg-muted">
           <TabsTrigger value="overview">Visão geral</TabsTrigger>
-          <TabsTrigger value="confronto">Confronto OS vs OP</TabsTrigger>
+          <TabsTrigger value="confronto">Confronto OS x OP</TabsTrigger>
           <TabsTrigger value="breakdown">Detalhamento</TabsTrigger>
         </TabsList>
 
