@@ -74,17 +74,32 @@ function useSaveSpreadsheet() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ techId, techName, spreadsheet }: { techId: string; techName: string; spreadsheet: SpreadsheetData }) => {
-      // Delete old spreadsheet record for this tech
       await supabase.from("financial_records").delete().eq("type", "expense_spreadsheet").like("notes", `%tech:${techId}%`);
-      // Calculate grand total
       const grandTotal = spreadsheet.rows.reduce((s, r) =>
         s + spreadsheet.columns.reduce((cs, c) => cs + (r.values[c.id] || 0), 0), 0);
-      // Store as single JSON record
       const { error } = await supabase.from("financial_records").insert({
         type: "expense_spreadsheet", source: "manual", label: "Despesas (planilha)",
         amount: grandTotal, status: "confirmed",
         notes: `tech:${techId}:${techName}`,
         category: JSON.stringify(spreadsheet),
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["tech-financials"] }),
+  });
+}
+
+function useSaveMovements() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ techId, techName, movements }: { techId: string; techName: string; movements: FinancialMovement[] }) => {
+      await supabase.from("financial_records").delete().eq("type", "financial_movements").like("notes", `%tech:${techId}%`);
+      const totalLoans = movements.filter((m) => m.type === "loan").reduce((s, m) => s + m.amount, 0);
+      const { error } = await supabase.from("financial_records").insert({
+        type: "financial_movements", source: "manual", label: "Movimentações financeiras",
+        amount: totalLoans, status: "confirmed",
+        notes: `tech:${techId}:${techName}`,
+        category: JSON.stringify(movements),
       });
       if (error) throw error;
     },
