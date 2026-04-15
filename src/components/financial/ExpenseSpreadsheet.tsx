@@ -217,10 +217,11 @@ export default function ExpenseSpreadsheet({ data, onChange, formatCurrency, fil
   const [autoFillPrompt, setAutoFillPrompt] = useState<{ period: string; year: string; startMonth: number } | null>(null);
 
   // Sort rows by period
-  const sortedRows = useMemo(() =>
-    [...data.rows].sort((a, b) => periodSortKey(a.period) - periodSortKey(b.period)),
-    [data.rows]
-  );
+  const sortedRows = useMemo(() => {
+    let rows = [...data.rows].sort((a, b) => periodSortKey(a.period) - periodSortKey(b.period));
+    if (filterYear) rows = rows.filter((r) => r.period.endsWith(`/${filterYear}`));
+    return rows;
+  }, [data.rows, filterYear]);
 
   // Group by year
   const yearGroups = useMemo(() => {
