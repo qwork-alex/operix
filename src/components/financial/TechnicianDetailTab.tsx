@@ -115,6 +115,9 @@ interface TechData {
   revenueReceived: number;
   totalExpenses: number;
   spreadsheet: SpreadsheetData;
+  movements: FinancialMovement[];
+  loansReceived: number;
+  loansPending: number;
 }
 
 function buildTechData(tech: { id: string; name: string }, records: any[]): TechData {
@@ -122,19 +125,22 @@ function buildTechData(tech: { id: string; name: string }, records: any[]): Tech
   const revenueExpected = mine.find((r) => r.type === "manual_revenue_expected")?.amount ?? 0;
   const revenueReceived = mine.find((r) => r.type === "manual_revenue_received")?.amount ?? 0;
 
-  // Parse spreadsheet from category JSON
   const ssRecord = mine.find((r) => r.type === "expense_spreadsheet");
   let spreadsheet: SpreadsheetData = { columns: getDefaultColumns(), rows: [] };
   if (ssRecord?.category) {
-    try {
-      const parsed = JSON.parse(ssRecord.category);
-      if (parsed.columns && parsed.rows) spreadsheet = parsed;
-    } catch { /* use default */ }
+    try { const parsed = JSON.parse(ssRecord.category); if (parsed.columns && parsed.rows) spreadsheet = parsed; } catch { /* default */ }
   }
-
   const totalExpenses = ssRecord?.amount ?? 0;
 
-  return { id: tech.id, name: tech.name, revenueExpected, revenueReceived, totalExpenses, spreadsheet };
+  const movRecord = mine.find((r) => r.type === "financial_movements");
+  let movements: FinancialMovement[] = [];
+  if (movRecord?.category) {
+    try { const parsed = JSON.parse(movRecord.category); if (Array.isArray(parsed)) movements = parsed; } catch { /* default */ }
+  }
+  const loansReceived = movements.filter((m) => m.type === "loan" && m.status === "paid").reduce((s, m) => s + m.amount, 0);
+  const loansPending = movements.filter((m) => m.type === "loan" && m.status !== "paid").reduce((s, m) => s + m.amount, 0);
+
+  return { id: tech.id, name: tech.name, revenueExpected, revenueReceived, totalExpenses, spreadsheet, movements, loansReceived, loansPending };
 }
 
 /* ── main component ── */
