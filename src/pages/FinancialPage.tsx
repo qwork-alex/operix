@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { AlertTriangle, RefreshCw, BarChart3 } from "lucide-react";
+import { RefreshCw, BarChart3, Bell, UserPlus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useReconciliationSummary, useRunReconciliation } from "@/hooks/useReconciliation";
 import { useConfrontoPending } from "@/hooks/useConfrontoOSOP";
@@ -14,6 +14,7 @@ import HistoricoTab from "@/components/confronto/HistoricoTab";
 import OverviewTab from "@/components/financial/OverviewTab";
 import TechnicianDetailTab from "@/components/financial/TechnicianDetailTab";
 import { Link2 } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 
 export default function FinancialPage() {
   const { t } = useLanguage();
@@ -21,6 +22,8 @@ export default function FinancialPage() {
   const { data: pendingItems = [] } = useConfrontoPending();
   const runMutation = useRunReconciliation();
   const [confrontoTab, setConfrontoTab] = useState("fusao");
+  const [mainTab, setMainTab] = useState("overview");
+  const [showAddTech, setShowAddTech] = useState(false);
 
   const isLoading = summaryLoading;
   const s = summary ?? {
@@ -31,6 +34,7 @@ export default function FinancialPage() {
   };
 
   const hasNoData = s.serviceOrderCount === 0 && s.paymentOrderCount === 0;
+  const hasAlerts = pendingItems.length > 0;
 
   if (isLoading) {
     return (
@@ -45,7 +49,7 @@ export default function FinancialPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Header */}
+      {/* Header — minimal */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
@@ -56,17 +60,56 @@ export default function FinancialPage() {
             <p className="text-xs text-muted-foreground">{t("fin.subtitle")}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {pendingItems.length > 0 && (
-            <Badge variant="destructive" className="text-xs">
-              <AlertTriangle className="h-3 w-3 mr-1" />
-              {pendingItems.length} divergência{pendingItems.length > 1 ? "s" : ""}
-            </Badge>
+
+        {/* Icon-only actions */}
+        <div className="flex items-center gap-1">
+          {hasAlerts && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-destructive hover:text-destructive"
+                  onClick={() => { setMainTab("confronto"); setConfrontoTab("pendentes"); }}
+                >
+                  <Bell className="h-4 w-4" />
+                  <span className="absolute -top-0.5 -right-0.5 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-destructive text-[9px] text-destructive-foreground px-1">
+                    {pendingItems.length}
+                  </span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{pendingItems.length} divergência{pendingItems.length > 1 ? "s" : ""}</TooltipContent>
+            </Tooltip>
           )}
-          <Button variant="outline" size="sm" onClick={() => runMutation.mutate()} disabled={runMutation.isPending}>
-            <RefreshCw className={`h-4 w-4 mr-1 ${runMutation.isPending ? "animate-spin" : ""}`} />
-            {t("fin.refreshAnalysis")}
-          </Button>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setShowAddTech(true)}
+              >
+                <UserPlus className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Adicionar técnico</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => runMutation.mutate()}
+                disabled={runMutation.isPending}
+              >
+                <RefreshCw className={`h-4 w-4 ${runMutation.isPending ? "animate-spin" : ""}`} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t("fin.refreshAnalysis")}</TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
@@ -83,27 +126,19 @@ export default function FinancialPage() {
         </Card>
       )}
 
-      {/* MAIN 3-TAB NAVIGATION */}
-      <Tabs defaultValue="overview" className="space-y-4">
+      {/* TABS — clean, no badges */}
+      <Tabs value={mainTab} onValueChange={setMainTab} className="space-y-4">
         <TabsList className="bg-muted">
           <TabsTrigger value="overview">Visão geral</TabsTrigger>
-          <TabsTrigger value="confronto" className="relative">
-            Confronto OS × OP
-            {pendingItems.length > 0 && (
-              <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive/20 text-destructive text-[9px] px-1">
-                {pendingItems.length}
-              </span>
-            )}
-          </TabsTrigger>
+          <TabsTrigger value="confronto">Confronto</TabsTrigger>
           <TabsTrigger value="breakdown">Detalhamento</TabsTrigger>
         </TabsList>
 
-        {/* ===================== VISÃO GERAL ===================== */}
         <TabsContent value="overview" className="space-y-4">
           <OverviewTab summary={s} hasNoData={hasNoData} />
         </TabsContent>
 
-        {/* ===================== CONFRONTO OS × OP (UNTOUCHED) ===================== */}
+        {/* CONFRONTO — UNTOUCHED */}
         <TabsContent value="confronto" className="space-y-4">
           <Tabs value={confrontoTab} onValueChange={setConfrontoTab}>
             <TabsList className="bg-muted/50">
@@ -133,9 +168,8 @@ export default function FinancialPage() {
           </Tabs>
         </TabsContent>
 
-        {/* ===================== DETALHAMENTO ===================== */}
         <TabsContent value="breakdown" className="space-y-4">
-          <TechnicianDetailTab />
+          <TechnicianDetailTab showAddModal={showAddTech} onShowAddModal={setShowAddTech} />
         </TabsContent>
       </Tabs>
     </div>
