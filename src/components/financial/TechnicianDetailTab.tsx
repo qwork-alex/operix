@@ -8,10 +8,15 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   ChevronDown, ChevronRight, Plus, TrendingUp, TrendingDown,
-  UserPlus, Users, Calendar,
+  UserPlus, Users, Calendar, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import ExpenseSpreadsheet, { SpreadsheetData, SpreadsheetRow, getDefaultColumns } from "./ExpenseSpreadsheet";
@@ -51,6 +56,18 @@ function useAddTechnician() {
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["tech-detail-list"] }); toast.success("Técnico adicionado"); },
+    onError: (e) => toast.error("Erro: " + (e as Error).message),
+  });
+}
+
+function useDeleteTechFinancials() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ techId }: { techId: string }) => {
+      const { error } = await supabase.from("financial_records").delete().like("notes", `%tech:${techId}%`);
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["tech-financials"] }); toast.success("Análise financeira apagada"); },
     onError: (e) => toast.error("Erro: " + (e as Error).message),
   });
 }
@@ -121,7 +138,6 @@ interface TechData {
 function buildTechData(tech: { id: string; name: string }, records: any[]): TechData {
   const mine = records.filter((r) => (r.notes || "").includes(`tech:${tech.id}`));
 
-  // Revenue per year
   const revenueByYear: Record<string, { expected: number; received: number }> = {};
   mine.filter((r) => r.type === "manual_revenue_expected" || r.type === "manual_revenue_received").forEach((r) => {
     const yearMatch = (r.notes || "").match(/year:(\d{4})/);
@@ -131,7 +147,6 @@ function buildTechData(tech: { id: string; name: string }, records: any[]): Tech
     else revenueByYear[year].received = r.amount;
   });
 
-  // Legacy revenue (no year tag) → try to assign to current year
   mine.filter((r) => (r.type === "manual_revenue_expected" || r.type === "manual_revenue_received") && !(r.notes || "").includes("year:")).forEach((r) => {
     const year = String(new Date().getFullYear());
     if (!revenueByYear[year]) revenueByYear[year] = { expected: 0, received: 0 };
@@ -171,23 +186,14 @@ interface YearBlockData {
 }
 
 function getYearBlocks(data: TechData, columns: { id: string }[]): YearBlockData[] {
-  // Collect all years
   const years = new Set<string>();
-
-  data.spreadsheet.rows.forEach((r) => {
-    const y = getYearFromPeriod(r.period);
-    if (y) years.add(y);
-  });
-  data.movements.forEach((m) => {
-    const y = getYearFromPeriod(m.period);
-    if (y) years.add(y);
-  });
+  data.spreadsheet.rows.forEach((r) => { const y = getYearFromPeriod(r.period); if (y) years.add(y); });
+  data.movements.forEach((m) => { const y = getYearFromPeriod(m.period); if (y) years.add(y); });
   Object.keys(data.revenueByYear).forEach((y) => { if (y !== "unknown") years.add(y); });
-
   if (years.size === 0) years.add(String(new Date().getFullYear()));
 
   return Array.from(years).sort().map((year) => {
-    const yy = year.slice(2); // "25"
+    const yy = year.slice(2);
     const rev = data.revenueByYear[year] || { expected: 0, received: 0 };
     const expenseRows = data.spreadsheet.rows.filter((r) => r.period.endsWith(`/${yy}`));
     const totalExpenses = expenseRows.reduce((s, r) =>
@@ -197,49 +203,74 @@ function getYearBlocks(data: TechData, columns: { id: string }[]): YearBlockData
       .reduce((s, m) => s + (m.amount - (m.paidAmount || 0)), 0);
     const loansTotal = yearMovements.filter((m) => m.type === "loan").reduce((s, m) => s + m.amount, 0);
     const result = rev.received - totalExpenses - loansPending;
-
     return { year, revenueExpected: rev.expected, revenueReceived: rev.received, expenseRows, totalExpenses, yearMovements, loansPending, loansTotal, result };
   });
 }
 
 /* ── main component ── */
-export default function TechnicianDetailTab() {
+export default function TechnicianDetailTab({ showAddModal, onShowAddModal }: { showAddModal?: boolean; onShowAddModal?: (v: boolean) => void }) {
   const { data: technicians = [], isLoading: loadingTech } = useTechnicians();
   const { data: records = [], isLoading: loadingFin } = useTechFinancials();
   const { formatCurrency } = useLanguage();
-  const [showAdd, setShowAdd] = useState(false);
+  const [localShowAdd, setLocalShowAdd] = useState(false);
+
+  const showAdd = showAddModal ?? localShowAdd;
+  const setShowAdd = onShowAddModal ?? setLocalShowAdd;
 
   if (loadingTech || loadingFin) {
-    return <div className="space-y-3">{[1, 2, 3].map((i) => <div key={i} className="h-16 bg-muted/30 rounded-lg animate-pulse" />)}</div>;
+    return <div className="space-y-3">{[1, 2, 3].map((i) => <div key={i} className="h-14 bg-muted/30 rounded-lg animate-pulse" />)}</div>;
   }
 
   const techDataList = technicians.map((t) => buildTechData(t, records));
 
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-muted-foreground">Análise financeira por técnico</h3>
-        <Button variant="outline" size="sm" onClick={() => setShowAdd(true)}>
-          <UserPlus className="h-4 w-4 mr-1" /> Adicionar técnico
-        </Button>
-      </div>
+  // Calculate company totals
+  const companyTotal = techDataList.reduce((sum, td) => {
+    const blocks = getYearBlocks(td, td.spreadsheet.columns);
+    return sum + blocks.reduce((s, yb) => s + yb.result, 0);
+  }, 0);
 
+  return (
+    <div className="space-y-6">
       {techDataList.length === 0 && (
         <Card className="border-border/50 bg-muted/30">
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <Users className="h-12 w-12 text-muted-foreground/40 mb-4" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">Adicione técnicos para começar a análise financeira</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-2">Nenhum técnico registado</h3>
             <p className="text-sm text-muted-foreground max-w-md mb-4">
-              Os dados de receita e despesas serão geridos manualmente por técnico.
+              Adicione técnicos para iniciar a análise financeira.
             </p>
-            <Button onClick={() => setShowAdd(true)}><Plus className="h-4 w-4 mr-1" /> Adicionar técnico</Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button size="icon" onClick={() => setShowAdd(true)}>
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Adicionar técnico</TooltipContent>
+            </Tooltip>
           </CardContent>
         </Card>
       )}
 
-      {techDataList.map((td) => (
-        <TechnicianCard key={td.id} data={td} formatCurrency={formatCurrency} />
-      ))}
+      {/* Technician list */}
+      {techDataList.length > 0 && (
+        <div className="space-y-2">
+          {techDataList.map((td) => (
+            <TechnicianRow key={td.id} data={td} formatCurrency={formatCurrency} />
+          ))}
+        </div>
+      )}
+
+      {/* Company summary — separated entity */}
+      {techDataList.length > 0 && (
+        <div className="pt-2 border-t border-border/30">
+          <div className="flex items-center justify-between px-4 py-3">
+            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Balanço da empresa</span>
+            <span className={`text-base font-bold tabular-nums ${companyTotal >= 0 ? "text-emerald-400" : "text-destructive"}`}>
+              {formatCurrency(Math.abs(companyTotal))}
+            </span>
+          </div>
+        </div>
+      )}
 
       <AddTechnicianModal open={showAdd} onOpenChange={setShowAdd} />
     </div>
@@ -273,14 +304,16 @@ function AddTechnicianModal({ open, onOpenChange }: { open: boolean; onOpenChang
   );
 }
 
-/* ── Technician card ── */
-function TechnicianCard({ data, formatCurrency }: { data: TechData; formatCurrency: (v: number) => string }) {
+/* ── Technician row (minimal, clickable, with hidden delete) ── */
+function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrency: (v: number) => string }) {
   const [open, setOpen] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [localSpreadsheet, setLocalSpreadsheet] = useState<SpreadsheetData>(data.spreadsheet);
   const [localMovements, setLocalMovements] = useState<FinancialMovement[]>(data.movements);
   const saveSpreadsheet = useSaveSpreadsheet();
   const saveMovements = useSaveMovements();
   const upsertRevenue = useUpsertRevenue();
+  const deleteTechFin = useDeleteTechFinancials();
 
   const yearBlocks = useMemo(() => getYearBlocks(
     { ...data, spreadsheet: localSpreadsheet, movements: localMovements },
@@ -306,46 +339,71 @@ function TechnicianCard({ data, formatCurrency }: { data: TechData; formatCurren
   }, [data.id, data.name, upsertRevenue]);
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger asChild>
-        <Card className="border-border/50 cursor-pointer hover:border-primary/30 transition-colors">
-          <CardContent className="py-3 px-4 flex items-center justify-between">
+    <>
+      <Collapsible open={open} onOpenChange={setOpen}>
+        <CollapsibleTrigger asChild>
+          <div className="group flex items-center justify-between px-4 py-3 rounded-lg border border-border/40 cursor-pointer hover:border-primary/30 hover:bg-muted/20 transition-all">
             <div className="flex items-center gap-3">
-              <span className="text-base">{isPositive ? "🟢" : "🔴"}</span>
-              <span className="font-medium text-foreground">{data.name}</span>
-              <Badge variant={isPositive ? "outline" : "destructive"} className="text-[10px]">
-                {isPositive ? "Empresa deve pagar" : "Em dívida"}
-              </Badge>
+              <span className={`h-2 w-2 rounded-full ${isPositive ? "bg-emerald-400" : "bg-destructive"}`} />
+              <span className="text-sm font-medium text-foreground">{data.name}</span>
             </div>
-            <div className="flex items-center gap-4">
-              <span className={`text-sm font-medium tabular-nums ${isPositive ? "text-emerald-400" : "text-destructive"}`}>
+            <div className="flex items-center gap-3">
+              <span className={`text-sm font-semibold tabular-nums ${isPositive ? "text-emerald-400" : "text-destructive"}`}>
                 {formatCurrency(Math.abs(globalResult))}
               </span>
-              <Button variant="ghost" size="sm" className="h-7 text-xs">
-                {open ? <ChevronDown className="h-4 w-4" /> : "Ver detalhes"}
-              </Button>
+
+              {/* Hidden delete — appears on hover */}
+              <button
+                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-destructive/10"
+                onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }}
+              >
+                <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive transition-colors" />
+              </button>
+
+              {open ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
             </div>
-          </CardContent>
-        </Card>
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <div className="mt-3 space-y-4">
-          {yearBlocks.map((yb) => (
-            <YearBlock
-              key={yb.year}
-              block={yb}
-              columns={localSpreadsheet.columns}
-              allSpreadsheet={localSpreadsheet}
-              allMovements={localMovements}
-              onSpreadsheetChange={handleSpreadsheetChange}
-              onMovementsChange={handleMovementsChange}
-              onRevenueSave={handleRevenueSave}
-              formatCurrency={formatCurrency}
-            />
-          ))}
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
+          </div>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="mt-3 ml-2 space-y-4">
+            {yearBlocks.map((yb) => (
+              <YearBlock
+                key={yb.year}
+                block={yb}
+                columns={localSpreadsheet.columns}
+                allSpreadsheet={localSpreadsheet}
+                allMovements={localMovements}
+                onSpreadsheetChange={handleSpreadsheetChange}
+                onMovementsChange={handleMovementsChange}
+                onRevenueSave={handleRevenueSave}
+                formatCurrency={formatCurrency}
+              />
+            ))}
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+
+      {/* Delete confirmation */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Tem certeza que deseja apagar esta análise?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Todos os dados financeiros de <strong>{data.name}</strong> (receitas, despesas e movimentações) serão apagados permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteTechFin.mutate({ techId: data.id })}
+            >
+              Apagar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
@@ -362,13 +420,9 @@ function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheet
 }) {
   const [open, setOpen] = useState(true);
   const isPositive = block.result >= 0;
-
-  // Filter spreadsheet to only this year's rows for display,
-  // but pass full data for saving
   const yearSuffix = block.year.slice(2);
 
   const handleYearMovementsChange = useCallback((yearMovements: FinancialMovement[]) => {
-    // Replace this year's movements in the full list
     const otherMovements = allMovements.filter((m) => getYearFromPeriod(m.period) !== block.year);
     onMovementsChange([...otherMovements, ...yearMovements]);
   }, [allMovements, block.year, onMovementsChange]);
@@ -383,11 +437,8 @@ function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheet
                 {open ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                 <Calendar className="h-4 w-4 text-primary" />
                 <CardTitle className="text-sm font-semibold">{block.year}</CardTitle>
-                <Badge variant="outline" className="text-[10px]">
-                  {block.expenseRows.length} meses
-                </Badge>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 {isPositive ? <TrendingUp className="h-4 w-4 text-emerald-400" /> : <TrendingDown className="h-4 w-4 text-destructive" />}
                 <span className={`text-sm font-bold tabular-nums ${isPositive ? "text-emerald-400" : "text-destructive"}`}>
                   {formatCurrency(Math.abs(block.result))}
@@ -398,64 +449,34 @@ function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheet
         </CollapsibleTrigger>
         <CollapsibleContent>
           <CardContent className="px-4 pb-4 space-y-4">
-            {/* Revenue */}
-            <YearRevenueSection
-              year={block.year}
-              expected={block.revenueExpected}
-              received={block.revenueReceived}
-              onSave={onRevenueSave}
-              formatCurrency={formatCurrency}
-            />
+            <YearRevenueSection year={block.year} expected={block.revenueExpected} received={block.revenueReceived} onSave={onRevenueSave} formatCurrency={formatCurrency} />
 
-            {/* Movements (loans) */}
             <div className="space-y-2">
-              <h4 className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
-                Movimentações financeiras
-              </h4>
-              <FinancialMovements
-                movements={block.yearMovements}
-                onChange={handleYearMovementsChange}
-                formatCurrency={formatCurrency}
-              />
+              <h4 className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Movimentações</h4>
+              <FinancialMovements movements={block.yearMovements} onChange={handleYearMovementsChange} formatCurrency={formatCurrency} />
             </div>
 
-            {/* Expenses */}
             <div className="space-y-2">
-              <h4 className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
-                Despesas (planilha financeira)
-              </h4>
-              <ExpenseSpreadsheet
-                data={allSpreadsheet}
-                onChange={onSpreadsheetChange}
-                formatCurrency={formatCurrency}
-                filterYear={yearSuffix}
-              />
+              <h4 className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Despesas</h4>
+              <ExpenseSpreadsheet data={allSpreadsheet} onChange={onSpreadsheetChange} formatCurrency={formatCurrency} filterYear={yearSuffix} />
             </div>
 
             {/* Year Result */}
-            <Card className={`border-border/50 ${isPositive ? "shadow-[0_0_15px_-5px_hsl(var(--chart-2)/0.3)]" : "shadow-[0_0_15px_-5px_hsl(var(--destructive)/0.3)]"}`}>
-              <CardContent className="py-3 px-4">
-                <div className="flex justify-between items-center mb-1">
-                  <div className="flex items-center gap-2">
-                    {isPositive ? <TrendingUp className="h-4 w-4 text-emerald-400" /> : <TrendingDown className="h-4 w-4 text-destructive" />}
-                    <span className="text-sm font-medium text-muted-foreground">Resultado {block.year}</span>
-                  </div>
-                  <span className={`text-lg font-bold tabular-nums ${isPositive ? "text-emerald-400" : "text-destructive"}`}>
-                    {formatCurrency(Math.abs(block.result))}
-                  </span>
-                </div>
-                <div className="flex gap-4 text-[10px] text-muted-foreground mt-1">
+            <div className={`flex items-center justify-between px-4 py-2.5 rounded-lg border ${isPositive ? "border-emerald-400/20 bg-emerald-400/5" : "border-destructive/20 bg-destructive/5"}`}>
+              <div className="flex items-center gap-2">
+                {isPositive ? <TrendingUp className="h-4 w-4 text-emerald-400" /> : <TrendingDown className="h-4 w-4 text-destructive" />}
+                <span className="text-sm font-medium text-muted-foreground">Resultado {block.year}</span>
+              </div>
+              <div className="text-right">
+                <span className={`text-base font-bold tabular-nums ${isPositive ? "text-emerald-400" : "text-destructive"}`}>
+                  {formatCurrency(Math.abs(block.result))}
+                </span>
+                <div className="flex gap-3 text-[10px] text-muted-foreground mt-0.5">
                   <span>Despesas: {formatCurrency(block.totalExpenses)}</span>
-                  {block.loansPending > 0 && <span className="text-amber-400">Empréstimos pendentes: {formatCurrency(block.loansPending)}</span>}
-                  {block.loansTotal > 0 && <span>Empréstimos total: {formatCurrency(block.loansTotal)}</span>}
+                  {block.loansPending > 0 && <span className="text-amber-400">Pendente: {formatCurrency(block.loansPending)}</span>}
                 </div>
-                <p className={`text-xs mt-1 ${isPositive ? "text-emerald-400/80" : "text-destructive/80"}`}>
-                  {isPositive
-                    ? `Empresa deve pagar ao técnico: ${formatCurrency(block.result)}`
-                    : `Técnico está em dívida com a empresa: ${formatCurrency(Math.abs(block.result))}`}
-                </p>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </CardContent>
         </CollapsibleContent>
       </Collapsible>
@@ -480,13 +501,13 @@ function YearRevenueSection({ year, expected, received, onSave, formatCurrency }
       </h4>
       <div className="grid grid-cols-3 gap-3">
         <div className="space-y-1">
-          <span className="text-xs text-muted-foreground">Receita esperada</span>
+          <span className="text-xs text-muted-foreground">Esperada</span>
           <Input type="number" className="h-8 text-sm text-right" value={localExpected}
             onChange={(e) => setLocalExpected(e.target.value)}
             onBlur={() => onSave(year, "manual_revenue_expected", parseFloat(localExpected) || 0)} />
         </div>
         <div className="space-y-1">
-          <span className="text-xs text-muted-foreground">Receita recebida</span>
+          <span className="text-xs text-muted-foreground">Recebida</span>
           <Input type="number" className="h-8 text-sm text-right" value={localReceived}
             onChange={(e) => setLocalReceived(e.target.value)}
             onBlur={() => onSave(year, "manual_revenue_received", parseFloat(localReceived) || 0)} />
