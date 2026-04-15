@@ -36,7 +36,7 @@ function useTechFinancials() {
       const { data, error } = await supabase
         .from("financial_records")
         .select("id, label, amount, type, notes, category")
-        .in("type", ["expense_spreadsheet", "manual_revenue_expected", "manual_revenue_received"]);
+        .in("type", ["expense_spreadsheet", "manual_revenue_expected", "manual_revenue_received", "financial_movements"]);
       if (error) throw error;
       return data ?? [];
     },
