@@ -5,7 +5,6 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
@@ -16,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   ChevronDown, ChevronRight, Plus, TrendingUp, TrendingDown,
-  UserPlus, Users, Calendar, Trash2,
+  Users, Calendar, Trash2, Building2,
 } from "lucide-react";
 import { toast } from "sonner";
 import ExpenseSpreadsheet, { SpreadsheetData, SpreadsheetRow, getDefaultColumns } from "./ExpenseSpreadsheet";
@@ -64,10 +63,18 @@ function useDeleteTechFinancials() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ techId }: { techId: string }) => {
-      const { error } = await supabase.from("financial_records").delete().like("notes", `%tech:${techId}%`);
-      if (error) throw error;
+      // Delete financial records
+      const { error: frError } = await supabase.from("financial_records").delete().like("notes", `%tech:${techId}%`);
+      if (frError) throw frError;
+      // Delete the technician itself
+      const { error: tError } = await supabase.from("technicians").delete().eq("id", techId);
+      if (tError) throw tError;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["tech-financials"] }); toast.success("Análise financeira apagada"); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tech-financials"] });
+      qc.invalidateQueries({ queryKey: ["tech-detail-list"] });
+      toast.success("Técnico e análise financeira apagados");
+    },
     onError: (e) => toast.error("Erro: " + (e as Error).message),
   });
 }
@@ -223,7 +230,6 @@ export default function TechnicianDetailTab({ showAddModal, onShowAddModal }: { 
 
   const techDataList = technicians.map((t) => buildTechData(t, records));
 
-  // Calculate company totals
   const companyTotal = techDataList.reduce((sum, td) => {
     const blocks = getYearBlocks(td, td.spreadsheet.columns);
     return sum + blocks.reduce((s, yb) => s + yb.result, 0);
@@ -253,23 +259,28 @@ export default function TechnicianDetailTab({ showAddModal, onShowAddModal }: { 
 
       {/* Technician list */}
       {techDataList.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {techDataList.map((td) => (
             <TechnicianRow key={td.id} data={td} formatCurrency={formatCurrency} />
           ))}
         </div>
       )}
 
-      {/* Company summary — separated entity */}
+      {/* Company balance — structured card */}
       {techDataList.length > 0 && (
-        <div className="pt-2 border-t border-border/30">
-          <div className="flex items-center justify-between px-4 py-3">
-            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Balanço da empresa</span>
-            <span className={`text-base font-bold tabular-nums ${companyTotal >= 0 ? "text-emerald-400" : "text-destructive"}`}>
-              {formatCurrency(Math.abs(companyTotal))}
+        <Card className="border-border/50 bg-muted/20">
+          <CardContent className="flex items-center justify-between py-4 px-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10">
+                <Building2 className="h-4 w-4 text-primary" />
+              </div>
+              <span className="text-sm font-semibold text-foreground">Balanço da empresa</span>
+            </div>
+            <span className={`text-lg font-bold tabular-nums ${companyTotal >= 0 ? "text-emerald-400" : "text-destructive"}`}>
+              {companyTotal < 0 ? "- " : ""}{formatCurrency(Math.abs(companyTotal))}
             </span>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
       <AddTechnicianModal open={showAdd} onOpenChange={setShowAdd} />
@@ -277,7 +288,7 @@ export default function TechnicianDetailTab({ showAddModal, onShowAddModal }: { 
   );
 }
 
-/* ── Add modal ── */
+/* ── Add modal (simplified) ── */
 function AddTechnicianModal({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const [name, setName] = useState("");
   const addTech = useAddTechnician();
@@ -289,10 +300,10 @@ function AddTechnicianModal({ open, onOpenChange }: { open: boolean; onOpenChang
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader><DialogTitle>Adicionar técnico</DialogTitle></DialogHeader>
-        <div className="space-y-4 py-2">
+        <div className="py-2">
           <div className="space-y-2">
-            <Label>Nome do técnico *</Label>
-            <Input placeholder="Nome completo" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSubmit()} />
+            <Label>Nome</Label>
+            <Input placeholder="Digite o nome" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSubmit()} />
           </div>
         </div>
         <DialogFooter>
@@ -304,7 +315,7 @@ function AddTechnicianModal({ open, onOpenChange }: { open: boolean; onOpenChang
   );
 }
 
-/* ── Technician row (minimal, clickable, with hidden delete) ── */
+/* ── Technician row ── */
 function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrency: (v: number) => string }) {
   const [open, setOpen] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -343,16 +354,15 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
       <Collapsible open={open} onOpenChange={setOpen}>
         <CollapsibleTrigger asChild>
           <div className="group flex items-center justify-between px-4 py-3 rounded-lg border border-border/40 cursor-pointer hover:border-primary/30 hover:bg-muted/20 transition-all">
-            <div className="flex items-center gap-3">
-              <span className={`h-2 w-2 rounded-full ${isPositive ? "bg-emerald-400" : "bg-destructive"}`} />
-              <span className="text-sm font-medium text-foreground">{data.name}</span>
+            <div className="flex items-center gap-3 min-w-0">
+              <span className={`h-2 w-2 rounded-full shrink-0 ${isPositive ? "bg-emerald-400" : "bg-destructive"}`} />
+              <span className="text-sm font-medium text-foreground truncate">{data.name}</span>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 shrink-0">
               <span className={`text-sm font-semibold tabular-nums ${isPositive ? "text-emerald-400" : "text-destructive"}`}>
-                {formatCurrency(Math.abs(globalResult))}
+                {globalResult < 0 ? "- " : ""}{formatCurrency(Math.abs(globalResult))}
               </span>
 
-              {/* Hidden delete — appears on hover */}
               <button
                 className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-destructive/10"
                 onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }}
@@ -383,13 +393,12 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
         </CollapsibleContent>
       </Collapsible>
 
-      {/* Delete confirmation */}
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Tem certeza que deseja apagar esta análise?</AlertDialogTitle>
             <AlertDialogDescription>
-              Todos os dados financeiros de <strong>{data.name}</strong> (receitas, despesas e movimentações) serão apagados permanentemente.
+              Todos os dados financeiros de <strong>{data.name}</strong> (receitas, despesas e movimentações) serão apagados permanentemente. O técnico será removido da lista.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -448,7 +457,7 @@ function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheet
           </CardHeader>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <CardContent className="px-4 pb-4 space-y-4">
+          <CardContent className="px-4 pb-4 space-y-5">
             <YearRevenueSection year={block.year} expected={block.revenueExpected} received={block.revenueReceived} onSave={onRevenueSave} formatCurrency={formatCurrency} />
 
             <div className="space-y-2">
@@ -462,7 +471,7 @@ function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheet
             </div>
 
             {/* Year Result */}
-            <div className={`flex items-center justify-between px-4 py-2.5 rounded-lg border ${isPositive ? "border-emerald-400/20 bg-emerald-400/5" : "border-destructive/20 bg-destructive/5"}`}>
+            <div className={`flex items-center justify-between px-4 py-3 rounded-lg border ${isPositive ? "border-emerald-400/20 bg-emerald-400/5" : "border-destructive/20 bg-destructive/5"}`}>
               <div className="flex items-center gap-2">
                 {isPositive ? <TrendingUp className="h-4 w-4 text-emerald-400" /> : <TrendingDown className="h-4 w-4 text-destructive" />}
                 <span className="text-sm font-medium text-muted-foreground">Resultado {block.year}</span>
