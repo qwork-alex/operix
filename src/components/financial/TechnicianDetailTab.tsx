@@ -10,71 +10,50 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import {
-  ChevronDown, ChevronRight, Plus, Trash2, TrendingUp, TrendingDown, AlertTriangle,
-  Check, X, UserPlus, Users,
+  ChevronDown, ChevronRight, Plus, Trash2, TrendingUp, TrendingDown,
+  Check, X, UserPlus, Users, Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 
-interface TechFinancials {
+/* ── types ── */
+interface Expense { id: string; label: string; amount: number }
+
+interface TechData {
+  id: string;
   name: string;
-  technicianId: string;
-  expectedRevenue: number;
-  receivedRevenue: number;
-  difference: number;
-  expenses: { id: string; label: string; amount: number }[];
-  totalExpenses: number;
-  result: number;
-  status: "positive" | "negative";
+  revenueExpected: number;
+  revenueReceived: number;
+  expenses: Expense[];
 }
 
-function useTechnicianFinancials() {
+const DEFAULT_EXPENSE_LABELS = [
+  "Combustível", "Hotel", "Seguro", "Ferramentas",
+  "Salário", "Encargos sociais", "Impostos", "Outros",
+];
+
+/* ── hooks ── */
+function useTechnicians() {
   return useQuery({
-    queryKey: ["technician-financials"],
+    queryKey: ["tech-detail-list"],
     queryFn: async () => {
-      const [techRes, soRes, poRes, frRes] = await Promise.all([
-        supabase.from("technicians").select("id, name"),
-        supabase.from("service_orders").select("technician_name, technician_id, total"),
-        supabase.from("payment_orders").select("technician_name, technician_id, total"),
-        supabase.from("financial_records").select("id, label, amount, type, category, notes")
-          .eq("type", "expense"),
-      ]);
+      const { data, error } = await supabase.from("technicians").select("id, name").order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
 
-      const technicians = techRes.data ?? [];
-      const serviceOrders = soRes.data ?? [];
-      const paymentOrders = poRes.data ?? [];
-      const expenseRecords = frRes.data ?? [];
-
-      return technicians.map((tech): TechFinancials => {
-        const expected = serviceOrders
-          .filter((so: any) => so.technician_id === tech.id || (so.technician_name || "").toLowerCase() === tech.name.toLowerCase())
-          .reduce((s: number, so: any) => s + Number(so.total || 0), 0);
-
-        const received = paymentOrders
-          .filter((po: any) => po.technician_id === tech.id || (po.technician_name || "").toLowerCase() === tech.name.toLowerCase())
-          .reduce((s: number, po: any) => s + Number(po.total || 0), 0);
-
-        const techExpenses = expenseRecords
-          .filter((r: any) => {
-            const notes = r.notes || "";
-            return notes.includes(tech.id) || notes.toLowerCase().includes(tech.name.toLowerCase());
-          })
-          .map((r: any) => ({ id: r.id, label: r.label || r.category || "Outro", amount: Number(r.amount || 0) }));
-
-        const totalExpenses = techExpenses.reduce((s: number, e: any) => s + e.amount, 0);
-        const result = received - totalExpenses;
-
-        return {
-          name: tech.name,
-          technicianId: tech.id,
-          expectedRevenue: expected,
-          receivedRevenue: received,
-          difference: expected - received,
-          expenses: techExpenses,
-          totalExpenses,
-          result,
-          status: result >= 0 ? "positive" : "negative",
-        };
-      }).sort((a, b) => b.receivedRevenue - a.receivedRevenue);
+function useTechFinancials(techIds: string[]) {
+  return useQuery({
+    queryKey: ["tech-financials", techIds],
+    enabled: techIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("financial_records")
+        .select("id, label, amount, type, notes")
+        .in("type", ["expense", "manual_revenue_expected", "manual_revenue_received"]);
+      if (error) throw error;
+      return data ?? [];
     },
   });
 }
@@ -86,166 +65,142 @@ function useAddTechnician() {
       const { error } = await supabase.from("technicians").insert({ name });
       if (error) throw error;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["technician-financials"] });
-      toast.success("Técnico adicionado");
-    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["tech-detail-list"] }); toast.success("Técnico adicionado"); },
     onError: (e) => toast.error("Erro: " + (e as Error).message),
   });
 }
 
-function useAddTechExpense() {
+function useUpsertRevenue() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ techId, techName, type, amount }: { techId: string; techName: string; type: string; amount: number }) => {
+      // delete old then insert new
+      await supabase.from("financial_records").delete().eq("type", type).like("notes", `%tech:${techId}%`);
+      const { error } = await supabase.from("financial_records").insert({
+        type, source: "manual", label: type === "manual_revenue_expected" ? "Receita esperada" : "Receita recebida",
+        amount, status: "confirmed", notes: `tech:${techId}:${techName}`,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["tech-financials"] }),
+  });
+}
+
+function useAddExpense() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ techId, techName, label, amount }: { techId: string; techName: string; label: string; amount: number }) => {
       const { error } = await supabase.from("financial_records").insert({
-        type: "expense",
-        source: "manual",
-        category: label,
-        label,
-        amount,
-        status: "confirmed",
-        notes: `tech:${techId}:${techName}`,
+        type: "expense", source: "manual", category: label, label, amount,
+        status: "confirmed", notes: `tech:${techId}:${techName}`,
       });
       if (error) throw error;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["technician-financials"] });
-      qc.invalidateQueries({ queryKey: ["reconciliation-summary"] });
-      toast.success("Despesa adicionada");
-    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["tech-financials"] }); toast.success("Despesa adicionada"); },
     onError: (e) => toast.error("Erro: " + (e as Error).message),
   });
 }
 
-function useDeleteTechExpense() {
+function useDeleteRecord() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("financial_records").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["technician-financials"] });
-      qc.invalidateQueries({ queryKey: ["reconciliation-summary"] });
-      toast.success("Despesa removida");
-    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["tech-financials"] }); toast.success("Removido"); },
     onError: (e) => toast.error("Erro: " + (e as Error).message),
   });
 }
 
-const DEFAULT_EXPENSE_TYPES = ["Combustível", "Hotel", "Seguro", "Ferramentas", "Outros"];
+/* ── helpers ── */
+function buildTechData(tech: { id: string; name: string }, records: any[]): TechData {
+  const mine = records.filter((r) => (r.notes || "").includes(`tech:${tech.id}`));
+  const revenueExpected = mine.find((r) => r.type === "manual_revenue_expected")?.amount ?? 0;
+  const revenueReceived = mine.find((r) => r.type === "manual_revenue_received")?.amount ?? 0;
+  const expenses = mine.filter((r) => r.type === "expense").map((r) => ({ id: r.id, label: r.label || r.category || "Outro", amount: Number(r.amount || 0) }));
+  return { id: tech.id, name: tech.name, revenueExpected, revenueReceived, expenses };
+}
 
+/* ── main component ── */
 export default function TechnicianDetailTab() {
-  const { data: techData = [], isLoading } = useTechnicianFinancials();
+  const { data: technicians = [], isLoading: loadingTech } = useTechnicians();
+  const { data: records = [], isLoading: loadingFin } = useTechFinancials(technicians.map((t) => t.id));
   const { formatCurrency } = useLanguage();
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
+
+  const isLoading = loadingTech || loadingFin;
 
   if (isLoading) {
-    return <div className="space-y-3">{[1, 2, 3].map(i => <div key={i} className="h-16 bg-muted/30 rounded-lg animate-pulse" />)}</div>;
+    return <div className="space-y-3">{[1, 2, 3].map((i) => <div key={i} className="h-16 bg-muted/30 rounded-lg animate-pulse" />)}</div>;
   }
+
+  const techDataList = technicians.map((t) => buildTechData(t, records));
 
   return (
     <div className="space-y-4">
-      {/* Header with Add button */}
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-muted-foreground">Análise por técnico</h3>
-        <Button variant="outline" size="sm" onClick={() => setShowAddModal(true)}>
+        <h3 className="text-sm font-medium text-muted-foreground">Análise financeira por técnico</h3>
+        <Button variant="outline" size="sm" onClick={() => setShowAdd(true)}>
           <UserPlus className="h-4 w-4 mr-1" /> Adicionar técnico
         </Button>
       </div>
 
-      {/* Empty state */}
-      {techData.length === 0 && (
+      {techDataList.length === 0 && (
         <Card className="border-border/50 bg-muted/30">
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <Users className="h-12 w-12 text-muted-foreground/40 mb-4" />
             <h3 className="text-lg font-semibold text-foreground mb-2">Adicione técnicos para começar a análise financeira</h3>
             <p className="text-sm text-muted-foreground max-w-md mb-4">
-              Os dados de receita serão calculados automaticamente a partir das ordens de serviço e pagamento.
+              Os dados de receita e despesas serão geridos manualmente por técnico.
             </p>
-            <Button onClick={() => setShowAddModal(true)}>
-              <Plus className="h-4 w-4 mr-1" /> Adicionar técnico
-            </Button>
+            <Button onClick={() => setShowAdd(true)}><Plus className="h-4 w-4 mr-1" /> Adicionar técnico</Button>
           </CardContent>
         </Card>
       )}
 
-      {/* Alerts */}
-      {techData.some(t => t.status === "negative") && (
-        <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">
-          <AlertTriangle className="h-4 w-4" />
-          {techData.filter(t => t.status === "negative").length} técnico(s) em dívida com a empresa
-        </div>
-      )}
-
-      {/* Technician cards */}
-      {techData.map((tech) => (
-        <TechnicianCard key={tech.technicianId} tech={tech} formatCurrency={formatCurrency} />
+      {techDataList.map((td) => (
+        <TechnicianCard key={td.id} data={td} formatCurrency={formatCurrency} />
       ))}
 
-      {/* Add Technician Modal */}
-      <AddTechnicianModal open={showAddModal} onOpenChange={setShowAddModal} />
+      <AddTechnicianModal open={showAdd} onOpenChange={setShowAdd} />
     </div>
   );
 }
 
+/* ── Add modal ── */
 function AddTechnicianModal({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const [name, setName] = useState("");
   const addTech = useAddTechnician();
-
   const handleSubmit = () => {
     if (!name.trim()) return;
-    addTech.mutate({ name: name.trim() }, {
-      onSuccess: () => { setName(""); onOpenChange(false); },
-    });
+    addTech.mutate({ name: name.trim() }, { onSuccess: () => { setName(""); onOpenChange(false); } });
   };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Adicionar técnico</DialogTitle>
-        </DialogHeader>
+        <DialogHeader><DialogTitle>Adicionar técnico</DialogTitle></DialogHeader>
         <div className="space-y-4 py-2">
           <div className="space-y-2">
             <Label>Nome do técnico *</Label>
-            <Input
-              placeholder="Nome completo"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-            />
+            <Input placeholder="Nome completo" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSubmit()} />
           </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={handleSubmit} disabled={!name.trim() || addTech.isPending}>
-            {addTech.isPending ? "Salvando..." : "Adicionar"}
-          </Button>
+          <Button onClick={handleSubmit} disabled={!name.trim() || addTech.isPending}>{addTech.isPending ? "Salvando..." : "Adicionar"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
-function TechnicianCard({ tech, formatCurrency }: { tech: TechFinancials; formatCurrency: (v: number) => string }) {
+/* ── Technician card ── */
+function TechnicianCard({ data, formatCurrency }: { data: TechData; formatCurrency: (v: number) => string }) {
   const [open, setOpen] = useState(false);
-  const [newLabel, setNewLabel] = useState("");
-  const [newAmount, setNewAmount] = useState("");
-  const [showForm, setShowForm] = useState(false);
-  const addExpense = useAddTechExpense();
-  const deleteExpense = useDeleteTechExpense();
-
-  const isPositive = tech.result >= 0;
-
-  const handleAdd = () => {
-    if (!newLabel || !newAmount) return;
-    addExpense.mutate({ techId: tech.technicianId, techName: tech.name, label: newLabel, amount: parseFloat(newAmount) });
-    setNewLabel("");
-    setNewAmount("");
-    setShowForm(false);
-  };
+  const totalExpenses = data.expenses.reduce((s, e) => s + e.amount, 0);
+  const result = data.revenueReceived - totalExpenses;
+  const isPositive = result >= 0;
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -254,14 +209,14 @@ function TechnicianCard({ tech, formatCurrency }: { tech: TechFinancials; format
           <CardContent className="py-3 px-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <span className="text-base">{isPositive ? "🟢" : "🔴"}</span>
-              <span className="font-medium text-foreground">{tech.name}</span>
+              <span className="font-medium text-foreground">{data.name}</span>
               <Badge variant={isPositive ? "outline" : "destructive"} className="text-[10px]">
                 {isPositive ? "Empresa deve pagar" : "Em dívida"}
               </Badge>
             </div>
             <div className="flex items-center gap-4">
               <span className={`text-sm font-medium tabular-nums ${isPositive ? "text-emerald-400" : "text-destructive"}`}>
-                {formatCurrency(Math.abs(tech.result))}
+                {formatCurrency(Math.abs(result))}
               </span>
               <Button variant="ghost" size="sm" className="h-7 text-xs">
                 {open ? <ChevronDown className="h-4 w-4" /> : "Ver detalhes"}
@@ -270,118 +225,142 @@ function TechnicianCard({ tech, formatCurrency }: { tech: TechFinancials; format
           </CardContent>
         </Card>
       </CollapsibleTrigger>
-
       <CollapsibleContent>
         <div className="ml-4 mt-2 space-y-3 border-l-2 border-border pl-4 pb-2">
-          {/* Revenue (read-only) */}
-          <Card className="border-border/50">
-            <CardHeader className="pb-1 pt-3 px-4">
-              <CardTitle className="text-xs text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                <TrendingUp className="h-3 w-3" /> Receitas (automático)
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 pb-3 space-y-1">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Receita esperada (OS)</span>
-                <span className="tabular-nums">{formatCurrency(tech.expectedRevenue)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Receita recebida (OP)</span>
-                <span className="tabular-nums">{formatCurrency(tech.receivedRevenue)}</span>
-              </div>
-              <div className="flex justify-between text-sm font-medium border-t border-border/50 pt-1">
-                <span className="text-muted-foreground">Diferença</span>
-                <span className={`tabular-nums ${tech.difference > 0 ? "text-destructive" : tech.difference < 0 ? "text-emerald-400" : "text-foreground"}`}>
-                  {tech.difference > 0 ? "-" : tech.difference < 0 ? "+" : ""}{formatCurrency(Math.abs(tech.difference))}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Expenses (editable) */}
-          <Card className="border-border/50">
-            <CardHeader className="pb-1 pt-3 px-4 flex flex-row items-center justify-between">
-              <CardTitle className="text-xs text-muted-foreground uppercase tracking-wider">Despesas</CardTitle>
-              <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setShowForm(!showForm)}>
-                <Plus className="h-3 w-3 mr-1" /> Adicionar
-              </Button>
-            </CardHeader>
-            <CardContent className="px-4 pb-3 space-y-1">
-              {showForm && (
-                <div className="flex gap-2 mb-2">
-                  <select
-                    className="flex-1 rounded-md border border-input bg-background px-2 py-1 text-sm"
-                    value={newLabel}
-                    onChange={(e) => setNewLabel(e.target.value)}
-                  >
-                    <option value="">Selecionar tipo...</option>
-                    {DEFAULT_EXPENSE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                  <Input
-                    type="number"
-                    placeholder="Valor"
-                    className="w-24 h-8 text-sm"
-                    value={newAmount}
-                    onChange={(e) => setNewAmount(e.target.value)}
-                  />
-                  <Button size="sm" className="h-8" onClick={handleAdd} disabled={addExpense.isPending}>
-                    <Check className="h-3 w-3" />
-                  </Button>
-                  <Button size="sm" variant="ghost" className="h-8" onClick={() => setShowForm(false)}>
-                    <X className="h-3 w-3" />
-                  </Button>
-                </div>
-              )}
-
-              {tech.expenses.length > 0 ? (
-                tech.expenses.map((exp) => (
-                  <div key={exp.id} className="flex items-center justify-between text-sm group">
-                    <span className="text-muted-foreground">{exp.label}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="tabular-nums">{formatCurrency(exp.amount)}</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-destructive"
-                        onClick={() => deleteExpense.mutate(exp.id)}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="text-xs text-muted-foreground text-center py-2">Nenhuma despesa registrada</p>
-              )}
-
-              <div className="flex justify-between text-sm font-medium border-t border-border/50 pt-1">
-                <span className="text-muted-foreground">Total despesas</span>
-                <span className="tabular-nums">{formatCurrency(tech.totalExpenses)}</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Result */}
-          <Card className={`border-border/50 ${isPositive ? "glow-green" : "glow-red"}`}>
-            <CardContent className="py-3 px-4">
-              <div className="flex justify-between items-center mb-1">
-                <div className="flex items-center gap-2">
-                  {isPositive ? <TrendingUp className="h-4 w-4 text-emerald-400" /> : <TrendingDown className="h-4 w-4 text-destructive" />}
-                  <span className="text-sm font-medium text-muted-foreground">Resultado</span>
-                </div>
-                <span className={`text-lg font-bold tabular-nums ${isPositive ? "text-emerald-400" : "text-destructive"}`}>
-                  {formatCurrency(Math.abs(tech.result))}
-                </span>
-              </div>
-              <p className={`text-xs mt-1 ${isPositive ? "text-emerald-400/80" : "text-destructive/80"}`}>
-                {isPositive
-                  ? `Empresa deve pagar ao técnico: ${formatCurrency(tech.result)}`
-                  : `Técnico está em dívida com a empresa: ${formatCurrency(Math.abs(tech.result))}`}
-              </p>
-            </CardContent>
-          </Card>
+          <RevenueSection data={data} formatCurrency={formatCurrency} />
+          <ExpensesSection data={data} formatCurrency={formatCurrency} />
+          <ResultSection result={result} totalExpenses={totalExpenses} formatCurrency={formatCurrency} />
         </div>
       </CollapsibleContent>
     </Collapsible>
+  );
+}
+
+/* ── Revenue (manual inputs) ── */
+function RevenueSection({ data, formatCurrency }: { data: TechData; formatCurrency: (v: number) => string }) {
+  const [expected, setExpected] = useState(String(data.revenueExpected || ""));
+  const [received, setReceived] = useState(String(data.revenueReceived || ""));
+  const upsert = useUpsertRevenue();
+  const difference = (Number(expected) || 0) - (Number(received) || 0);
+
+  const save = (type: string, val: string) => {
+    const amount = parseFloat(val);
+    if (isNaN(amount)) return;
+    upsert.mutate({ techId: data.id, techName: data.name, type, amount });
+  };
+
+  return (
+    <Card className="border-border/50">
+      <CardHeader className="pb-1 pt-3 px-4">
+        <CardTitle className="text-xs text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+          <TrendingUp className="h-3 w-3" /> Receitas (entrada manual)
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="px-4 pb-3 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-sm text-muted-foreground w-40">Receita esperada</span>
+          <Input type="number" className="h-8 w-32 text-sm text-right" value={expected}
+            onChange={(e) => setExpected(e.target.value)}
+            onBlur={() => save("manual_revenue_expected", expected)} />
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-sm text-muted-foreground w-40">Receita recebida</span>
+          <Input type="number" className="h-8 w-32 text-sm text-right" value={received}
+            onChange={(e) => setReceived(e.target.value)}
+            onBlur={() => save("manual_revenue_received", received)} />
+        </div>
+        <div className="flex justify-between text-sm font-medium border-t border-border/50 pt-1">
+          <span className="text-muted-foreground">Diferença</span>
+          <span className={`tabular-nums ${difference > 0 ? "text-destructive" : difference < 0 ? "text-emerald-400" : "text-foreground"}`}>
+            {difference > 0 ? "-" : difference < 0 ? "+" : ""}{formatCurrency(Math.abs(difference))}
+          </span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ── Expenses ── */
+function ExpensesSection({ data, formatCurrency }: { data: TechData; formatCurrency: (v: number) => string }) {
+  const [showForm, setShowForm] = useState(false);
+  const [newLabel, setNewLabel] = useState("");
+  const [newAmount, setNewAmount] = useState("");
+  const addExpense = useAddExpense();
+  const deleteRecord = useDeleteRecord();
+
+  const handleAdd = () => {
+    if (!newLabel || !newAmount) return;
+    addExpense.mutate({ techId: data.id, techName: data.name, label: newLabel, amount: parseFloat(newAmount) });
+    setNewLabel(""); setNewAmount(""); setShowForm(false);
+  };
+
+  const totalExpenses = data.expenses.reduce((s, e) => s + e.amount, 0);
+
+  return (
+    <Card className="border-border/50">
+      <CardHeader className="pb-1 pt-3 px-4 flex flex-row items-center justify-between">
+        <CardTitle className="text-xs text-muted-foreground uppercase tracking-wider">Despesas</CardTitle>
+        <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setShowForm(!showForm)}>
+          <Plus className="h-3 w-3 mr-1" /> Adicionar
+        </Button>
+      </CardHeader>
+      <CardContent className="px-4 pb-3 space-y-1">
+        {showForm && (
+          <div className="flex gap-2 mb-2">
+            <select className="flex-1 rounded-md border border-input bg-background px-2 py-1 text-sm" value={newLabel} onChange={(e) => setNewLabel(e.target.value)}>
+              <option value="">Selecionar tipo...</option>
+              {DEFAULT_EXPENSE_LABELS.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <Input type="number" placeholder="Valor" className="w-24 h-8 text-sm" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} />
+            <Button size="sm" className="h-8" onClick={handleAdd} disabled={addExpense.isPending}><Check className="h-3 w-3" /></Button>
+            <Button size="sm" variant="ghost" className="h-8" onClick={() => setShowForm(false)}><X className="h-3 w-3" /></Button>
+          </div>
+        )}
+
+        {data.expenses.length > 0 ? data.expenses.map((exp) => (
+          <div key={exp.id} className="flex items-center justify-between text-sm group">
+            <span className="text-muted-foreground">{exp.label}</span>
+            <div className="flex items-center gap-2">
+              <span className="tabular-nums">{formatCurrency(exp.amount)}</span>
+              <Button variant="ghost" size="sm" className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-destructive" onClick={() => deleteRecord.mutate(exp.id)}>
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </div>
+          </div>
+        )) : (
+          <p className="text-xs text-muted-foreground text-center py-2">Nenhuma despesa registrada</p>
+        )}
+
+        <div className="flex justify-between text-sm font-medium border-t border-border/50 pt-1">
+          <span className="text-muted-foreground">Total despesas</span>
+          <span className="tabular-nums">{formatCurrency(totalExpenses)}</span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ── Result ── */
+function ResultSection({ result, totalExpenses, formatCurrency }: { result: number; totalExpenses: number; formatCurrency: (v: number) => string }) {
+  const isPositive = result >= 0;
+  return (
+    <Card className={`border-border/50 ${isPositive ? "glow-green" : "glow-red"}`}>
+      <CardContent className="py-3 px-4">
+        <div className="flex justify-between items-center mb-1">
+          <div className="flex items-center gap-2">
+            {isPositive ? <TrendingUp className="h-4 w-4 text-emerald-400" /> : <TrendingDown className="h-4 w-4 text-destructive" />}
+            <span className="text-sm font-medium text-muted-foreground">Resultado</span>
+          </div>
+          <span className={`text-lg font-bold tabular-nums ${isPositive ? "text-emerald-400" : "text-destructive"}`}>
+            {formatCurrency(Math.abs(result))}
+          </span>
+        </div>
+        <p className={`text-xs mt-1 ${isPositive ? "text-emerald-400/80" : "text-destructive/80"}`}>
+          {isPositive
+            ? `Empresa deve pagar ao técnico: ${formatCurrency(result)}`
+            : `Técnico está em dívida com a empresa: ${formatCurrency(Math.abs(result))}`}
+        </p>
+      </CardContent>
+    </Card>
   );
 }
