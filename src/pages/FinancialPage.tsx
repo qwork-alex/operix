@@ -1,29 +1,39 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { RefreshCw, BarChart3, Bell, UserPlus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useReconciliationSummary, useRunReconciliation } from "@/hooks/useReconciliation";
 import { useConfrontoPending } from "@/hooks/useConfrontoOSOP";
+import { useNotifications } from "@/hooks/useNotifications";
 import FusaoManualTab from "@/components/confronto/FusaoManualTab";
 import PendentesTab from "@/components/confronto/PendentesTab";
 import HistoricoTab from "@/components/confronto/HistoricoTab";
 import OverviewTab from "@/components/financial/OverviewTab";
 import TechnicianDetailTab from "@/components/financial/TechnicianDetailTab";
-import { Link2 } from "lucide-react";
-import { AlertTriangle } from "lucide-react";
+import { Link2, AlertTriangle } from "lucide-react";
 
 export default function FinancialPage() {
   const { t } = useLanguage();
   const { data: summary, isLoading: summaryLoading } = useReconciliationSummary();
   const { data: pendingItems = [] } = useConfrontoPending();
+  const { notifications, markAsRead } = useNotifications();
   const runMutation = useRunReconciliation();
   const [confrontoTab, setConfrontoTab] = useState("fusao");
   const [mainTab, setMainTab] = useState("overview");
   const [showAddTech, setShowAddTech] = useState(false);
+
+  // Financial alerts: unread discrepancy notifications
+  const financialAlerts = notifications.filter(
+    (n: any) => !n.is_read && n.type === "discrepancy"
+  );
+  const hasAlerts = financialAlerts.length > 0;
 
   const isLoading = summaryLoading;
   const s = summary ?? {
@@ -34,7 +44,6 @@ export default function FinancialPage() {
   };
 
   const hasNoData = s.serviceOrderCount === 0 && s.paymentOrderCount === 0;
-  const hasAlerts = pendingItems.length > 0;
 
   if (isLoading) {
     return (
@@ -49,7 +58,7 @@ export default function FinancialPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Header — minimal */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
@@ -63,23 +72,38 @@ export default function FinancialPage() {
 
         {/* Icon-only actions */}
         <div className="flex items-center gap-1">
+          {/* Alert bell — only renders if alerts exist */}
           {hasAlerts && (
-            <Tooltip>
-              <TooltipTrigger asChild>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-destructive hover:text-destructive"
-                  onClick={() => { setMainTab("confronto"); setConfrontoTab("pendentes"); }}
+                  className="h-8 w-8 text-destructive hover:text-destructive relative"
                 >
                   <Bell className="h-4 w-4" />
                   <span className="absolute -top-0.5 -right-0.5 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-destructive text-[9px] text-destructive-foreground px-1">
-                    {pendingItems.length}
+                    {financialAlerts.length}
                   </span>
                 </Button>
-              </TooltipTrigger>
-              <TooltipContent>{pendingItems.length} divergência{pendingItems.length > 1 ? "s" : ""}</TooltipContent>
-            </Tooltip>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-72">
+                {financialAlerts.map((alert: any) => (
+                  <DropdownMenuItem
+                    key={alert.id}
+                    className="cursor-pointer flex flex-col items-start gap-0.5 py-2"
+                    onClick={() => {
+                      markAsRead(alert.id);
+                      setMainTab("confronto");
+                      setConfrontoTab("pendentes");
+                    }}
+                  >
+                    <span className="text-sm font-medium text-foreground">{alert.title}</span>
+                    {alert.message && <span className="text-xs text-muted-foreground">{alert.message}</span>}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
 
           <Tooltip>
@@ -126,11 +150,11 @@ export default function FinancialPage() {
         </Card>
       )}
 
-      {/* TABS — clean, no badges */}
+      {/* TABS */}
       <Tabs value={mainTab} onValueChange={setMainTab} className="space-y-4">
         <TabsList className="bg-muted">
           <TabsTrigger value="overview">Visão geral</TabsTrigger>
-          <TabsTrigger value="confronto">Confronto</TabsTrigger>
+          <TabsTrigger value="confronto">Confronto OS vs OP</TabsTrigger>
           <TabsTrigger value="breakdown">Detalhamento</TabsTrigger>
         </TabsList>
 
