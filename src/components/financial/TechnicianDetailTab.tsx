@@ -299,7 +299,7 @@ function AddTechnicianModal({ open, onOpenChange }: { open: boolean; onOpenChang
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader><DialogTitle>Adicionar técnico</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>Adicionar</DialogTitle></DialogHeader>
         <div className="py-2">
           <div className="space-y-2">
             <Label>Nome</Label>
