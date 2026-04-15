@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import ExpenseSpreadsheet, { SpreadsheetData, SpreadsheetRow, getDefaultColumns } from "./ExpenseSpreadsheet";
+import FinancialMovements, { FinancialMovement } from "./FinancialMovements";
 
 /* ── hooks ── */
 function useTechnicians() {
