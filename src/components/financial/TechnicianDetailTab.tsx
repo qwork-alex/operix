@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import ExpenseSpreadsheet, { SpreadsheetData, SpreadsheetRow, getDefaultColumns } from "./ExpenseSpreadsheet";
+import FinancialMovements, { FinancialMovement } from "./FinancialMovements";
 
 /* ── hooks ── */
 function useTechnicians() {
@@ -35,7 +36,7 @@ function useTechFinancials() {
       const { data, error } = await supabase
         .from("financial_records")
         .select("id, label, amount, type, notes, category")
-        .in("type", ["expense_spreadsheet", "manual_revenue_expected", "manual_revenue_received"]);
+        .in("type", ["expense_spreadsheet", "manual_revenue_expected", "manual_revenue_received", "financial_movements"]);
       if (error) throw error;
       return data ?? [];
     },
@@ -73,17 +74,32 @@ function useSaveSpreadsheet() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ techId, techName, spreadsheet }: { techId: string; techName: string; spreadsheet: SpreadsheetData }) => {
-      // Delete old spreadsheet record for this tech
       await supabase.from("financial_records").delete().eq("type", "expense_spreadsheet").like("notes", `%tech:${techId}%`);
-      // Calculate grand total
       const grandTotal = spreadsheet.rows.reduce((s, r) =>
         s + spreadsheet.columns.reduce((cs, c) => cs + (r.values[c.id] || 0), 0), 0);
-      // Store as single JSON record
       const { error } = await supabase.from("financial_records").insert({
         type: "expense_spreadsheet", source: "manual", label: "Despesas (planilha)",
         amount: grandTotal, status: "confirmed",
         notes: `tech:${techId}:${techName}`,
         category: JSON.stringify(spreadsheet),
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["tech-financials"] }),
+  });
+}
+
+function useSaveMovements() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ techId, techName, movements }: { techId: string; techName: string; movements: FinancialMovement[] }) => {
+      await supabase.from("financial_records").delete().eq("type", "financial_movements").like("notes", `%tech:${techId}%`);
+      const totalLoans = movements.filter((m) => m.type === "loan").reduce((s, m) => s + m.amount, 0);
+      const { error } = await supabase.from("financial_records").insert({
+        type: "financial_movements", source: "manual", label: "Movimentações financeiras",
+        amount: totalLoans, status: "confirmed",
+        notes: `tech:${techId}:${techName}`,
+        category: JSON.stringify(movements),
       });
       if (error) throw error;
     },
@@ -99,6 +115,9 @@ interface TechData {
   revenueReceived: number;
   totalExpenses: number;
   spreadsheet: SpreadsheetData;
+  movements: FinancialMovement[];
+  loansReceived: number;
+  loansPending: number;
 }
 
 function buildTechData(tech: { id: string; name: string }, records: any[]): TechData {
@@ -106,19 +125,22 @@ function buildTechData(tech: { id: string; name: string }, records: any[]): Tech
   const revenueExpected = mine.find((r) => r.type === "manual_revenue_expected")?.amount ?? 0;
   const revenueReceived = mine.find((r) => r.type === "manual_revenue_received")?.amount ?? 0;
 
-  // Parse spreadsheet from category JSON
   const ssRecord = mine.find((r) => r.type === "expense_spreadsheet");
   let spreadsheet: SpreadsheetData = { columns: getDefaultColumns(), rows: [] };
   if (ssRecord?.category) {
-    try {
-      const parsed = JSON.parse(ssRecord.category);
-      if (parsed.columns && parsed.rows) spreadsheet = parsed;
-    } catch { /* use default */ }
+    try { const parsed = JSON.parse(ssRecord.category); if (parsed.columns && parsed.rows) spreadsheet = parsed; } catch { /* default */ }
   }
-
   const totalExpenses = ssRecord?.amount ?? 0;
 
-  return { id: tech.id, name: tech.name, revenueExpected, revenueReceived, totalExpenses, spreadsheet };
+  const movRecord = mine.find((r) => r.type === "financial_movements");
+  let movements: FinancialMovement[] = [];
+  if (movRecord?.category) {
+    try { const parsed = JSON.parse(movRecord.category); if (Array.isArray(parsed)) movements = parsed; } catch { /* default */ }
+  }
+  const loansReceived = movements.filter((m) => m.type === "loan" && m.status === "paid").reduce((s, m) => s + m.amount, 0);
+  const loansPending = movements.filter((m) => m.type === "loan" && m.status !== "paid").reduce((s, m) => s + m.amount, 0);
+
+  return { id: tech.id, name: tech.name, revenueExpected, revenueReceived, totalExpenses, spreadsheet, movements, loansReceived, loansPending };
 }
 
 /* ── main component ── */
@@ -197,7 +219,7 @@ function AddTechnicianModal({ open, onOpenChange }: { open: boolean; onOpenChang
 /* ── Technician card ── */
 function TechnicianCard({ data, formatCurrency }: { data: TechData; formatCurrency: (v: number) => string }) {
   const [open, setOpen] = useState(false);
-  const result = data.revenueReceived - data.totalExpenses;
+  const result = data.revenueReceived - data.totalExpenses - data.loansPending;
   const isPositive = result >= 0;
 
   return (
@@ -227,7 +249,8 @@ function TechnicianCard({ data, formatCurrency }: { data: TechData; formatCurren
         <div className="ml-4 mt-2 space-y-3 border-l-2 border-border pl-4 pb-2">
           <RevenueSection data={data} formatCurrency={formatCurrency} />
           <SpreadsheetSection data={data} formatCurrency={formatCurrency} />
-          <ResultSection result={result} totalExpenses={data.totalExpenses} formatCurrency={formatCurrency} />
+          <MovementsSection data={data} formatCurrency={formatCurrency} />
+          <ResultSection result={result} totalExpenses={data.totalExpenses} loansPending={data.loansPending} loansReceived={data.loansReceived} formatCurrency={formatCurrency} />
         </div>
       </CollapsibleContent>
     </Collapsible>
@@ -303,8 +326,34 @@ function SpreadsheetSection({ data, formatCurrency }: { data: TechData; formatCu
   );
 }
 
+/* ── Movements section ── */
+function MovementsSection({ data, formatCurrency }: { data: TechData; formatCurrency: (v: number) => string }) {
+  const [localData, setLocalData] = useState<FinancialMovement[]>(data.movements);
+  const saveMovements = useSaveMovements();
+
+  const handleChange = useCallback((newData: FinancialMovement[]) => {
+    setLocalData(newData);
+    saveMovements.mutate({ techId: data.id, techName: data.name, movements: newData });
+  }, [data.id, data.name, saveMovements]);
+
+  return (
+    <Card className="border-border/50">
+      <CardHeader className="pb-1 pt-3 px-4">
+        <CardTitle className="text-xs text-muted-foreground uppercase tracking-wider">
+          Movimentações financeiras
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="px-4 pb-3">
+        <FinancialMovements movements={localData} onChange={handleChange} formatCurrency={formatCurrency} />
+      </CardContent>
+    </Card>
+  );
+}
+
 /* ── Result ── */
-function ResultSection({ result, totalExpenses, formatCurrency }: { result: number; totalExpenses: number; formatCurrency: (v: number) => string }) {
+function ResultSection({ result, totalExpenses, loansPending, loansReceived, formatCurrency }: {
+  result: number; totalExpenses: number; loansPending: number; loansReceived: number; formatCurrency: (v: number) => string;
+}) {
   const isPositive = result >= 0;
   return (
     <Card className={`border-border/50 ${isPositive ? "glow-green" : "glow-red"}`}>
@@ -317,6 +366,11 @@ function ResultSection({ result, totalExpenses, formatCurrency }: { result: numb
           <span className={`text-lg font-bold tabular-nums ${isPositive ? "text-emerald-400" : "text-destructive"}`}>
             {formatCurrency(Math.abs(result))}
           </span>
+        </div>
+        <div className="flex gap-4 text-[10px] text-muted-foreground mt-1">
+          <span>Despesas: {formatCurrency(totalExpenses)}</span>
+          {loansPending > 0 && <span className="text-amber-400">Empréstimos pendentes: {formatCurrency(loansPending)}</span>}
+          {loansReceived > 0 && <span>Empréstimos pagos: {formatCurrency(loansReceived)}</span>}
         </div>
         <p className={`text-xs mt-1 ${isPositive ? "text-emerald-400/80" : "text-destructive/80"}`}>
           {isPositive
