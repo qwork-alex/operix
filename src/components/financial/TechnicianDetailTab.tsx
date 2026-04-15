@@ -219,7 +219,7 @@ function AddTechnicianModal({ open, onOpenChange }: { open: boolean; onOpenChang
 /* ── Technician card ── */
 function TechnicianCard({ data, formatCurrency }: { data: TechData; formatCurrency: (v: number) => string }) {
   const [open, setOpen] = useState(false);
-  const result = data.revenueReceived - data.totalExpenses;
+  const result = data.revenueReceived - data.totalExpenses - data.loansPending;
   const isPositive = result >= 0;
 
   return (
