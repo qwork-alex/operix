@@ -249,7 +249,8 @@ function TechnicianCard({ data, formatCurrency }: { data: TechData; formatCurren
         <div className="ml-4 mt-2 space-y-3 border-l-2 border-border pl-4 pb-2">
           <RevenueSection data={data} formatCurrency={formatCurrency} />
           <SpreadsheetSection data={data} formatCurrency={formatCurrency} />
-          <ResultSection result={result} totalExpenses={data.totalExpenses} formatCurrency={formatCurrency} />
+          <MovementsSection data={data} formatCurrency={formatCurrency} />
+          <ResultSection result={result} totalExpenses={data.totalExpenses} loansPending={data.loansPending} loansReceived={data.loansReceived} formatCurrency={formatCurrency} />
         </div>
       </CollapsibleContent>
     </Collapsible>
