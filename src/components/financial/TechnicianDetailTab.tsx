@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/hooks/useLanguage";
@@ -10,26 +10,11 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import {
-  ChevronDown, ChevronRight, Plus, Trash2, TrendingUp, TrendingDown,
-  Check, X, UserPlus, Users, Pencil,
+  ChevronDown, Plus, TrendingUp, TrendingDown,
+  UserPlus, Users,
 } from "lucide-react";
 import { toast } from "sonner";
-
-/* ── types ── */
-interface Expense { id: string; label: string; amount: number }
-
-interface TechData {
-  id: string;
-  name: string;
-  revenueExpected: number;
-  revenueReceived: number;
-  expenses: Expense[];
-}
-
-const DEFAULT_EXPENSE_LABELS = [
-  "Combustível", "Hotel", "Seguro", "Ferramentas",
-  "Salário", "Encargos sociais", "Impostos", "Outros",
-];
+import ExpenseSpreadsheet, { SpreadsheetData, SpreadsheetRow, getDefaultColumns } from "./ExpenseSpreadsheet";
 
 /* ── hooks ── */
 function useTechnicians() {
@@ -43,15 +28,14 @@ function useTechnicians() {
   });
 }
 
-function useTechFinancials(techIds: string[]) {
+function useTechFinancials() {
   return useQuery({
-    queryKey: ["tech-financials", techIds],
-    enabled: techIds.length > 0,
+    queryKey: ["tech-financials"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("financial_records")
-        .select("id, label, amount, type, notes")
-        .in("type", ["expense", "manual_revenue_expected", "manual_revenue_received"]);
+        .select("id, label, amount, type, notes, category")
+        .in("type", ["expense_spreadsheet", "manual_revenue_expected", "manual_revenue_received"]);
       if (error) throw error;
       return data ?? [];
     },
@@ -74,7 +58,6 @@ function useUpsertRevenue() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ techId, techName, type, amount }: { techId: string; techName: string; type: string; amount: number }) => {
-      // delete old then insert new
       await supabase.from("financial_records").delete().eq("type", type).like("notes", `%tech:${techId}%`);
       const { error } = await supabase.from("financial_records").insert({
         type, source: "manual", label: type === "manual_revenue_expected" ? "Receita esperada" : "Receita recebida",
@@ -86,46 +69,62 @@ function useUpsertRevenue() {
   });
 }
 
-function useAddExpense() {
+function useSaveSpreadsheet() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ techId, techName, label, amount }: { techId: string; techName: string; label: string; amount: number }) => {
+    mutationFn: async ({ techId, techName, spreadsheet }: { techId: string; techName: string; spreadsheet: SpreadsheetData }) => {
+      // Delete old spreadsheet record for this tech
+      await supabase.from("financial_records").delete().eq("type", "expense_spreadsheet").like("notes", `%tech:${techId}%`);
+      // Calculate grand total
+      const grandTotal = spreadsheet.rows.reduce((s, r) =>
+        s + spreadsheet.columns.reduce((cs, c) => cs + (r.values[c.id] || 0), 0), 0);
+      // Store as single JSON record
       const { error } = await supabase.from("financial_records").insert({
-        type: "expense", source: "manual", category: label, label, amount,
-        status: "confirmed", notes: `tech:${techId}:${techName}`,
+        type: "expense_spreadsheet", source: "manual", label: "Despesas (planilha)",
+        amount: grandTotal, status: "confirmed",
+        notes: `tech:${techId}:${techName}`,
+        category: JSON.stringify(spreadsheet),
       });
       if (error) throw error;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["tech-financials"] }); toast.success("Despesa adicionada"); },
-    onError: (e) => toast.error("Erro: " + (e as Error).message),
-  });
-}
-
-function useDeleteRecord() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("financial_records").delete().eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["tech-financials"] }); toast.success("Removido"); },
-    onError: (e) => toast.error("Erro: " + (e as Error).message),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["tech-financials"] }),
   });
 }
 
 /* ── helpers ── */
+interface TechData {
+  id: string;
+  name: string;
+  revenueExpected: number;
+  revenueReceived: number;
+  totalExpenses: number;
+  spreadsheet: SpreadsheetData;
+}
+
 function buildTechData(tech: { id: string; name: string }, records: any[]): TechData {
   const mine = records.filter((r) => (r.notes || "").includes(`tech:${tech.id}`));
   const revenueExpected = mine.find((r) => r.type === "manual_revenue_expected")?.amount ?? 0;
   const revenueReceived = mine.find((r) => r.type === "manual_revenue_received")?.amount ?? 0;
-  const expenses = mine.filter((r) => r.type === "expense").map((r) => ({ id: r.id, label: r.label || r.category || "Outro", amount: Number(r.amount || 0) }));
-  return { id: tech.id, name: tech.name, revenueExpected, revenueReceived, expenses };
+
+  // Parse spreadsheet from category JSON
+  const ssRecord = mine.find((r) => r.type === "expense_spreadsheet");
+  let spreadsheet: SpreadsheetData = { columns: getDefaultColumns(), rows: [] };
+  if (ssRecord?.category) {
+    try {
+      const parsed = JSON.parse(ssRecord.category);
+      if (parsed.columns && parsed.rows) spreadsheet = parsed;
+    } catch { /* use default */ }
+  }
+
+  const totalExpenses = ssRecord?.amount ?? 0;
+
+  return { id: tech.id, name: tech.name, revenueExpected, revenueReceived, totalExpenses, spreadsheet };
 }
 
 /* ── main component ── */
 export default function TechnicianDetailTab() {
   const { data: technicians = [], isLoading: loadingTech } = useTechnicians();
-  const { data: records = [], isLoading: loadingFin } = useTechFinancials(technicians.map((t) => t.id));
+  const { data: records = [], isLoading: loadingFin } = useTechFinancials();
   const { formatCurrency } = useLanguage();
   const [showAdd, setShowAdd] = useState(false);
 
@@ -198,8 +197,7 @@ function AddTechnicianModal({ open, onOpenChange }: { open: boolean; onOpenChang
 /* ── Technician card ── */
 function TechnicianCard({ data, formatCurrency }: { data: TechData; formatCurrency: (v: number) => string }) {
   const [open, setOpen] = useState(false);
-  const totalExpenses = data.expenses.reduce((s, e) => s + e.amount, 0);
-  const result = data.revenueReceived - totalExpenses;
+  const result = data.revenueReceived - data.totalExpenses;
   const isPositive = result >= 0;
 
   return (
@@ -228,8 +226,8 @@ function TechnicianCard({ data, formatCurrency }: { data: TechData; formatCurren
       <CollapsibleContent>
         <div className="ml-4 mt-2 space-y-3 border-l-2 border-border pl-4 pb-2">
           <RevenueSection data={data} formatCurrency={formatCurrency} />
-          <ExpensesSection data={data} formatCurrency={formatCurrency} />
-          <ResultSection result={result} totalExpenses={totalExpenses} formatCurrency={formatCurrency} />
+          <SpreadsheetSection data={data} formatCurrency={formatCurrency} />
+          <ResultSection result={result} totalExpenses={data.totalExpenses} formatCurrency={formatCurrency} />
         </div>
       </CollapsibleContent>
     </Collapsible>
@@ -280,61 +278,26 @@ function RevenueSection({ data, formatCurrency }: { data: TechData; formatCurren
   );
 }
 
-/* ── Expenses ── */
-function ExpensesSection({ data, formatCurrency }: { data: TechData; formatCurrency: (v: number) => string }) {
-  const [showForm, setShowForm] = useState(false);
-  const [newLabel, setNewLabel] = useState("");
-  const [newAmount, setNewAmount] = useState("");
-  const addExpense = useAddExpense();
-  const deleteRecord = useDeleteRecord();
+/* ── Spreadsheet expenses ── */
+function SpreadsheetSection({ data, formatCurrency }: { data: TechData; formatCurrency: (v: number) => string }) {
+  const [localData, setLocalData] = useState<SpreadsheetData>(data.spreadsheet);
+  const saveSpreadsheet = useSaveSpreadsheet();
 
-  const handleAdd = () => {
-    if (!newLabel || !newAmount) return;
-    addExpense.mutate({ techId: data.id, techName: data.name, label: newLabel, amount: parseFloat(newAmount) });
-    setNewLabel(""); setNewAmount(""); setShowForm(false);
-  };
-
-  const totalExpenses = data.expenses.reduce((s, e) => s + e.amount, 0);
+  const handleChange = useCallback((newData: SpreadsheetData) => {
+    setLocalData(newData);
+    // Debounced save on every change
+    saveSpreadsheet.mutate({ techId: data.id, techName: data.name, spreadsheet: newData });
+  }, [data.id, data.name, saveSpreadsheet]);
 
   return (
     <Card className="border-border/50">
-      <CardHeader className="pb-1 pt-3 px-4 flex flex-row items-center justify-between">
-        <CardTitle className="text-xs text-muted-foreground uppercase tracking-wider">Despesas</CardTitle>
-        <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setShowForm(!showForm)}>
-          <Plus className="h-3 w-3 mr-1" /> Adicionar
-        </Button>
+      <CardHeader className="pb-1 pt-3 px-4">
+        <CardTitle className="text-xs text-muted-foreground uppercase tracking-wider">
+          Despesas (planilha financeira)
+        </CardTitle>
       </CardHeader>
-      <CardContent className="px-4 pb-3 space-y-1">
-        {showForm && (
-          <div className="flex gap-2 mb-2">
-            <select className="flex-1 rounded-md border border-input bg-background px-2 py-1 text-sm" value={newLabel} onChange={(e) => setNewLabel(e.target.value)}>
-              <option value="">Selecionar tipo...</option>
-              {DEFAULT_EXPENSE_LABELS.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-            <Input type="number" placeholder="Valor" className="w-24 h-8 text-sm" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} />
-            <Button size="sm" className="h-8" onClick={handleAdd} disabled={addExpense.isPending}><Check className="h-3 w-3" /></Button>
-            <Button size="sm" variant="ghost" className="h-8" onClick={() => setShowForm(false)}><X className="h-3 w-3" /></Button>
-          </div>
-        )}
-
-        {data.expenses.length > 0 ? data.expenses.map((exp) => (
-          <div key={exp.id} className="flex items-center justify-between text-sm group">
-            <span className="text-muted-foreground">{exp.label}</span>
-            <div className="flex items-center gap-2">
-              <span className="tabular-nums">{formatCurrency(exp.amount)}</span>
-              <Button variant="ghost" size="sm" className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-destructive" onClick={() => deleteRecord.mutate(exp.id)}>
-                <Trash2 className="h-3 w-3" />
-              </Button>
-            </div>
-          </div>
-        )) : (
-          <p className="text-xs text-muted-foreground text-center py-2">Nenhuma despesa registrada</p>
-        )}
-
-        <div className="flex justify-between text-sm font-medium border-t border-border/50 pt-1">
-          <span className="text-muted-foreground">Total despesas</span>
-          <span className="tabular-nums">{formatCurrency(totalExpenses)}</span>
-        </div>
+      <CardContent className="px-4 pb-3">
+        <ExpenseSpreadsheet data={localData} onChange={handleChange} formatCurrency={formatCurrency} />
       </CardContent>
     </Card>
   );
