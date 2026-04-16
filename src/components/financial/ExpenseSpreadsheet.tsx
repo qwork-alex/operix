@@ -209,7 +209,7 @@ export default function ExpenseSpreadsheet({ data, onChange, formatCurrency, fil
   const [showAddCol, setShowAddCol] = useState(false);
   const [newColName, setNewColName] = useState("");
   
-  const [autoFillPrompt, setAutoFillPrompt] = useState<{ period: string; year: string; startMonth: number } | null>(null);
+  
 
   // Sort rows by period
   const sortedRows = useMemo(() => {
@@ -263,20 +263,6 @@ export default function ExpenseSpreadsheet({ data, onChange, formatCurrency, fil
     onChange({ ...data, rows: [...data.rows, newRow] });
   };
 
-  const autoFillYear = () => {
-    if (!autoFillPrompt) return;
-    const { year, startMonth } = autoFillPrompt;
-    let rows = [...data.rows];
-    for (let m = startMonth; m <= 12; m++) {
-      const p = `${MONTH_LABELS[m - 1]}/${year}`;
-      if (!rows.find((r) => r.period === p)) {
-        rows.push({ id: `row_${Date.now()}_${m}`, period: p, values: {} });
-      }
-    }
-    onChange({ ...data, rows });
-    setAutoFillPrompt(null);
-    toast.success("Períodos preenchidos");
-  };
 
   const removeRow = (rowId: string) => {
     onChange({ ...data, rows: data.rows.filter((r) => r.id !== rowId) });
@@ -292,9 +278,6 @@ export default function ExpenseSpreadsheet({ data, onChange, formatCurrency, fil
 
   return (
     <div className="space-y-3">
-      {/* table */}
-
-      {/* table */}
       {data.rows.length === 0 ? (
         <p className="text-xs text-muted-foreground text-center py-4">
           Adicione um período para começar a registrar despesas
@@ -384,21 +367,6 @@ export default function ExpenseSpreadsheet({ data, onChange, formatCurrency, fil
         </DialogContent>
       </Dialog>
 
-      {/* auto-fill dialog */}
-      <Dialog open={!!autoFillPrompt} onOpenChange={() => { if (autoFillPrompt) { commitAddRow(autoFillPrompt.period); setAutoFillPrompt(null); } }}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader><DialogTitle>Preencher automaticamente?</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground py-2">
-            Deseja preencher automaticamente até Dezembro/{autoFillPrompt?.year}?
-          </p>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => { if (autoFillPrompt) commitAddRow(autoFillPrompt.period); setAutoFillPrompt(null); }}>
-              Não, apenas este mês
-            </Button>
-            <Button onClick={() => autoFillYear()}>Sim, preencher</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
