@@ -588,7 +588,7 @@ function EmptyTechDetail({ techId, techName, onAddPeriod, onRevenueSave }: {
 }
 
 /* ── Year Block ── */
-function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheetChange, onMovementsChange, onRevenueSave, formatCurrency, onDeleteYear, onAddPeriod, onRenameYear }: {
+function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheetChange, onMovementsChange, onRevenueSave, formatCurrency, onDeleteYear, onAddPeriod, onRenameYear, derivedAgg }: {
   block: YearBlockData;
   columns: { id: string; label: string; type: string }[];
   allSpreadsheet: SpreadsheetData;
@@ -600,6 +600,7 @@ function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheet
   onDeleteYear: (year: string) => void;
   onAddPeriod: (period: string, constrainYear?: string) => void;
   onRenameYear: (oldYear: string, newYear: string) => void;
+  derivedAgg?: ParticipantAgg;
 }) {
   const [open, setOpen] = useState(true);
   const [showDeleteYear, setShowDeleteYear] = useState(false);
