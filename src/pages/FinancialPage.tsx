@@ -12,6 +12,7 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { useReconciliationSummary, useRunReconciliation } from "@/hooks/useReconciliation";
 import { useConfrontoPending } from "@/hooks/useConfrontoOSOP";
 import { useNotifications } from "@/hooks/useNotifications";
+import { useParticipantAggregation } from "@/hooks/useParticipantAggregation";
 import FusaoManualTab from "@/components/confronto/FusaoManualTab";
 import PendentesTab from "@/components/confronto/PendentesTab";
 import HistoricoTab from "@/components/confronto/HistoricoTab";
