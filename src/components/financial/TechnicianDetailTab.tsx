@@ -414,6 +414,8 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
                 onMovementsChange={handleMovementsChange}
                 onRevenueSave={handleRevenueSave}
                 formatCurrency={formatCurrency}
+                onDeleteYear={handleDeleteYear}
+                onAddYear={handleAddYear}
               />
             ))}
           </div>
