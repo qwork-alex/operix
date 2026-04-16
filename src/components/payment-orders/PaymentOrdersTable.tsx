@@ -429,17 +429,12 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
             <div className="flex items-center gap-1">
               <span className="text-[10px] text-muted-foreground mr-1">Alterar lote:</span>
               <Button variant="outline" size="sm" className="h-6 text-[10px] px-2 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
-                onClick={() => group.listName && batchStatusMutation.mutate({ listName: group.listName, status: "paid" })}
+                onClick={() => group.listName && batchStatusMutation.mutate({ listName: group.listName, mode: "paid" })}
                 disabled={batchStatusMutation.isPending || !group.listName}>
                 <CheckCircle2 className="h-3 w-3 mr-0.5" /> Pago
               </Button>
-              <Button variant="outline" size="sm" className="h-6 text-[10px] px-2 border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
-                onClick={() => group.listName && batchStatusMutation.mutate({ listName: group.listName, status: "partial" })}
-                disabled={batchStatusMutation.isPending || !group.listName}>
-                Parcial
-              </Button>
               <Button variant="outline" size="sm" className="h-6 text-[10px] px-2 border-red-500/30 text-red-400 hover:bg-red-500/10"
-                onClick={() => group.listName && batchStatusMutation.mutate({ listName: group.listName, status: "pending" })}
+                onClick={() => group.listName && batchStatusMutation.mutate({ listName: group.listName, mode: "pending" })}
                 disabled={batchStatusMutation.isPending || !group.listName}>
                 Pendente
               </Button>
