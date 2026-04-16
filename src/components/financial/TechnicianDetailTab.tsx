@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import ExpenseSpreadsheet, { SpreadsheetData, SpreadsheetRow, getDefaultColumns } from "./ExpenseSpreadsheet";
-import FinancialMovements, { FinancialMovement, getYearFromPeriod } from "./FinancialMovements";
+import FinancialMovements, { FinancialMovement, getYearFromPeriod, normalizePeriod } from "./FinancialMovements";
 
 /* ── hooks ── */
 function useTechnicians() {
@@ -372,8 +372,6 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
   }, [data.id, data.name, localSpreadsheet, localMovements, saveSpreadsheet, saveMovements, upsertRevenue]);
 
   const handleAddPeriod = useCallback((rawPeriod: string) => {
-    // Import normalization from FinancialMovements
-    const { normalizePeriod } = require("./FinancialMovements");
     const normalized = normalizePeriod(rawPeriod);
     if (!normalized) {
       toast.error("Formato inválido. Use: Jan/25, 03/24, etc.");
