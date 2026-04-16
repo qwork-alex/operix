@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import ExpenseSpreadsheet, { SpreadsheetData, SpreadsheetRow, getDefaultColumns } from "./ExpenseSpreadsheet";
-import FinancialMovements, { FinancialMovement, getYearFromPeriod, normalizePeriod } from "./FinancialMovements";
+import FinancialMovements, { FinancialMovement, getYearFromPeriod, normalizePeriod, normalizeMonth } from "./FinancialMovements";
 
 /* ── hooks ── */
 function useTechnicians() {
@@ -371,19 +371,33 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
     toast.success(`Período ${year} removido`);
   }, [data.id, data.name, localSpreadsheet, localMovements, saveSpreadsheet, saveMovements, upsertRevenue]);
 
-  const handleAddPeriod = useCallback((rawPeriod: string, constrainYear?: string) => {
-    const normalized = normalizePeriod(rawPeriod);
-    if (!normalized) {
-      toast.error("Formato inválido. Use: Jan/25, 03/24, etc.");
+  const handleAddPeriod = useCallback((rawInput: string, constrainYear?: string) => {
+    // Accept month-only input, auto-link to year
+    const month = normalizeMonth(rawInput);
+    if (!month) {
+      // Fallback: try full period format
+      const normalized = normalizePeriod(rawInput);
+      if (!normalized) {
+        toast.error("Mês inválido. Use: Jan, Fev, 01, etc.");
+        return;
+      }
+      // Force year suffix
+      const yy = constrainYear ? constrainYear.slice(2) : normalized.split("/")[1];
+      const monthPart = normalized.split("/")[0];
+      const finalPeriod = `${monthPart}/${yy}`;
+      if (localSpreadsheet.rows.some((r) => r.period === finalPeriod)) {
+        toast.error("Período já existe");
+        return;
+      }
+      const newRow: import("./ExpenseSpreadsheet").SpreadsheetRow = { id: `row_${Date.now()}`, period: finalPeriod, values: {} };
+      const newSS = { ...localSpreadsheet, rows: [...localSpreadsheet.rows, newRow] };
+      setLocalSpreadsheet(newSS);
+      saveSpreadsheet.mutate({ techId: data.id, techName: data.name, spreadsheet: newSS });
+      toast.success(`Período ${finalPeriod} criado`);
       return;
     }
-    // If constrained to a year, force the year suffix
-    let finalPeriod = normalized;
-    if (constrainYear) {
-      const yy = constrainYear.slice(2);
-      const monthPart = normalized.split("/")[0];
-      finalPeriod = `${monthPart}/${yy}`;
-    }
+    const yy = constrainYear ? constrainYear.slice(2) : String(new Date().getFullYear()).slice(2);
+    const finalPeriod = `${month}/${yy}`;
     if (localSpreadsheet.rows.some((r) => r.period === finalPeriod)) {
       toast.error("Período já existe");
       return;
@@ -529,16 +543,21 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
 /* ── Empty tech detail — shows when no year blocks exist ── */
 function EmptyTechDetail({ techId, techName, onAddPeriod, onRevenueSave }: {
   techId: string; techName: string;
-  onAddPeriod: (period: string) => void;
+  onAddPeriod: (period: string, constrainYear?: string) => void;
   onRevenueSave: (year: string, type: string, amount: number) => void;
 }) {
-  const currentYear = String(new Date().getFullYear());
-  const [periodInput, setPeriodInput] = useState("");
+  const [yearInput, setYearInput] = useState("");
 
-  const handleCreateYear = () => {
-    onAddPeriod(`Jan/${currentYear.slice(2)}`);
-    onRevenueSave(currentYear, "manual_revenue_expected", 0);
-    onRevenueSave(currentYear, "manual_revenue_received", 0);
+  const handleCreateYear = (year: string) => {
+    const y = year.trim();
+    if (!/^\d{4}$/.test(y)) {
+      toast.error("Ano inválido. Use formato: 2025");
+      return;
+    }
+    onAddPeriod(`Jan/${y.slice(2)}`, y);
+    onRevenueSave(y, "manual_revenue_expected", 0);
+    onRevenueSave(y, "manual_revenue_received", 0);
+    setYearInput("");
   };
 
   return (
@@ -548,21 +567,18 @@ function EmptyTechDetail({ techId, techName, onAddPeriod, onRevenueSave }: {
         <p className="text-sm text-muted-foreground">Nenhum período registado para <strong>{techName}</strong>.</p>
         <div className="flex items-center gap-2">
           <Input
-            className="h-8 w-28 text-xs"
-            placeholder="Ex: Jan/25"
-            value={periodInput}
-            onChange={(e) => setPeriodInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && periodInput.trim()) { onAddPeriod(periodInput.trim()); setPeriodInput(""); } }}
+            className="h-8 w-24 text-xs text-center"
+            placeholder="Ex: 2025"
+            value={yearInput}
+            onChange={(e) => setYearInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && yearInput.trim()) handleCreateYear(yearInput); }}
           />
-          {periodInput.trim() && (
-            <button className="p-1 rounded hover:bg-primary/10 text-primary" onClick={() => { onAddPeriod(periodInput.trim()); setPeriodInput(""); }}>
+          {yearInput.trim() && (
+            <button className="p-1 rounded hover:bg-primary/10 text-primary" onClick={() => handleCreateYear(yearInput)}>
               <Plus className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
-        <Button variant="outline" size="sm" onClick={handleCreateYear}>
-          Criar período {currentYear}
-        </Button>
       </CardContent>
     </Card>
   );
@@ -687,8 +703,8 @@ function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheet
               <h4 className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Despesas</h4>
               <div className="flex items-center gap-2">
                 <Input
-                  className="h-7 w-28 text-xs"
-                  placeholder="Ex: Jan/25"
+                  className="h-7 w-20 text-xs"
+                  placeholder="Ex: Jan"
                   value={newPeriodInput}
                   onChange={(e) => setNewPeriodInput(e.target.value)}
                   onKeyDown={(e) => {
