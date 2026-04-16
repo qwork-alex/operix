@@ -46,7 +46,7 @@ export function useParticipantAggregation() {
       const [soRes, distRes, poRes] = await Promise.all([
         supabase
           .from("service_orders")
-          .select("id, total, group_id, license_plate, week, created_at"),
+          .select("id, total, group_id, license_plate, week, created_at, distribution_snapshot"),
         supabase
           .from("service_order_distributions")
           .select("service_order_id, participant_name, calculated_value, percentage"),
@@ -61,15 +61,42 @@ export function useParticipantAggregation() {
       const distributions = distRes.data ?? [];
       const paymentOrders = poRes.data ?? [];
 
-      // Index distributions by service_order_id
-      const distBySo = new Map<string, { name: string; value: number }[]>();
+      // Index live distributions by service_order_id (fallback only)
+      const liveDistBySo = new Map<string, { name: string; value: number }[]>();
       for (const d of distributions) {
-        const list = distBySo.get(d.service_order_id) ?? [];
+        const list = liveDistBySo.get(d.service_order_id) ?? [];
         list.push({
           name: d.participant_name,
           value: Number(d.calculated_value || 0),
         });
-        distBySo.set(d.service_order_id, list);
+        liveDistBySo.set(d.service_order_id, list);
+      }
+
+      // Resolve final distribution per OS: SNAPSHOT wins, live is fallback only.
+      // The snapshot is immutable — past OS keep their original percentages
+      // even if profit rules are later edited.
+      const distBySo = new Map<string, { name: string; value: number }[]>();
+      for (const so of serviceOrders) {
+        const snap = (so as any).distribution_snapshot as
+          | Array<{ participant_name: string; percentage: number; calculated_value: number }>
+          | null;
+        if (Array.isArray(snap) && snap.length > 0) {
+          const total = Number(so.total || 0);
+          distBySo.set(
+            so.id,
+            snap.map((s) => {
+              // Prefer stored calculated_value; fall back to total × percentage
+              const v =
+                s.calculated_value != null && !Number.isNaN(Number(s.calculated_value))
+                  ? Number(s.calculated_value)
+                  : total * (Number(s.percentage || 0) / 100);
+              return { name: s.participant_name, value: v };
+            }),
+          );
+        } else {
+          const live = liveDistBySo.get(so.id);
+          if (live && live.length > 0) distBySo.set(so.id, live);
+        }
       }
 
       // Helper: normalize plate
