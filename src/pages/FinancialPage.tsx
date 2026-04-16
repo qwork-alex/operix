@@ -173,6 +173,11 @@ export default function FinancialPage() {
                 ⚠ Sem snapshot: {dbg.missingSnapshotCount}
               </span>
             )}
+            {dbg.paymentOrdersUnlinked > 0 && (
+              <span className="font-mono text-amber-500">
+                ⚠ OP sem ligação a OS: {dbg.paymentOrdersUnlinked}
+              </span>
+            )}
             {aggDisconnected && (
               <span className="font-mono text-destructive font-semibold">
                 ⚠ Aggregation not connected to data
