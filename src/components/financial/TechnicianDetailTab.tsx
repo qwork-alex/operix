@@ -196,7 +196,12 @@ function getYearBlocks(data: TechData, columns: { id: string }[]): YearBlockData
   const years = new Set<string>();
   data.spreadsheet.rows.forEach((r) => { const y = getYearFromPeriod(r.period); if (y) years.add(y); });
   data.movements.forEach((m) => { const y = getYearFromPeriod(m.period); if (y) years.add(y); });
-  Object.keys(data.revenueByYear).forEach((y) => { if (y !== "unknown") years.add(y); });
+  Object.keys(data.revenueByYear).forEach((y) => {
+    if (y !== "unknown") {
+      const rev = data.revenueByYear[y];
+      if (rev.expected !== 0 || rev.received !== 0) years.add(y);
+    }
+  });
   if (years.size === 0) years.add(String(new Date().getFullYear()));
 
   return Array.from(years).sort().map((year) => {
