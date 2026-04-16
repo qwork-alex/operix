@@ -119,7 +119,7 @@ function EditableHeader({ label, onChange }: { label: string; onChange: (v: stri
   useEffect(() => { if (editing) ref.current?.focus(); }, [editing]);
 
   if (!editing) {
-    return <span className="cursor-text" onDoubleClick={() => { setDraft(label); setEditing(true); }}>{label}</span>;
+    return <span className="cursor-text" onClick={() => { setDraft(label); setEditing(true); }}>{label}</span>;
   }
   const commit = () => { if (draft.trim()) onChange(draft.trim()); setEditing(false); };
   return (
@@ -342,13 +342,13 @@ export default function ExpenseSpreadsheet({ data, onChange, formatCurrency, fil
               {sortedRows.map((row, rowIdx) => (
                 <React.Fragment key={row.id}>
                   <tr className="border-b border-border/30 hover:bg-muted/20 transition-colors group/row">
-                    <td className="px-3 py-1 text-sm font-medium text-foreground text-left">{row.period}</td>
+                    <td className="px-3 py-1.5 text-sm font-medium text-foreground text-left align-middle">{row.period}</td>
                     {data.columns.map((col) => (
-                      <td key={col.id} className="px-1 py-0.5 text-center">
+                      <td key={col.id} className="px-1 py-0.5 text-center align-middle">
                         <EditableCell value={row.values[col.id] || 0} onChange={(v) => updateCell(row.id, col.id, v)} />
                       </td>
                     ))}
-                    <td className="px-3 py-1 text-center text-sm font-semibold tabular-nums text-foreground">
+                    <td className="px-3 py-1.5 text-center align-middle text-sm font-semibold tabular-nums text-foreground">
                       {formatCurrency(rowTotal(row))}
                     </td>
                     <td className="px-1 py-1">
