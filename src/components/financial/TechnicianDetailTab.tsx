@@ -497,6 +497,7 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
                 onDeleteYear={handleDeleteYear}
                 onAddPeriod={handleAddPeriod}
                 onRenameYear={handleRenameYear}
+                derivedAgg={getParticipantYearAgg(aggregation, data.name, yb.year)}
               />
             ))}
             {/* Add next year button */}
