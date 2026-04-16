@@ -371,22 +371,47 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
     toast.success(`Período ${year} removido`);
   }, [data.id, data.name, localSpreadsheet, localMovements, saveSpreadsheet, saveMovements, upsertRevenue]);
 
-  const handleAddPeriod = useCallback((rawPeriod: string) => {
+  const handleAddPeriod = useCallback((rawPeriod: string, constrainYear?: string) => {
     const normalized = normalizePeriod(rawPeriod);
     if (!normalized) {
       toast.error("Formato inválido. Use: Jan/25, 03/24, etc.");
       return;
     }
-    if (localSpreadsheet.rows.some((r) => r.period === normalized)) {
+    // If constrained to a year, force the year suffix
+    let finalPeriod = normalized;
+    if (constrainYear) {
+      const yy = constrainYear.slice(2);
+      const monthPart = normalized.split("/")[0];
+      finalPeriod = `${monthPart}/${yy}`;
+    }
+    if (localSpreadsheet.rows.some((r) => r.period === finalPeriod)) {
       toast.error("Período já existe");
       return;
     }
-    const newRow: import("./ExpenseSpreadsheet").SpreadsheetRow = { id: `row_${Date.now()}`, period: normalized, values: {} };
+    const newRow: import("./ExpenseSpreadsheet").SpreadsheetRow = { id: `row_${Date.now()}`, period: finalPeriod, values: {} };
     const newSS = { ...localSpreadsheet, rows: [...localSpreadsheet.rows, newRow] };
     setLocalSpreadsheet(newSS);
     saveSpreadsheet.mutate({ techId: data.id, techName: data.name, spreadsheet: newSS });
-    toast.success(`Período ${normalized} criado`);
+    toast.success(`Período ${finalPeriod} criado`);
   }, [localSpreadsheet, data.id, data.name, saveSpreadsheet]);
+
+  const handleAddYear = useCallback(() => {
+    const existingYears = yearBlocks.map((yb) => parseInt(yb.year)).filter((y) => !isNaN(y));
+    const nextYear = existingYears.length > 0 ? Math.max(...existingYears) + 1 : new Date().getFullYear();
+    const yy = String(nextYear).slice(2);
+    const firstPeriod = `Jan/${yy}`;
+    if (localSpreadsheet.rows.some((r) => r.period === firstPeriod)) {
+      toast.error(`Período ${firstPeriod} já existe`);
+      return;
+    }
+    const newRow: import("./ExpenseSpreadsheet").SpreadsheetRow = { id: `row_${Date.now()}`, period: firstPeriod, values: {} };
+    const newSS = { ...localSpreadsheet, rows: [...localSpreadsheet.rows, newRow] };
+    setLocalSpreadsheet(newSS);
+    saveSpreadsheet.mutate({ techId: data.id, techName: data.name, spreadsheet: newSS });
+    upsertRevenue.mutate({ techId: data.id, techName: data.name, type: "manual_revenue_expected", amount: 0, year: String(nextYear) });
+    upsertRevenue.mutate({ techId: data.id, techName: data.name, type: "manual_revenue_received", amount: 0, year: String(nextYear) });
+    toast.success(`Ano ${nextYear} criado`);
+  }, [yearBlocks, localSpreadsheet, data.id, data.name, saveSpreadsheet, upsertRevenue]);
 
   const handleRenameYear = useCallback((oldYear: string, newYear: string) => {
     if (oldYear === newYear) return;
@@ -458,6 +483,22 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
                 onRenameYear={handleRenameYear}
               />
             ))}
+            {/* Add next year button */}
+            {yearBlocks.length > 0 && (
+              <div className="flex justify-center group/addyear">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      className="opacity-0 group-hover/addyear:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-primary/10 border border-transparent hover:border-primary/20"
+                      onClick={handleAddYear}
+                    >
+                      <Plus className="h-4 w-4 text-primary" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Criar próximo ano</TooltipContent>
+                </Tooltip>
+              </div>
+            )}
           </div>
         </CollapsibleContent>
       </Collapsible>
