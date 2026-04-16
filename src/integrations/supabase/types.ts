@@ -1127,6 +1127,7 @@ export type Database = {
           client_name: string
           created_at: string
           created_by: string | null
+          distribution_snapshot: Json | null
           group_id: string | null
           id: string
           license_plate: string | null
@@ -1154,6 +1155,7 @@ export type Database = {
           client_name?: string
           created_at?: string
           created_by?: string | null
+          distribution_snapshot?: Json | null
           group_id?: string | null
           id?: string
           license_plate?: string | null
@@ -1181,6 +1183,7 @@ export type Database = {
           client_name?: string
           created_at?: string
           created_by?: string | null
+          distribution_snapshot?: Json | null
           group_id?: string | null
           id?: string
           license_plate?: string | null
