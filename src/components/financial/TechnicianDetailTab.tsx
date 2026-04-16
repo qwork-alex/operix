@@ -790,14 +790,17 @@ function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheet
 }
 
 /* ── Year Revenue Section ── */
-function YearRevenueSection({ year, expected, received, onSave, formatCurrency }: {
+function YearRevenueSection({ year, expected, received, onSave, formatCurrency, derivedAgg }: {
   year: string; expected: number; received: number;
   onSave: (year: string, type: string, amount: number) => void;
   formatCurrency: (v: number) => string;
+  derivedAgg?: ParticipantAgg;
 }) {
   const [localExpected, setLocalExpected] = useState(String(expected || ""));
   const [localReceived, setLocalReceived] = useState(String(received || ""));
   const difference = (Number(localExpected) || 0) - (Number(localReceived) || 0);
+
+  const hasDerived = derivedAgg && (derivedAgg.expected > 0 || derivedAgg.received > 0);
 
   return (
     <div className="space-y-2">
@@ -823,6 +826,34 @@ function YearRevenueSection({ year, expected, received, onSave, formatCurrency }
             {difference > 0 ? "-" : difference < 0 ? "+" : ""}{formatCurrency(Math.abs(difference))}
           </div>
         </div>
+      </div>
+
+      {hasDerived && (
+        <div className="grid grid-cols-3 gap-3 mt-1 pt-2 border-t border-dashed border-border/40">
+          <DerivedCell label="Esperada (regras)" value={derivedAgg!.expected} formatCurrency={formatCurrency} />
+          <DerivedCell label="Recebida (real)" value={derivedAgg!.received} formatCurrency={formatCurrency} />
+          <DerivedCell
+            label="Diferença"
+            value={derivedAgg!.difference}
+            formatCurrency={formatCurrency}
+            tone={derivedAgg!.difference > 0 ? "negative" : derivedAgg!.difference < 0 ? "positive" : "neutral"}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DerivedCell({ label, value, formatCurrency, tone = "neutral" }: {
+  label: string; value: number; formatCurrency: (v: number) => string;
+  tone?: "positive" | "negative" | "neutral";
+}) {
+  const color = tone === "positive" ? "text-emerald-400" : tone === "negative" ? "text-destructive" : "text-muted-foreground";
+  return (
+    <div className="space-y-0.5">
+      <span className="text-[10px] text-muted-foreground/70 uppercase tracking-wider">{label}</span>
+      <div className={`h-7 flex items-center justify-end px-3 text-xs font-medium tabular-nums rounded-md bg-muted/20 ${color}`}>
+        {formatCurrency(Math.abs(value))}
       </div>
     </div>
   );
