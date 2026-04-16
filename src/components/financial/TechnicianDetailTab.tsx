@@ -579,7 +579,7 @@ function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheet
   onRevenueSave: (year: string, type: string, amount: number) => void;
   formatCurrency: (v: number) => string;
   onDeleteYear: (year: string) => void;
-  onAddPeriod: (period: string) => void;
+  onAddPeriod: (period: string, constrainYear?: string) => void;
   onRenameYear: (oldYear: string, newYear: string) => void;
 }) {
   const [open, setOpen] = useState(true);
