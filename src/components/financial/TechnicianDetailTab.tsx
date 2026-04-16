@@ -202,7 +202,7 @@ function getYearBlocks(data: TechData, columns: { id: string }[]): YearBlockData
       if (rev.expected !== 0 || rev.received !== 0) years.add(y);
     }
   });
-  if (years.size === 0) years.add(String(new Date().getFullYear()));
+  // No auto-generation — if empty, return empty array
 
   return Array.from(years).sort().map((year) => {
     const yy = year.slice(2);
@@ -371,17 +371,43 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
     toast.success(`Período ${year} removido`);
   }, [data.id, data.name, localSpreadsheet, localMovements, saveSpreadsheet, saveMovements, upsertRevenue]);
 
-  const handleAddYear = useCallback(() => {
-    const existingYears = yearBlocks.map((yb) => parseInt(yb.year));
-    const nextYear = existingYears.length > 0 ? Math.max(...existingYears) + 1 : new Date().getFullYear();
-    const yy = String(nextYear).slice(2);
-    // Add Jan row for new year
-    const newRow: import("./ExpenseSpreadsheet").SpreadsheetRow = { id: `row_${Date.now()}`, period: `Jan/${yy}`, values: {} };
+  const handleAddPeriod = useCallback((period: string) => {
+    if (localSpreadsheet.rows.some((r) => r.period === period)) {
+      toast.error("Período já existe");
+      return;
+    }
+    const newRow: import("./ExpenseSpreadsheet").SpreadsheetRow = { id: `row_${Date.now()}`, period, values: {} };
     const newSS = { ...localSpreadsheet, rows: [...localSpreadsheet.rows, newRow] };
     setLocalSpreadsheet(newSS);
     saveSpreadsheet.mutate({ techId: data.id, techName: data.name, spreadsheet: newSS });
-    toast.success(`Período ${nextYear} criado`);
-  }, [yearBlocks, localSpreadsheet, data.id, data.name, saveSpreadsheet]);
+    toast.success(`Período ${period} criado`);
+  }, [localSpreadsheet, data.id, data.name, saveSpreadsheet]);
+
+  const handleRenameYear = useCallback((oldYear: string, newYear: string) => {
+    if (oldYear === newYear) return;
+    const oldYY = oldYear.slice(2);
+    const newYY = newYear.slice(2);
+    const newRows = localSpreadsheet.rows.map((r) =>
+      r.period.endsWith(`/${oldYY}`) ? { ...r, period: r.period.replace(`/${oldYY}`, `/${newYY}`) } : r
+    );
+    const newSS = { ...localSpreadsheet, rows: newRows };
+    setLocalSpreadsheet(newSS);
+    saveSpreadsheet.mutate({ techId: data.id, techName: data.name, spreadsheet: newSS });
+
+    const newMovements = localMovements.map((m) => {
+      const y = getYearFromPeriod(m.period);
+      if (y === oldYear) return { ...m, period: m.period.replace(`/${oldYY}`, `/${newYY}`) };
+      return m;
+    });
+    setLocalMovements(newMovements);
+    saveMovements.mutate({ techId: data.id, techName: data.name, movements: newMovements });
+
+    upsertRevenue.mutate({ techId: data.id, techName: data.name, type: "manual_revenue_expected", amount: data.revenueByYear[oldYear]?.expected || 0, year: newYear });
+    upsertRevenue.mutate({ techId: data.id, techName: data.name, type: "manual_revenue_received", amount: data.revenueByYear[oldYear]?.received || 0, year: newYear });
+    upsertRevenue.mutate({ techId: data.id, techName: data.name, type: "manual_revenue_expected", amount: 0, year: oldYear });
+    upsertRevenue.mutate({ techId: data.id, techName: data.name, type: "manual_revenue_received", amount: 0, year: oldYear });
+    toast.success(`Período renomeado para ${newYear}`);
+  }, [localSpreadsheet, localMovements, data, saveSpreadsheet, saveMovements, upsertRevenue]);
 
   return (
     <>
