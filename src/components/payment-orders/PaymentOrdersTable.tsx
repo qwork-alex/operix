@@ -82,8 +82,16 @@ interface PaymentOrderRow {
   license_plate: string | null;
   services: Json | null;
   total: number | null;
+  amount_paid?: number | null;
   status: string;
   created_at: string;
+}
+
+/** Derive status strictly from amount_paid vs total. */
+function deriveStatus(total: number, amountPaid: number): "pending" | "partial" | "paid" {
+  if (!amountPaid || amountPaid <= 0) return "pending";
+  if (total > 0 && amountPaid >= total) return "paid";
+  return "partial";
 }
 
 const statusStyle: Record<string, string> = {
@@ -166,26 +174,36 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
     pending: "● Pendente",
   };
 
-  const statusMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { error } = await supabase.from("payment_orders").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
+  /** Update amount_paid → derive status server-side write */
+  const paymentMutation = useMutation({
+    mutationFn: async ({ id, amount_paid, total }: { id: string; amount_paid: number; total: number }) => {
+      const status = deriveStatus(total, amount_paid);
+      const { error } = await supabase
+        .from("payment_orders")
+        .update({ amount_paid, status, updated_at: new Date().toISOString() } as any)
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payment_orders"] });
       queryClient.invalidateQueries({ queryKey: ["service_orders"] });
       queryClient.invalidateQueries({ queryKey: ["financial-summary"] });
-      toast.success(t("toast.updated"));
     },
     onError: (err) => toast.error((err as Error).message),
   });
 
+  /** Batch: mark whole list as fully paid / partial reset / pending reset (amount_paid driven) */
   const batchStatusMutation = useMutation({
-    mutationFn: async ({ listName, status }: { listName: string; status: string }) => {
-      const listOrderIds = orders.filter(o => o.list_name === listName).map(o => o.id);
-      if (!listOrderIds.length) return;
-      for (const id of listOrderIds) {
-        const { error } = await supabase.from("payment_orders").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
+    mutationFn: async ({ listName, mode }: { listName: string; mode: "paid" | "pending" }) => {
+      const listOrders = orders.filter(o => o.list_name === listName);
+      for (const o of listOrders) {
+        const total = o.total || 0;
+        const amount_paid = mode === "paid" ? total : 0;
+        const status = deriveStatus(total, amount_paid);
+        const { error } = await supabase
+          .from("payment_orders")
+          .update({ amount_paid, status, updated_at: new Date().toISOString() } as any)
+          .eq("id", o.id);
         if (error) throw error;
       }
     },
@@ -411,17 +429,12 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
             <div className="flex items-center gap-1">
               <span className="text-[10px] text-muted-foreground mr-1">Alterar lote:</span>
               <Button variant="outline" size="sm" className="h-6 text-[10px] px-2 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
-                onClick={() => group.listName && batchStatusMutation.mutate({ listName: group.listName, status: "paid" })}
+                onClick={() => group.listName && batchStatusMutation.mutate({ listName: group.listName, mode: "paid" })}
                 disabled={batchStatusMutation.isPending || !group.listName}>
                 <CheckCircle2 className="h-3 w-3 mr-0.5" /> Pago
               </Button>
-              <Button variant="outline" size="sm" className="h-6 text-[10px] px-2 border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
-                onClick={() => group.listName && batchStatusMutation.mutate({ listName: group.listName, status: "partial" })}
-                disabled={batchStatusMutation.isPending || !group.listName}>
-                Parcial
-              </Button>
               <Button variant="outline" size="sm" className="h-6 text-[10px] px-2 border-red-500/30 text-red-400 hover:bg-red-500/10"
-                onClick={() => group.listName && batchStatusMutation.mutate({ listName: group.listName, status: "pending" })}
+                onClick={() => group.listName && batchStatusMutation.mutate({ listName: group.listName, mode: "pending" })}
                 disabled={batchStatusMutation.isPending || !group.listName}>
                 Pendente
               </Button>
@@ -549,16 +562,15 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
                       ))}
                       <TableCell className="text-right font-medium tabular-nums">{formatCurrency(o.total || 0)}</TableCell>
                       <TableCell>
-                        <Select value={o.status} onValueChange={v => statusMutation.mutate({ id: o.id, status: v })}>
-                          <SelectTrigger className={cn("h-7 w-[110px] text-[10px] border", statusStyle[o.status] || statusStyle.pending)}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="pending">Pendente</SelectItem>
-                            <SelectItem value="partial">Parcial</SelectItem>
-                            <SelectItem value="paid">Pago</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <PaymentStatusCell
+                          orderId={o.id}
+                          total={o.total || 0}
+                          amountPaid={Number(o.amount_paid) || 0}
+                          derivedStatus={deriveStatus(o.total || 0, Number(o.amount_paid) || 0)}
+                          formatCurrency={formatCurrency}
+                          onSubmit={(amount_paid) => paymentMutation.mutate({ id: o.id, amount_paid, total: o.total || 0 })}
+                          isPending={paymentMutation.isPending}
+                        />
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1">
@@ -616,5 +628,92 @@ function EditServiceCellPair({ service, onNameChange, onPriceChange }: {
           value={service.price || ""} placeholder="0" onChange={e => onPriceChange(Number(e.target.value) || 0)} />
       </TableCell>
     </>
+  );
+}
+
+/** Status cell driven by amount_paid. Shows badge + inline editable Amount Paid input. */
+function PaymentStatusCell({
+  total,
+  amountPaid,
+  derivedStatus,
+  formatCurrency,
+  onSubmit,
+  isPending,
+}: {
+  orderId: string;
+  total: number;
+  amountPaid: number;
+  derivedStatus: "pending" | "partial" | "paid";
+  formatCurrency: (n: number) => string;
+  onSubmit: (amountPaid: number) => void;
+  isPending: boolean;
+}) {
+  const [draft, setDraft] = useState<string>(amountPaid ? String(amountPaid) : "");
+  const [open, setOpen] = useState(false);
+  const remaining = Math.max(0, total - amountPaid);
+
+  const commit = () => {
+    const v = Math.max(0, Number(draft) || 0);
+    if (v !== amountPaid) onSubmit(v);
+    setOpen(false);
+  };
+
+  const quickPaid = () => {
+    setDraft(String(total));
+    if (total !== amountPaid) onSubmit(total);
+    setOpen(false);
+  };
+  const quickReset = () => {
+    setDraft("0");
+    if (amountPaid !== 0) onSubmit(0);
+    setOpen(false);
+  };
+
+  return (
+    <div className="flex flex-col gap-1 min-w-[140px]">
+      <div className="flex items-center gap-1">
+        <Badge
+          variant="outline"
+          className={cn("cursor-pointer text-[10px]", statusStyle[derivedStatus])}
+          onClick={() => setOpen(o => !o)}
+        >
+          {derivedStatus === "paid" ? "✓ Pago" : derivedStatus === "partial" ? "◐ Parcial" : "● Pendente"}
+        </Badge>
+        {isPending && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+      </div>
+
+      {(open || derivedStatus === "partial") && (
+        <div className="flex flex-col gap-1 rounded-md border border-border/50 bg-background/50 p-1.5">
+          <div className="flex items-center gap-1">
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              max={total}
+              value={draft}
+              onChange={e => setDraft(e.target.value)}
+              onBlur={commit}
+              onKeyDown={e => { if (e.key === "Enter") commit(); }}
+              placeholder="Valor pago"
+              className="h-6 text-[10px] px-1 tabular-nums"
+            />
+          </div>
+          <div className="flex items-center justify-between text-[10px] tabular-nums">
+            <span className="text-emerald-400">Pago: {formatCurrency(amountPaid)}</span>
+            <span className={cn(remaining > 0 ? "text-amber-400" : "text-muted-foreground")}>
+              Resta: {formatCurrency(remaining)}
+            </span>
+          </div>
+          <div className="flex gap-1">
+            <Button size="sm" variant="ghost" className="h-5 text-[9px] px-1 flex-1" onClick={quickPaid}>
+              Total
+            </Button>
+            <Button size="sm" variant="ghost" className="h-5 text-[9px] px-1 flex-1" onClick={quickReset}>
+              Zerar
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

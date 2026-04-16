@@ -790,6 +790,7 @@ export type Database = {
       }
       payment_orders: {
         Row: {
+          amount_paid: number
           car_name: string | null
           client_id: string | null
           client_name: string | null
@@ -809,6 +810,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          amount_paid?: number
           car_name?: string | null
           client_id?: string | null
           client_name?: string | null
@@ -828,6 +830,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          amount_paid?: number
           car_name?: string | null
           client_id?: string | null
           client_name?: string | null
