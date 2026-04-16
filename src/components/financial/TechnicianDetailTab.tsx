@@ -331,6 +331,7 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
   const saveMovements = useSaveMovements();
   const upsertRevenue = useUpsertRevenue();
   const deleteTechFin = useDeleteTechFinancials();
+  const { data: aggregation } = useParticipantAggregation();
 
   const yearBlocks = useMemo(() => getYearBlocks(
     { ...data, spreadsheet: localSpreadsheet, movements: localMovements },
