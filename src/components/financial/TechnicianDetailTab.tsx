@@ -494,6 +494,9 @@ function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheet
   const [open, setOpen] = useState(true);
   const [showDeleteYear, setShowDeleteYear] = useState(false);
   const [showDeleteMovements, setShowDeleteMovements] = useState(false);
+  const [editingYear, setEditingYear] = useState(false);
+  const [yearDraft, setYearDraft] = useState(block.year);
+  const [newPeriodInput, setNewPeriodInput] = useState("");
   const isPositive = block.result >= 0;
   const yearSuffix = block.year.slice(2);
 
@@ -518,16 +521,23 @@ function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheet
               <div className="flex items-center gap-2">
                 {open ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                 <Calendar className="h-4 w-4 text-primary" />
-                <CardTitle className="text-sm font-semibold">{block.year}</CardTitle>
+                {editingYear ? (
+                  <Input
+                    className="h-6 w-20 text-sm font-semibold text-center"
+                    value={yearDraft}
+                    autoFocus
+                    onChange={(e) => setYearDraft(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    onBlur={() => { onRenameYear(block.year, yearDraft.trim()); setEditingYear(false); }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { onRenameYear(block.year, yearDraft.trim()); setEditingYear(false); }
+                      if (e.key === "Escape") { setYearDraft(block.year); setEditingYear(false); }
+                    }}
+                  />
+                ) : (
+                  <CardTitle className="text-sm font-semibold cursor-text" onClick={(e) => { e.stopPropagation(); setYearDraft(block.year); setEditingYear(true); }}>{block.year}</CardTitle>
+                )}
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button className="p-1 rounded hover:bg-primary/10" onClick={(e) => { e.stopPropagation(); onAddYear(); }}>
-                        <Plus className="h-3.5 w-3.5 text-primary" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>Criar novo período</TooltipContent>
-                  </Tooltip>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button className="p-1 rounded hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); setShowDeleteYear(true); }}>
