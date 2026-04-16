@@ -257,18 +257,6 @@ export default function ExpenseSpreadsheet({ data, onChange, formatCurrency, fil
     onChange({ ...data, columns: data.columns.map((c) => c.id === colId ? { ...c, label } : c) });
   };
 
-  const addPeriod = () => {
-    const norm = normalizePeriod(periodDraft);
-    if (!norm) { toast.error("Formato inválido. Use: Jan/25, 01/2025 ou janeiro 2025"); return; }
-    if (data.rows.some((r) => r.period === norm)) { toast.error("Período já existe"); return; }
-    const parsed = parseNormalized(norm);
-    if (parsed && parsed.month < 12) {
-      setAutoFillPrompt({ period: norm, year: parsed.year, startMonth: parsed.month });
-    } else {
-      commitAddRow(norm);
-    }
-    setPeriodDraft("");
-  };
 
   const commitAddRow = (period: string) => {
     const newRow: SpreadsheetRow = { id: `row_${Date.now()}`, period, values: {} };
