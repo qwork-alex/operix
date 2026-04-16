@@ -594,6 +594,28 @@ function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheet
 
             <div className="space-y-2">
               <h4 className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Despesas</h4>
+              <div className="flex items-center gap-2">
+                <Input
+                  className="h-7 w-28 text-xs"
+                  placeholder="Ex: Jan/25"
+                  value={newPeriodInput}
+                  onChange={(e) => setNewPeriodInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && newPeriodInput.trim()) {
+                      onAddPeriod(newPeriodInput.trim());
+                      setNewPeriodInput("");
+                    }
+                  }}
+                />
+                {newPeriodInput.trim() && (
+                  <button
+                    className="p-1 rounded hover:bg-primary/10 text-primary"
+                    onClick={() => { onAddPeriod(newPeriodInput.trim()); setNewPeriodInput(""); }}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
               <ExpenseSpreadsheet data={allSpreadsheet} onChange={onSpreadsheetChange} formatCurrency={formatCurrency} filterYear={yearSuffix} />
             </div>
 
