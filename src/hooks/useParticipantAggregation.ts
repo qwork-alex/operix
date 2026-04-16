@@ -32,6 +32,14 @@ export interface ParticipantAggregation {
   byParticipantYearMonth: Record<string, Record<string, Record<string, ParticipantAgg>>>;
   // year → month(YYYY-MM) → name → agg
   totals: { expected: number; received: number; difference: number };
+  debug: {
+    serviceOrdersUsed: number;
+    serviceOrdersTotal: number;
+    paymentOrdersUsed: number;
+    paymentOrdersTotal: number;
+    missingSnapshotCount: number;
+    missingSnapshotIds: string[];
+  };
 }
 
 function emptyAgg(name: string): ParticipantAgg {
