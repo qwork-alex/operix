@@ -174,7 +174,7 @@ export default function FinancialPage() {
               </span>
             )}
             {dbg.paymentOrdersUnlinked > 0 && (
-              <span className="font-mono text-amber-500">
+              <span className="font-mono text-warning">
                 ⚠ OP sem ligação a OS: {dbg.paymentOrdersUnlinked}
               </span>
             )}
