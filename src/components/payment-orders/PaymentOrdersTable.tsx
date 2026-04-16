@@ -82,8 +82,16 @@ interface PaymentOrderRow {
   license_plate: string | null;
   services: Json | null;
   total: number | null;
+  amount_paid?: number | null;
   status: string;
   created_at: string;
+}
+
+/** Derive status strictly from amount_paid vs total. */
+function deriveStatus(total: number, amountPaid: number): "pending" | "partial" | "paid" {
+  if (!amountPaid || amountPaid <= 0) return "pending";
+  if (total > 0 && amountPaid >= total) return "paid";
+  return "partial";
 }
 
 const statusStyle: Record<string, string> = {
