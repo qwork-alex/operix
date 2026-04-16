@@ -169,7 +169,7 @@ export default function FinancialPage() {
               OP usadas: <span className="text-foreground font-semibold">{dbg.paymentOrdersUsed}</span> / {dbg.paymentOrdersTotal}
             </span>
             {dbg.missingSnapshotCount > 0 && (
-              <span className="font-mono text-amber-500">
+              <span className="font-mono text-destructive">
                 ⚠ Sem snapshot: {dbg.missingSnapshotCount}
               </span>
             )}
