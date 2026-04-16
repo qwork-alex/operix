@@ -45,25 +45,25 @@ export default function FinancialPage() {
     serviceOrderCount: 0, paymentOrderCount: 0, activeDiscrepancies: 0,
   };
 
-  // Override revenue KPIs with distribution-driven aggregation when available
-  const s = (() => {
-    if (!aggregation || aggregation.totals.expected === 0) return baseSummary;
-    const expectedRevenue = aggregation.totals.expected;
-    const receivedRevenue = aggregation.totals.received;
-    const totalDifference = expectedRevenue - receivedRevenue;
-    const discrepancyPct = expectedRevenue > 0
-      ? Math.round((Math.abs(totalDifference) / expectedRevenue) * 1000) / 10
-      : 0;
-    return {
-      ...baseSummary,
-      expectedRevenue,
-      receivedRevenue,
-      totalDifference,
-      discrepancyPct,
-      profit: receivedRevenue - baseSummary.expenses,
-    };
-  })();
+  // HARD BIND: Financial UI is driven EXCLUSIVELY by the snapshot-based
+  // aggregation engine. No fallback to legacy reconciliation totals.
+  const expectedRevenue = aggregation?.totals.expected ?? 0;
+  const receivedRevenue = aggregation?.totals.received ?? 0;
+  const totalDifference = expectedRevenue - receivedRevenue;
+  const discrepancyPct = expectedRevenue > 0
+    ? Math.round((Math.abs(totalDifference) / expectedRevenue) * 1000) / 10
+    : 0;
+  const s = {
+    ...baseSummary,
+    expectedRevenue,
+    receivedRevenue,
+    totalDifference,
+    discrepancyPct,
+    profit: receivedRevenue - baseSummary.expenses,
+  };
 
+  const dbg = aggregation?.debug;
+  const aggDisconnected = !!dbg && dbg.serviceOrdersUsed === 0 && dbg.serviceOrdersTotal > 0;
   const hasNoData = s.serviceOrderCount === 0 && s.paymentOrderCount === 0;
 
   if (isLoading) {
