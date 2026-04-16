@@ -303,20 +303,7 @@ export default function ExpenseSpreadsheet({ data, onChange, formatCurrency, fil
 
   return (
     <div className="space-y-3">
-      {/* toolbar */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <Input placeholder="Período: jan/25, 01/2025..."
-          className="h-8 w-48 text-sm" value={periodDraft}
-          onChange={(e) => setPeriodDraft(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && addPeriod()}
-        />
-        <Button size="sm" variant="outline" className="h-8 text-xs" onClick={addPeriod}>
-          <Plus className="h-3 w-3 mr-1" /> Adicionar período
-        </Button>
-        <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setShowAddCol(true)}>
-          <Plus className="h-3 w-3 mr-1" /> Coluna
-        </Button>
-      </div>
+      {/* table */}
 
       {/* table */}
       {data.rows.length === 0 ? (
@@ -335,7 +322,19 @@ export default function ExpenseSpreadsheet({ data, onChange, formatCurrency, fil
                   />
                 ))}
                 <th className="px-3 py-2 text-center text-xs font-semibold text-foreground w-28">Total</th>
-                <th className="w-8" />
+                <th className="w-8 group/addcol relative">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        className="opacity-0 group-hover/addcol:opacity-100 hover:opacity-100 transition-opacity p-1 rounded hover:bg-primary/10"
+                        onClick={() => setShowAddCol(true)}
+                      >
+                        <Plus className="h-3 w-3 text-primary" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>Adicionar coluna</TooltipContent>
+                  </Tooltip>
+                </th>
               </tr>
             </thead>
             <tbody>
