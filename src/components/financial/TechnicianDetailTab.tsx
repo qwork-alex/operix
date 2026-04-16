@@ -415,7 +415,7 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
 }
 
 /* ── Year Block ── */
-function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheetChange, onMovementsChange, onRevenueSave, formatCurrency }: {
+function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheetChange, onMovementsChange, onRevenueSave, formatCurrency, onDeleteYear, onAddYear }: {
   block: YearBlockData;
   columns: { id: string; label: string; type: string }[];
   allSpreadsheet: SpreadsheetData;
@@ -424,8 +424,12 @@ function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheet
   onMovementsChange: (d: FinancialMovement[]) => void;
   onRevenueSave: (year: string, type: string, amount: number) => void;
   formatCurrency: (v: number) => string;
+  onDeleteYear: (year: string) => void;
+  onAddYear: () => void;
 }) {
   const [open, setOpen] = useState(true);
+  const [showDeleteYear, setShowDeleteYear] = useState(false);
+  const [showDeleteMovements, setShowDeleteMovements] = useState(false);
   const isPositive = block.result >= 0;
   const yearSuffix = block.year.slice(2);
 
@@ -434,16 +438,41 @@ function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheet
     onMovementsChange([...otherMovements, ...yearMovements]);
   }, [allMovements, block.year, onMovementsChange]);
 
+  const handleDeleteAllMovements = () => {
+    const otherMovements = allMovements.filter((m) => getYearFromPeriod(m.period) !== block.year);
+    onMovementsChange(otherMovements);
+    setShowDeleteMovements(false);
+    toast.success("Movimentações removidas");
+  };
+
   return (
     <Card className="border-border/50 overflow-hidden">
       <Collapsible open={open} onOpenChange={setOpen}>
         <CollapsibleTrigger asChild>
-          <CardHeader className="py-3 px-4 cursor-pointer hover:bg-muted/30 transition-colors">
+          <CardHeader className="py-3 px-4 cursor-pointer hover:bg-muted/30 transition-colors group">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 {open ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                 <Calendar className="h-4 w-4 text-primary" />
                 <CardTitle className="text-sm font-semibold">{block.year}</CardTitle>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button className="p-1 rounded hover:bg-primary/10" onClick={(e) => { e.stopPropagation(); onAddYear(); }}>
+                        <Plus className="h-3.5 w-3.5 text-primary" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>Criar novo período</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button className="p-1 rounded hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); setShowDeleteYear(true); }}>
+                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive transition-colors" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>Excluir período</TooltipContent>
+                  </Tooltip>
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 {isPositive ? <TrendingUp className="h-4 w-4 text-emerald-400" /> : <TrendingDown className="h-4 w-4 text-destructive" />}
@@ -459,7 +488,33 @@ function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheet
             <YearRevenueSection year={block.year} expected={block.revenueExpected} received={block.revenueReceived} onSave={onRevenueSave} formatCurrency={formatCurrency} />
 
             <div className="space-y-2">
-              <h4 className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Movimentações</h4>
+              <div className="flex items-center gap-2 group/movheader">
+                <h4 className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Movimentações</h4>
+                <div className="flex items-center gap-1 opacity-0 group-hover/movheader:opacity-100 transition-opacity">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button className="p-0.5 rounded hover:bg-primary/10" onClick={() => {
+                        const newMov: FinancialMovement = {
+                          id: `mov_${Date.now()}`, period: `Jan/${yearSuffix}`, type: "loan",
+                          origin: "", amount: 0, paidAmount: 0, status: "pending",
+                        };
+                        handleYearMovementsChange([...block.yearMovements, newMov]);
+                      }}>
+                        <Plus className="h-3.5 w-3.5 text-primary" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>Adicionar movimentação</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button className="p-0.5 rounded hover:bg-destructive/10" onClick={() => setShowDeleteMovements(true)}>
+                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive transition-colors" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>Excluir movimentações</TooltipContent>
+                  </Tooltip>
+                </div>
+              </div>
               <FinancialMovements movements={block.yearMovements} onChange={handleYearMovementsChange} formatCurrency={formatCurrency} />
             </div>
 
@@ -487,6 +542,42 @@ function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheet
           </CardContent>
         </CollapsibleContent>
       </Collapsible>
+
+      {/* Delete year confirm */}
+      <AlertDialog open={showDeleteYear} onOpenChange={setShowDeleteYear}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Tem certeza que deseja excluir?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Todos os dados do período <strong>{block.year}</strong> (receitas, despesas e movimentações) serão removidos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Não</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => onDeleteYear(block.year)}>
+              Sim
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete movements confirm */}
+      <AlertDialog open={showDeleteMovements} onOpenChange={setShowDeleteMovements}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Tem certeza que deseja excluir?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Todas as movimentações de <strong>{block.year}</strong> serão removidas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Não</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={handleDeleteAllMovements}>
+              Sim
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
