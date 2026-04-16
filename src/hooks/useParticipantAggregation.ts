@@ -37,6 +37,7 @@ export interface ParticipantAggregation {
     serviceOrdersTotal: number;
     paymentOrdersUsed: number;
     paymentOrdersTotal: number;
+    paymentOrdersUnlinked: number;
     missingSnapshotCount: number;
     missingSnapshotIds: string[];
   };
@@ -112,22 +113,11 @@ export function useParticipantAggregation() {
       const normPlate = (p?: string | null) =>
         (p || "").replace(/[\s\-]/g, "").toUpperCase();
 
-      // For each SO, find linked POs and compute aggregated received_ratio
-      // received_ratio_so = Σ amount_paid / Σ total of linked POs (capped at 1)
+      // STRICT MODE: only POs explicitly linked via service_order_id contribute.
+      // Unlinked POs are ignored and surfaced as a warning in debug.
       const ratioBySo = new Map<string, number>();
       for (const so of serviceOrders) {
-        const linkedPOs = paymentOrders.filter((po) => {
-          if (po.service_order_id === so.id) return true;
-          if (so.group_id && po.group_id && so.group_id === po.group_id) return true;
-          if (
-            so.week &&
-            po.list_name === so.week &&
-            normPlate(so.license_plate) &&
-            normPlate(po.license_plate) === normPlate(so.license_plate)
-          )
-            return true;
-          return false;
-        });
+        const linkedPOs = paymentOrders.filter((po) => po.service_order_id === so.id);
 
         if (linkedPOs.length === 0) {
           ratioBySo.set(so.id, 0);
@@ -145,7 +135,7 @@ export function useParticipantAggregation() {
 
         let ratio = 0;
         if (sumTotal > 0) ratio = Math.min(1, sumPaid / sumTotal);
-        else if (sumPaid > 0) ratio = 1; // total=0 but paid → fully paid
+        else if (sumPaid > 0) ratio = 1;
         ratioBySo.set(so.id, ratio);
       }
 
@@ -192,19 +182,11 @@ export function useParticipantAggregation() {
       const serviceOrdersUsed = Array.from(distBySo.values()).filter(
         (v) => v.length > 0,
       ).length;
-      const paymentOrdersUsed = paymentOrders.filter((po) =>
-        serviceOrders.some((so) => {
-          if (po.service_order_id === so.id) return true;
-          if (so.group_id && po.group_id && so.group_id === po.group_id) return true;
-          if (
-            so.week &&
-            po.list_name === so.week &&
-            normPlate(so.license_plate) &&
-            normPlate(po.license_plate) === normPlate(so.license_plate)
-          )
-            return true;
-          return false;
-        }),
+      const paymentOrdersUsed = paymentOrders.filter(
+        (po) => po.service_order_id && serviceOrders.some((so) => so.id === po.service_order_id),
+      ).length;
+      const paymentOrdersUnlinked = paymentOrders.filter(
+        (po) => !po.service_order_id,
       ).length;
 
       return {
@@ -216,6 +198,7 @@ export function useParticipantAggregation() {
           serviceOrdersTotal: serviceOrders.length,
           paymentOrdersUsed,
           paymentOrdersTotal: paymentOrders.length,
+          paymentOrdersUnlinked,
           missingSnapshotCount: missingSnapshotIds.length,
           missingSnapshotIds,
         },
