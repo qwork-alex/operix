@@ -20,6 +20,7 @@ import {
 import { toast } from "sonner";
 import ExpenseSpreadsheet, { SpreadsheetData, SpreadsheetRow, getDefaultColumns } from "./ExpenseSpreadsheet";
 import FinancialMovements, { FinancialMovement, getYearFromPeriod, normalizePeriod, normalizeMonth } from "./FinancialMovements";
+import { useParticipantAggregation, getParticipantYearAgg, type ParticipantAgg } from "@/hooks/useParticipantAggregation";
 
 /* ── hooks ── */
 function useTechnicians() {
@@ -330,6 +331,7 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
   const saveMovements = useSaveMovements();
   const upsertRevenue = useUpsertRevenue();
   const deleteTechFin = useDeleteTechFinancials();
+  const { data: aggregation } = useParticipantAggregation();
 
   const yearBlocks = useMemo(() => getYearBlocks(
     { ...data, spreadsheet: localSpreadsheet, movements: localMovements },
@@ -495,6 +497,7 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
                 onDeleteYear={handleDeleteYear}
                 onAddPeriod={handleAddPeriod}
                 onRenameYear={handleRenameYear}
+                derivedAgg={getParticipantYearAgg(aggregation, data.name, yb.year)}
               />
             ))}
             {/* Add next year button */}
@@ -585,7 +588,7 @@ function EmptyTechDetail({ techId, techName, onAddPeriod, onRevenueSave }: {
 }
 
 /* ── Year Block ── */
-function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheetChange, onMovementsChange, onRevenueSave, formatCurrency, onDeleteYear, onAddPeriod, onRenameYear }: {
+function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheetChange, onMovementsChange, onRevenueSave, formatCurrency, onDeleteYear, onAddPeriod, onRenameYear, derivedAgg }: {
   block: YearBlockData;
   columns: { id: string; label: string; type: string }[];
   allSpreadsheet: SpreadsheetData;
@@ -597,6 +600,7 @@ function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheet
   onDeleteYear: (year: string) => void;
   onAddPeriod: (period: string, constrainYear?: string) => void;
   onRenameYear: (oldYear: string, newYear: string) => void;
+  derivedAgg?: ParticipantAgg;
 }) {
   const [open, setOpen] = useState(true);
   const [showDeleteYear, setShowDeleteYear] = useState(false);
@@ -666,7 +670,7 @@ function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheet
         </CollapsibleTrigger>
         <CollapsibleContent>
           <CardContent className="px-4 pb-4 space-y-5">
-            <YearRevenueSection year={block.year} expected={block.revenueExpected} received={block.revenueReceived} onSave={onRevenueSave} formatCurrency={formatCurrency} />
+            <YearRevenueSection year={block.year} expected={block.revenueExpected} received={block.revenueReceived} onSave={onRevenueSave} formatCurrency={formatCurrency} derivedAgg={derivedAgg} />
 
             <div className="space-y-2">
               <div className="flex items-center gap-2 group/movheader">
@@ -786,14 +790,17 @@ function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheet
 }
 
 /* ── Year Revenue Section ── */
-function YearRevenueSection({ year, expected, received, onSave, formatCurrency }: {
+function YearRevenueSection({ year, expected, received, onSave, formatCurrency, derivedAgg }: {
   year: string; expected: number; received: number;
   onSave: (year: string, type: string, amount: number) => void;
   formatCurrency: (v: number) => string;
+  derivedAgg?: ParticipantAgg;
 }) {
   const [localExpected, setLocalExpected] = useState(String(expected || ""));
   const [localReceived, setLocalReceived] = useState(String(received || ""));
   const difference = (Number(localExpected) || 0) - (Number(localReceived) || 0);
+
+  const hasDerived = derivedAgg && (derivedAgg.expected > 0 || derivedAgg.received > 0);
 
   return (
     <div className="space-y-2">
@@ -819,6 +826,34 @@ function YearRevenueSection({ year, expected, received, onSave, formatCurrency }
             {difference > 0 ? "-" : difference < 0 ? "+" : ""}{formatCurrency(Math.abs(difference))}
           </div>
         </div>
+      </div>
+
+      {hasDerived && (
+        <div className="grid grid-cols-3 gap-3 mt-1 pt-2 border-t border-dashed border-border/40">
+          <DerivedCell label="Esperada (regras)" value={derivedAgg!.expected} formatCurrency={formatCurrency} />
+          <DerivedCell label="Recebida (real)" value={derivedAgg!.received} formatCurrency={formatCurrency} />
+          <DerivedCell
+            label="Diferença"
+            value={derivedAgg!.difference}
+            formatCurrency={formatCurrency}
+            tone={derivedAgg!.difference > 0 ? "negative" : derivedAgg!.difference < 0 ? "positive" : "neutral"}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DerivedCell({ label, value, formatCurrency, tone = "neutral" }: {
+  label: string; value: number; formatCurrency: (v: number) => string;
+  tone?: "positive" | "negative" | "neutral";
+}) {
+  const color = tone === "positive" ? "text-emerald-400" : tone === "negative" ? "text-destructive" : "text-muted-foreground";
+  return (
+    <div className="space-y-0.5">
+      <span className="text-[10px] text-muted-foreground/70 uppercase tracking-wider">{label}</span>
+      <div className={`h-7 flex items-center justify-end px-3 text-xs font-medium tabular-nums rounded-md bg-muted/20 ${color}`}>
+        {formatCurrency(Math.abs(value))}
       </div>
     </div>
   );

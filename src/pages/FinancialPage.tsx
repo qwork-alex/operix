@@ -12,6 +12,7 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { useReconciliationSummary, useRunReconciliation } from "@/hooks/useReconciliation";
 import { useConfrontoPending } from "@/hooks/useConfrontoOSOP";
 import { useNotifications } from "@/hooks/useNotifications";
+import { useParticipantAggregation } from "@/hooks/useParticipantAggregation";
 import FusaoManualTab from "@/components/confronto/FusaoManualTab";
 import PendentesTab from "@/components/confronto/PendentesTab";
 import HistoricoTab from "@/components/confronto/HistoricoTab";
@@ -24,6 +25,7 @@ export default function FinancialPage() {
   const { data: summary, isLoading: summaryLoading } = useReconciliationSummary();
   const { data: pendingItems = [] } = useConfrontoPending();
   const { notifications, markAsRead } = useNotifications();
+  const { data: aggregation } = useParticipantAggregation();
   const runMutation = useRunReconciliation();
   const [confrontoTab, setConfrontoTab] = useState("fusao");
   const [mainTab, setMainTab] = useState("overview");
@@ -36,12 +38,31 @@ export default function FinancialPage() {
   const hasAlerts = financialAlerts.length > 0;
 
   const isLoading = summaryLoading;
-  const s = summary ?? {
+  const baseSummary = summary ?? {
     expectedRevenue: 0, receivedRevenue: 0, totalDifference: 0, discrepancyPct: 0,
     matched: 0, mismatched: 0, missing: 0, pending: 0, expenses: 0, profit: 0,
     monthly: [], byClient: [], byTechnician: [], byPlatform: [], alerts: [],
     serviceOrderCount: 0, paymentOrderCount: 0, activeDiscrepancies: 0,
   };
+
+  // Override revenue KPIs with distribution-driven aggregation when available
+  const s = (() => {
+    if (!aggregation || aggregation.totals.expected === 0) return baseSummary;
+    const expectedRevenue = aggregation.totals.expected;
+    const receivedRevenue = aggregation.totals.received;
+    const totalDifference = expectedRevenue - receivedRevenue;
+    const discrepancyPct = expectedRevenue > 0
+      ? Math.round((Math.abs(totalDifference) / expectedRevenue) * 1000) / 10
+      : 0;
+    return {
+      ...baseSummary,
+      expectedRevenue,
+      receivedRevenue,
+      totalDifference,
+      discrepancyPct,
+      profit: receivedRevenue - baseSummary.expenses,
+    };
+  })();
 
   const hasNoData = s.serviceOrderCount === 0 && s.paymentOrderCount === 0;
 
