@@ -45,25 +45,25 @@ export default function FinancialPage() {
     serviceOrderCount: 0, paymentOrderCount: 0, activeDiscrepancies: 0,
   };
 
-  // Override revenue KPIs with distribution-driven aggregation when available
-  const s = (() => {
-    if (!aggregation || aggregation.totals.expected === 0) return baseSummary;
-    const expectedRevenue = aggregation.totals.expected;
-    const receivedRevenue = aggregation.totals.received;
-    const totalDifference = expectedRevenue - receivedRevenue;
-    const discrepancyPct = expectedRevenue > 0
-      ? Math.round((Math.abs(totalDifference) / expectedRevenue) * 1000) / 10
-      : 0;
-    return {
-      ...baseSummary,
-      expectedRevenue,
-      receivedRevenue,
-      totalDifference,
-      discrepancyPct,
-      profit: receivedRevenue - baseSummary.expenses,
-    };
-  })();
+  // HARD BIND: Financial UI is driven EXCLUSIVELY by the snapshot-based
+  // aggregation engine. No fallback to legacy reconciliation totals.
+  const expectedRevenue = aggregation?.totals.expected ?? 0;
+  const receivedRevenue = aggregation?.totals.received ?? 0;
+  const totalDifference = expectedRevenue - receivedRevenue;
+  const discrepancyPct = expectedRevenue > 0
+    ? Math.round((Math.abs(totalDifference) / expectedRevenue) * 1000) / 10
+    : 0;
+  const s = {
+    ...baseSummary,
+    expectedRevenue,
+    receivedRevenue,
+    totalDifference,
+    discrepancyPct,
+    profit: receivedRevenue - baseSummary.expenses,
+  };
 
+  const dbg = aggregation?.debug;
+  const aggDisconnected = !!dbg && dbg.serviceOrdersUsed === 0 && dbg.serviceOrdersTotal > 0;
   const hasNoData = s.serviceOrderCount === 0 && s.paymentOrderCount === 0;
 
   if (isLoading) {
@@ -157,6 +157,30 @@ export default function FinancialPage() {
           </Tooltip>
         </div>
       </div>
+
+      {/* Aggregation engine debug strip */}
+      {dbg && (
+        <Card className={`border ${aggDisconnected ? "border-destructive/40 bg-destructive/5" : "border-border/40 bg-muted/20"}`}>
+          <CardContent className="flex flex-wrap items-center gap-x-4 gap-y-1 py-2 px-3 text-[11px]">
+            <span className="font-mono text-muted-foreground">
+              SO usadas: <span className="text-foreground font-semibold">{dbg.serviceOrdersUsed}</span> / {dbg.serviceOrdersTotal}
+            </span>
+            <span className="font-mono text-muted-foreground">
+              OP usadas: <span className="text-foreground font-semibold">{dbg.paymentOrdersUsed}</span> / {dbg.paymentOrdersTotal}
+            </span>
+            {dbg.missingSnapshotCount > 0 && (
+              <span className="font-mono text-destructive">
+                ⚠ Sem snapshot: {dbg.missingSnapshotCount}
+              </span>
+            )}
+            {aggDisconnected && (
+              <span className="font-mono text-destructive font-semibold">
+                ⚠ Aggregation not connected to data
+              </span>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* No-data empty state */}
       {hasNoData && (

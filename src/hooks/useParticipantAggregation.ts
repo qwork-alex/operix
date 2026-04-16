@@ -32,6 +32,14 @@ export interface ParticipantAggregation {
   byParticipantYearMonth: Record<string, Record<string, Record<string, ParticipantAgg>>>;
   // year → month(YYYY-MM) → name → agg
   totals: { expected: number; received: number; difference: number };
+  debug: {
+    serviceOrdersUsed: number;
+    serviceOrdersTotal: number;
+    paymentOrdersUsed: number;
+    paymentOrdersTotal: number;
+    missingSnapshotCount: number;
+    missingSnapshotIds: string[];
+  };
 }
 
 function emptyAgg(name: string): ParticipantAgg {
@@ -76,6 +84,7 @@ export function useParticipantAggregation() {
       // The snapshot is immutable — past OS keep their original percentages
       // even if profit rules are later edited.
       const distBySo = new Map<string, { name: string; value: number }[]>();
+      const missingSnapshotIds: string[] = [];
       for (const so of serviceOrders) {
         const snap = (so as any).distribution_snapshot as
           | Array<{ participant_name: string; percentage: number; calculated_value: number }>
@@ -85,7 +94,6 @@ export function useParticipantAggregation() {
           distBySo.set(
             so.id,
             snap.map((s) => {
-              // Prefer stored calculated_value; fall back to total × percentage
               const v =
                 s.calculated_value != null && !Number.isNaN(Number(s.calculated_value))
                   ? Number(s.calculated_value)
@@ -94,6 +102,7 @@ export function useParticipantAggregation() {
             }),
           );
         } else {
+          missingSnapshotIds.push(so.id);
           const live = liveDistBySo.get(so.id);
           if (live && live.length > 0) distBySo.set(so.id, live);
         }
@@ -180,7 +189,37 @@ export function useParticipantAggregation() {
         { expected: 0, received: 0, difference: 0 },
       );
 
-      return { byParticipant, byParticipantYearMonth, totals };
+      const serviceOrdersUsed = Array.from(distBySo.values()).filter(
+        (v) => v.length > 0,
+      ).length;
+      const paymentOrdersUsed = paymentOrders.filter((po) =>
+        serviceOrders.some((so) => {
+          if (po.service_order_id === so.id) return true;
+          if (so.group_id && po.group_id && so.group_id === po.group_id) return true;
+          if (
+            so.week &&
+            po.list_name === so.week &&
+            normPlate(so.license_plate) &&
+            normPlate(po.license_plate) === normPlate(so.license_plate)
+          )
+            return true;
+          return false;
+        }),
+      ).length;
+
+      return {
+        byParticipant,
+        byParticipantYearMonth,
+        totals,
+        debug: {
+          serviceOrdersUsed,
+          serviceOrdersTotal: serviceOrders.length,
+          paymentOrdersUsed,
+          paymentOrdersTotal: paymentOrders.length,
+          missingSnapshotCount: missingSnapshotIds.length,
+          missingSnapshotIds,
+        },
+      };
     },
   });
 }
