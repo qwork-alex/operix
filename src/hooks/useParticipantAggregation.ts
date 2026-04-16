@@ -37,6 +37,7 @@ export interface ParticipantAggregation {
     serviceOrdersTotal: number;
     paymentOrdersUsed: number;
     paymentOrdersTotal: number;
+    paymentOrdersUnlinked: number;
     missingSnapshotCount: number;
     missingSnapshotIds: string[];
   };
