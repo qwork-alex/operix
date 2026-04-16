@@ -434,6 +434,9 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
         </CollapsibleTrigger>
         <CollapsibleContent>
           <div className="mt-3 ml-2 space-y-4">
+            {yearBlocks.length === 0 && (
+              <EmptyTechDetail techId={data.id} techName={data.name} onAddPeriod={handleAddPeriod} onRevenueSave={handleRevenueSave} />
+            )}
              {yearBlocks.map((yb) => (
               <YearBlock
                 key={yb.year}
@@ -474,6 +477,48 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
         </AlertDialogContent>
       </AlertDialog>
     </>
+  );
+}
+
+/* ── Empty tech detail — shows when no year blocks exist ── */
+function EmptyTechDetail({ techId, techName, onAddPeriod, onRevenueSave }: {
+  techId: string; techName: string;
+  onAddPeriod: (period: string) => void;
+  onRevenueSave: (year: string, type: string, amount: number) => void;
+}) {
+  const currentYear = String(new Date().getFullYear());
+  const [periodInput, setPeriodInput] = useState("");
+
+  const handleCreateYear = () => {
+    onAddPeriod(`Jan/${currentYear.slice(2)}`);
+    onRevenueSave(currentYear, "manual_revenue_expected", 0);
+    onRevenueSave(currentYear, "manual_revenue_received", 0);
+  };
+
+  return (
+    <Card className="border-border/50 bg-muted/20">
+      <CardContent className="flex flex-col items-center justify-center py-8 text-center space-y-3">
+        <Calendar className="h-8 w-8 text-muted-foreground/40" />
+        <p className="text-sm text-muted-foreground">Nenhum período registado para <strong>{techName}</strong>.</p>
+        <div className="flex items-center gap-2">
+          <Input
+            className="h-8 w-28 text-xs"
+            placeholder="Ex: Jan/25"
+            value={periodInput}
+            onChange={(e) => setPeriodInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && periodInput.trim()) { onAddPeriod(periodInput.trim()); setPeriodInput(""); } }}
+          />
+          {periodInput.trim() && (
+            <button className="p-1 rounded hover:bg-primary/10 text-primary" onClick={() => { onAddPeriod(periodInput.trim()); setPeriodInput(""); }}>
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+        <Button variant="outline" size="sm" onClick={handleCreateYear}>
+          Criar período {currentYear}
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
 
