@@ -158,6 +158,30 @@ export default function FinancialPage() {
         </div>
       </div>
 
+      {/* Aggregation engine debug strip */}
+      {dbg && (
+        <Card className={`border ${aggDisconnected ? "border-destructive/40 bg-destructive/5" : "border-border/40 bg-muted/20"}`}>
+          <CardContent className="flex flex-wrap items-center gap-x-4 gap-y-1 py-2 px-3 text-[11px]">
+            <span className="font-mono text-muted-foreground">
+              SO usadas: <span className="text-foreground font-semibold">{dbg.serviceOrdersUsed}</span> / {dbg.serviceOrdersTotal}
+            </span>
+            <span className="font-mono text-muted-foreground">
+              OP usadas: <span className="text-foreground font-semibold">{dbg.paymentOrdersUsed}</span> / {dbg.paymentOrdersTotal}
+            </span>
+            {dbg.missingSnapshotCount > 0 && (
+              <span className="font-mono text-amber-500">
+                ⚠ Sem snapshot: {dbg.missingSnapshotCount}
+              </span>
+            )}
+            {aggDisconnected && (
+              <span className="font-mono text-destructive font-semibold">
+                ⚠ Aggregation not connected to data
+              </span>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* No-data empty state */}
       {hasNoData && (
         <Card className="border-border/50 bg-muted/30">
