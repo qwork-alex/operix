@@ -562,16 +562,15 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
                       ))}
                       <TableCell className="text-right font-medium tabular-nums">{formatCurrency(o.total || 0)}</TableCell>
                       <TableCell>
-                        <Select value={o.status} onValueChange={v => statusMutation.mutate({ id: o.id, status: v })}>
-                          <SelectTrigger className={cn("h-7 w-[110px] text-[10px] border", statusStyle[o.status] || statusStyle.pending)}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="pending">Pendente</SelectItem>
-                            <SelectItem value="partial">Parcial</SelectItem>
-                            <SelectItem value="paid">Pago</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <PaymentStatusCell
+                          orderId={o.id}
+                          total={o.total || 0}
+                          amountPaid={Number(o.amount_paid) || 0}
+                          derivedStatus={deriveStatus(o.total || 0, Number(o.amount_paid) || 0)}
+                          formatCurrency={formatCurrency}
+                          onSubmit={(amount_paid) => paymentMutation.mutate({ id: o.id, amount_paid, total: o.total || 0 })}
+                          isPending={paymentMutation.isPending}
+                        />
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1">
