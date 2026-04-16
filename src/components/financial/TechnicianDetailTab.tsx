@@ -478,7 +478,7 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
 }
 
 /* ── Year Block ── */
-function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheetChange, onMovementsChange, onRevenueSave, formatCurrency, onDeleteYear, onAddYear }: {
+function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheetChange, onMovementsChange, onRevenueSave, formatCurrency, onDeleteYear, onAddPeriod, onRenameYear }: {
   block: YearBlockData;
   columns: { id: string; label: string; type: string }[];
   allSpreadsheet: SpreadsheetData;
@@ -488,7 +488,8 @@ function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheet
   onRevenueSave: (year: string, type: string, amount: number) => void;
   formatCurrency: (v: number) => string;
   onDeleteYear: (year: string) => void;
-  onAddYear: () => void;
+  onAddPeriod: (period: string) => void;
+  onRenameYear: (oldYear: string, newYear: string) => void;
 }) {
   const [open, setOpen] = useState(true);
   const [showDeleteYear, setShowDeleteYear] = useState(false);
