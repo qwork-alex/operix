@@ -1,11 +1,12 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import React from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
-import { Plus, Trash2, X, MoreVertical, Copy } from "lucide-react";
+import { Plus, Trash2, MoreVertical, Copy } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 
@@ -31,7 +32,7 @@ interface Props {
   data: SpreadsheetData;
   onChange: (data: SpreadsheetData) => void;
   formatCurrency: (v: number) => string;
-  filterYear?: string; // e.g. "25" to only show rows ending in /25
+  filterYear?: string;
 }
 
 /* ── period helpers ── */
@@ -75,6 +76,12 @@ function periodSortKey(p: string): number {
   return parseInt(parsed.year) * 100 + parsed.month;
 }
 
+/** Display month only (strip /YY suffix) */
+function displayMonth(period: string): string {
+  const slash = period.indexOf("/");
+  return slash !== -1 ? period.substring(0, slash) : period;
+}
+
 const DEFAULT_COLUMNS: SpreadsheetColumn[] = [];
 
 export function getDefaultColumns(): SpreadsheetColumn[] {
@@ -92,7 +99,7 @@ function EditableCell({ value, onChange }: { value: number; onChange: (v: number
   if (!editing) {
     return (
       <div
-        className="h-full w-full px-2 py-1.5 cursor-text text-center tabular-nums text-sm text-foreground hover:bg-muted/40 transition-colors rounded"
+        className="h-full w-full px-2 py-1.5 cursor-text text-center align-middle tabular-nums text-sm text-foreground hover:bg-muted/40 transition-colors rounded"
         onClick={() => { setDraft(value ? String(value) : ""); setEditing(true); }}
       >
         {value || "—"}
@@ -140,7 +147,7 @@ function ColumnHeaderMenu({ col, onRename, onDelete, onDuplicate }: {
   onDuplicate: (id: string) => void;
 }) {
   return (
-    <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground min-w-[100px] group">
+    <th className="px-2 py-2 text-center align-middle text-xs font-medium text-muted-foreground min-w-[100px] group">
       <div className="flex items-center justify-center gap-1">
         <EditableHeader label={col.label} onChange={(v) => onRename(col.id, v)} />
         <DropdownMenu>
@@ -179,7 +186,7 @@ function InsertPeriodButton({ suggestion, onInsert }: { suggestion: string | nul
             className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 flex items-center gap-1 px-2 py-0.5 text-[10px] rounded-full bg-primary/20 text-primary border border-primary/30 hover:bg-primary/30 transition-colors"
             onClick={() => onInsert(suggestion)}
           >
-            <Plus className="h-2.5 w-2.5" /> {suggestion}
+            <Plus className="h-2.5 w-2.5" /> {displayMonth(suggestion)}
           </button>
         )}
       </td>
@@ -199,7 +206,7 @@ function getMissingSuggestion(current: string, next: string | null): string | nu
     expectedYear = String(parseInt(cp.year) + 1).slice(-2);
   }
   const expected = `${MONTH_LABELS[expectedMonthIdx - 1]}/${expectedYear}`;
-  if (!next) return expected; // after last row
+  if (!next) return expected;
   if (next !== expected) return expected;
   return null;
 }
@@ -208,18 +215,12 @@ function getMissingSuggestion(current: string, next: string | null): string | nu
 export default function ExpenseSpreadsheet({ data, onChange, formatCurrency, filterYear }: Props) {
   const [showAddCol, setShowAddCol] = useState(false);
   const [newColName, setNewColName] = useState("");
-  
-  
 
-  // Sort rows by period
   const sortedRows = useMemo(() => {
     let rows = [...data.rows].sort((a, b) => periodSortKey(a.period) - periodSortKey(b.period));
     if (filterYear) rows = rows.filter((r) => r.period.endsWith(`/${filterYear}`));
     return rows;
   }, [data.rows, filterYear]);
-
-
-
 
   const updateCell = useCallback((rowId: string, colId: string, value: number) => {
     const rows = data.rows.map((r) => r.id === rowId ? { ...r, values: { ...r.values, [colId]: value } } : r);
@@ -257,12 +258,10 @@ export default function ExpenseSpreadsheet({ data, onChange, formatCurrency, fil
     onChange({ ...data, columns: data.columns.map((c) => c.id === colId ? { ...c, label } : c) });
   };
 
-
   const commitAddRow = (period: string) => {
     const newRow: SpreadsheetRow = { id: `row_${Date.now()}`, period, values: {} };
     onChange({ ...data, rows: [...data.rows, newRow] });
   };
-
 
   const removeRow = (rowId: string) => {
     onChange({ ...data, rows: data.rows.filter((r) => r.id !== rowId) });
@@ -287,14 +286,14 @@ export default function ExpenseSpreadsheet({ data, onChange, formatCurrency, fil
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border/50 bg-muted/30">
-                <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground w-24">Período</th>
+                <th className="px-3 py-2 text-center align-middle text-xs font-medium text-muted-foreground w-20">Mês</th>
                 {data.columns.map((col) => (
                   <ColumnHeaderMenu key={col.id} col={col}
                     onRename={renameColumn} onDelete={removeColumn} onDuplicate={duplicateColumn}
                   />
                 ))}
-                <th className="px-3 py-2 text-center text-xs font-semibold text-foreground w-28">Total</th>
-                <th className="w-8 group/addcol relative">
+                {/* Add column button — appears inline after last custom column header */}
+                <th className="w-6 p-0 relative group/addcol">
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
@@ -307,23 +306,30 @@ export default function ExpenseSpreadsheet({ data, onChange, formatCurrency, fil
                     <TooltipContent>Adicionar coluna</TooltipContent>
                   </Tooltip>
                 </th>
+                <th className="px-3 py-2 text-center align-middle text-xs font-semibold text-foreground w-28">Total</th>
               </tr>
             </thead>
             <tbody>
               {sortedRows.map((row, rowIdx) => (
                 <React.Fragment key={row.id}>
-                  <tr className="border-b border-border/30 hover:bg-muted/20 transition-colors group/row">
-                    <td className="px-3 py-1.5 text-sm font-medium text-foreground text-left align-middle">{row.period}</td>
+                  <tr className="border-b border-border/30 hover:bg-muted/20 transition-colors group/row relative">
+                    <td className="px-3 py-1.5 text-sm font-medium text-foreground text-center align-middle">{displayMonth(row.period)}</td>
                     {data.columns.map((col) => (
                       <td key={col.id} className="px-1 py-0.5 text-center align-middle">
                         <EditableCell value={row.values[col.id] || 0} onChange={(v) => updateCell(row.id, col.id, v)} />
                       </td>
                     ))}
+                    {/* Spacer cell for add-column area */}
+                    <td className="w-6 p-0" />
                     <td className="px-3 py-1.5 text-center align-middle text-sm font-semibold tabular-nums text-foreground">
                       {formatCurrency(rowTotal(row))}
                     </td>
-                    <td className="px-1 py-1">
-                      <button className="opacity-0 group-hover/row:opacity-100 transition-opacity text-destructive" onClick={() => removeRow(row.id)}>
+                    {/* Delete button — absolute overlay, outside table flow */}
+                    <td className="p-0 w-0 border-0 relative">
+                      <button
+                        className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full opacity-0 group-hover/row:opacity-100 transition-opacity text-destructive p-1"
+                        onClick={() => removeRow(row.id)}
+                      >
                         <Trash2 className="h-3 w-3" />
                       </button>
                     </td>
@@ -337,13 +343,13 @@ export default function ExpenseSpreadsheet({ data, onChange, formatCurrency, fil
             </tbody>
             <tfoot>
               <tr className="border-t border-border/50 bg-muted/20">
-                <td className="px-3 py-2 text-xs font-semibold text-muted-foreground text-left">Total geral</td>
+                <td className="px-3 py-2 text-xs font-semibold text-muted-foreground text-center align-middle">Total</td>
                 {data.columns.map((col) => {
                   const colTotal = data.rows.reduce((s, r) => s + (r.values[col.id] || 0), 0);
-                  return <td key={col.id} className="px-2 py-2 text-center text-xs tabular-nums text-muted-foreground">{formatCurrency(colTotal)}</td>;
+                  return <td key={col.id} className="px-2 py-2 text-center align-middle text-xs tabular-nums text-muted-foreground">{formatCurrency(colTotal)}</td>;
                 })}
-                <td className="px-3 py-2 text-center text-sm font-bold tabular-nums text-foreground">{formatCurrency(grandTotal)}</td>
-                <td />
+                <td className="w-6 p-0" />
+                <td className="px-3 py-2 text-center align-middle text-sm font-bold tabular-nums text-foreground">{formatCurrency(grandTotal)}</td>
               </tr>
             </tfoot>
           </table>
@@ -366,10 +372,6 @@ export default function ExpenseSpreadsheet({ data, onChange, formatCurrency, fil
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
     </div>
   );
 }
-
-// Need React import for React.Fragment
-import React from "react";

@@ -240,13 +240,12 @@ export default function FinancialMovements({ movements, onChange, formatCurrency
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border/50 bg-muted/30">
-                <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground w-24">Mês</th>
-                <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground">Origem</th>
-                <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground w-28">Valor</th>
-                <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground w-28">Valor pago</th>
-                <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground w-28">Restante</th>
-                <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground w-24">Status</th>
-                <th className="w-8" />
+                <th className="px-3 py-2 text-center align-middle text-xs font-medium text-muted-foreground w-20">Mês</th>
+                <th className="px-3 py-2 text-center align-middle text-xs font-medium text-muted-foreground">Origem</th>
+                <th className="px-3 py-2 text-center align-middle text-xs font-medium text-muted-foreground w-28">Valor</th>
+                <th className="px-3 py-2 text-center align-middle text-xs font-medium text-muted-foreground w-28">Valor pago</th>
+                <th className="px-3 py-2 text-center align-middle text-xs font-medium text-muted-foreground w-28">Restante</th>
+                <th className="px-3 py-2 text-center align-middle text-xs font-medium text-muted-foreground w-24">Status</th>
               </tr>
             </thead>
             <tbody>
