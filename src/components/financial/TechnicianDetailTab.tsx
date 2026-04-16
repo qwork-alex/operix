@@ -202,7 +202,7 @@ function getYearBlocks(data: TechData, columns: { id: string }[]): YearBlockData
       if (rev.expected !== 0 || rev.received !== 0) years.add(y);
     }
   });
-  if (years.size === 0) years.add(String(new Date().getFullYear()));
+  // No auto-generation — if empty, return empty array
 
   return Array.from(years).sort().map((year) => {
     const yy = year.slice(2);
@@ -371,17 +371,43 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
     toast.success(`Período ${year} removido`);
   }, [data.id, data.name, localSpreadsheet, localMovements, saveSpreadsheet, saveMovements, upsertRevenue]);
 
-  const handleAddYear = useCallback(() => {
-    const existingYears = yearBlocks.map((yb) => parseInt(yb.year));
-    const nextYear = existingYears.length > 0 ? Math.max(...existingYears) + 1 : new Date().getFullYear();
-    const yy = String(nextYear).slice(2);
-    // Add Jan row for new year
-    const newRow: import("./ExpenseSpreadsheet").SpreadsheetRow = { id: `row_${Date.now()}`, period: `Jan/${yy}`, values: {} };
+  const handleAddPeriod = useCallback((period: string) => {
+    if (localSpreadsheet.rows.some((r) => r.period === period)) {
+      toast.error("Período já existe");
+      return;
+    }
+    const newRow: import("./ExpenseSpreadsheet").SpreadsheetRow = { id: `row_${Date.now()}`, period, values: {} };
     const newSS = { ...localSpreadsheet, rows: [...localSpreadsheet.rows, newRow] };
     setLocalSpreadsheet(newSS);
     saveSpreadsheet.mutate({ techId: data.id, techName: data.name, spreadsheet: newSS });
-    toast.success(`Período ${nextYear} criado`);
-  }, [yearBlocks, localSpreadsheet, data.id, data.name, saveSpreadsheet]);
+    toast.success(`Período ${period} criado`);
+  }, [localSpreadsheet, data.id, data.name, saveSpreadsheet]);
+
+  const handleRenameYear = useCallback((oldYear: string, newYear: string) => {
+    if (oldYear === newYear) return;
+    const oldYY = oldYear.slice(2);
+    const newYY = newYear.slice(2);
+    const newRows = localSpreadsheet.rows.map((r) =>
+      r.period.endsWith(`/${oldYY}`) ? { ...r, period: r.period.replace(`/${oldYY}`, `/${newYY}`) } : r
+    );
+    const newSS = { ...localSpreadsheet, rows: newRows };
+    setLocalSpreadsheet(newSS);
+    saveSpreadsheet.mutate({ techId: data.id, techName: data.name, spreadsheet: newSS });
+
+    const newMovements = localMovements.map((m) => {
+      const y = getYearFromPeriod(m.period);
+      if (y === oldYear) return { ...m, period: m.period.replace(`/${oldYY}`, `/${newYY}`) };
+      return m;
+    });
+    setLocalMovements(newMovements);
+    saveMovements.mutate({ techId: data.id, techName: data.name, movements: newMovements });
+
+    upsertRevenue.mutate({ techId: data.id, techName: data.name, type: "manual_revenue_expected", amount: data.revenueByYear[oldYear]?.expected || 0, year: newYear });
+    upsertRevenue.mutate({ techId: data.id, techName: data.name, type: "manual_revenue_received", amount: data.revenueByYear[oldYear]?.received || 0, year: newYear });
+    upsertRevenue.mutate({ techId: data.id, techName: data.name, type: "manual_revenue_expected", amount: 0, year: oldYear });
+    upsertRevenue.mutate({ techId: data.id, techName: data.name, type: "manual_revenue_received", amount: 0, year: oldYear });
+    toast.success(`Período renomeado para ${newYear}`);
+  }, [localSpreadsheet, localMovements, data, saveSpreadsheet, saveMovements, upsertRevenue]);
 
   return (
     <>
@@ -408,7 +434,7 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
         </CollapsibleTrigger>
         <CollapsibleContent>
           <div className="mt-3 ml-2 space-y-4">
-            {yearBlocks.map((yb) => (
+             {yearBlocks.map((yb) => (
               <YearBlock
                 key={yb.year}
                 block={yb}
@@ -420,7 +446,8 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
                 onRevenueSave={handleRevenueSave}
                 formatCurrency={formatCurrency}
                 onDeleteYear={handleDeleteYear}
-                onAddYear={handleAddYear}
+                onAddPeriod={handleAddPeriod}
+                onRenameYear={handleRenameYear}
               />
             ))}
           </div>
@@ -451,7 +478,7 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
 }
 
 /* ── Year Block ── */
-function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheetChange, onMovementsChange, onRevenueSave, formatCurrency, onDeleteYear, onAddYear }: {
+function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheetChange, onMovementsChange, onRevenueSave, formatCurrency, onDeleteYear, onAddPeriod, onRenameYear }: {
   block: YearBlockData;
   columns: { id: string; label: string; type: string }[];
   allSpreadsheet: SpreadsheetData;
@@ -461,11 +488,15 @@ function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheet
   onRevenueSave: (year: string, type: string, amount: number) => void;
   formatCurrency: (v: number) => string;
   onDeleteYear: (year: string) => void;
-  onAddYear: () => void;
+  onAddPeriod: (period: string) => void;
+  onRenameYear: (oldYear: string, newYear: string) => void;
 }) {
   const [open, setOpen] = useState(true);
   const [showDeleteYear, setShowDeleteYear] = useState(false);
   const [showDeleteMovements, setShowDeleteMovements] = useState(false);
+  const [editingYear, setEditingYear] = useState(false);
+  const [yearDraft, setYearDraft] = useState(block.year);
+  const [newPeriodInput, setNewPeriodInput] = useState("");
   const isPositive = block.result >= 0;
   const yearSuffix = block.year.slice(2);
 
@@ -490,16 +521,23 @@ function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheet
               <div className="flex items-center gap-2">
                 {open ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                 <Calendar className="h-4 w-4 text-primary" />
-                <CardTitle className="text-sm font-semibold">{block.year}</CardTitle>
+                {editingYear ? (
+                  <Input
+                    className="h-6 w-20 text-sm font-semibold text-center"
+                    value={yearDraft}
+                    autoFocus
+                    onChange={(e) => setYearDraft(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    onBlur={() => { onRenameYear(block.year, yearDraft.trim()); setEditingYear(false); }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { onRenameYear(block.year, yearDraft.trim()); setEditingYear(false); }
+                      if (e.key === "Escape") { setYearDraft(block.year); setEditingYear(false); }
+                    }}
+                  />
+                ) : (
+                  <CardTitle className="text-sm font-semibold cursor-text" onClick={(e) => { e.stopPropagation(); setYearDraft(block.year); setEditingYear(true); }}>{block.year}</CardTitle>
+                )}
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button className="p-1 rounded hover:bg-primary/10" onClick={(e) => { e.stopPropagation(); onAddYear(); }}>
-                        <Plus className="h-3.5 w-3.5 text-primary" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>Criar novo período</TooltipContent>
-                  </Tooltip>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button className="p-1 rounded hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); setShowDeleteYear(true); }}>
@@ -556,6 +594,28 @@ function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheet
 
             <div className="space-y-2">
               <h4 className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Despesas</h4>
+              <div className="flex items-center gap-2">
+                <Input
+                  className="h-7 w-28 text-xs"
+                  placeholder="Ex: Jan/25"
+                  value={newPeriodInput}
+                  onChange={(e) => setNewPeriodInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && newPeriodInput.trim()) {
+                      onAddPeriod(newPeriodInput.trim());
+                      setNewPeriodInput("");
+                    }
+                  }}
+                />
+                {newPeriodInput.trim() && (
+                  <button
+                    className="p-1 rounded hover:bg-primary/10 text-primary"
+                    onClick={() => { onAddPeriod(newPeriodInput.trim()); setNewPeriodInput(""); }}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
               <ExpenseSpreadsheet data={allSpreadsheet} onChange={onSpreadsheetChange} formatCurrency={formatCurrency} filterYear={yearSuffix} />
             </div>
 
