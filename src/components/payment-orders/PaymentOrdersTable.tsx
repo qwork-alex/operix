@@ -174,26 +174,36 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
     pending: "● Pendente",
   };
 
-  const statusMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { error } = await supabase.from("payment_orders").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
+  /** Update amount_paid → derive status server-side write */
+  const paymentMutation = useMutation({
+    mutationFn: async ({ id, amount_paid, total }: { id: string; amount_paid: number; total: number }) => {
+      const status = deriveStatus(total, amount_paid);
+      const { error } = await supabase
+        .from("payment_orders")
+        .update({ amount_paid, status, updated_at: new Date().toISOString() } as any)
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payment_orders"] });
       queryClient.invalidateQueries({ queryKey: ["service_orders"] });
       queryClient.invalidateQueries({ queryKey: ["financial-summary"] });
-      toast.success(t("toast.updated"));
     },
     onError: (err) => toast.error((err as Error).message),
   });
 
+  /** Batch: mark whole list as fully paid / partial reset / pending reset (amount_paid driven) */
   const batchStatusMutation = useMutation({
-    mutationFn: async ({ listName, status }: { listName: string; status: string }) => {
-      const listOrderIds = orders.filter(o => o.list_name === listName).map(o => o.id);
-      if (!listOrderIds.length) return;
-      for (const id of listOrderIds) {
-        const { error } = await supabase.from("payment_orders").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
+    mutationFn: async ({ listName, mode }: { listName: string; mode: "paid" | "pending" }) => {
+      const listOrders = orders.filter(o => o.list_name === listName);
+      for (const o of listOrders) {
+        const total = o.total || 0;
+        const amount_paid = mode === "paid" ? total : 0;
+        const status = deriveStatus(total, amount_paid);
+        const { error } = await supabase
+          .from("payment_orders")
+          .update({ amount_paid, status, updated_at: new Date().toISOString() } as any)
+          .eq("id", o.id);
         if (error) throw error;
       }
     },
