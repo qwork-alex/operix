@@ -349,6 +349,35 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
     upsertRevenue.mutate({ techId: data.id, techName: data.name, type, amount, year });
   }, [data.id, data.name, upsertRevenue]);
 
+  const handleDeleteYear = useCallback((year: string) => {
+    const yy = year.slice(2);
+    const newRows = localSpreadsheet.rows.filter((r) => !r.period.endsWith(`/${yy}`));
+    const newSS = { ...localSpreadsheet, rows: newRows };
+    setLocalSpreadsheet(newSS);
+    saveSpreadsheet.mutate({ techId: data.id, techName: data.name, spreadsheet: newSS });
+
+    const newMovements = localMovements.filter((m) => getYearFromPeriod(m.period) !== year);
+    setLocalMovements(newMovements);
+    saveMovements.mutate({ techId: data.id, techName: data.name, movements: newMovements });
+
+    // Delete revenue for that year
+    upsertRevenue.mutate({ techId: data.id, techName: data.name, type: "manual_revenue_expected", amount: 0, year });
+    upsertRevenue.mutate({ techId: data.id, techName: data.name, type: "manual_revenue_received", amount: 0, year });
+    toast.success(`Período ${year} removido`);
+  }, [data.id, data.name, localSpreadsheet, localMovements, saveSpreadsheet, saveMovements, upsertRevenue]);
+
+  const handleAddYear = useCallback(() => {
+    const existingYears = yearBlocks.map((yb) => parseInt(yb.year));
+    const nextYear = existingYears.length > 0 ? Math.max(...existingYears) + 1 : new Date().getFullYear();
+    const yy = String(nextYear).slice(2);
+    // Add Jan row for new year
+    const newRow: import("./ExpenseSpreadsheet").SpreadsheetRow = { id: `row_${Date.now()}`, period: `Jan/${yy}`, values: {} };
+    const newSS = { ...localSpreadsheet, rows: [...localSpreadsheet.rows, newRow] };
+    setLocalSpreadsheet(newSS);
+    saveSpreadsheet.mutate({ techId: data.id, techName: data.name, spreadsheet: newSS });
+    toast.success(`Período ${nextYear} criado`);
+  }, [yearBlocks, localSpreadsheet, data.id, data.name, saveSpreadsheet]);
+
   return (
     <>
       <Collapsible open={open} onOpenChange={setOpen}>
