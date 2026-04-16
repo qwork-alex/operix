@@ -188,17 +188,14 @@ export default function FinancialMovements({ movements, onChange, formatCurrency
       if (m.id !== id) return m;
       const next = { ...m, [field]: value };
 
-      // Period validation: enforce year constraint and prevent duplicates
+      // Period validation: prevent duplicate months
       if (field === "period") {
-        const norm = normalizePeriod(value);
-        if (norm) {
-          // Check duplicate
-          if (movements.some((other) => other.id !== id && other.period === norm)) {
-            toast.error("Período duplicado na movimentação");
-            return m; // reject change
-          }
-          next.period = norm;
+        // value is already full period "Month/YY" from EditableMonthCell
+        if (value && movements.some((other) => other.id !== id && other.period === value)) {
+          toast.error("Mês duplicado na movimentação");
+          return m;
         }
+        next.period = value;
       }
 
       // Auto-adjust status based on paidAmount
