@@ -74,11 +74,7 @@ function periodSortKey(p: string): number {
   return parseInt(parsed.year) * 100 + parsed.month;
 }
 
-const DEFAULT_COLUMNS: SpreadsheetColumn[] = [
-  { id: "salario", label: "Salário", type: "fixed" },
-  { id: "encargos", label: "Encargos sociais", type: "fixed" },
-  { id: "impostos", label: "Impostos", type: "fixed" },
-];
+const DEFAULT_COLUMNS: SpreadsheetColumn[] = [];
 
 export function getDefaultColumns(): SpreadsheetColumn[] {
   return DEFAULT_COLUMNS.map((c) => ({ ...c }));
@@ -156,11 +152,9 @@ function ColumnHeaderMenu({ col, onRename, onDelete, onDuplicate }: {
             <DropdownMenuItem onClick={() => onDuplicate(col.id)}>
               <Copy className="h-3 w-3 mr-2" /> Duplicar coluna
             </DropdownMenuItem>
-            {col.type === "custom" && (
-              <DropdownMenuItem className="text-destructive" onClick={() => onDelete(col.id)}>
-                <Trash2 className="h-3 w-3 mr-2" /> Remover coluna
-              </DropdownMenuItem>
-            )}
+            <DropdownMenuItem className="text-destructive" onClick={() => onDelete(col.id)}>
+              <Trash2 className="h-3 w-3 mr-2" /> Remover coluna
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -357,52 +351,30 @@ export default function ExpenseSpreadsheet({ data, onChange, formatCurrency, fil
               </tr>
             </thead>
             <tbody>
-              {yearGroups.map(([year, rows]) => {
-                const isCollapsed = collapsedYears[year];
-                const yearTotal = rows.reduce((s, r) => s + rowTotal(r), 0);
-                return (
-                  <React.Fragment key={year}>
-                    {/* year header */}
-                    <tr className="bg-muted/40 border-b border-border/30 cursor-pointer hover:bg-muted/60 transition-colors"
-                      onClick={() => toggleYear(year)}>
-                      <td colSpan={data.columns.length + 2} className="px-3 py-1.5">
-                        <div className="flex items-center gap-2">
-                          {isCollapsed ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
-                          <span className="text-xs font-semibold text-foreground">{year}</span>
-                          <span className="text-[10px] text-muted-foreground">({rows.length} meses)</span>
-                          <span className="ml-auto text-xs font-medium tabular-nums text-muted-foreground">{formatCurrency(yearTotal)}</span>
-                        </div>
+              {sortedRows.map((row, rowIdx) => (
+                <React.Fragment key={row.id}>
+                  <tr className="border-b border-border/30 hover:bg-muted/20 transition-colors group/row">
+                    <td className="px-3 py-1 text-sm font-medium text-foreground text-left">{row.period}</td>
+                    {data.columns.map((col) => (
+                      <td key={col.id} className="px-1 py-0.5 text-center">
+                        <EditableCell value={row.values[col.id] || 0} onChange={(v) => updateCell(row.id, col.id, v)} />
                       </td>
-                      <td />
-                    </tr>
-                    {!isCollapsed && rows.map((row, rowIdx) => (
-                      <React.Fragment key={row.id}>
-                        <tr className="border-b border-border/30 hover:bg-muted/20 transition-colors group/row">
-                          <td className="px-3 py-1 text-sm font-medium text-foreground text-left">{row.period}</td>
-                          {data.columns.map((col) => (
-                            <td key={col.id} className="px-1 py-0.5 text-center">
-                              <EditableCell value={row.values[col.id] || 0} onChange={(v) => updateCell(row.id, col.id, v)} />
-                            </td>
-                          ))}
-                          <td className="px-3 py-1 text-center text-sm font-semibold tabular-nums text-foreground">
-                            {formatCurrency(rowTotal(row))}
-                          </td>
-                          <td className="px-1 py-1">
-                            <button className="opacity-0 group-hover/row:opacity-100 transition-opacity text-destructive" onClick={() => removeRow(row.id)}>
-                              <Trash2 className="h-3 w-3" />
-                            </button>
-                          </td>
-                        </tr>
-                        {/* smart insert suggestion */}
-                        <InsertPeriodButton
-                          suggestion={getMissingSuggestion(row.period, rows[rowIdx + 1]?.period || null)}
-                          onInsert={insertPeriod}
-                        />
-                      </React.Fragment>
                     ))}
-                  </React.Fragment>
-                );
-              })}
+                    <td className="px-3 py-1 text-center text-sm font-semibold tabular-nums text-foreground">
+                      {formatCurrency(rowTotal(row))}
+                    </td>
+                    <td className="px-1 py-1">
+                      <button className="opacity-0 group-hover/row:opacity-100 transition-opacity text-destructive" onClick={() => removeRow(row.id)}>
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </td>
+                  </tr>
+                  <InsertPeriodButton
+                    suggestion={getMissingSuggestion(row.period, sortedRows[rowIdx + 1]?.period || null)}
+                    onInsert={insertPeriod}
+                  />
+                </React.Fragment>
+              ))}
             </tbody>
             <tfoot>
               <tr className="border-t border-border/50 bg-muted/20">
