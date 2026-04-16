@@ -20,6 +20,7 @@ import {
 import { toast } from "sonner";
 import ExpenseSpreadsheet, { SpreadsheetData, SpreadsheetRow, getDefaultColumns } from "./ExpenseSpreadsheet";
 import FinancialMovements, { FinancialMovement, getYearFromPeriod, normalizePeriod, normalizeMonth } from "./FinancialMovements";
+import { useParticipantAggregation, getParticipantYearAgg, type ParticipantAgg } from "@/hooks/useParticipantAggregation";
 
 /* ── hooks ── */
 function useTechnicians() {
