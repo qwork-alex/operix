@@ -693,7 +693,7 @@ function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheet
                   onChange={(e) => setNewPeriodInput(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && newPeriodInput.trim()) {
-                      onAddPeriod(newPeriodInput.trim());
+                      onAddPeriod(newPeriodInput.trim(), block.year);
                       setNewPeriodInput("");
                     }
                   }}
@@ -701,7 +701,7 @@ function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheet
                 {newPeriodInput.trim() && (
                   <button
                     className="p-1 rounded hover:bg-primary/10 text-primary"
-                    onClick={() => { onAddPeriod(newPeriodInput.trim()); setNewPeriodInput(""); }}
+                    onClick={() => { onAddPeriod(newPeriodInput.trim(), block.year); setNewPeriodInput(""); }}
                   >
                     <Plus className="h-3.5 w-3.5" />
                   </button>
