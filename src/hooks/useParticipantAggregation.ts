@@ -189,7 +189,37 @@ export function useParticipantAggregation() {
         { expected: 0, received: 0, difference: 0 },
       );
 
-      return { byParticipant, byParticipantYearMonth, totals };
+      const serviceOrdersUsed = Array.from(distBySo.values()).filter(
+        (v) => v.length > 0,
+      ).length;
+      const paymentOrdersUsed = paymentOrders.filter((po) =>
+        serviceOrders.some((so) => {
+          if (po.service_order_id === so.id) return true;
+          if (so.group_id && po.group_id && so.group_id === po.group_id) return true;
+          if (
+            so.week &&
+            po.list_name === so.week &&
+            normPlate(so.license_plate) &&
+            normPlate(po.license_plate) === normPlate(so.license_plate)
+          )
+            return true;
+          return false;
+        }),
+      ).length;
+
+      return {
+        byParticipant,
+        byParticipantYearMonth,
+        totals,
+        debug: {
+          serviceOrdersUsed,
+          serviceOrdersTotal: serviceOrders.length,
+          paymentOrdersUsed,
+          paymentOrdersTotal: paymentOrders.length,
+          missingSnapshotCount: missingSnapshotIds.length,
+          missingSnapshotIds,
+        },
+      };
     },
   });
 }
