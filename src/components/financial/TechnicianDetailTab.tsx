@@ -434,6 +434,9 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
         </CollapsibleTrigger>
         <CollapsibleContent>
           <div className="mt-3 ml-2 space-y-4">
+            {yearBlocks.length === 0 && (
+              <EmptyTechDetail techId={data.id} techName={data.name} onAddPeriod={handleAddPeriod} onRevenueSave={handleRevenueSave} />
+            )}
              {yearBlocks.map((yb) => (
               <YearBlock
                 key={yb.year}
