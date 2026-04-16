@@ -240,40 +240,39 @@ export default function FinancialMovements({ movements, onChange, formatCurrency
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border/50 bg-muted/30">
-                <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground w-24">Mês</th>
-                <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground">Origem</th>
-                <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground w-28">Valor</th>
-                <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground w-28">Valor pago</th>
-                <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground w-28">Restante</th>
-                <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground w-24">Status</th>
-                <th className="w-8" />
+                <th className="px-3 py-2 text-center align-middle text-xs font-medium text-muted-foreground w-20">Mês</th>
+                <th className="px-3 py-2 text-center align-middle text-xs font-medium text-muted-foreground">Origem</th>
+                <th className="px-3 py-2 text-center align-middle text-xs font-medium text-muted-foreground w-28">Valor</th>
+                <th className="px-3 py-2 text-center align-middle text-xs font-medium text-muted-foreground w-28">Valor pago</th>
+                <th className="px-3 py-2 text-center align-middle text-xs font-medium text-muted-foreground w-28">Restante</th>
+                <th className="px-3 py-2 text-center align-middle text-xs font-medium text-muted-foreground w-24">Status</th>
               </tr>
             </thead>
             <tbody>
               {movements.map((mov) => {
                 const remaining = Math.max(0, mov.amount - (mov.paidAmount || 0));
                 return (
-                  <tr key={mov.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors group/row">
-                    <td className="px-1 py-0.5">
+                  <tr key={mov.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors group/row relative">
+                    <td className="px-1 py-0.5 text-center align-middle">
                       <EditableMonthCell value={mov.period} onChange={(v) => updateField(mov.id, "period", v)} constrainToYear={constrainToYear} />
                     </td>
-                    <td className="px-1 py-0.5">
+                    <td className="px-1 py-0.5 text-center align-middle">
                       <EditableTextCell value={mov.origin} onChange={(v) => updateField(mov.id, "origin", v)} />
                     </td>
-                    <td className="px-1 py-0.5">
+                    <td className="px-1 py-0.5 text-center align-middle">
                       <EditableAmount value={mov.amount} onChange={(v) => updateField(mov.id, "amount", v)} />
                     </td>
-                    <td className="px-1 py-0.5">
+                    <td className="px-1 py-0.5 text-center align-middle">
                       <EditableAmount value={mov.paidAmount || 0} onChange={(v) => updateField(mov.id, "paidAmount", v)} />
                     </td>
-                    <td className="px-3 py-1.5 text-center text-sm tabular-nums text-muted-foreground">
+                    <td className="px-3 py-1.5 text-center align-middle text-sm tabular-nums text-muted-foreground">
                       {remaining > 0 ? (
                         <span className="text-amber-400">{formatCurrency(remaining)}</span>
                       ) : (
                         <span className="text-emerald-400">—</span>
                       )}
                     </td>
-                    <td className="px-1 py-0.5 text-center">
+                    <td className="px-1 py-0.5 text-center align-middle">
                       <Select value={mov.status} onValueChange={(v) => updateField(mov.id, "status", v)}>
                         <SelectTrigger className="h-7 text-xs border-0 bg-transparent justify-center">
                           <Badge variant="outline" className={`text-[10px] ${STATUS_COLORS[mov.status]}`}>
@@ -287,8 +286,12 @@ export default function FinancialMovements({ movements, onChange, formatCurrency
                         </SelectContent>
                       </Select>
                     </td>
-                    <td className="px-1 py-1">
-                      <button className="opacity-0 group-hover/row:opacity-100 transition-opacity text-destructive" onClick={() => removeMovement(mov.id)}>
+                    {/* Delete button — absolute overlay outside table flow */}
+                    <td className="p-0 w-0 border-0 relative">
+                      <button
+                        className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full opacity-0 group-hover/row:opacity-100 transition-opacity text-destructive p-1"
+                        onClick={() => removeMovement(mov.id)}
+                      >
                         <Trash2 className="h-3 w-3" />
                       </button>
                     </td>
