@@ -217,20 +217,8 @@ export default function ExpenseSpreadsheet({ data, onChange, formatCurrency, fil
     return rows;
   }, [data.rows, filterYear]);
 
-  // Group by year
-  const yearGroups = useMemo(() => {
-    const groups: Record<string, SpreadsheetRow[]> = {};
-    sortedRows.forEach((row) => {
-      const p = parseNormalized(row.period);
-      const yearKey = p ? `20${p.year}` : "Outro";
-      if (!groups[yearKey]) groups[yearKey] = [];
-      groups[yearKey].push(row);
-    });
-    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
-  }, [sortedRows]);
 
-  const [collapsedYears, setCollapsedYears] = useState<Record<string, boolean>>({});
-  const toggleYear = (y: string) => setCollapsedYears((prev) => ({ ...prev, [y]: !prev[y] }));
+
 
   const updateCell = useCallback((rowId: string, colId: string, value: number) => {
     const rows = data.rows.map((r) => r.id === rowId ? { ...r, values: { ...r.values, [colId]: value } } : r);
