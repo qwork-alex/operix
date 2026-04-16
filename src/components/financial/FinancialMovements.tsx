@@ -38,9 +38,26 @@ export function getYearFromPeriod(period: string): string | null {
   return m ? `20${m[1]}` : null;
 }
 
+/* ── month-only normalization ── */
+export function normalizeMonth(raw: string): string | null {
+  const t = raw.trim().toLowerCase();
+  // Numeric: 1-12
+  const numMatch = t.match(/^(\d{1,2})$/);
+  if (numMatch) {
+    const m = parseInt(numMatch[1]);
+    if (m >= 1 && m <= 12) return MONTH_LABELS[m - 1];
+  }
+  // Text: jan, janeiro, etc.
+  const m = MONTH_MAP[t];
+  if (m) return MONTH_LABELS[m - 1];
+  // Already normalized: Jan, Fev...
+  if (MONTH_LABELS.includes(t.charAt(0).toUpperCase() + t.slice(1))) return t.charAt(0).toUpperCase() + t.slice(1);
+  return null;
+}
+
 export interface FinancialMovement {
   id: string;
-  period: string;
+  period: string; // stored as "Jan/YY" internally
   type: "loan" | "manual_entry";
   origin: string;
   amount: number;
@@ -67,40 +84,36 @@ const STATUS_COLORS: Record<string, string> = {
   partial: "bg-blue-500/20 text-blue-400 border-blue-500/30",
 };
 
-function EditablePeriodCell({ value, onChange, constrainToYear }: { value: string; onChange: (v: string) => void; constrainToYear?: string }) {
+function EditableMonthCell({ value, onChange, constrainToYear }: { value: string; onChange: (v: string) => void; constrainToYear?: string }) {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
+  // Display month only (strip /YY)
+  const displayValue = value ? value.split("/")[0] : "";
+  const [draft, setDraft] = useState(displayValue);
   const ref = useRef<HTMLInputElement>(null);
   useEffect(() => { if (editing) ref.current?.focus(); }, [editing]);
 
   if (!editing) {
     return (
       <div className="px-2 py-1.5 cursor-text text-sm text-foreground hover:bg-muted/40 rounded text-center"
-        onClick={() => { setDraft(value); setEditing(true); }}>
-        {value || "—"}
+        onClick={() => { setDraft(displayValue); setEditing(true); }}>
+        {displayValue || "—"}
       </div>
     );
   }
   const commit = () => {
-    const norm = normalizePeriod(draft);
-    if (!norm) {
-      toast.error("Formato inválido. Use: Jan/25, 03/24, etc.");
+    const month = normalizeMonth(draft);
+    if (!month) {
+      toast.error("Mês inválido. Use: Jan, Fev, 01, etc.");
       setEditing(false);
       return;
     }
-    if (constrainToYear) {
-      const periodYear = getYearFromPeriod(norm);
-      if (periodYear && periodYear !== constrainToYear) {
-        toast.error(`Este período não pertence ao ano ${constrainToYear}`);
-        setEditing(false);
-        return;
-      }
-    }
-    onChange(norm);
+    const yy = constrainToYear ? constrainToYear.slice(2) : "25";
+    onChange(`${month}/${yy}`);
     setEditing(false);
   };
   return (
     <Input ref={ref} className="h-7 text-sm text-center border-primary/50 bg-background"
+      placeholder="Ex: Jan"
       value={draft} onChange={(e) => setDraft(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") setEditing(false); }}
@@ -175,17 +188,14 @@ export default function FinancialMovements({ movements, onChange, formatCurrency
       if (m.id !== id) return m;
       const next = { ...m, [field]: value };
 
-      // Period validation: enforce year constraint and prevent duplicates
+      // Period validation: prevent duplicate months
       if (field === "period") {
-        const norm = normalizePeriod(value);
-        if (norm) {
-          // Check duplicate
-          if (movements.some((other) => other.id !== id && other.period === norm)) {
-            toast.error("Período duplicado na movimentação");
-            return m; // reject change
-          }
-          next.period = norm;
+        // value is already full period "Month/YY" from EditableMonthCell
+        if (value && movements.some((other) => other.id !== id && other.period === value)) {
+          toast.error("Mês duplicado na movimentação");
+          return m;
         }
+        next.period = value;
       }
 
       // Auto-adjust status based on paidAmount
@@ -230,7 +240,7 @@ export default function FinancialMovements({ movements, onChange, formatCurrency
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border/50 bg-muted/30">
-                <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground w-24">Período</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground w-24">Mês</th>
                 <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground">Origem</th>
                 <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground w-28">Valor</th>
                 <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground w-28">Valor pago</th>
@@ -245,7 +255,7 @@ export default function FinancialMovements({ movements, onChange, formatCurrency
                 return (
                   <tr key={mov.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors group/row">
                     <td className="px-1 py-0.5">
-                      <EditablePeriodCell value={mov.period} onChange={(v) => updateField(mov.id, "period", v)} constrainToYear={constrainToYear} />
+                      <EditableMonthCell value={mov.period} onChange={(v) => updateField(mov.id, "period", v)} constrainToYear={constrainToYear} />
                     </td>
                     <td className="px-1 py-0.5">
                       <EditableTextCell value={mov.origin} onChange={(v) => updateField(mov.id, "origin", v)} />
