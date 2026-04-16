@@ -371,16 +371,23 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
     toast.success(`Período ${year} removido`);
   }, [data.id, data.name, localSpreadsheet, localMovements, saveSpreadsheet, saveMovements, upsertRevenue]);
 
-  const handleAddPeriod = useCallback((period: string) => {
-    if (localSpreadsheet.rows.some((r) => r.period === period)) {
+  const handleAddPeriod = useCallback((rawPeriod: string) => {
+    // Import normalization from FinancialMovements
+    const { normalizePeriod } = require("./FinancialMovements");
+    const normalized = normalizePeriod(rawPeriod);
+    if (!normalized) {
+      toast.error("Formato inválido. Use: Jan/25, 03/24, etc.");
+      return;
+    }
+    if (localSpreadsheet.rows.some((r) => r.period === normalized)) {
       toast.error("Período já existe");
       return;
     }
-    const newRow: import("./ExpenseSpreadsheet").SpreadsheetRow = { id: `row_${Date.now()}`, period, values: {} };
+    const newRow: import("./ExpenseSpreadsheet").SpreadsheetRow = { id: `row_${Date.now()}`, period: normalized, values: {} };
     const newSS = { ...localSpreadsheet, rows: [...localSpreadsheet.rows, newRow] };
     setLocalSpreadsheet(newSS);
     saveSpreadsheet.mutate({ techId: data.id, techName: data.name, spreadsheet: newSS });
-    toast.success(`Período ${period} criado`);
+    toast.success(`Período ${normalized} criado`);
   }, [localSpreadsheet, data.id, data.name, saveSpreadsheet]);
 
   const handleRenameYear = useCallback((oldYear: string, newYear: string) => {
@@ -634,7 +641,7 @@ function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheet
                   </Tooltip>
                 </div>
               </div>
-              <FinancialMovements movements={block.yearMovements} onChange={handleYearMovementsChange} formatCurrency={formatCurrency} />
+              <FinancialMovements movements={block.yearMovements} onChange={handleYearMovementsChange} formatCurrency={formatCurrency} constrainToYear={block.year} />
             </div>
 
             <div className="space-y-2">

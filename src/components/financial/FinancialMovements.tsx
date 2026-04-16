@@ -52,6 +52,7 @@ interface Props {
   movements: FinancialMovement[];
   onChange: (movements: FinancialMovement[]) => void;
   formatCurrency: (v: number) => string;
+  constrainToYear?: string; // e.g. "2024" — blocks periods outside this year
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -66,7 +67,7 @@ const STATUS_COLORS: Record<string, string> = {
   partial: "bg-blue-500/20 text-blue-400 border-blue-500/30",
 };
 
-function EditableCell({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function EditablePeriodCell({ value, onChange, constrainToYear }: { value: string; onChange: (v: string) => void; constrainToYear?: string }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const ref = useRef<HTMLInputElement>(null);
@@ -82,9 +83,46 @@ function EditableCell({ value, onChange }: { value: string; onChange: (v: string
   }
   const commit = () => {
     const norm = normalizePeriod(draft);
-    onChange(norm || draft);
+    if (!norm) {
+      toast.error("Formato inválido. Use: Jan/25, 03/24, etc.");
+      setEditing(false);
+      return;
+    }
+    if (constrainToYear) {
+      const periodYear = getYearFromPeriod(norm);
+      if (periodYear && periodYear !== constrainToYear) {
+        toast.error(`Este período não pertence ao ano ${constrainToYear}`);
+        setEditing(false);
+        return;
+      }
+    }
+    onChange(norm);
     setEditing(false);
   };
+  return (
+    <Input ref={ref} className="h-7 text-sm text-center border-primary/50 bg-background"
+      value={draft} onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") setEditing(false); }}
+    />
+  );
+}
+
+function EditableTextCell({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (editing) ref.current?.focus(); }, [editing]);
+
+  if (!editing) {
+    return (
+      <div className="px-2 py-1.5 cursor-text text-sm text-foreground hover:bg-muted/40 rounded text-center"
+        onClick={() => { setDraft(value); setEditing(true); }}>
+        {value || "—"}
+      </div>
+    );
+  }
+  const commit = () => { onChange(draft); setEditing(false); };
   return (
     <Input ref={ref} className="h-7 text-sm text-center border-primary/50 bg-background"
       value={draft} onChange={(e) => setDraft(e.target.value)}
@@ -118,7 +156,7 @@ function EditableAmount({ value, onChange }: { value: number; onChange: (v: numb
   );
 }
 
-export default function FinancialMovements({ movements, onChange, formatCurrency }: Props) {
+export default function FinancialMovements({ movements, onChange, formatCurrency, constrainToYear }: Props) {
   const addMovement = () => {
     const newMov: FinancialMovement = {
       id: `mov_${Date.now()}`,
@@ -136,6 +174,20 @@ export default function FinancialMovements({ movements, onChange, formatCurrency
     const updated = movements.map((m) => {
       if (m.id !== id) return m;
       const next = { ...m, [field]: value };
+
+      // Period validation: enforce year constraint and prevent duplicates
+      if (field === "period") {
+        const norm = normalizePeriod(value);
+        if (norm) {
+          // Check duplicate
+          if (movements.some((other) => other.id !== id && other.period === norm)) {
+            toast.error("Período duplicado na movimentação");
+            return m; // reject change
+          }
+          next.period = norm;
+        }
+      }
+
       // Auto-adjust status based on paidAmount
       if (field === "paidAmount") {
         const paid = parseFloat(value) || 0;
@@ -193,10 +245,10 @@ export default function FinancialMovements({ movements, onChange, formatCurrency
                 return (
                   <tr key={mov.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors group/row">
                     <td className="px-1 py-0.5">
-                      <EditableCell value={mov.period} onChange={(v) => updateField(mov.id, "period", v)} />
+                      <EditablePeriodCell value={mov.period} onChange={(v) => updateField(mov.id, "period", v)} constrainToYear={constrainToYear} />
                     </td>
                     <td className="px-1 py-0.5">
-                      <EditableCell value={mov.origin} onChange={(v) => updateField(mov.id, "origin", v)} />
+                      <EditableTextCell value={mov.origin} onChange={(v) => updateField(mov.id, "origin", v)} />
                     </td>
                     <td className="px-1 py-0.5">
                       <EditableAmount value={mov.amount} onChange={(v) => updateField(mov.id, "amount", v)} />
