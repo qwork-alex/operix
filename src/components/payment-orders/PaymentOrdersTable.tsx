@@ -630,3 +630,90 @@ function EditServiceCellPair({ service, onNameChange, onPriceChange }: {
     </>
   );
 }
+
+/** Status cell driven by amount_paid. Shows badge + inline editable Amount Paid input. */
+function PaymentStatusCell({
+  total,
+  amountPaid,
+  derivedStatus,
+  formatCurrency,
+  onSubmit,
+  isPending,
+}: {
+  orderId: string;
+  total: number;
+  amountPaid: number;
+  derivedStatus: "pending" | "partial" | "paid";
+  formatCurrency: (n: number) => string;
+  onSubmit: (amountPaid: number) => void;
+  isPending: boolean;
+}) {
+  const [draft, setDraft] = useState<string>(amountPaid ? String(amountPaid) : "");
+  const [open, setOpen] = useState(false);
+  const remaining = Math.max(0, total - amountPaid);
+
+  const commit = () => {
+    const v = Math.max(0, Number(draft) || 0);
+    if (v !== amountPaid) onSubmit(v);
+    setOpen(false);
+  };
+
+  const quickPaid = () => {
+    setDraft(String(total));
+    if (total !== amountPaid) onSubmit(total);
+    setOpen(false);
+  };
+  const quickReset = () => {
+    setDraft("0");
+    if (amountPaid !== 0) onSubmit(0);
+    setOpen(false);
+  };
+
+  return (
+    <div className="flex flex-col gap-1 min-w-[140px]">
+      <div className="flex items-center gap-1">
+        <Badge
+          variant="outline"
+          className={cn("cursor-pointer text-[10px]", statusStyle[derivedStatus])}
+          onClick={() => setOpen(o => !o)}
+        >
+          {derivedStatus === "paid" ? "✓ Pago" : derivedStatus === "partial" ? "◐ Parcial" : "● Pendente"}
+        </Badge>
+        {isPending && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+      </div>
+
+      {(open || derivedStatus === "partial") && (
+        <div className="flex flex-col gap-1 rounded-md border border-border/50 bg-background/50 p-1.5">
+          <div className="flex items-center gap-1">
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              max={total}
+              value={draft}
+              onChange={e => setDraft(e.target.value)}
+              onBlur={commit}
+              onKeyDown={e => { if (e.key === "Enter") commit(); }}
+              placeholder="Valor pago"
+              className="h-6 text-[10px] px-1 tabular-nums"
+            />
+          </div>
+          <div className="flex items-center justify-between text-[10px] tabular-nums">
+            <span className="text-emerald-400">Pago: {formatCurrency(amountPaid)}</span>
+            <span className={cn(remaining > 0 ? "text-amber-400" : "text-muted-foreground")}>
+              Resta: {formatCurrency(remaining)}
+            </span>
+          </div>
+          <div className="flex gap-1">
+            <Button size="sm" variant="ghost" className="h-5 text-[9px] px-1 flex-1" onClick={quickPaid}>
+              Total
+            </Button>
+            <Button size="sm" variant="ghost" className="h-5 text-[9px] px-1 flex-1" onClick={quickReset}>
+              Zerar
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
