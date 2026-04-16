@@ -670,7 +670,7 @@ function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheet
         </CollapsibleTrigger>
         <CollapsibleContent>
           <CardContent className="px-4 pb-4 space-y-5">
-            <YearRevenueSection year={block.year} expected={block.revenueExpected} received={block.revenueReceived} onSave={onRevenueSave} formatCurrency={formatCurrency} />
+            <YearRevenueSection year={block.year} expected={block.revenueExpected} received={block.revenueReceived} onSave={onRevenueSave} formatCurrency={formatCurrency} derivedAgg={derivedAgg} />
 
             <div className="space-y-2">
               <div className="flex items-center gap-2 group/movheader">
