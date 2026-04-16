@@ -84,6 +84,7 @@ export function useParticipantAggregation() {
       // The snapshot is immutable — past OS keep their original percentages
       // even if profit rules are later edited.
       const distBySo = new Map<string, { name: string; value: number }[]>();
+      const missingSnapshotIds: string[] = [];
       for (const so of serviceOrders) {
         const snap = (so as any).distribution_snapshot as
           | Array<{ participant_name: string; percentage: number; calculated_value: number }>
@@ -93,7 +94,6 @@ export function useParticipantAggregation() {
           distBySo.set(
             so.id,
             snap.map((s) => {
-              // Prefer stored calculated_value; fall back to total × percentage
               const v =
                 s.calculated_value != null && !Number.isNaN(Number(s.calculated_value))
                   ? Number(s.calculated_value)
@@ -102,6 +102,7 @@ export function useParticipantAggregation() {
             }),
           );
         } else {
+          missingSnapshotIds.push(so.id);
           const live = liveDistBySo.get(so.id);
           if (live && live.length > 0) distBySo.set(so.id, live);
         }
