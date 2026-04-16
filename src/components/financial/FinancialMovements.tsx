@@ -162,17 +162,12 @@ export default function FinancialMovements({ movements, onChange, formatCurrency
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <Button size="sm" variant="outline" className="h-8 text-xs" onClick={addMovement}>
-          <Plus className="h-3 w-3 mr-1" /> Adicionar movimentação
-        </Button>
-        {movements.length > 0 && (
-          <div className="flex items-center gap-3 ml-auto text-[10px] text-muted-foreground">
-            <span>Total: <strong className="text-foreground">{formatCurrency(totalLoans)}</strong></span>
-            <span>Pendentes: <strong className="text-amber-400">{formatCurrency(pendingLoans)}</strong></span>
-          </div>
-        )}
-      </div>
+      {movements.length > 0 && (
+        <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+          <span>Total: <strong className="text-foreground">{formatCurrency(totalLoans)}</strong></span>
+          <span>Pendentes: <strong className="text-amber-400">{formatCurrency(pendingLoans)}</strong></span>
+        </div>
+      )}
 
       {movements.length === 0 ? (
         <p className="text-xs text-muted-foreground text-center py-4">
