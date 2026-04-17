@@ -870,6 +870,7 @@ export function ProfitDistribution() {
             </div>
           )}
         </CardContent>
+        )}
       </Card>
     );
   };
