@@ -1,23 +1,33 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { partialPaymentsStore } from "@/lib/partialPaymentsStore";
 
 /**
- * READ-ONLY financial aggregation engine.
+ * READ-ONLY group/distribution-driven financial engine.
  *
- * Sources:
- *  - service_orders               → OS universe + total
- *  - service_order_distributions  → Expected per participant (rule-driven)
- *  - payment_orders               → amount_paid / total → received_ratio
+ * Architecture: Service Orders → Groups → Distribution Rules → Participants.
  *
- * Rules:
- *  - OS without any distribution row are IGNORED (no fallback).
- *  - Received per participant = distributed_value × Σ(amount_paid / total) of linked POs
- *    capped at 1 (paid > total ⇒ ratio 1).
- *  - Pending PO (amount_paid = 0) ⇒ contributes 0.
- *  - Partial PO ⇒ proportional contribution.
- *  - Paid PO (amount_paid ≥ total) ⇒ full contribution.
+ * Sources (read-only):
+ *  - service_orders                 → universe + total + status + group_id
+ *      Uses the FROZEN distribution_snapshot (immutable per OS).
+ *      Falls back to the live profit_rule for OS without snapshot,
+ *      matched by `group_id ∈ profit_rules.group_ids`.
+ *  - profit_rules + profit_rule_items
+ *                                    → ensures every participant from any
+ *                                      active rule appears (even with 0 OS).
+ *  - localStorage (partialPaymentsStore)
+ *                                    → Financial-UI-only partial amounts.
+ *
+ * Status rules:
+ *  - 'paid'     → received = expected (full)
+ *  - 'partial'  → received = partial_amount(UI) × percentage_share
+ *                 (i.e. snapshot_value × partial/total, ratio capped at 1)
+ *  - 'pending'  → received = 0
  *
  * NEVER writes to any of these tables.
+ * NEVER reads from payment_orders or financial_entries.
+ * NEVER filters by technician ownership — only group linkage matters.
  */
 
 export interface ParticipantAgg {
@@ -35,9 +45,9 @@ export interface ParticipantAggregation {
   debug: {
     serviceOrdersUsed: number;
     serviceOrdersTotal: number;
-    paymentOrdersUsed: number;
-    paymentOrdersTotal: number;
-    paymentOrdersUnlinked: number;
+    serviceOrdersWithoutGroup: number;
+    serviceOrdersWithoutDistribution: number;
+    participantsFromRules: number;
     missingSnapshotCount: number;
     missingSnapshotIds: string[];
   };
@@ -48,120 +58,156 @@ function emptyAgg(name: string): ParticipantAgg {
 }
 
 export function useParticipantAggregation() {
+  const qc = useQueryClient();
+  const [, force] = useState(0);
+
+  // Re-run aggregation whenever the UI-only partial store changes.
+  useEffect(() => {
+    return partialPaymentsStore.subscribe(() => {
+      qc.invalidateQueries({ queryKey: ["participant-aggregation"] });
+      force((n) => n + 1);
+    });
+  }, [qc]);
+
   return useQuery<ParticipantAggregation>({
     queryKey: ["participant-aggregation"],
-    staleTime: 30_000, // cache 30s — avoid recompute on every render
+    staleTime: 30_000,
     queryFn: async () => {
-      const [soRes, distRes, poRes, feRes] = await Promise.all([
+      const [soRes, rulesRes, ruleItemsRes] = await Promise.all([
         supabase
           .from("service_orders")
-          .select("id, total, status, group_id, license_plate, week, created_at, distribution_snapshot"),
-        supabase
-          .from("service_order_distributions")
-          .select("service_order_id, participant_name, calculated_value, percentage"),
-        supabase
-          .from("payment_orders")
           .select(
-            "service_order_id, group_id, license_plate, list_name, total, amount_paid, status, created_at",
+            "id, total, status, group_id, created_at, distribution_snapshot",
           ),
         supabase
-          .from("financial_entries" as any)
-          .select("service_order_id, amount_paid"),
+          .from("profit_rules")
+          .select("id, group_ids, is_active")
+          .eq("is_active", true),
+        supabase
+          .from("profit_rule_items")
+          .select("rule_id, participant_name, percentage"),
       ]);
 
       const serviceOrders = soRes.data ?? [];
-      const distributions = distRes.data ?? [];
-      const paymentOrders = poRes.data ?? [];
-      const financialEntries = ((feRes.data ?? []) as unknown) as Array<{ service_order_id: string; amount_paid: number }>;
+      const rules = rulesRes.data ?? [];
+      const ruleItems = ruleItemsRes.data ?? [];
 
-      // Sum manual partial-payment entries per SO
-      const entriesBySo = new Map<string, number>();
-      for (const fe of financialEntries) {
-        entriesBySo.set(
-          fe.service_order_id,
-          (entriesBySo.get(fe.service_order_id) ?? 0) + Number(fe.amount_paid || 0),
-        );
-      }
-
-      // Index live distributions by service_order_id (fallback only)
-      const liveDistBySo = new Map<string, { name: string; value: number }[]>();
-      for (const d of distributions) {
-        const list = liveDistBySo.get(d.service_order_id) ?? [];
+      // Index rule items by rule_id
+      const itemsByRule = new Map<string, Array<{ name: string; pct: number }>>();
+      for (const it of ruleItems) {
+        const list = itemsByRule.get(it.rule_id) ?? [];
         list.push({
-          name: d.participant_name,
-          value: Number(d.calculated_value || 0),
+          name: it.participant_name,
+          pct: Number(it.percentage || 0),
         });
-        liveDistBySo.set(d.service_order_id, list);
+        itemsByRule.set(it.rule_id, list);
       }
 
-      // Resolve final distribution per OS: SNAPSHOT wins, live is fallback only.
-      // The snapshot is immutable — past OS keep their original percentages
-      // even if profit rules are later edited.
-      const distBySo = new Map<string, { name: string; value: number }[]>();
-      const missingSnapshotIds: string[] = [];
-      for (const so of serviceOrders) {
-        const snap = (so as any).distribution_snapshot as
-          | Array<{ participant_name: string; percentage: number; calculated_value: number }>
-          | null;
-        if (Array.isArray(snap) && snap.length > 0) {
-          const total = Number(so.total || 0);
-          distBySo.set(
-            so.id,
-            snap.map((s) => {
-              const v =
-                s.calculated_value != null && !Number.isNaN(Number(s.calculated_value))
-                  ? Number(s.calculated_value)
-                  : total * (Number(s.percentage || 0) / 100);
-              return { name: s.participant_name, value: v };
-            }),
-          );
-        } else {
-          missingSnapshotIds.push(so.id);
-          const live = liveDistBySo.get(so.id);
-          if (live && live.length > 0) distBySo.set(so.id, live);
+      // Map: group_id → distribution items (live fallback)
+      const liveDistByGroup = new Map<string, Array<{ name: string; pct: number }>>();
+      for (const r of rules) {
+        const items = itemsByRule.get(r.id);
+        if (!items || items.length === 0) continue;
+        const groups = (r.group_ids ?? []) as string[];
+        for (const g of groups) {
+          if (!g) continue;
+          // Last active rule wins for a group; merge by name otherwise
+          liveDistByGroup.set(g, items);
         }
       }
 
-      // Helper: normalize plate
-      const normPlate = (p?: string | null) =>
-        (p || "").replace(/[\s\-]/g, "").toUpperCase();
+      // Resolve final distribution per OS:
+      //   1) snapshot wins (immutable)
+      //   2) else live rule by group_id
+      //   3) else skip (no distribution → ignored)
+      const distBySo = new Map<
+        string,
+        Array<{ name: string; value: number; pct: number }>
+      >();
+      const missingSnapshotIds: string[] = [];
+      let serviceOrdersWithoutGroup = 0;
+      let serviceOrdersWithoutDistribution = 0;
 
-      // HYBRID STATUS-DRIVEN RATIO:
-      //  - status 'paid'    → ratio 1 (full)
-      //  - status 'partial' → ratio = SUM(financial_entries.amount_paid) / total
-      //  - status 'pending' → ratio 0
-      //  - any other        → fallback to linked PO ratio (kept for safety, no value impact otherwise)
+      for (const so of serviceOrders) {
+        const total = Number(so.total || 0);
+        const snap = (so as any).distribution_snapshot as
+          | Array<{ participant_name: string; percentage: number; calculated_value: number }>
+          | null;
+
+        if (Array.isArray(snap) && snap.length > 0) {
+          distBySo.set(
+            so.id,
+            snap.map((s) => {
+              const pct = Number(s.percentage || 0);
+              const v =
+                s.calculated_value != null && !Number.isNaN(Number(s.calculated_value))
+                  ? Number(s.calculated_value)
+                  : total * (pct / 100);
+              return { name: s.participant_name, value: v, pct };
+            }),
+          );
+          continue;
+        }
+
+        missingSnapshotIds.push(so.id);
+
+        if (!so.group_id) {
+          serviceOrdersWithoutGroup++;
+          continue;
+        }
+        const live = liveDistByGroup.get(so.group_id);
+        if (!live || live.length === 0) {
+          serviceOrdersWithoutDistribution++;
+          continue;
+        }
+        distBySo.set(
+          so.id,
+          live.map((d) => ({
+            name: d.name,
+            pct: d.pct,
+            value: total * (d.pct / 100),
+          })),
+        );
+      }
+
+      // Status-driven received ratio (UI-only partial amounts)
+      const partialStore = partialPaymentsStore.getAll();
       const ratioBySo = new Map<string, number>();
       for (const so of serviceOrders) {
         const total = Number(so.total || 0);
         const status = (so as any).status as string | null;
-
         if (status === "paid") {
           ratioBySo.set(so.id, 1);
-          continue;
-        }
-        if (status === "partial") {
-          const paid = entriesBySo.get(so.id) ?? 0;
+        } else if (status === "partial") {
+          const paid = Number(partialStore[so.id] ?? 0);
           let ratio = 0;
           if (total > 0) ratio = Math.min(1, paid / total);
           else if (paid > 0) ratio = 1;
           ratioBySo.set(so.id, ratio);
-          continue;
+        } else {
+          ratioBySo.set(so.id, 0);
         }
-        // pending or unknown → 0
-        ratioBySo.set(so.id, 0);
       }
 
-      // Aggregate per participant (and per year/month)
+      // Aggregate per participant (and year/month)
       const byParticipant: Record<string, ParticipantAgg> = {};
       const byParticipantYearMonth: Record<
         string,
         Record<string, Record<string, ParticipantAgg>>
       > = {};
 
+      // Seed every participant declared in any active rule (zeroed)
+      const allParticipantNames = new Set<string>();
+      for (const items of itemsByRule.values()) {
+        for (const it of items) allParticipantNames.add(it.name);
+      }
+      for (const name of allParticipantNames) {
+        byParticipant[name] = emptyAgg(name);
+      }
+
       for (const so of serviceOrders) {
         const dists = distBySo.get(so.id);
-        if (!dists || dists.length === 0) continue; // IGNORE OS without rule
+        if (!dists || dists.length === 0) continue;
 
         const ratio = ratioBySo.get(so.id) ?? 0;
         const created = (so.created_at as string) || "";
@@ -195,12 +241,6 @@ export function useParticipantAggregation() {
       const serviceOrdersUsed = Array.from(distBySo.values()).filter(
         (v) => v.length > 0,
       ).length;
-      const paymentOrdersUsed = paymentOrders.filter(
-        (po) => po.service_order_id && serviceOrders.some((so) => so.id === po.service_order_id),
-      ).length;
-      const paymentOrdersUnlinked = paymentOrders.filter(
-        (po) => !po.service_order_id,
-      ).length;
 
       return {
         byParticipant,
@@ -209,9 +249,9 @@ export function useParticipantAggregation() {
         debug: {
           serviceOrdersUsed,
           serviceOrdersTotal: serviceOrders.length,
-          paymentOrdersUsed,
-          paymentOrdersTotal: paymentOrders.length,
-          paymentOrdersUnlinked,
+          serviceOrdersWithoutGroup,
+          serviceOrdersWithoutDistribution,
+          participantsFromRules: allParticipantNames.size,
           missingSnapshotCount: missingSnapshotIds.length,
           missingSnapshotIds,
         },
