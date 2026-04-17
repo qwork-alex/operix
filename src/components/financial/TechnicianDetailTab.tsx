@@ -819,7 +819,7 @@ function YearBlock({ techName, block, columns, allSpreadsheet, allMovements, onS
                   </Tooltip>
                 </div>
               </div>
-              <FinancialMovements movements={block.yearMovements} onChange={handleYearMovementsChange} formatCurrency={formatCurrency} constrainToYear={block.year} />
+              <FinancialMovements movements={block.yearMovements} onChange={handleYearMovementsChange} formatCurrency={formatCurrency} constrainToYear={block.year} availableCash={effectiveCash} />
             </div>
 
             <div className="space-y-2">
