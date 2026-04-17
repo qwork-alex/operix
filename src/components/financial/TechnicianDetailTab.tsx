@@ -794,18 +794,22 @@ function YearBlock({ techName, block, columns, allSpreadsheet, allMovements, onS
   );
 }
 
-/* ── Year Revenue Section ── */
+/* ── Year Revenue Section ──
+   Reads ONLY from the canonical aggregation (single source of truth).
+   No manual Expected/Received/Difference inputs — those caused 1¢ drift. */
 function YearRevenueSection({ year, expected, received, onSave, formatCurrency, derivedAgg }: {
   year: string; expected: number; received: number;
   onSave: (year: string, type: string, amount: number) => void;
   formatCurrency: (v: number) => string;
   derivedAgg?: ParticipantAgg;
 }) {
-  const [localExpected, setLocalExpected] = useState(String(expected || ""));
-  const [localReceived, setLocalReceived] = useState(String(received || ""));
-  const difference = (Number(localExpected) || 0) - (Number(localReceived) || 0);
-
-  const hasDerived = derivedAgg && (derivedAgg.expected > 0 || derivedAgg.received > 0);
+  const exp = derivedAgg?.expected ?? 0;
+  const rec = derivedAgg?.received ?? 0;
+  const diff = derivedAgg?.difference ?? 0;
+  const diffTone =
+    diff > 0 ? "text-destructive"
+    : diff < 0 ? "text-emerald-400"
+    : "text-foreground";
 
   return (
     <div className="space-y-2">
@@ -815,36 +819,23 @@ function YearRevenueSection({ year, expected, received, onSave, formatCurrency, 
       <div className="grid grid-cols-3 gap-3">
         <div className="space-y-1">
           <span className="text-xs text-muted-foreground">Esperada</span>
-          <Input type="number" className="h-8 text-sm text-right" value={localExpected}
-            onChange={(e) => setLocalExpected(e.target.value)}
-            onBlur={() => onSave(year, "manual_revenue_expected", parseFloat(localExpected) || 0)} />
+          <div className="h-8 flex items-center justify-end px-3 text-sm font-medium tabular-nums rounded-md border border-border/50 bg-muted/30 text-foreground">
+            {formatCurrency(exp)}
+          </div>
         </div>
         <div className="space-y-1">
           <span className="text-xs text-muted-foreground">Recebida</span>
-          <Input type="number" className="h-8 text-sm text-right" value={localReceived}
-            onChange={(e) => setLocalReceived(e.target.value)}
-            onBlur={() => onSave(year, "manual_revenue_received", parseFloat(localReceived) || 0)} />
+          <div className="h-8 flex items-center justify-end px-3 text-sm font-medium tabular-nums rounded-md border border-border/50 bg-muted/30 text-foreground">
+            {formatCurrency(rec)}
+          </div>
         </div>
         <div className="space-y-1">
           <span className="text-xs text-muted-foreground">Diferença</span>
-          <div className={`h-8 flex items-center justify-end px-3 text-sm font-medium tabular-nums rounded-md border border-border/50 bg-muted/30 ${difference > 0 ? "text-destructive" : difference < 0 ? "text-emerald-400" : "text-foreground"}`}>
-            {difference > 0 ? "-" : difference < 0 ? "+" : ""}{formatCurrency(Math.abs(difference))}
+          <div className={`h-8 flex items-center justify-end px-3 text-sm font-medium tabular-nums rounded-md border border-border/50 bg-muted/30 ${diffTone}`}>
+            {diff > 0 ? "-" : diff < 0 ? "+" : ""}{formatCurrency(Math.abs(diff))}
           </div>
         </div>
       </div>
-
-      {hasDerived && (
-        <div className="grid grid-cols-3 gap-3 mt-1 pt-2 border-t border-dashed border-border/40">
-          <DerivedCell label="Esperada (regras)" value={derivedAgg!.expected} formatCurrency={formatCurrency} />
-          <DerivedCell label="Recebida (real)" value={derivedAgg!.received} formatCurrency={formatCurrency} />
-          <DerivedCell
-            label="Diferença"
-            value={derivedAgg!.difference}
-            formatCurrency={formatCurrency}
-            tone={derivedAgg!.difference > 0 ? "negative" : derivedAgg!.difference < 0 ? "positive" : "neutral"}
-          />
-        </div>
-      )}
     </div>
   );
 }
