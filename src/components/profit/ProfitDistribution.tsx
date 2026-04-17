@@ -1035,28 +1035,43 @@ export function ProfitDistribution() {
       })()}
 
       {/* Summary */}
-      <Card className="border-border/50">
+      <Card className="border-white/[0.08] bg-white/[0.02] backdrop-blur-sm">
         <CardHeader>
-          <CardTitle className="text-sm font-semibold">Resumo Geral</CardTitle>
+          <CardTitle
+            className="text-sm font-semibold text-white"
+            style={{ textShadow: "0 0 6px rgba(255,255,255,0.15)" }}
+          >
+            Resumo Geral
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="rounded-lg border border-border/50 p-3 text-center">
-              <p className="text-[10px] text-muted-foreground">Receita Total (OS)</p>
-              <p className="text-lg font-bold text-foreground">{formatCurrency(totalSORevenue)}</p>
-            </div>
-            <div className="rounded-lg border border-border/50 p-3 text-center">
-              <p className="text-[10px] text-muted-foreground">Ordens de Serviço</p>
-              <p className="text-lg font-bold text-foreground">{serviceOrders.length}</p>
-            </div>
-            <div className="rounded-lg border border-border/50 p-3 text-center">
-              <p className="text-[10px] text-muted-foreground">Grupos com OS</p>
-              <p className="text-lg font-bold text-foreground">{availableGroups.size}</p>
-            </div>
-            <div className="rounded-lg border border-border/50 p-3 text-center">
-              <p className="text-[10px] text-muted-foreground">Regras Criadas</p>
-              <p className="text-lg font-bold text-foreground">{rules.length}</p>
-            </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[
+              { label: "Receita Total (OS)", value: formatCurrency(totalSORevenue), glow: "152 60% 45%" }, // green
+              { label: "Ordens de Serviço", value: serviceOrders.length, glow: "210 80% 55%" },             // blue
+              { label: "Grupos com OS", value: availableGroups.size, glow: "270 70% 60%" },                  // purple
+              { label: "Regras Criadas", value: rules.length, glow: "43 85% 55%" },                          // gold
+            ].map((stat) => (
+              <div
+                key={stat.label}
+                className="rounded-2xl border border-white/[0.08] bg-white/[0.03] backdrop-blur-sm p-5 text-center transition-all duration-200 ease-out hover:scale-[1.02] hover:border-white/[0.15]"
+                style={{ boxShadow: `0 0 25px hsl(${stat.glow} / 0.12)` }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.boxShadow = `0 0 35px hsl(${stat.glow} / 0.22)`;
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.boxShadow = `0 0 25px hsl(${stat.glow} / 0.12)`;
+                }}
+              >
+                <p className="text-[11px] uppercase tracking-wide text-white/60 mb-1.5">{stat.label}</p>
+                <p
+                  className="text-xl font-bold text-white"
+                  style={{ textShadow: `0 0 8px hsl(${stat.glow} / 0.4)` }}
+                >
+                  {stat.value}
+                </p>
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>
