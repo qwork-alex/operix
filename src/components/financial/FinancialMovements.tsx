@@ -172,13 +172,14 @@ function EditableAmount({ value, onChange }: { value: number; onChange: (v: numb
   );
 }
 
-export default function FinancialMovements({ movements, onChange, formatCurrency, constrainToYear }: Props) {
+export default function FinancialMovements({ movements, onChange, formatCurrency, constrainToYear, availableCash }: Props) {
   const addMovement = () => {
     const newMov: FinancialMovement = {
       id: `mov_${Date.now()}`,
       period: "",
       type: "loan",
       origin: "",
+      reason: "",
       amount: 0,
       paidAmount: 0,
       status: "pending",
@@ -204,12 +205,32 @@ export default function FinancialMovements({ movements, onChange, formatCurrency
       // Auto-adjust status based on paidAmount
       if (field === "paidAmount") {
         const paid = parseFloat(value) || 0;
+        // Cash consistency: a payment cannot exceed available cash
+        if (typeof availableCash === "number" && paid > (m.paidAmount || 0)) {
+          const delta = paid - (m.paidAmount || 0);
+          if (delta > availableCash) {
+            const allowed = (m.paidAmount || 0) + Math.max(0, availableCash);
+            toast.error("Caixa insuficiente — pagamento ajustado para parcial");
+            next.paidAmount = allowed;
+            next.status = allowed <= 0 ? "pending" : allowed >= next.amount ? "paid" : "partial";
+            return next;
+          }
+        }
         if (paid <= 0) next.status = "pending";
         else if (paid >= next.amount) next.status = "paid";
         else next.status = "partial";
       }
       if (field === "status" && value !== "partial") {
-        next.paidAmount = value === "paid" ? next.amount : 0;
+        const target = value === "paid" ? next.amount : 0;
+        const delta = target - (m.paidAmount || 0);
+        if (value === "paid" && typeof availableCash === "number" && delta > availableCash) {
+          toast.error("Caixa insuficiente para marcar como pago — registado como parcial");
+          const allowed = (m.paidAmount || 0) + Math.max(0, availableCash);
+          next.paidAmount = allowed;
+          next.status = allowed <= 0 ? "pending" : allowed >= next.amount ? "paid" : "partial";
+          return next;
+        }
+        next.paidAmount = target;
       }
       return next;
     });
