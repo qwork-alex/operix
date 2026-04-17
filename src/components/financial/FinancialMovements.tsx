@@ -285,6 +285,9 @@ export default function FinancialMovements({ movements, onChange, formatCurrency
                       <EditableTextCell value={mov.origin} onChange={(v) => updateField(mov.id, "origin", v)} />
                     </td>
                     <td className="px-1 py-0.5 text-center align-middle">
+                      <EditableTextCell value={mov.reason || ""} onChange={(v) => updateField(mov.id, "reason", v)} />
+                    </td>
+                    <td className="px-1 py-0.5 text-center align-middle">
                       <EditableAmount value={mov.amount} onChange={(v) => updateField(mov.id, "amount", v)} />
                     </td>
                     <td className="px-1 py-0.5 text-center align-middle">
