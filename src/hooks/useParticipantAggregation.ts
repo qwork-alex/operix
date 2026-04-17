@@ -194,25 +194,61 @@ export function useParticipantAggregation() {
       }
 
       // Aggregate per participant — and by WEEK (no date/year filtering).
+      // STRICT: only participants tied to each OS via its own group/snapshot
+      // contribute. No global participant seeding — that caused contamination
+      // (every tech showing up on every OS with 0).
       const byParticipant: Record<string, ParticipantAgg> = {};
       const byParticipantWeek: Record<string, Record<string, ParticipantAgg>> = {};
       const weeksFound = new Set<string>();
-
-      // Seed every participant declared in any active rule (zeroed)
       const allParticipantNames = new Set<string>();
       for (const items of itemsByRule.values()) {
         for (const it of items) allParticipantNames.add(it.name);
       }
-      for (const name of allParticipantNames) {
-        byParticipant[name] = emptyAgg(name);
+
+      // Reverse index for debug: group_id → rule_id(s)
+      const ruleIdsByGroup = new Map<string, string[]>();
+      for (const r of rules) {
+        for (const g of (r.group_ids ?? []) as string[]) {
+          if (!g) continue;
+          const list = ruleIdsByGroup.get(g) ?? [];
+          list.push(r.id);
+          ruleIdsByGroup.set(g, list);
+        }
       }
+      const traceRows: Array<{
+        service_order_id: string;
+        group_id: string | null;
+        rule_id: string | null;
+        source: "snapshot" | "live-rule" | "none";
+        participants_applied: string[];
+      }> = [];
 
       for (const so of serviceOrders) {
         const dists = distBySo.get(so.id);
-        if (!dists || dists.length === 0) continue;
+        const week = ((so as any).week as string | null)?.trim() || "unknown";
+        const snap = (so as any).distribution_snapshot;
+        const ruleIds = so.group_id ? ruleIdsByGroup.get(so.group_id) ?? [] : [];
+
+        if (!dists || dists.length === 0) {
+          traceRows.push({
+            service_order_id: so.id,
+            group_id: so.group_id ?? null,
+            rule_id: ruleIds[0] ?? null,
+            source: "none",
+            participants_applied: [],
+          });
+          continue;
+        }
+
+        traceRows.push({
+          service_order_id: so.id,
+          group_id: so.group_id ?? null,
+          rule_id: ruleIds[0] ?? null,
+          source: Array.isArray(snap) && snap.length > 0 ? "snapshot" : "live-rule",
+          participants_applied: dists.map((d) => d.name),
+        });
 
         const ratio = ratioBySo.get(so.id) ?? 0;
-        const week = ((so as any).week as string | null)?.trim() || "unknown";
         weeksFound.add(week);
 
         for (const d of dists) {
@@ -228,6 +264,9 @@ export function useParticipantAggregation() {
           agg2.difference = agg2.expected - agg2.received;
         }
       }
+
+      // eslint-disable-next-line no-console
+      console.debug("[ParticipantAggregation] per-OS trace", traceRows);
 
       const totals = Object.values(byParticipant).reduce(
         (s, a) => ({
