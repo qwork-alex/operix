@@ -486,6 +486,7 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
              {yearBlocks.map((yb) => (
               <YearBlock
                 key={yb.year}
+                techName={data.name}
                 block={yb}
                 columns={localSpreadsheet.columns}
                 allSpreadsheet={localSpreadsheet}
