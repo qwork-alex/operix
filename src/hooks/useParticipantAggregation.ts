@@ -286,22 +286,3 @@ export function getParticipantYearAgg(
   return data.byParticipant[participantName] ?? emptyAgg(participantName);
 }
 
-/** Aggregate a participant across a given year (sums all months). */
-export function getParticipantYearAgg(
-  data: ParticipantAggregation | undefined,
-  participantName: string,
-  year: string,
-): ParticipantAgg {
-  if (!data) return emptyAgg(participantName);
-  const yearMap = data.byParticipantYearMonth[year];
-  if (!yearMap) return emptyAgg(participantName);
-  const out = emptyAgg(participantName);
-  for (const monthMap of Object.values(yearMap)) {
-    const a = monthMap[participantName];
-    if (!a) continue;
-    out.expected += a.expected;
-    out.received += a.received;
-  }
-  out.difference = out.expected - out.received;
-  return out;
-}
