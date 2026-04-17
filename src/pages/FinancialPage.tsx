@@ -166,16 +166,21 @@ export default function FinancialPage() {
               SO usadas: <span className="text-foreground font-semibold">{dbg.serviceOrdersUsed}</span> / {dbg.serviceOrdersTotal}
             </span>
             <span className="font-mono text-muted-foreground">
-              OP usadas: <span className="text-foreground font-semibold">{dbg.paymentOrdersUsed}</span> / {dbg.paymentOrdersTotal}
+              Participantes (regras): <span className="text-foreground font-semibold">{dbg.participantsFromRules}</span>
             </span>
             {dbg.missingSnapshotCount > 0 && (
-              <span className="font-mono text-destructive">
+              <span className="font-mono text-amber-400">
                 ⚠ Sem snapshot: {dbg.missingSnapshotCount}
               </span>
             )}
-            {dbg.paymentOrdersUnlinked > 0 && (
-              <span className="font-mono text-warning">
-                ⚠ OP sem ligação a OS: {dbg.paymentOrdersUnlinked}
+            {dbg.serviceOrdersWithoutGroup > 0 && (
+              <span className="font-mono text-destructive">
+                ⚠ OS sem grupo: {dbg.serviceOrdersWithoutGroup}
+              </span>
+            )}
+            {dbg.serviceOrdersWithoutDistribution > 0 && (
+              <span className="font-mono text-destructive">
+                ⚠ OS sem regra de distribuição: {dbg.serviceOrdersWithoutDistribution}
               </span>
             )}
             {aggDisconnected && (

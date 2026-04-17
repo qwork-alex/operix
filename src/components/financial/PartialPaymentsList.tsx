@@ -1,24 +1,22 @@
-import { useState, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Save, Trash2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
+import { partialPaymentsStore } from "@/lib/partialPaymentsStore";
 
 /**
- * Lightweight UI: lists every Service Order with status='partial' that was
- * created in the given year AND whose distribution snapshot includes the
- * given participant. Allows the user to enter / edit the partial amount,
- * which is persisted to the new `financial_entries` table.
+ * UI-only partial payments editor.
  *
- * Read paths:
- *  - service_orders        (id, total, status, created_at, distribution_snapshot)
- *  - financial_entries     (sum amount_paid per service_order_id)
+ * Lists every Service Order with status='partial' that was created in the
+ * given year AND whose distribution snapshot includes the given participant.
  *
- * Write paths:
- *  - financial_entries     (insert / delete only — never touches SO/PO)
+ * Partial amounts live ONLY in localStorage (partialPaymentsStore). The
+ * service_orders table remains immutable. payment_orders / financial_entries
+ * are not used.
  */
 
 interface PartialSO {
@@ -26,14 +24,9 @@ interface PartialSO {
   total: number;
   car_name: string | null;
   license_plate: string | null;
-  paid: number;
-  entryId: string | null;
 }
 
-function fetchPartialsForParticipant(
-  participantName: string,
-  year: string,
-) {
+function fetchPartialsForParticipant(participantName: string, year: string) {
   return async (): Promise<PartialSO[]> => {
     const yearStart = `${year}-01-01`;
     const yearEnd = `${year}-12-31T23:59:59`;
@@ -52,34 +45,12 @@ function fetchPartialsForParticipant(
       return snap.some((s: any) => s?.participant_name === participantName);
     });
 
-    if (filtered.length === 0) return [];
-
-    const ids = filtered.map((s: any) => s.id);
-    const { data: entries, error: feErr } = await (supabase as any)
-      .from("financial_entries")
-      .select("id, service_order_id, amount_paid")
-      .in("service_order_id", ids);
-    if (feErr) throw feErr;
-
-    const paidMap = new Map<string, { sum: number; latestId: string | null }>();
-    for (const e of (entries ?? []) as Array<{ id: string; service_order_id: string; amount_paid: number }>) {
-      const cur = paidMap.get(e.service_order_id) ?? { sum: 0, latestId: null };
-      cur.sum += Number(e.amount_paid || 0);
-      cur.latestId = e.id;
-      paidMap.set(e.service_order_id, cur);
-    }
-
-    return filtered.map((so: any) => {
-      const m = paidMap.get(so.id);
-      return {
-        id: so.id,
-        total: Number(so.total || 0),
-        car_name: so.car_name,
-        license_plate: so.license_plate,
-        paid: m?.sum ?? 0,
-        entryId: m?.latestId ?? null,
-      };
-    });
+    return filtered.map((so: any) => ({
+      id: so.id,
+      total: Number(so.total || 0),
+      car_name: so.car_name,
+      license_plate: so.license_plate,
+    }));
   };
 }
 
@@ -92,37 +63,12 @@ export default function PartialPaymentsList({
   year: string;
   formatCurrency: (v: number) => string;
 }) {
-  const qc = useQueryClient();
   const queryKey = ["partial-sos", participantName, year];
 
   const { data: items = [], isLoading } = useQuery({
     queryKey,
     queryFn: fetchPartialsForParticipant(participantName, year),
     staleTime: 15_000,
-  });
-
-  const upsertEntry = useMutation({
-    mutationFn: async ({ soId, amount }: { soId: string; amount: number }) => {
-      // Replace strategy: delete prior entries for this SO, insert new one
-      const { error: delErr } = await (supabase as any)
-        .from("financial_entries")
-        .delete()
-        .eq("service_order_id", soId);
-      if (delErr) throw delErr;
-
-      if (amount > 0) {
-        const { error } = await (supabase as any)
-          .from("financial_entries")
-          .insert({ service_order_id: soId, amount_paid: amount });
-        if (error) throw error;
-      }
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey });
-      qc.invalidateQueries({ queryKey: ["participant-aggregation"] });
-      toast.success("Pagamento parcial guardado");
-    },
-    onError: (e) => toast.error("Erro: " + (e as Error).message),
   });
 
   if (isLoading) {
@@ -144,14 +90,7 @@ export default function PartialPaymentsList({
         Pagamentos parciais ({items.length})
       </div>
       {items.map((it) => (
-        <PartialRow
-          key={it.id}
-          item={it}
-          formatCurrency={formatCurrency}
-          onSave={(amount) => upsertEntry.mutate({ soId: it.id, amount })}
-          onClear={() => upsertEntry.mutate({ soId: it.id, amount: 0 })}
-          saving={upsertEntry.isPending}
-        />
+        <PartialRow key={it.id} item={it} formatCurrency={formatCurrency} />
       ))}
     </div>
   );
@@ -160,26 +99,27 @@ export default function PartialPaymentsList({
 function PartialRow({
   item,
   formatCurrency,
-  onSave,
-  onClear,
-  saving,
 }: {
   item: PartialSO;
   formatCurrency: (v: number) => string;
-  onSave: (amount: number) => void;
-  onClear: () => void;
-  saving: boolean;
 }) {
-  const [draft, setDraft] = useState(String(item.paid || ""));
+  const [paid, setPaid] = useState<number>(() => partialPaymentsStore.get(item.id));
+  const [draft, setDraft] = useState<string>(() =>
+    partialPaymentsStore.get(item.id) ? String(partialPaymentsStore.get(item.id)) : "",
+  );
   const [dirty, setDirty] = useState(false);
 
-  // Reset draft if upstream value changes (e.g. after a save)
+  // Stay in sync with cross-tab/store changes
   useEffect(() => {
-    setDraft(String(item.paid || ""));
-    setDirty(false);
-  }, [item.paid]);
+    return partialPaymentsStore.subscribe(() => {
+      const v = partialPaymentsStore.get(item.id);
+      setPaid(v);
+      setDraft(v ? String(v) : "");
+      setDirty(false);
+    });
+  }, [item.id]);
 
-  const remaining = Math.max(0, item.total - item.paid);
+  const remaining = Math.max(0, item.total - paid);
   const label = item.car_name || item.license_plate || "Ordem";
 
   const handleSave = () => {
@@ -192,7 +132,13 @@ function PartialRow({
       toast.error(`Valor excede o total (${formatCurrency(item.total)})`);
       return;
     }
-    onSave(num);
+    partialPaymentsStore.set(item.id, num);
+    toast.success("Pagamento parcial guardado");
+  };
+
+  const handleClear = () => {
+    partialPaymentsStore.clear(item.id);
+    toast.success("Pagamento parcial removido");
   };
 
   return (
@@ -224,29 +170,17 @@ function PartialRow({
         {dirty && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-6 w-6"
-                onClick={handleSave}
-                disabled={saving}
-              >
+              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={handleSave}>
                 <Save className="h-3.5 w-3.5 text-primary" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>Guardar</TooltipContent>
           </Tooltip>
         )}
-        {item.paid > 0 && !dirty && (
+        {paid > 0 && !dirty && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-6 w-6"
-                onClick={onClear}
-                disabled={saving}
-              >
+              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={handleClear}>
                 <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
               </Button>
             </TooltipTrigger>
