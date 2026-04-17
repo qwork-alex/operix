@@ -341,25 +341,49 @@ export function ProfitDistribution() {
         const soIds = allSOs.map((so: any) => so.id);
         await supabase.from("service_order_distributions").delete().in("service_order_id", soIds);
 
-        const distributions = allSOs.flatMap((so: any) =>
-          participants.map(item => ({
+        // Canonical integer-cents splitter — MUST match
+        // src/hooks/useParticipantAggregation.ts splitCents().
+        const splitCents = (totalCents: number, pcts: number[]): number[] => {
+          const n = pcts.length;
+          if (n === 0) return [];
+          const raw = pcts.map((p) => (totalCents * p) / 100);
+          const floors = raw.map((x) => Math.floor(x));
+          let remainder = totalCents - floors.reduce((s, x) => s + x, 0);
+          const order = raw
+            .map((x, i) => ({ i, frac: x - Math.floor(x) }))
+            .sort((a, b) => b.frac - a.frac);
+          const out = floors.slice();
+          for (let k = 0; k < order.length && remainder > 0; k++) {
+            out[order[k].i] += 1;
+            remainder -= 1;
+          }
+          return out;
+        };
+
+        const pctsArr = participants.map((p) => p.percentage);
+        const distributions = allSOs.flatMap((so: any) => {
+          const totalCents = Math.round(Number(so.total || 0) * 100);
+          const parts = splitCents(totalCents, pctsArr);
+          return participants.map((item, i) => ({
             service_order_id: so.id,
             participant_name: item.participant_name,
             percentage: item.percentage,
-            calculated_value: Math.round(Number(so.total || 0) * item.percentage / 100 * 100) / 100,
-          }))
-        );
+            calculated_value: parts[i] / 100,
+          }));
+        });
         if (distributions.length > 0) {
           await supabase.from("service_order_distributions").insert(distributions);
         }
 
-        const techItem = participants.find(i => i.participant_type === "technician");
-        if (techItem) {
+        const techIdx = participants.findIndex(i => i.participant_type === "technician");
+        if (techIdx >= 0) {
+          const techPct = participants[techIdx].percentage;
           for (const so of allSOs) {
-            const total = Number((so as any).total || 0);
+            const totalCents = Math.round(Number((so as any).total || 0) * 100);
+            const parts = splitCents(totalCents, pctsArr);
             await supabase.from("service_orders").update({
-              technician_percentage: techItem.percentage,
-              technician_earning: Math.round(total * techItem.percentage / 100 * 100) / 100,
+              technician_percentage: techPct,
+              technician_earning: parts[techIdx] / 100,
               updated_at: new Date().toISOString(),
             }).eq("id", (so as any).id);
           }

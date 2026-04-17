@@ -149,35 +149,66 @@ export function useParticipantAggregation() {
         }
       }
 
-      // Resolve final distribution per OS:
-      //   1) snapshot wins (immutable)
+      // ── INTEGER CENTS MATH ──
+      // All money flows through integer cents (€ × 100) until the final
+      // display step. This guarantees sum(parts) == total exactly and
+      // matches the canonical splitter used by Profit Distribution.
+      const toCents = (n: number) => Math.round(Number(n || 0) * 100);
+
+      /**
+       * Canonical largest-remainder splitter — SHARED contract with
+       * ProfitDistribution. Splits `totalCents` across percentages so that
+       * the integer parts always sum back to `totalCents` (no cent loss).
+       */
+      const splitCents = (
+        totalCents: number,
+        pcts: number[],
+      ): number[] => {
+        const n = pcts.length;
+        if (n === 0) return [];
+        const raw = pcts.map((p) => (totalCents * p) / 100);
+        const floors = raw.map((x) => Math.floor(x));
+        let remainder = totalCents - floors.reduce((s, x) => s + x, 0);
+        const order = raw
+          .map((x, i) => ({ i, frac: x - Math.floor(x) }))
+          .sort((a, b) => b.frac - a.frac);
+        const out = floors.slice();
+        for (let k = 0; k < order.length && remainder > 0; k++) {
+          out[order[k].i] += 1;
+          remainder -= 1;
+        }
+        return out;
+      };
+
+      // Resolve final distribution per OS in CENTS:
+      //   1) snapshot wins (immutable, but re-balanced via splitCents to
+      //      kill any historical 1¢ drift in stored calculated_value)
       //   2) else live rule by group_id
       //   3) else skip (no distribution → ignored)
       const distBySo = new Map<
         string,
-        Array<{ name: string; value: number; pct: number }>
+        Array<{ name: string; cents: number; pct: number }>
       >();
       const missingSnapshotIds: string[] = [];
       let serviceOrdersWithoutGroup = 0;
       let serviceOrdersWithoutDistribution = 0;
 
       for (const so of serviceOrders) {
-        const total = Number(so.total || 0);
+        const totalCents = toCents(so.total);
         const snap = (so as any).distribution_snapshot as
           | Array<{ participant_name: string; percentage: number; calculated_value: number }>
           | null;
 
         if (Array.isArray(snap) && snap.length > 0) {
+          const pcts = snap.map((s) => Number(s.percentage || 0));
+          const parts = splitCents(totalCents, pcts);
           distBySo.set(
             so.id,
-            snap.map((s) => {
-              const pct = Number(s.percentage || 0);
-              const v =
-                s.calculated_value != null && !Number.isNaN(Number(s.calculated_value))
-                  ? Number(s.calculated_value)
-                  : total * (pct / 100);
-              return { name: s.participant_name, value: v, pct };
-            }),
+            snap.map((s, i) => ({
+              name: s.participant_name,
+              pct: pcts[i],
+              cents: parts[i],
+            })),
           );
           continue;
         }
@@ -193,32 +224,31 @@ export function useParticipantAggregation() {
           serviceOrdersWithoutDistribution++;
           continue;
         }
+        const pcts = live.map((d) => d.pct);
+        const parts = splitCents(totalCents, pcts);
         distBySo.set(
           so.id,
-          live.map((d) => ({
-            name: d.name,
-            pct: d.pct,
-            value: total * (d.pct / 100),
-          })),
+          live.map((d, i) => ({ name: d.name, pct: d.pct, cents: parts[i] })),
         );
       }
 
-      // Status-driven received ratio (UI-only partial amounts)
+      // Status-driven received cents (UI-only partial amounts).
+      // For partial: received_cents = floor(participant_cents * paid / total),
+      // computed in integer space — no float ratio.
       const partialStore = partialPaymentsStore.getAll();
-      const ratioBySo = new Map<string, number>();
+      const paidCentsBySo = new Map<string, number>();
+      const statusBySo = new Map<string, string | null>();
       for (const so of serviceOrders) {
-        const total = Number(so.total || 0);
+        const totalCents = toCents(so.total);
         const status = (so as any).status as string | null;
+        statusBySo.set(so.id, status);
         if (status === "paid") {
-          ratioBySo.set(so.id, 1);
+          paidCentsBySo.set(so.id, totalCents);
         } else if (status === "partial") {
-          const paid = Number(partialStore[so.id] ?? 0);
-          let ratio = 0;
-          if (total > 0) ratio = Math.min(1, paid / total);
-          else if (paid > 0) ratio = 1;
-          ratioBySo.set(so.id, ratio);
+          const paid = toCents(partialStore[so.id] ?? 0);
+          paidCentsBySo.set(so.id, Math.min(totalCents, paid));
         } else {
-          ratioBySo.set(so.id, 0);
+          paidCentsBySo.set(so.id, 0);
         }
       }
 
@@ -277,53 +307,74 @@ export function useParticipantAggregation() {
           participants_applied: dists.map((d) => d.name),
         });
 
-        const ratio = ratioBySo.get(so.id) ?? 0;
+        const paidCents = paidCentsBySo.get(so.id) ?? 0;
         weeksFound.add(week);
 
-        for (const d of dists) {
+        // Distribute paid cents across participants using the SAME
+        // largest-remainder splitter, weighted by each participant's
+        // expected cents — guarantees sum(received_parts) == paidCents.
+        const expectedParts = dists.map((d) => d.cents);
+        const sumExpected = expectedParts.reduce((s, x) => s + x, 0);
+        let receivedParts: number[];
+        if (paidCents <= 0 || sumExpected <= 0) {
+          receivedParts = expectedParts.map(() => 0);
+        } else if (paidCents >= sumExpected) {
+          receivedParts = expectedParts.slice();
+        } else {
+          const pcts = expectedParts.map((c) => (c * 100) / sumExpected);
+          receivedParts = splitCents(paidCents, pcts);
+        }
+
+        for (let i = 0; i < dists.length; i++) {
+          const d = dists[i];
+          const exp = d.cents;
+          const rec = receivedParts[i];
+
           const agg = (byParticipant[d.name] ??= emptyAgg(d.name));
-          agg.expected += d.value;
-          agg.received += d.value * ratio;
-          agg.difference = agg.expected - agg.received;
+          (agg as any)._expCents = ((agg as any)._expCents ?? 0) + exp;
+          (agg as any)._recCents = ((agg as any)._recCents ?? 0) + rec;
 
           const weekMap = (byParticipantWeek[week] ??= {});
           const agg2 = (weekMap[d.name] ??= emptyAgg(d.name));
-          agg2.expected += d.value;
-          agg2.received += d.value * ratio;
-          agg2.difference = agg2.expected - agg2.received;
+          (agg2 as any)._expCents = ((agg2 as any)._expCents ?? 0) + exp;
+          (agg2 as any)._recCents = ((agg2 as any)._recCents ?? 0) + rec;
         }
       }
 
       // eslint-disable-next-line no-console
       console.debug("[ParticipantAggregation] per-OS trace", traceRows);
 
-      // FINAL rounding to 2 decimals — only at the last step, never intermediate.
-      // Matches the rounding used by the Profit Distribution module.
-      const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
-      for (const name of Object.keys(byParticipant)) {
-        const a = byParticipant[name];
-        a.expected = round2(a.expected);
-        a.received = round2(a.received);
-        a.difference = round2(a.expected - a.received);
-      }
+      // FINAL conversion: integer cents → euros. Single division, no float
+      // intermediate math, no Math.round / toFixed beyond this point.
+      const centsToEuros = (c: number) => c / 100;
+      const finalize = (a: ParticipantAgg) => {
+        const exp = (a as any)._expCents ?? 0;
+        const rec = (a as any)._recCents ?? 0;
+        a.expected = centsToEuros(exp);
+        a.received = centsToEuros(rec);
+        a.difference = centsToEuros(exp - rec);
+        delete (a as any)._expCents;
+        delete (a as any)._recCents;
+      };
+      for (const name of Object.keys(byParticipant)) finalize(byParticipant[name]);
       for (const week of Object.keys(byParticipantWeek)) {
         const map = byParticipantWeek[week];
-        for (const name of Object.keys(map)) {
-          const a = map[name];
-          a.expected = round2(a.expected);
-          a.received = round2(a.received);
-          a.difference = round2(a.expected - a.received);
-        }
+        for (const name of Object.keys(map)) finalize(map[name]);
       }
 
-      const totals = Object.values(byParticipant).reduce(
-        (s, a) => ({
-          expected: round2(s.expected + a.expected),
-          received: round2(s.received + a.received),
-          difference: round2(s.difference + a.difference),
-        }),
-        { expected: 0, received: 0, difference: 0 },
-      );
+      // Totals: sum participant cents (re-derive from euros via *100 round
+      // to recover exact cents), convert once.
+      let totExpCents = 0;
+      let totRecCents = 0;
+      for (const a of Object.values(byParticipant)) {
+        totExpCents += Math.round(a.expected * 100);
+        totRecCents += Math.round(a.received * 100);
+      }
+      const totals = {
+        expected: centsToEuros(totExpCents),
+        received: centsToEuros(totRecCents),
+        difference: centsToEuros(totExpCents - totRecCents),
+      };
 
       const serviceOrdersUsed = Array.from(distBySo.values()).filter(
         (v) => v.length > 0,
