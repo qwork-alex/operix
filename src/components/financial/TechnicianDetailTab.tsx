@@ -652,8 +652,22 @@ function YearBlock({ techName, block, columns, allSpreadsheet, allMovements, onS
   const [editingYear, setEditingYear] = useState(false);
   const [yearDraft, setYearDraft] = useState(block.year);
   const [newPeriodInput, setNewPeriodInput] = useState("");
-  const isPositive = block.technicianResult >= 0;
   const yearSuffix = block.year.slice(2);
+
+  // ── EFFECTIVE values: derivedAgg (real PO data) takes priority over manual entries.
+  // CASH must reflect REAL money received from payment orders, not just manual inputs.
+  const effectiveReceived = derivedAgg && derivedAgg.received > 0 ? derivedAgg.received : block.revenueReceived;
+  const effectiveExpected = derivedAgg && derivedAgg.expected > 0 ? derivedAgg.expected : block.revenueExpected;
+
+  // CASH = received + incoming loans − paid expenses (company-owned money)
+  const effectiveCash = effectiveReceived + block.loansIncoming - block.totalExpenses;
+  // TECHNICIAN RESULT = expected − expenses (operational, no loans)
+  const effectiveTechnicianResult = effectiveExpected - block.totalExpenses;
+  // PAYABLE TO TECHNICIAN: positive operational result becomes a liability owed to the tech
+  const payableToTechnician = Math.max(0, effectiveReceived - block.totalExpenses);
+  // Total obligations = partner debts (Sanchez/loans) + tech payable
+  const totalObligations = block.obligationsTotal + payableToTechnician;
+  const isPositive = effectiveTechnicianResult >= 0;
 
   const handleYearMovementsChange = useCallback((yearMovements: FinancialMovement[]) => {
     const otherMovements = allMovements.filter((m) => getYearFromPeriod(m.period) !== block.year);
@@ -706,7 +720,7 @@ function YearBlock({ techName, block, columns, allSpreadsheet, allMovements, onS
               <div className="flex items-center gap-2">
                 {isPositive ? <TrendingUp className="h-4 w-4 text-emerald-400" /> : <TrendingDown className="h-4 w-4 text-destructive" />}
                 <span className={`text-sm font-bold tabular-nums ${isPositive ? "text-emerald-400" : "text-destructive"}`}>
-                  {formatCurrency(Math.abs(block.technicianResult))}
+                  {formatCurrency(Math.abs(effectiveTechnicianResult))}
                 </span>
               </div>
             </div>
@@ -782,9 +796,9 @@ function YearBlock({ techName, block, columns, allSpreadsheet, allMovements, onS
                 Resumo financeiro {block.year}
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {/* A) CASH */}
+                {/* A) CASH — real money owned by the company */}
                 <div className={`rounded-lg border px-4 py-3 ${
-                  block.cash >= 0
+                  effectiveCash >= 0
                     ? "border-emerald-400/20 bg-emerald-400/5"
                     : "border-destructive/20 bg-destructive/5"
                 }`}>
@@ -795,12 +809,12 @@ function YearBlock({ techName, block, columns, allSpreadsheet, allMovements, onS
                     </span>
                   </div>
                   <div className={`text-base font-bold tabular-nums ${
-                    block.cash >= 0 ? "text-emerald-400" : "text-destructive"
+                    effectiveCash >= 0 ? "text-emerald-400" : "text-destructive"
                   }`}>
-                    {block.cash < 0 ? "- " : ""}{formatCurrency(Math.abs(block.cash))}
+                    {effectiveCash < 0 ? "- " : ""}{formatCurrency(Math.abs(effectiveCash))}
                   </div>
                   <div className="text-[10px] text-muted-foreground mt-1 space-y-0.5">
-                    <div className="flex justify-between"><span>Recebido</span><span className="tabular-nums">{formatCurrency(block.revenueReceived)}</span></div>
+                    <div className="flex justify-between"><span>Recebido</span><span className="tabular-nums">{formatCurrency(effectiveReceived)}</span></div>
                     {block.loansIncoming > 0 && (
                       <div className="flex justify-between"><span>+ Empréstimos</span><span className="tabular-nums">{formatCurrency(block.loansIncoming)}</span></div>
                     )}
@@ -808,9 +822,9 @@ function YearBlock({ techName, block, columns, allSpreadsheet, allMovements, onS
                   </div>
                 </div>
 
-                {/* B) OBLIGATIONS */}
+                {/* B) OBLIGATIONS — debts to partners + payable to technician */}
                 <div className={`rounded-lg border px-4 py-3 ${
-                  block.obligationsTotal > 0
+                  totalObligations > 0
                     ? "border-amber-500/30 bg-amber-500/5"
                     : "border-border/40 bg-muted/20"
                 }`}>
@@ -821,32 +835,40 @@ function YearBlock({ techName, block, columns, allSpreadsheet, allMovements, onS
                     </span>
                   </div>
                   <div className={`text-base font-bold tabular-nums ${
-                    block.obligationsTotal > 0 ? "text-amber-400" : "text-muted-foreground"
+                    totalObligations > 0 ? "text-amber-400" : "text-muted-foreground"
                   }`}>
-                    {formatCurrency(block.obligationsTotal)}
+                    {formatCurrency(totalObligations)}
                   </div>
                   <div className="text-[10px] text-muted-foreground mt-1 space-y-0.5">
-                    {block.obligations.length === 0 ? (
+                    {block.obligations.length === 0 && payableToTechnician === 0 ? (
                       <div className="italic">Sem dívidas pendentes</div>
                     ) : (
-                      block.obligations.map((o) => (
-                        <div key={o.origin} className="flex justify-between">
-                          <span className="truncate">{o.origin}</span>
-                          <span className="tabular-nums">{formatCurrency(o.remaining)}</span>
-                        </div>
-                      ))
+                      <>
+                        {block.obligations.map((o) => (
+                          <div key={o.origin} className="flex justify-between">
+                            <span className="truncate">Dívida: {o.origin}</span>
+                            <span className="tabular-nums">{formatCurrency(o.remaining)}</span>
+                          </div>
+                        ))}
+                        {payableToTechnician > 0 && (
+                          <div className="flex justify-between">
+                            <span className="truncate">A pagar: {techName}</span>
+                            <span className="tabular-nums">{formatCurrency(payableToTechnician)}</span>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
 
-                {/* C) TECHNICIAN RESULT */}
+                {/* C) TECHNICIAN RESULT — operational performance (no loans) */}
                 <div className={`rounded-lg border px-4 py-3 ${
-                  block.technicianResult >= 0
+                  effectiveTechnicianResult >= 0
                     ? "border-primary/20 bg-primary/5"
                     : "border-destructive/20 bg-destructive/5"
                 }`}>
                   <div className="flex items-center gap-2 mb-1">
-                    {block.technicianResult >= 0
+                    {effectiveTechnicianResult >= 0
                       ? <TrendingUp className="h-3.5 w-3.5 text-primary" />
                       : <TrendingDown className="h-3.5 w-3.5 text-destructive" />}
                     <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
@@ -854,12 +876,12 @@ function YearBlock({ techName, block, columns, allSpreadsheet, allMovements, onS
                     </span>
                   </div>
                   <div className={`text-base font-bold tabular-nums ${
-                    block.technicianResult >= 0 ? "text-primary" : "text-destructive"
+                    effectiveTechnicianResult >= 0 ? "text-primary" : "text-destructive"
                   }`}>
-                    {block.technicianResult < 0 ? "- " : ""}{formatCurrency(Math.abs(block.technicianResult))}
+                    {effectiveTechnicianResult < 0 ? "- " : ""}{formatCurrency(Math.abs(effectiveTechnicianResult))}
                   </div>
                   <div className="text-[10px] text-muted-foreground mt-1 space-y-0.5">
-                    <div className="flex justify-between"><span>Esperado</span><span className="tabular-nums">{formatCurrency(block.revenueExpected)}</span></div>
+                    <div className="flex justify-between"><span>Esperado</span><span className="tabular-nums">{formatCurrency(effectiveExpected)}</span></div>
                     <div className="flex justify-between"><span>− Despesas</span><span className="tabular-nums">{formatCurrency(block.totalExpenses)}</span></div>
                   </div>
                 </div>
