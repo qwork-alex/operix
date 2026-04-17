@@ -39,17 +39,21 @@ export interface ParticipantAgg {
 
 export interface ParticipantAggregation {
   byParticipant: Record<string, ParticipantAgg>;
-  byParticipantYearMonth: Record<string, Record<string, Record<string, ParticipantAgg>>>;
-  // year → month(YYYY-MM) → name → agg
+  /** week (raw service_orders.week, e.g. "40") → name → agg.
+   *  Time dimension is WEEK — no date/year filtering. */
+  byParticipantWeek: Record<string, Record<string, ParticipantAgg>>;
   totals: { expected: number; received: number; difference: number };
   debug: {
     serviceOrdersUsed: number;
     serviceOrdersTotal: number;
+    serviceOrdersBeforeFilter: number;
+    serviceOrdersAfterFilter: number;
     serviceOrdersWithoutGroup: number;
     serviceOrdersWithoutDistribution: number;
     participantsFromRules: number;
     missingSnapshotCount: number;
     missingSnapshotIds: string[];
+    weeksFound: string[];
   };
 }
 
@@ -77,7 +81,7 @@ export function useParticipantAggregation() {
         supabase
           .from("service_orders")
           .select(
-            "id, total, status, group_id, created_at, distribution_snapshot",
+            "id, total, status, group_id, week, distribution_snapshot",
           ),
         supabase
           .from("profit_rules")
@@ -189,12 +193,10 @@ export function useParticipantAggregation() {
         }
       }
 
-      // Aggregate per participant (and year/month)
+      // Aggregate per participant — and by WEEK (no date/year filtering).
       const byParticipant: Record<string, ParticipantAgg> = {};
-      const byParticipantYearMonth: Record<
-        string,
-        Record<string, Record<string, ParticipantAgg>>
-      > = {};
+      const byParticipantWeek: Record<string, Record<string, ParticipantAgg>> = {};
+      const weeksFound = new Set<string>();
 
       // Seed every participant declared in any active rule (zeroed)
       const allParticipantNames = new Set<string>();
@@ -210,9 +212,8 @@ export function useParticipantAggregation() {
         if (!dists || dists.length === 0) continue;
 
         const ratio = ratioBySo.get(so.id) ?? 0;
-        const created = (so.created_at as string) || "";
-        const year = created.slice(0, 4) || "unknown";
-        const month = created.slice(0, 7) || "unknown";
+        const week = ((so as any).week as string | null)?.trim() || "unknown";
+        weeksFound.add(week);
 
         for (const d of dists) {
           const agg = (byParticipant[d.name] ??= emptyAgg(d.name));
@@ -220,9 +221,8 @@ export function useParticipantAggregation() {
           agg.received += d.value * ratio;
           agg.difference = agg.expected - agg.received;
 
-          const yearMap = (byParticipantYearMonth[year] ??= {});
-          const monthMap = (yearMap[month] ??= {});
-          const agg2 = (monthMap[d.name] ??= emptyAgg(d.name));
+          const weekMap = (byParticipantWeek[week] ??= {});
+          const agg2 = (weekMap[d.name] ??= emptyAgg(d.name));
           agg2.expected += d.value;
           agg2.received += d.value * ratio;
           agg2.difference = agg2.expected - agg2.received;
@@ -242,22 +242,48 @@ export function useParticipantAggregation() {
         (v) => v.length > 0,
       ).length;
 
+      // Debug log — week-based, no date filter
+      // eslint-disable-next-line no-console
+      console.debug("[ParticipantAggregation] week-based aggregation", {
+        serviceOrdersBeforeFilter: serviceOrders.length,
+        serviceOrdersAfterFilter: serviceOrdersUsed,
+        weeksFound: Array.from(weeksFound).sort(),
+        totals,
+      });
+
       return {
         byParticipant,
-        byParticipantYearMonth,
+        byParticipantWeek,
         totals,
         debug: {
           serviceOrdersUsed,
           serviceOrdersTotal: serviceOrders.length,
+          serviceOrdersBeforeFilter: serviceOrders.length,
+          serviceOrdersAfterFilter: serviceOrdersUsed,
           serviceOrdersWithoutGroup,
           serviceOrdersWithoutDistribution,
           participantsFromRules: allParticipantNames.size,
           missingSnapshotCount: missingSnapshotIds.length,
           missingSnapshotIds,
+          weeksFound: Array.from(weeksFound).sort(),
         },
       };
     },
   });
+}
+
+/**
+ * Year is DISPLAY-ONLY in the Financial UI — service_orders have no date,
+ * only `week`. This returns the participant's full aggregated total across
+ * ALL weeks/groups (independent of the year label passed in).
+ */
+export function getParticipantYearAgg(
+  data: ParticipantAggregation | undefined,
+  participantName: string,
+  _year: string,
+): ParticipantAgg {
+  if (!data) return emptyAgg(participantName);
+  return data.byParticipant[participantName] ?? emptyAgg(participantName);
 }
 
 /** Aggregate a participant across a given year (sums all months). */
