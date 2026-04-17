@@ -400,7 +400,11 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
     localSpreadsheet.columns
   ), [data, localSpreadsheet, localMovements]);
 
-  const globalResult = yearBlocks.reduce((s, yb) => s + yb.technicianResult, 0);
+  // Header rollup uses CASH (real money owned) — sum across all years for this tech.
+  const globalResult = yearBlocks.reduce((s, yb) => {
+    const cash = yb.revenueReceived + yb.loansIncoming - yb.totalExpenses - yb.loansRepaid - yb.techPaymentsMade;
+    return s + cash;
+  }, 0);
   const isPositive = globalResult >= 0;
 
   const handleSpreadsheetChange = useCallback((newData: SpreadsheetData) => {
