@@ -52,10 +52,10 @@ export function useParticipantAggregation() {
     queryKey: ["participant-aggregation"],
     staleTime: 30_000, // cache 30s — avoid recompute on every render
     queryFn: async () => {
-      const [soRes, distRes, poRes] = await Promise.all([
+      const [soRes, distRes, poRes, feRes] = await Promise.all([
         supabase
           .from("service_orders")
-          .select("id, total, group_id, license_plate, week, created_at, distribution_snapshot"),
+          .select("id, total, status, group_id, license_plate, week, created_at, distribution_snapshot"),
         supabase
           .from("service_order_distributions")
           .select("service_order_id, participant_name, calculated_value, percentage"),
@@ -64,11 +64,24 @@ export function useParticipantAggregation() {
           .select(
             "service_order_id, group_id, license_plate, list_name, total, amount_paid, status, created_at",
           ),
+        supabase
+          .from("financial_entries" as any)
+          .select("service_order_id, amount_paid"),
       ]);
 
       const serviceOrders = soRes.data ?? [];
       const distributions = distRes.data ?? [];
       const paymentOrders = poRes.data ?? [];
+      const financialEntries = ((feRes.data ?? []) as unknown) as Array<{ service_order_id: string; amount_paid: number }>;
+
+      // Sum manual partial-payment entries per SO
+      const entriesBySo = new Map<string, number>();
+      for (const fe of financialEntries) {
+        entriesBySo.set(
+          fe.service_order_id,
+          (entriesBySo.get(fe.service_order_id) ?? 0) + Number(fe.amount_paid || 0),
+        );
+      }
 
       // Index live distributions by service_order_id (fallback only)
       const liveDistBySo = new Map<string, { name: string; value: number }[]>();
@@ -113,30 +126,30 @@ export function useParticipantAggregation() {
       const normPlate = (p?: string | null) =>
         (p || "").replace(/[\s\-]/g, "").toUpperCase();
 
-      // STRICT MODE: only POs explicitly linked via service_order_id contribute.
-      // Unlinked POs are ignored and surfaced as a warning in debug.
+      // HYBRID STATUS-DRIVEN RATIO:
+      //  - status 'paid'    → ratio 1 (full)
+      //  - status 'partial' → ratio = SUM(financial_entries.amount_paid) / total
+      //  - status 'pending' → ratio 0
+      //  - any other        → fallback to linked PO ratio (kept for safety, no value impact otherwise)
       const ratioBySo = new Map<string, number>();
       for (const so of serviceOrders) {
-        const linkedPOs = paymentOrders.filter((po) => po.service_order_id === so.id);
+        const total = Number(so.total || 0);
+        const status = (so as any).status as string | null;
 
-        if (linkedPOs.length === 0) {
-          ratioBySo.set(so.id, 0);
+        if (status === "paid") {
+          ratioBySo.set(so.id, 1);
           continue;
         }
-
-        const sumTotal = linkedPOs.reduce(
-          (s, po) => s + Number(po.total || 0),
-          0,
-        );
-        const sumPaid = linkedPOs.reduce(
-          (s, po) => s + Number(po.amount_paid || 0),
-          0,
-        );
-
-        let ratio = 0;
-        if (sumTotal > 0) ratio = Math.min(1, sumPaid / sumTotal);
-        else if (sumPaid > 0) ratio = 1;
-        ratioBySo.set(so.id, ratio);
+        if (status === "partial") {
+          const paid = entriesBySo.get(so.id) ?? 0;
+          let ratio = 0;
+          if (total > 0) ratio = Math.min(1, paid / total);
+          else if (paid > 0) ratio = 1;
+          ratioBySo.set(so.id, ratio);
+          continue;
+        }
+        // pending or unknown → 0
+        ratioBySo.set(so.id, 0);
       }
 
       // Aggregate per participant (and per year/month)

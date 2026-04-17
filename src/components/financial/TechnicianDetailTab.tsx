@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import ExpenseSpreadsheet, { SpreadsheetData, SpreadsheetRow, getDefaultColumns } from "./ExpenseSpreadsheet";
 import FinancialMovements, { FinancialMovement, getYearFromPeriod, normalizePeriod, normalizeMonth } from "./FinancialMovements";
 import { useParticipantAggregation, getParticipantYearAgg, type ParticipantAgg } from "@/hooks/useParticipantAggregation";
+import PartialPaymentsList from "./PartialPaymentsList";
 
 /* ── hooks ── */
 function useTechnicians() {
@@ -486,6 +487,7 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
              {yearBlocks.map((yb) => (
               <YearBlock
                 key={yb.year}
+                techName={data.name}
                 block={yb}
                 columns={localSpreadsheet.columns}
                 allSpreadsheet={localSpreadsheet}
@@ -588,7 +590,8 @@ function EmptyTechDetail({ techId, techName, onAddPeriod, onRevenueSave }: {
 }
 
 /* ── Year Block ── */
-function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheetChange, onMovementsChange, onRevenueSave, formatCurrency, onDeleteYear, onAddPeriod, onRenameYear, derivedAgg }: {
+function YearBlock({ techName, block, columns, allSpreadsheet, allMovements, onSpreadsheetChange, onMovementsChange, onRevenueSave, formatCurrency, onDeleteYear, onAddPeriod, onRenameYear, derivedAgg }: {
+  techName: string;
   block: YearBlockData;
   columns: { id: string; label: string; type: string }[];
   allSpreadsheet: SpreadsheetData;
@@ -671,6 +674,8 @@ function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheet
         <CollapsibleContent>
           <CardContent className="px-4 pb-4 space-y-5">
             <YearRevenueSection year={block.year} expected={block.revenueExpected} received={block.revenueReceived} onSave={onRevenueSave} formatCurrency={formatCurrency} derivedAgg={derivedAgg} />
+
+            <PartialPaymentsList participantName={techName} year={block.year} formatCurrency={formatCurrency} />
 
             <div className="space-y-2">
               <div className="flex items-center gap-2 group/movheader">
