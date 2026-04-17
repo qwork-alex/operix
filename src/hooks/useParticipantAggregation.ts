@@ -73,9 +73,30 @@ export function useParticipantAggregation() {
     });
   }, [qc]);
 
+  // Realtime: instant refetch on any change to service_orders (status/total/group),
+  // payment_orders, or profit rules. No manual refresh, no stale cache.
+  useEffect(() => {
+    const invalidate = () => {
+      qc.invalidateQueries({ queryKey: ["participant-aggregation"] });
+      force((n) => n + 1);
+    };
+    const channel = supabase
+      .channel("financial-aggregation-sync")
+      .on("postgres_changes", { event: "*", schema: "public", table: "service_orders" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "payment_orders" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "profit_rules" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "profit_rule_items" }, invalidate)
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [qc]);
+
   return useQuery<ParticipantAggregation>({
     queryKey: ["participant-aggregation"],
-    staleTime: 30_000,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchOnMount: "always",
     queryFn: async () => {
       const [soRes, rulesRes, ruleItemsRes] = await Promise.all([
         supabase
