@@ -102,6 +102,19 @@ export function ProfitDistribution() {
   const [groupPopoverSearch, setGroupPopoverSearch] = useState<Record<string, string>>({});
   const [deleteRuleTarget, setDeleteRuleTarget] = useState<string | null>(null);
   const [showDeleteAll, setShowDeleteAll] = useState(false);
+  const [search, setSearch] = useState("");
+  const [openRules, setOpenRules] = useState<Record<string, boolean>>(() => {
+    try {
+      const raw = localStorage.getItem("profit-rules-open");
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem("profit-rules-open", JSON.stringify(openRules)); } catch {}
+  }, [openRules]);
+
+  const toggleOpen = (id: string) => setOpenRules(prev => ({ ...prev, [id]: !prev[id] }));
 
   // ── Queries ──
   const { data: fetchedRules = [], isLoading: rulesLoading } = useQuery({
