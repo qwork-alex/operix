@@ -380,7 +380,7 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
     localSpreadsheet.columns
   ), [data, localSpreadsheet, localMovements]);
 
-  const globalResult = yearBlocks.reduce((s, yb) => s + yb.result, 0);
+  const globalResult = yearBlocks.reduce((s, yb) => s + yb.technicianResult, 0);
   const isPositive = globalResult >= 0;
 
   const handleSpreadsheetChange = useCallback((newData: SpreadsheetData) => {
