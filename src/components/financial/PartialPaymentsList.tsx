@@ -26,23 +26,27 @@ interface PartialSO {
   license_plate: string | null;
 }
 
-function fetchPartialsForParticipant(participantName: string, year: string) {
+function fetchPartialsForParticipant(participantName: string) {
   return async (): Promise<PartialSO[]> => {
-    const yearStart = `${year}-01-01`;
-    const yearEnd = `${year}-12-31T23:59:59`;
-
+    // NO date filtering — service_orders use `week`, not dates.
+    // Year is display-only at the UI level.
     const { data: sos, error } = await supabase
       .from("service_orders")
-      .select("id, total, car_name, license_plate, status, created_at, distribution_snapshot")
-      .eq("status", "partial")
-      .gte("created_at", yearStart)
-      .lte("created_at", yearEnd);
+      .select("id, total, car_name, license_plate, status, week, distribution_snapshot")
+      .eq("status", "partial");
     if (error) throw error;
 
+    const before = sos?.length ?? 0;
     const filtered = (sos ?? []).filter((so: any) => {
       const snap = so.distribution_snapshot;
       if (!Array.isArray(snap)) return false;
       return snap.some((s: any) => s?.participant_name === participantName);
+    });
+    // eslint-disable-next-line no-console
+    console.debug("[PartialPaymentsList] week-based filter", {
+      participantName,
+      before,
+      after: filtered.length,
     });
 
     return filtered.map((so: any) => ({
@@ -60,14 +64,15 @@ export default function PartialPaymentsList({
   formatCurrency,
 }: {
   participantName: string;
+  /** Display-only label. Does NOT filter — service_orders have no date. */
   year: string;
   formatCurrency: (v: number) => string;
 }) {
-  const queryKey = ["partial-sos", participantName, year];
+  const queryKey = ["partial-sos", participantName];
 
   const { data: items = [], isLoading } = useQuery({
     queryKey,
-    queryFn: fetchPartialsForParticipant(participantName, year),
+    queryFn: fetchPartialsForParticipant(participantName),
     staleTime: 15_000,
   });
 
@@ -79,7 +84,7 @@ export default function PartialPaymentsList({
     return (
       <div className="flex items-center gap-2 text-[11px] text-muted-foreground/70 py-1.5 px-2 rounded-md bg-muted/20 border border-dashed border-border/40">
         <AlertCircle className="h-3 w-3" />
-        Nenhuma OS parcial para {participantName} em {year}.
+        Nenhuma OS parcial para {participantName} ({year}).
       </div>
     );
   }
