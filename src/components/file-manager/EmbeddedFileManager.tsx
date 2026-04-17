@@ -344,8 +344,17 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
     setPreviewDoc(null);
   }, [previewDoc]);
 
+  const ensureStoragePath = (doc: any, action: string): boolean => {
+    if (!doc?.storage_path) {
+      console.warn(`[FileManager] ${action} skipped: no storage_path for`, doc?.name);
+      toast.error("File not available — storage path missing.");
+      return false;
+    }
+    return true;
+  };
+
   const handleDownload = async (doc: any) => {
-    if (!doc.storage_path) return;
+    if (!ensureStoragePath(doc, "Download")) return;
     try {
       const { blobUrl } = await fetchDocumentBlobUrl(doc, 3600);
       const a = document.createElement("a");
@@ -358,16 +367,12 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
       console.log("[FileManager] Download complete:", doc.name);
     } catch (err) {
       console.error("[FileManager] Download error:", err);
-      toast.error(t("fm.previewError"));
+      toast.error(err instanceof Error ? err.message : "Download failed.");
     }
   };
 
   const handlePreview = async (doc: any) => {
-    if (!doc.storage_path) {
-      console.warn("[FileManager] Preview skipped: no storage_path for", doc.name);
-      toast.error("File not available — storage path missing.");
-      return;
-    }
+    if (!ensureStoragePath(doc, "Preview")) return;
     if (previewDoc?._blobUrl && previewDoc.url) {
       revokeBlobUrl(previewDoc.url);
     }
@@ -385,14 +390,14 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
       console.error("[FileManager] Preview error:", err);
       const message = err instanceof Error ? err.message : "Preview failed.";
       setPreviewDoc({ ...doc, mime_type: resolvedMime, status: "error", error: message });
-      toast.error("Preview failed. Please try again.");
+      toast.error(message);
     } finally {
       setPreviewLoading(false);
     }
   };
 
   const handlePrint = async (doc: any) => {
-    if (!doc.storage_path) return;
+    if (!ensureStoragePath(doc, "Print")) return;
     try {
       const { blobUrl, mimeType } = await fetchDocumentBlobUrl(doc, 3600);
 
@@ -420,7 +425,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
               iframe.contentWindow?.print();
             } catch (error) {
               console.error("[FileManager] Print trigger failed:", error);
-              toast.error(t("fm.previewError"));
+              toast.error("Print failed. Try opening the file instead.");
             }
           }, 300);
           window.setTimeout(cleanup, 10000);
@@ -428,7 +433,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
         iframe.onerror = () => {
           console.error("[FileManager] Print iframe failed:", doc.name);
           cleanup();
-          toast.error(t("fm.previewError"));
+          toast.error("Print failed. Try opening the file instead.");
         };
       } else if (isImageMime(mimeType)) {
         const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
@@ -439,12 +444,19 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
         }
         window.setTimeout(cleanup, 15000);
       } else {
+        // Fallback for unsupported types: open in a new tab so the user can
+        // print from the browser's native viewer instead of silently failing.
         cleanup();
-        toast.error(t("fm.previewError"));
+        const fallback = window.open(blobUrl, "_blank", "noopener,noreferrer");
+        if (!fallback) {
+          toast.error("Print not supported for this file type. Allow popups to open it instead.");
+        } else {
+          toast.message("Opened in a new tab — use your browser's Print menu.");
+        }
       }
     } catch (err) {
       console.error("[FileManager] Print error:", err);
-      toast.error(t("fm.previewError"));
+      toast.error(err instanceof Error ? err.message : "Print failed.");
     }
   };
 
