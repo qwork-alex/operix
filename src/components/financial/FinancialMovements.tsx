@@ -58,8 +58,9 @@ export function normalizeMonth(raw: string): string | null {
 export interface FinancialMovement {
   id: string;
   period: string; // stored as "Jan/YY" internally
-  type: "loan" | "manual_entry";
+  type: "loan" | "manual_entry" | "payment";
   origin: string;
+  reason?: string; // "Motivo" — short description of the movement
   amount: number;
   paidAmount: number;
   status: "pending" | "paid" | "partial";
@@ -70,6 +71,8 @@ interface Props {
   onChange: (movements: FinancialMovement[]) => void;
   formatCurrency: (v: number) => string;
   constrainToYear?: string; // e.g. "2024" — blocks periods outside this year
+  /** Available cash for the period — blocks marking "paid" if amount > cash. */
+  availableCash?: number;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -169,13 +172,14 @@ function EditableAmount({ value, onChange }: { value: number; onChange: (v: numb
   );
 }
 
-export default function FinancialMovements({ movements, onChange, formatCurrency, constrainToYear }: Props) {
+export default function FinancialMovements({ movements, onChange, formatCurrency, constrainToYear, availableCash }: Props) {
   const addMovement = () => {
     const newMov: FinancialMovement = {
       id: `mov_${Date.now()}`,
       period: "",
       type: "loan",
       origin: "",
+      reason: "",
       amount: 0,
       paidAmount: 0,
       status: "pending",
@@ -201,12 +205,32 @@ export default function FinancialMovements({ movements, onChange, formatCurrency
       // Auto-adjust status based on paidAmount
       if (field === "paidAmount") {
         const paid = parseFloat(value) || 0;
+        // Cash consistency: a payment cannot exceed available cash
+        if (typeof availableCash === "number" && paid > (m.paidAmount || 0)) {
+          const delta = paid - (m.paidAmount || 0);
+          if (delta > availableCash) {
+            const allowed = (m.paidAmount || 0) + Math.max(0, availableCash);
+            toast.error("Caixa insuficiente — pagamento ajustado para parcial");
+            next.paidAmount = allowed;
+            next.status = allowed <= 0 ? "pending" : allowed >= next.amount ? "paid" : "partial";
+            return next;
+          }
+        }
         if (paid <= 0) next.status = "pending";
         else if (paid >= next.amount) next.status = "paid";
         else next.status = "partial";
       }
       if (field === "status" && value !== "partial") {
-        next.paidAmount = value === "paid" ? next.amount : 0;
+        const target = value === "paid" ? next.amount : 0;
+        const delta = target - (m.paidAmount || 0);
+        if (value === "paid" && typeof availableCash === "number" && delta > availableCash) {
+          toast.error("Caixa insuficiente para marcar como pago — registado como parcial");
+          const allowed = (m.paidAmount || 0) + Math.max(0, availableCash);
+          next.paidAmount = allowed;
+          next.status = allowed <= 0 ? "pending" : allowed >= next.amount ? "paid" : "partial";
+          return next;
+        }
+        next.paidAmount = target;
       }
       return next;
     });
@@ -241,7 +265,8 @@ export default function FinancialMovements({ movements, onChange, formatCurrency
             <thead>
               <tr className="border-b border-border/50 bg-muted/30">
                 <th className="px-3 py-2 text-center align-middle text-xs font-medium text-muted-foreground w-20">Mês</th>
-                <th className="px-3 py-2 text-center align-middle text-xs font-medium text-muted-foreground">Origem</th>
+                <th className="px-3 py-2 text-center align-middle text-xs font-medium text-muted-foreground w-32">Origem</th>
+                <th className="px-3 py-2 text-center align-middle text-xs font-medium text-muted-foreground">Motivo</th>
                 <th className="px-3 py-2 text-center align-middle text-xs font-medium text-muted-foreground w-28">Valor</th>
                 <th className="px-3 py-2 text-center align-middle text-xs font-medium text-muted-foreground w-28">Valor pago</th>
                 <th className="px-3 py-2 text-center align-middle text-xs font-medium text-muted-foreground w-28">Restante</th>
@@ -258,6 +283,9 @@ export default function FinancialMovements({ movements, onChange, formatCurrency
                     </td>
                     <td className="px-1 py-0.5 text-center align-middle">
                       <EditableTextCell value={mov.origin} onChange={(v) => updateField(mov.id, "origin", v)} />
+                    </td>
+                    <td className="px-1 py-0.5 text-center align-middle">
+                      <EditableTextCell value={mov.reason || ""} onChange={(v) => updateField(mov.id, "reason", v)} />
                     </td>
                     <td className="px-1 py-0.5 text-center align-middle">
                       <EditableAmount value={mov.amount} onChange={(v) => updateField(mov.id, "amount", v)} />
