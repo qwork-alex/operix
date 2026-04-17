@@ -73,23 +73,31 @@ export function useParticipantAggregation() {
     });
   }, [qc]);
 
-  // Realtime: instant refetch on any change to service_orders (status/total/group),
-  // payment_orders, or profit rules. No manual refresh, no stale cache.
+  // NOTE: No supabase realtime channel here — Financial recomputes locally
+  // via TanStack Query invalidations triggered by mutating hooks
+  // (useServiceOrders, profit rules, etc.) and by partialPaymentsStore.
+  // Realtime caused "cannot add postgres_changes after subscribe" crashes
+  // under StrictMode and is not needed: all writes happen in-app and
+  // already invalidate their query keys.
+  //
+  // We piggy-back on cache invalidation of the most relevant keys to keep
+  // Financial instant without opening a websocket.
   useEffect(() => {
-    const invalidate = () => {
-      qc.invalidateQueries({ queryKey: ["participant-aggregation"] });
-      force((n) => n + 1);
-    };
-    const channel = supabase
-      .channel("financial-aggregation-sync")
-      .on("postgres_changes", { event: "*", schema: "public", table: "service_orders" }, invalidate)
-      .on("postgres_changes", { event: "*", schema: "public", table: "payment_orders" }, invalidate)
-      .on("postgres_changes", { event: "*", schema: "public", table: "profit_rules" }, invalidate)
-      .on("postgres_changes", { event: "*", schema: "public", table: "profit_rule_items" }, invalidate)
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    const unsub = qc.getQueryCache().subscribe((event) => {
+      const key = (event?.query?.queryKey ?? []) as unknown[];
+      const head = typeof key[0] === "string" ? (key[0] as string) : "";
+      if (
+        head === "service-orders" ||
+        head === "payment-orders" ||
+        head === "profit-rules" ||
+        head === "profit_rules" ||
+        head === "profit-rule-items"
+      ) {
+        qc.invalidateQueries({ queryKey: ["participant-aggregation"] });
+        force((n) => n + 1);
+      }
+    });
+    return () => unsub();
   }, [qc]);
 
   return useQuery<ParticipantAggregation>({
