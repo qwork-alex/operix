@@ -589,7 +589,8 @@ function EmptyTechDetail({ techId, techName, onAddPeriod, onRevenueSave }: {
 }
 
 /* ── Year Block ── */
-function YearBlock({ block, columns, allSpreadsheet, allMovements, onSpreadsheetChange, onMovementsChange, onRevenueSave, formatCurrency, onDeleteYear, onAddPeriod, onRenameYear, derivedAgg }: {
+function YearBlock({ techName, block, columns, allSpreadsheet, allMovements, onSpreadsheetChange, onMovementsChange, onRevenueSave, formatCurrency, onDeleteYear, onAddPeriod, onRenameYear, derivedAgg }: {
+  techName: string;
   block: YearBlockData;
   columns: { id: string; label: string; type: string }[];
   allSpreadsheet: SpreadsheetData;
