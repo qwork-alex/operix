@@ -676,27 +676,62 @@ function YearBlock({ techName, block, columns, allSpreadsheet, allMovements, onS
   const [editingYear, setEditingYear] = useState(false);
   const [yearDraft, setYearDraft] = useState(block.year);
   const [newPeriodInput, setNewPeriodInput] = useState("");
+  const [showTechPay, setShowTechPay] = useState(false);
+  const [techPayInput, setTechPayInput] = useState("");
   const yearSuffix = block.year.slice(2);
 
-  // ── EFFECTIVE values: derivedAgg (real PO data) takes priority over manual entries.
-  // CASH must reflect REAL money received from payment orders, not just manual inputs.
+  // EFFECTIVE values: derivedAgg (real PO data) takes priority over manual entries.
   const effectiveReceived = derivedAgg && derivedAgg.received > 0 ? derivedAgg.received : block.revenueReceived;
-  const effectiveExpected = derivedAgg && derivedAgg.expected > 0 ? derivedAgg.expected : block.revenueExpected;
 
-  // CASH = received + incoming loans − paid expenses (company-owned money)
-  const effectiveCash = effectiveReceived + block.loansIncoming - block.totalExpenses;
-  // TECHNICIAN RESULT = expected − expenses (operational, no loans)
-  const effectiveTechnicianResult = effectiveExpected - block.totalExpenses;
-  // PAYABLE TO TECHNICIAN: positive operational result becomes a liability owed to the tech
-  const payableToTechnician = Math.max(0, effectiveReceived - block.totalExpenses);
-  // Total obligations = partner debts (Sanchez/loans) + tech payable
-  const totalObligations = block.obligationsTotal + payableToTechnician;
-  const isPositive = effectiveTechnicianResult >= 0;
+  // CASH = received + loansIncoming − expenses − loansRepaid − techPaymentsMade
+  const effectiveCash =
+    effectiveReceived + block.loansIncoming - block.totalExpenses - block.loansRepaid - block.techPaymentsMade;
+
+  // PAYABLE TO TECHNICIAN: positive operational result owed to the tech (net of payments already made)
+  const payableToTechnician = Math.max(
+    0,
+    effectiveReceived - block.totalExpenses - block.techPaymentsMade
+  );
+
+  // OBLIGATIONS LOGIC (dynamic):
+  //  - If there are active partner debts (loans pending) → show partner obligations
+  //  - Else if cash > 0 and tech has positive operational result → obligation = technician
+  const hasPartnerDebts = block.obligationsTotal > 0;
+  const showTechObligation = !hasPartnerDebts && effectiveCash > 0 && payableToTechnician > 0;
+  const totalObligations = hasPartnerDebts ? block.obligationsTotal : (showTechObligation ? payableToTechnician : 0);
 
   const handleYearMovementsChange = useCallback((yearMovements: FinancialMovement[]) => {
     const otherMovements = allMovements.filter((m) => getYearFromPeriod(m.period) !== block.year);
     onMovementsChange([...otherMovements, ...yearMovements]);
   }, [allMovements, block.year, onMovementsChange]);
+
+  // Register a payment to the technician — creates a "payment" movement
+  // and validates against available cash (block "paid" if cash < amount).
+  const handleTechPayment = useCallback(() => {
+    const raw = parseFloat(techPayInput.replace(",", "."));
+    if (!raw || raw <= 0) {
+      toast.error("Valor inválido");
+      return;
+    }
+    if (raw > effectiveCash) {
+      toast.error("Caixa insuficiente para este pagamento");
+      return;
+    }
+    const newMov: FinancialMovement = {
+      id: `mov_${Date.now()}`,
+      period: `Jan/${yearSuffix}`,
+      type: "payment",
+      origin: techName,
+      reason: "Pagamento ao técnico",
+      amount: raw,
+      paidAmount: raw,
+      status: "paid",
+    };
+    handleYearMovementsChange([...block.yearMovements, newMov]);
+    toast.success(`Pagamento de ${raw.toFixed(2)} registado`);
+    setTechPayInput("");
+    setShowTechPay(false);
+  }, [techPayInput, effectiveCash, yearSuffix, techName, block.yearMovements, handleYearMovementsChange]);
 
   const handleDeleteAllMovements = () => {
     const otherMovements = allMovements.filter((m) => getYearFromPeriod(m.period) !== block.year);
