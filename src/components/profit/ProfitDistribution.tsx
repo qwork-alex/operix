@@ -27,6 +27,7 @@ import {
   PieChart as PieChartIcon, Plus, Save, Trash2, Loader2,
   AlertTriangle, Check, Users, FolderPlus, X, ChevronDown,
 } from "lucide-react";
+import { splitCents, toCents } from "@/lib/distributionMath";
 
 // ─── Types ───
 
@@ -341,28 +342,11 @@ export function ProfitDistribution() {
         const soIds = allSOs.map((so: any) => so.id);
         await supabase.from("service_order_distributions").delete().in("service_order_id", soIds);
 
-        // Canonical integer-cents splitter — MUST match
-        // src/hooks/useParticipantAggregation.ts splitCents().
-        const splitCents = (totalCents: number, pcts: number[]): number[] => {
-          const n = pcts.length;
-          if (n === 0) return [];
-          const raw = pcts.map((p) => (totalCents * p) / 100);
-          const floors = raw.map((x) => Math.floor(x));
-          let remainder = totalCents - floors.reduce((s, x) => s + x, 0);
-          const order = raw
-            .map((x, i) => ({ i, frac: x - Math.floor(x) }))
-            .sort((a, b) => b.frac - a.frac);
-          const out = floors.slice();
-          for (let k = 0; k < order.length && remainder > 0; k++) {
-            out[order[k].i] += 1;
-            remainder -= 1;
-          }
-          return out;
-        };
-
+        // Use SHARED canonical integer-cents splitter from
+        // src/lib/distributionMath.ts — same as useParticipantAggregation.
         const pctsArr = participants.map((p) => p.percentage);
         const distributions = allSOs.flatMap((so: any) => {
-          const totalCents = Math.round(Number(so.total || 0) * 100);
+          const totalCents = toCents(so.total);
           const parts = splitCents(totalCents, pctsArr);
           return participants.map((item, i) => ({
             service_order_id: so.id,
@@ -379,7 +363,7 @@ export function ProfitDistribution() {
         if (techIdx >= 0) {
           const techPct = participants[techIdx].percentage;
           for (const so of allSOs) {
-            const totalCents = Math.round(Number((so as any).total || 0) * 100);
+            const totalCents = toCents((so as any).total);
             const parts = splitCents(totalCents, pctsArr);
             await supabase.from("service_orders").update({
               technician_percentage: techPct,

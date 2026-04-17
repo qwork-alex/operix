@@ -158,39 +158,8 @@ export default function FinancialPage() {
         </div>
       </div>
 
-      {/* Aggregation engine debug strip */}
-      {dbg && (
-        <Card className={`border ${aggDisconnected ? "border-destructive/40 bg-destructive/5" : "border-border/40 bg-muted/20"}`}>
-          <CardContent className="flex flex-wrap items-center gap-x-4 gap-y-1 py-2 px-3 text-[11px]">
-            <span className="font-mono text-muted-foreground">
-              SO usadas: <span className="text-foreground font-semibold">{dbg.serviceOrdersUsed}</span> / {dbg.serviceOrdersTotal}
-            </span>
-            <span className="font-mono text-muted-foreground">
-              Participantes (regras): <span className="text-foreground font-semibold">{dbg.participantsFromRules}</span>
-            </span>
-            {dbg.missingSnapshotCount > 0 && (
-              <span className="font-mono text-amber-400">
-                ⚠ Sem snapshot: {dbg.missingSnapshotCount}
-              </span>
-            )}
-            {dbg.serviceOrdersWithoutGroup > 0 && (
-              <span className="font-mono text-destructive">
-                ⚠ OS sem grupo: {dbg.serviceOrdersWithoutGroup}
-              </span>
-            )}
-            {dbg.serviceOrdersWithoutDistribution > 0 && (
-              <span className="font-mono text-destructive">
-                ⚠ OS sem regra de distribuição: {dbg.serviceOrdersWithoutDistribution}
-              </span>
-            )}
-            {aggDisconnected && (
-              <span className="font-mono text-destructive font-semibold">
-                ⚠ Aggregation not connected to data
-              </span>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      {/* Debug strip removed — Financial values are derived from the
+          single source of truth (src/lib/distributionMath.ts). */}
 
       {/* No-data empty state */}
       {hasNoData && (
