@@ -849,49 +849,59 @@ function YearBlock({ techName, block, columns, allSpreadsheet, allMovements, onS
               <ExpenseSpreadsheet data={allSpreadsheet} onChange={onSpreadsheetChange} formatCurrency={formatCurrency} filterYear={yearSuffix} />
             </div>
 
-            {/* ── Financial Summary: 3 independent blocks ── */}
-            <div className="space-y-2 pt-1">
+            {/* ── Resumo financeiro ── Cash centered, dynamic obligations, payments by entity */}
+            <div className="space-y-3 pt-1">
               <h4 className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
                 Resumo financeiro {block.year}
               </h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {/* A) CASH — real money owned by the company */}
-                <div className={`rounded-lg border px-4 py-3 ${
-                  effectiveCash >= 0
-                    ? "border-emerald-400/20 bg-emerald-400/5"
-                    : "border-destructive/20 bg-destructive/5"
-                }`}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <Building2 className="h-3.5 w-3.5 text-emerald-400" />
-                    <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
-                      Caixa disponível
-                    </span>
-                  </div>
-                  <div className={`text-base font-bold tabular-nums ${
-                    effectiveCash >= 0 ? "text-emerald-400" : "text-destructive"
-                  }`}>
-                    {effectiveCash < 0 ? "- " : ""}{formatCurrency(Math.abs(effectiveCash))}
-                  </div>
-                  <div className="text-[10px] text-muted-foreground mt-1 space-y-0.5">
-                    <div className="flex justify-between"><span>Recebido</span><span className="tabular-nums">{formatCurrency(effectiveReceived)}</span></div>
-                    {block.loansIncoming > 0 && (
-                      <div className="flex justify-between"><span>+ Empréstimos</span><span className="tabular-nums">{formatCurrency(block.loansIncoming)}</span></div>
-                    )}
-                    <div className="flex justify-between"><span>− Despesas</span><span className="tabular-nums">{formatCurrency(block.totalExpenses)}</span></div>
-                  </div>
-                </div>
 
-                {/* B) OBLIGATIONS — debts to partners + payable to technician */}
+              {/* A) CASH — clean centered display, value only */}
+              <div className={`rounded-lg border px-6 py-5 flex flex-col items-center justify-center ${
+                effectiveCash >= 0
+                  ? "border-emerald-400/20 bg-emerald-400/5"
+                  : "border-destructive/20 bg-destructive/5"
+              }`}>
+                <div className="flex items-center gap-2 mb-1">
+                  <Building2 className="h-3.5 w-3.5 text-emerald-400" />
+                  <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
+                    Caixa disponível
+                  </span>
+                </div>
+                <div className={`text-2xl font-bold tabular-nums ${
+                  effectiveCash >= 0 ? "text-emerald-400" : "text-destructive"
+                }`}>
+                  {effectiveCash < 0 ? "- " : ""}{formatCurrency(Math.abs(effectiveCash))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* B) OBLIGATIONS — dynamic */}
                 <div className={`rounded-lg border px-4 py-3 ${
                   totalObligations > 0
                     ? "border-amber-500/30 bg-amber-500/5"
                     : "border-border/40 bg-muted/20"
                 }`}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <TrendingDown className="h-3.5 w-3.5 text-amber-400" />
-                    <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
-                      Obrigações
-                    </span>
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <TrendingDown className="h-3.5 w-3.5 text-amber-400" />
+                      <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
+                        Obrigações
+                      </span>
+                    </div>
+                    {/* Subtle payment button — only when obligation = technician */}
+                    {showTechObligation && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            className="p-1 rounded-full hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
+                            onClick={() => { setTechPayInput(String(payableToTechnician)); setShowTechPay(true); }}
+                          >
+                            <Plus className="h-3 w-3" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>Pagar técnico</TooltipContent>
+                      </Tooltip>
+                    )}
                   </div>
                   <div className={`text-base font-bold tabular-nums ${
                     totalObligations > 0 ? "text-amber-400" : "text-muted-foreground"
@@ -899,53 +909,80 @@ function YearBlock({ techName, block, columns, allSpreadsheet, allMovements, onS
                     {formatCurrency(totalObligations)}
                   </div>
                   <div className="text-[10px] text-muted-foreground mt-1 space-y-0.5">
-                    {block.obligations.length === 0 && payableToTechnician === 0 ? (
+                    {totalObligations === 0 ? (
                       <div className="italic">Sem dívidas pendentes</div>
+                    ) : hasPartnerDebts ? (
+                      block.obligations.map((o) => (
+                        <div key={o.origin} className="flex justify-between">
+                          <span className="truncate">{o.origin}</span>
+                          <span className="tabular-nums">{formatCurrency(o.remaining)}</span>
+                        </div>
+                      ))
                     ) : (
-                      <>
-                        {block.obligations.map((o) => (
-                          <div key={o.origin} className="flex justify-between">
-                            <span className="truncate">Dívida: {o.origin}</span>
-                            <span className="tabular-nums">{formatCurrency(o.remaining)}</span>
-                          </div>
-                        ))}
-                        {payableToTechnician > 0 && (
-                          <div className="flex justify-between">
-                            <span className="truncate">A pagar: {techName}</span>
-                            <span className="tabular-nums">{formatCurrency(payableToTechnician)}</span>
-                          </div>
-                        )}
-                      </>
+                      <div className="flex justify-between">
+                        <span className="truncate">{techName}</span>
+                        <span className="tabular-nums">{formatCurrency(payableToTechnician)}</span>
+                      </div>
                     )}
                   </div>
                 </div>
 
-                {/* C) TECHNICIAN RESULT — operational performance (no loans) */}
-                <div className={`rounded-lg border px-4 py-3 ${
-                  effectiveTechnicianResult >= 0
-                    ? "border-primary/20 bg-primary/5"
-                    : "border-destructive/20 bg-destructive/5"
-                }`}>
+                {/* C) PAGAMENTOS REALIZADOS — cumulative, grouped by entity */}
+                <div className="rounded-lg border border-border/40 bg-muted/20 px-4 py-3">
                   <div className="flex items-center gap-2 mb-1">
-                    {effectiveTechnicianResult >= 0
-                      ? <TrendingUp className="h-3.5 w-3.5 text-primary" />
-                      : <TrendingDown className="h-3.5 w-3.5 text-destructive" />}
+                    <TrendingUp className="h-3.5 w-3.5 text-primary" />
                     <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
-                      Resultado técnico
+                      Pagamentos realizados
                     </span>
                   </div>
-                  <div className={`text-base font-bold tabular-nums ${
-                    effectiveTechnicianResult >= 0 ? "text-primary" : "text-destructive"
-                  }`}>
-                    {effectiveTechnicianResult < 0 ? "- " : ""}{formatCurrency(Math.abs(effectiveTechnicianResult))}
+                  <div className="text-base font-bold tabular-nums text-foreground">
+                    {formatCurrency(block.paymentsByEntity.reduce((s, p) => s + p.amount, 0))}
                   </div>
                   <div className="text-[10px] text-muted-foreground mt-1 space-y-0.5">
-                    <div className="flex justify-between"><span>Esperado</span><span className="tabular-nums">{formatCurrency(effectiveExpected)}</span></div>
-                    <div className="flex justify-between"><span>− Despesas</span><span className="tabular-nums">{formatCurrency(block.totalExpenses)}</span></div>
+                    {block.paymentsByEntity.length === 0 ? (
+                      <div className="italic">Nenhum pagamento registado</div>
+                    ) : (
+                      block.paymentsByEntity.map((p) => (
+                        <div key={p.entity} className="flex justify-between">
+                          <span className="truncate">{p.entity}</span>
+                          <span className="tabular-nums">{formatCurrency(p.amount)}</span>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               </div>
             </div>
+
+            {/* Technician payment dialog */}
+            <Dialog open={showTechPay} onOpenChange={setShowTechPay}>
+              <DialogContent className="sm:max-w-sm">
+                <DialogHeader>
+                  <DialogTitle>Pagar {techName}</DialogTitle>
+                </DialogHeader>
+                <div className="py-2 space-y-3">
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <div className="flex justify-between"><span>Caixa disponível</span><span className="tabular-nums">{formatCurrency(effectiveCash)}</span></div>
+                    <div className="flex justify-between"><span>A pagar (sugerido)</span><span className="tabular-nums">{formatCurrency(payableToTechnician)}</span></div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Valor</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      autoFocus
+                      value={techPayInput}
+                      onChange={(e) => setTechPayInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleTechPayment(); }}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setShowTechPay(false)}>Cancelar</Button>
+                  <Button onClick={handleTechPayment}>Confirmar</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </CardContent>
         </CollapsibleContent>
       </Collapsible>
