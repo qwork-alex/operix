@@ -72,7 +72,7 @@ export function useParticipantAggregation() {
       const serviceOrders = soRes.data ?? [];
       const distributions = distRes.data ?? [];
       const paymentOrders = poRes.data ?? [];
-      const financialEntries = (feRes.data ?? []) as Array<{ service_order_id: string; amount_paid: number }>;
+      const financialEntries = ((feRes.data ?? []) as unknown) as Array<{ service_order_id: string; amount_paid: number }>;
 
       // Sum manual partial-payment entries per SO
       const entriesBySo = new Map<string, number>();
