@@ -464,31 +464,41 @@ export function ProfitDistribution() {
       return true;
     });
 
+    const isOpen = openRules[rule.id] ?? !!rule._isNew;
+
     return (
       <Card key={rule.id} className="border-border/50">
-        <CardHeader className="flex flex-row items-start justify-between pb-3 gap-4">
-          <div className="space-y-2 flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <Input
-                value={rule.rule_name}
-                onChange={(e) => handleRuleNameChange(rule.id, e.target.value)}
-                placeholder="Nome da regra"
-                className="h-8 text-sm font-semibold max-w-[250px]"
-              />
-              <div className="flex items-center gap-1.5">
-                <Switch
-                  checked={rule.is_active}
-                  onCheckedChange={(v) => updateLocalRule(rule.id, r => ({ ...r, is_active: v }))}
-                />
-                <span className="text-[10px] text-muted-foreground">{rule.is_active ? "Ativa" : "Inativa"}</span>
-              </div>
+        <CardHeader
+          className="flex flex-row items-center justify-between pb-3 gap-4 cursor-pointer select-none hover:bg-muted/30 transition-colors rounded-t-lg"
+          onClick={() => toggleOpen(rule.id)}
+        >
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <ChevronRight
+              className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`}
+            />
+            <div className="flex items-center gap-2 flex-wrap min-w-0">
+              <span className="text-sm font-semibold truncate">
+                {rule.rule_name || <span className="text-muted-foreground italic">Sem nome</span>}
+              </span>
+              <span className="text-xs text-muted-foreground">|</span>
+              <span className="text-xs text-muted-foreground">
+                {rule.group_ids.length} grupo{rule.group_ids.length !== 1 ? "s" : ""}
+              </span>
+              <span className="text-xs text-muted-foreground">|</span>
+              <span className="text-xs font-medium text-foreground">
+                {formatCurrency(totalRevenue)}
+              </span>
+              {!rule.is_active && (
+                <Badge variant="secondary" className="text-[10px]">Inativa</Badge>
+              )}
+              {isDirty && (
+                <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-500">
+                  Não salvo
+                </Badge>
+              )}
             </div>
-            <p className="text-[10px] text-muted-foreground">
-              {rule.group_ids.length} grupo{rule.group_ids.length !== 1 ? "s" : ""}
-              {" · "}{allSOs.length} OS · Receita: {formatCurrency(totalRevenue)}
-            </p>
           </div>
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
             {isDirty && (
               <>
                 <Button
@@ -505,18 +515,6 @@ export function ProfitDistribution() {
                 </Button>
               </>
             )}
-            {!rule._isNew && !isDirty && (
-              <Button
-                size="icon"
-                className="h-8 w-8"
-                disabled={!isRuleValid(rule) || saveRuleMutation.isPending}
-                onClick={() => saveRuleMutation.mutate(rule)}
-                title="Salvar"
-                variant="outline"
-              >
-                <Save className="h-4 w-4" />
-              </Button>
-            )}
             {!rule._isNew && (
               <Button
                 variant="destructive"
@@ -531,7 +529,24 @@ export function ProfitDistribution() {
             )}
           </div>
         </CardHeader>
+        {isOpen && (
         <CardContent className="space-y-4">
+          {/* Rule name + active toggle (editable inside) */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Input
+              value={rule.rule_name}
+              onChange={(e) => handleRuleNameChange(rule.id, e.target.value)}
+              placeholder="Nome da regra"
+              className="h-8 text-sm font-semibold max-w-[250px]"
+            />
+            <div className="flex items-center gap-1.5">
+              <Switch
+                checked={rule.is_active}
+                onCheckedChange={(v) => updateLocalRule(rule.id, r => ({ ...r, is_active: v }))}
+              />
+              <span className="text-[10px] text-muted-foreground">{rule.is_active ? "Ativa" : "Inativa"}</span>
+            </div>
+          </div>
           {/* Selected groups + dropdown multi-select */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
