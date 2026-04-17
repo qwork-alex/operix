@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   PieChart as PieChartIcon, Plus, Save, Trash2, Loader2,
-  AlertTriangle, Check, Users, FolderPlus, X, ChevronDown,
+  AlertTriangle, Check, Users, FolderPlus, X, ChevronDown, ChevronRight, Search,
 } from "lucide-react";
 import { splitCents, toCents } from "@/lib/distributionMath";
 
