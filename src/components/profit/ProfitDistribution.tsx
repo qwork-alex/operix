@@ -467,35 +467,56 @@ export function ProfitDistribution() {
     const isOpen = openRules[rule.id] ?? !!rule._isNew;
 
     return (
-      <Card key={rule.id} className="border-border/50">
+      <Card
+        key={rule.id}
+        className="group/rule border-white/[0.08] bg-white/[0.03] backdrop-blur-sm transition-all duration-200 ease-out hover:scale-[1.005] hover:border-white/[0.14]"
+        style={{
+          boxShadow: "0 0 20px hsl(152 60% 45% / 0.08)",
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLElement).style.boxShadow = "0 0 28px hsl(152 60% 45% / 0.16), 0 0 60px hsl(43 85% 55% / 0.05)";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLElement).style.boxShadow = "0 0 20px hsl(152 60% 45% / 0.08)";
+        }}
+      >
         <CardHeader
-          className="flex flex-row items-center justify-between pb-3 gap-4 cursor-pointer select-none hover:bg-muted/30 transition-colors rounded-t-lg"
+          className="flex flex-row items-center justify-between gap-4 py-4 px-5 cursor-pointer select-none transition-colors rounded-t-lg hover:bg-white/[0.02]"
           onClick={() => toggleOpen(rule.id)}
         >
           <div className="flex items-center gap-3 flex-1 min-w-0">
             <ChevronRight
-              className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`}
+              className={`h-[18px] w-[18px] shrink-0 text-muted-foreground transition-all duration-200 group-hover/rule:text-foreground group-hover/rule:drop-shadow-[0_0_4px_rgba(255,255,255,0.4)] ${isOpen ? "rotate-90" : ""}`}
             />
-            <div className="flex items-center gap-2 flex-wrap min-w-0">
-              <span className="text-sm font-semibold truncate">
-                {rule.rule_name || <span className="text-muted-foreground italic">Sem nome</span>}
+            <div className="flex items-center gap-3 flex-1 min-w-0 justify-between">
+              {/* LEFT: rule name */}
+              <span
+                className="text-[18px] font-semibold truncate text-white"
+                style={{ textShadow: "0 0 6px rgba(255,255,255,0.15)" }}
+              >
+                {rule.rule_name || <span className="text-muted-foreground italic font-normal">Sem nome</span>}
               </span>
-              <span className="text-xs text-muted-foreground">|</span>
-              <span className="text-xs text-muted-foreground">
+              {/* CENTER: group count */}
+              <span className="text-[14px] text-white/70 shrink-0 hidden sm:inline">
                 {rule.group_ids.length} grupo{rule.group_ids.length !== 1 ? "s" : ""}
               </span>
-              <span className="text-xs text-muted-foreground">|</span>
-              <span className="text-xs font-medium text-foreground">
-                {formatCurrency(totalRevenue)}
-              </span>
-              {!rule.is_active && (
-                <Badge variant="secondary" className="text-[10px]">Inativa</Badge>
-              )}
-              {isDirty && (
-                <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-500">
-                  Não salvo
-                </Badge>
-              )}
+              {/* RIGHT: value */}
+              <div className="flex items-center gap-2 shrink-0">
+                <span
+                  className="text-[18px] font-semibold text-white"
+                  style={{ textShadow: "0 0 6px rgba(255,255,255,0.15)" }}
+                >
+                  {formatCurrency(totalRevenue)}
+                </span>
+                {!rule.is_active && (
+                  <Badge variant="secondary" className="text-[10px]">Inativa</Badge>
+                )}
+                {isDirty && (
+                  <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-500">
+                    Não salvo
+                  </Badge>
+                )}
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
