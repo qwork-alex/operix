@@ -181,7 +181,14 @@ function buildTechData(tech: { id: string; name: string }, records: any[]): Tech
   return { id: tech.id, name: tech.name, spreadsheet, movements, revenueByYear };
 }
 
-/* ── year data helper ── */
+/* ── year data helper ──
+   Three independent financial dimensions per year:
+   - CASH = received + incoming loans − paid expenses
+   - OBLIGATIONS = sum of unpaid loan portions (breakdown by origin)
+   - TECHNICIAN RESULT = expected − expenses (NO loans mixed in)
+*/
+interface ObligationItem { origin: string; remaining: number; }
+
 interface YearBlockData {
   year: string;
   revenueExpected: number;
@@ -189,9 +196,13 @@ interface YearBlockData {
   expenseRows: SpreadsheetRow[];
   totalExpenses: number;
   yearMovements: FinancialMovement[];
-  loansPending: number;
-  loansTotal: number;
-  result: number;
+  // New separated metrics
+  loansIncoming: number;          // total loans received this year (cash inflow)
+  loansRepaid: number;            // total amount already repaid (cash outflow component)
+  obligations: ObligationItem[];  // per-origin remaining debt
+  obligationsTotal: number;
+  cash: number;                   // received + loansIncoming − totalExpenses (paid)
+  technicianResult: number;       // expected − totalExpenses (clean)
 }
 
 function getYearBlocks(data: TechData, columns: { id: string }[]): YearBlockData[] {
@@ -204,7 +215,6 @@ function getYearBlocks(data: TechData, columns: { id: string }[]): YearBlockData
       if (rev.expected !== 0 || rev.received !== 0) years.add(y);
     }
   });
-  // No auto-generation — if empty, return empty array
 
   return Array.from(years).sort().map((year) => {
     const yy = year.slice(2);
@@ -213,11 +223,42 @@ function getYearBlocks(data: TechData, columns: { id: string }[]): YearBlockData
     const totalExpenses = expenseRows.reduce((s, r) =>
       columns.reduce((cs, c) => cs + (r.values[c.id] || 0), s), 0);
     const yearMovements = data.movements.filter((m) => getYearFromPeriod(m.period) === year);
-    const loansPending = yearMovements.filter((m) => m.type === "loan" && m.status !== "paid")
-      .reduce((s, m) => s + (m.amount - (m.paidAmount || 0)), 0);
-    const loansTotal = yearMovements.filter((m) => m.type === "loan").reduce((s, m) => s + m.amount, 0);
-    const result = rev.received - totalExpenses - loansPending;
-    return { year, revenueExpected: rev.expected, revenueReceived: rev.received, expenseRows, totalExpenses, yearMovements, loansPending, loansTotal, result };
+    const loans = yearMovements.filter((m) => m.type === "loan");
+    const loansIncoming = loans.reduce((s, m) => s + (m.amount || 0), 0);
+    const loansRepaid = loans.reduce((s, m) => s + (m.paidAmount || 0), 0);
+
+    // Group remaining debt by origin (Sanchez, etc.)
+    const map = new Map<string, number>();
+    for (const m of loans) {
+      const remaining = Math.max(0, (m.amount || 0) - (m.paidAmount || 0));
+      if (remaining <= 0) continue;
+      const key = (m.origin || "—").trim() || "—";
+      map.set(key, (map.get(key) || 0) + remaining);
+    }
+    const obligations: ObligationItem[] = Array.from(map.entries())
+      .map(([origin, remaining]) => ({ origin, remaining }))
+      .sort((a, b) => b.remaining - a.remaining);
+    const obligationsTotal = obligations.reduce((s, o) => s + o.remaining, 0);
+
+    // CASH: what's actually in the company account
+    const cash = rev.received + loansIncoming - totalExpenses;
+    // TECHNICIAN RESULT: pure operational performance (no loans)
+    const technicianResult = rev.expected - totalExpenses;
+
+    return {
+      year,
+      revenueExpected: rev.expected,
+      revenueReceived: rev.received,
+      expenseRows,
+      totalExpenses,
+      yearMovements,
+      loansIncoming,
+      loansRepaid,
+      obligations,
+      obligationsTotal,
+      cash,
+      technicianResult,
+    };
   });
 }
 
