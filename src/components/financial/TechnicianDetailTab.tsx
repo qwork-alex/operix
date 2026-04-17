@@ -181,7 +181,14 @@ function buildTechData(tech: { id: string; name: string }, records: any[]): Tech
   return { id: tech.id, name: tech.name, spreadsheet, movements, revenueByYear };
 }
 
-/* ── year data helper ── */
+/* ── year data helper ──
+   Three independent financial dimensions per year:
+   - CASH = received + incoming loans − paid expenses
+   - OBLIGATIONS = sum of unpaid loan portions (breakdown by origin)
+   - TECHNICIAN RESULT = expected − expenses (NO loans mixed in)
+*/
+interface ObligationItem { origin: string; remaining: number; }
+
 interface YearBlockData {
   year: string;
   revenueExpected: number;
@@ -189,9 +196,13 @@ interface YearBlockData {
   expenseRows: SpreadsheetRow[];
   totalExpenses: number;
   yearMovements: FinancialMovement[];
-  loansPending: number;
-  loansTotal: number;
-  result: number;
+  // New separated metrics
+  loansIncoming: number;          // total loans received this year (cash inflow)
+  loansRepaid: number;            // total amount already repaid (cash outflow component)
+  obligations: ObligationItem[];  // per-origin remaining debt
+  obligationsTotal: number;
+  cash: number;                   // received + loansIncoming − totalExpenses (paid)
+  technicianResult: number;       // expected − totalExpenses (clean)
 }
 
 function getYearBlocks(data: TechData, columns: { id: string }[]): YearBlockData[] {
@@ -204,7 +215,6 @@ function getYearBlocks(data: TechData, columns: { id: string }[]): YearBlockData
       if (rev.expected !== 0 || rev.received !== 0) years.add(y);
     }
   });
-  // No auto-generation — if empty, return empty array
 
   return Array.from(years).sort().map((year) => {
     const yy = year.slice(2);
@@ -213,11 +223,42 @@ function getYearBlocks(data: TechData, columns: { id: string }[]): YearBlockData
     const totalExpenses = expenseRows.reduce((s, r) =>
       columns.reduce((cs, c) => cs + (r.values[c.id] || 0), s), 0);
     const yearMovements = data.movements.filter((m) => getYearFromPeriod(m.period) === year);
-    const loansPending = yearMovements.filter((m) => m.type === "loan" && m.status !== "paid")
-      .reduce((s, m) => s + (m.amount - (m.paidAmount || 0)), 0);
-    const loansTotal = yearMovements.filter((m) => m.type === "loan").reduce((s, m) => s + m.amount, 0);
-    const result = rev.received - totalExpenses - loansPending;
-    return { year, revenueExpected: rev.expected, revenueReceived: rev.received, expenseRows, totalExpenses, yearMovements, loansPending, loansTotal, result };
+    const loans = yearMovements.filter((m) => m.type === "loan");
+    const loansIncoming = loans.reduce((s, m) => s + (m.amount || 0), 0);
+    const loansRepaid = loans.reduce((s, m) => s + (m.paidAmount || 0), 0);
+
+    // Group remaining debt by origin (Sanchez, etc.)
+    const map = new Map<string, number>();
+    for (const m of loans) {
+      const remaining = Math.max(0, (m.amount || 0) - (m.paidAmount || 0));
+      if (remaining <= 0) continue;
+      const key = (m.origin || "—").trim() || "—";
+      map.set(key, (map.get(key) || 0) + remaining);
+    }
+    const obligations: ObligationItem[] = Array.from(map.entries())
+      .map(([origin, remaining]) => ({ origin, remaining }))
+      .sort((a, b) => b.remaining - a.remaining);
+    const obligationsTotal = obligations.reduce((s, o) => s + o.remaining, 0);
+
+    // CASH: what's actually in the company account
+    const cash = rev.received + loansIncoming - totalExpenses;
+    // TECHNICIAN RESULT: pure operational performance (no loans)
+    const technicianResult = rev.expected - totalExpenses;
+
+    return {
+      year,
+      revenueExpected: rev.expected,
+      revenueReceived: rev.received,
+      expenseRows,
+      totalExpenses,
+      yearMovements,
+      loansIncoming,
+      loansRepaid,
+      obligations,
+      obligationsTotal,
+      cash,
+      technicianResult,
+    };
   });
 }
 
@@ -239,7 +280,7 @@ export default function TechnicianDetailTab({ showAddModal, onShowAddModal }: { 
 
   const companyTotal = techDataList.reduce((sum, td) => {
     const blocks = getYearBlocks(td, td.spreadsheet.columns);
-    return sum + blocks.reduce((s, yb) => s + yb.result, 0);
+    return sum + blocks.reduce((s, yb) => s + yb.technicianResult, 0);
   }, 0);
 
   return (
@@ -339,7 +380,7 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
     localSpreadsheet.columns
   ), [data, localSpreadsheet, localMovements]);
 
-  const globalResult = yearBlocks.reduce((s, yb) => s + yb.result, 0);
+  const globalResult = yearBlocks.reduce((s, yb) => s + yb.technicianResult, 0);
   const isPositive = globalResult >= 0;
 
   const handleSpreadsheetChange = useCallback((newData: SpreadsheetData) => {
@@ -611,7 +652,7 @@ function YearBlock({ techName, block, columns, allSpreadsheet, allMovements, onS
   const [editingYear, setEditingYear] = useState(false);
   const [yearDraft, setYearDraft] = useState(block.year);
   const [newPeriodInput, setNewPeriodInput] = useState("");
-  const isPositive = block.result >= 0;
+  const isPositive = block.technicianResult >= 0;
   const yearSuffix = block.year.slice(2);
 
   const handleYearMovementsChange = useCallback((yearMovements: FinancialMovement[]) => {
@@ -665,7 +706,7 @@ function YearBlock({ techName, block, columns, allSpreadsheet, allMovements, onS
               <div className="flex items-center gap-2">
                 {isPositive ? <TrendingUp className="h-4 w-4 text-emerald-400" /> : <TrendingDown className="h-4 w-4 text-destructive" />}
                 <span className={`text-sm font-bold tabular-nums ${isPositive ? "text-emerald-400" : "text-destructive"}`}>
-                  {formatCurrency(Math.abs(block.result))}
+                  {formatCurrency(Math.abs(block.technicianResult))}
                 </span>
               </div>
             </div>
@@ -735,19 +776,92 @@ function YearBlock({ techName, block, columns, allSpreadsheet, allMovements, onS
               <ExpenseSpreadsheet data={allSpreadsheet} onChange={onSpreadsheetChange} formatCurrency={formatCurrency} filterYear={yearSuffix} />
             </div>
 
-            {/* Year Result */}
-            <div className={`flex items-center justify-between px-4 py-3 rounded-lg border ${isPositive ? "border-emerald-400/20 bg-emerald-400/5" : "border-destructive/20 bg-destructive/5"}`}>
-              <div className="flex items-center gap-2">
-                {isPositive ? <TrendingUp className="h-4 w-4 text-emerald-400" /> : <TrendingDown className="h-4 w-4 text-destructive" />}
-                <span className="text-sm font-medium text-muted-foreground">Resultado {block.year}</span>
-              </div>
-              <div className="text-right">
-                <span className={`text-base font-bold tabular-nums ${isPositive ? "text-emerald-400" : "text-destructive"}`}>
-                  {formatCurrency(Math.abs(block.result))}
-                </span>
-                <div className="flex gap-3 text-[10px] text-muted-foreground mt-0.5">
-                  <span>Despesas: {formatCurrency(block.totalExpenses)}</span>
-                  {block.loansPending > 0 && <span className="text-amber-400">Pendente: {formatCurrency(block.loansPending)}</span>}
+            {/* ── Financial Summary: 3 independent blocks ── */}
+            <div className="space-y-2 pt-1">
+              <h4 className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+                Resumo financeiro {block.year}
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {/* A) CASH */}
+                <div className={`rounded-lg border px-4 py-3 ${
+                  block.cash >= 0
+                    ? "border-emerald-400/20 bg-emerald-400/5"
+                    : "border-destructive/20 bg-destructive/5"
+                }`}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Building2 className="h-3.5 w-3.5 text-emerald-400" />
+                    <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
+                      Caixa disponível
+                    </span>
+                  </div>
+                  <div className={`text-base font-bold tabular-nums ${
+                    block.cash >= 0 ? "text-emerald-400" : "text-destructive"
+                  }`}>
+                    {block.cash < 0 ? "- " : ""}{formatCurrency(Math.abs(block.cash))}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground mt-1 space-y-0.5">
+                    <div className="flex justify-between"><span>Recebido</span><span className="tabular-nums">{formatCurrency(block.revenueReceived)}</span></div>
+                    {block.loansIncoming > 0 && (
+                      <div className="flex justify-between"><span>+ Empréstimos</span><span className="tabular-nums">{formatCurrency(block.loansIncoming)}</span></div>
+                    )}
+                    <div className="flex justify-between"><span>− Despesas</span><span className="tabular-nums">{formatCurrency(block.totalExpenses)}</span></div>
+                  </div>
+                </div>
+
+                {/* B) OBLIGATIONS */}
+                <div className={`rounded-lg border px-4 py-3 ${
+                  block.obligationsTotal > 0
+                    ? "border-amber-500/30 bg-amber-500/5"
+                    : "border-border/40 bg-muted/20"
+                }`}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <TrendingDown className="h-3.5 w-3.5 text-amber-400" />
+                    <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
+                      Obrigações
+                    </span>
+                  </div>
+                  <div className={`text-base font-bold tabular-nums ${
+                    block.obligationsTotal > 0 ? "text-amber-400" : "text-muted-foreground"
+                  }`}>
+                    {formatCurrency(block.obligationsTotal)}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground mt-1 space-y-0.5">
+                    {block.obligations.length === 0 ? (
+                      <div className="italic">Sem dívidas pendentes</div>
+                    ) : (
+                      block.obligations.map((o) => (
+                        <div key={o.origin} className="flex justify-between">
+                          <span className="truncate">{o.origin}</span>
+                          <span className="tabular-nums">{formatCurrency(o.remaining)}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* C) TECHNICIAN RESULT */}
+                <div className={`rounded-lg border px-4 py-3 ${
+                  block.technicianResult >= 0
+                    ? "border-primary/20 bg-primary/5"
+                    : "border-destructive/20 bg-destructive/5"
+                }`}>
+                  <div className="flex items-center gap-2 mb-1">
+                    {block.technicianResult >= 0
+                      ? <TrendingUp className="h-3.5 w-3.5 text-primary" />
+                      : <TrendingDown className="h-3.5 w-3.5 text-destructive" />}
+                    <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
+                      Resultado técnico
+                    </span>
+                  </div>
+                  <div className={`text-base font-bold tabular-nums ${
+                    block.technicianResult >= 0 ? "text-primary" : "text-destructive"
+                  }`}>
+                    {block.technicianResult < 0 ? "- " : ""}{formatCurrency(Math.abs(block.technicianResult))}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground mt-1 space-y-0.5">
+                    <div className="flex justify-between"><span>Esperado</span><span className="tabular-nums">{formatCurrency(block.revenueExpected)}</span></div>
+                    <div className="flex justify-between"><span>− Despesas</span><span className="tabular-nums">{formatCurrency(block.totalExpenses)}</span></div>
+                  </div>
                 </div>
               </div>
             </div>
