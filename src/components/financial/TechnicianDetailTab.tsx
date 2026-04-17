@@ -294,9 +294,13 @@ export default function TechnicianDetailTab({ showAddModal, onShowAddModal }: { 
 
   const techDataList = technicians.map((t) => buildTechData(t, records));
 
+  // Company total = sum of cash across all technicians (real money owned).
   const companyTotal = techDataList.reduce((sum, td) => {
     const blocks = getYearBlocks(td, td.spreadsheet.columns);
-    return sum + blocks.reduce((s, yb) => s + yb.technicianResult, 0);
+    return sum + blocks.reduce((s, yb) => {
+      const cash = yb.revenueReceived + yb.loansIncoming - yb.totalExpenses - yb.loansRepaid - yb.techPaymentsMade;
+      return s + cash;
+    }, 0);
   }, 0);
 
   return (
