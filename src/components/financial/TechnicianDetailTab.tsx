@@ -777,9 +777,9 @@ function YearBlock({ techName, block, columns, allSpreadsheet, allMovements, onS
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                {isPositive ? <TrendingUp className="h-4 w-4 text-emerald-400" /> : <TrendingDown className="h-4 w-4 text-destructive" />}
-                <span className={`text-sm font-bold tabular-nums ${isPositive ? "text-emerald-400" : "text-destructive"}`}>
-                  {formatCurrency(Math.abs(effectiveTechnicianResult))}
+                {effectiveCash >= 0 ? <TrendingUp className="h-4 w-4 text-emerald-400" /> : <TrendingDown className="h-4 w-4 text-destructive" />}
+                <span className={`text-sm font-bold tabular-nums ${effectiveCash >= 0 ? "text-emerald-400" : "text-destructive"}`}>
+                  {effectiveCash < 0 ? "- " : ""}{formatCurrency(Math.abs(effectiveCash))}
                 </span>
               </div>
             </div>
