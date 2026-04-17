@@ -52,10 +52,10 @@ export function useParticipantAggregation() {
     queryKey: ["participant-aggregation"],
     staleTime: 30_000, // cache 30s — avoid recompute on every render
     queryFn: async () => {
-      const [soRes, distRes, poRes] = await Promise.all([
+      const [soRes, distRes, poRes, feRes] = await Promise.all([
         supabase
           .from("service_orders")
-          .select("id, total, group_id, license_plate, week, created_at, distribution_snapshot"),
+          .select("id, total, status, group_id, license_plate, week, created_at, distribution_snapshot"),
         supabase
           .from("service_order_distributions")
           .select("service_order_id, participant_name, calculated_value, percentage"),
@@ -64,11 +64,24 @@ export function useParticipantAggregation() {
           .select(
             "service_order_id, group_id, license_plate, list_name, total, amount_paid, status, created_at",
           ),
+        supabase
+          .from("financial_entries" as any)
+          .select("service_order_id, amount_paid"),
       ]);
 
       const serviceOrders = soRes.data ?? [];
       const distributions = distRes.data ?? [];
       const paymentOrders = poRes.data ?? [];
+      const financialEntries = (feRes.data ?? []) as Array<{ service_order_id: string; amount_paid: number }>;
+
+      // Sum manual partial-payment entries per SO
+      const entriesBySo = new Map<string, number>();
+      for (const fe of financialEntries) {
+        entriesBySo.set(
+          fe.service_order_id,
+          (entriesBySo.get(fe.service_order_id) ?? 0) + Number(fe.amount_paid || 0),
+        );
+      }
 
       // Index live distributions by service_order_id (fallback only)
       const liveDistBySo = new Map<string, { name: string; value: number }[]>();
