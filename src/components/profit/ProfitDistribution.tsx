@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/hooks/useLanguage";
@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   PieChart as PieChartIcon, Plus, Save, Trash2, Loader2,
-  AlertTriangle, Check, Users, FolderPlus, X, ChevronDown,
+  AlertTriangle, Check, Users, FolderPlus, X, ChevronDown, ChevronRight, Search,
 } from "lucide-react";
 import { splitCents, toCents } from "@/lib/distributionMath";
 
@@ -102,6 +102,19 @@ export function ProfitDistribution() {
   const [groupPopoverSearch, setGroupPopoverSearch] = useState<Record<string, string>>({});
   const [deleteRuleTarget, setDeleteRuleTarget] = useState<string | null>(null);
   const [showDeleteAll, setShowDeleteAll] = useState(false);
+  const [search, setSearch] = useState("");
+  const [openRules, setOpenRules] = useState<Record<string, boolean>>(() => {
+    try {
+      const raw = localStorage.getItem("profit-rules-open");
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem("profit-rules-open", JSON.stringify(openRules)); } catch {}
+  }, [openRules]);
+
+  const toggleOpen = (id: string) => setOpenRules(prev => ({ ...prev, [id]: !prev[id] }));
 
   // ── Queries ──
   const { data: fetchedRules = [], isLoading: rulesLoading } = useQuery({
@@ -451,31 +464,41 @@ export function ProfitDistribution() {
       return true;
     });
 
+    const isOpen = openRules[rule.id] ?? !!rule._isNew;
+
     return (
       <Card key={rule.id} className="border-border/50">
-        <CardHeader className="flex flex-row items-start justify-between pb-3 gap-4">
-          <div className="space-y-2 flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <Input
-                value={rule.rule_name}
-                onChange={(e) => handleRuleNameChange(rule.id, e.target.value)}
-                placeholder="Nome da regra"
-                className="h-8 text-sm font-semibold max-w-[250px]"
-              />
-              <div className="flex items-center gap-1.5">
-                <Switch
-                  checked={rule.is_active}
-                  onCheckedChange={(v) => updateLocalRule(rule.id, r => ({ ...r, is_active: v }))}
-                />
-                <span className="text-[10px] text-muted-foreground">{rule.is_active ? "Ativa" : "Inativa"}</span>
-              </div>
+        <CardHeader
+          className="flex flex-row items-center justify-between pb-3 gap-4 cursor-pointer select-none hover:bg-muted/30 transition-colors rounded-t-lg"
+          onClick={() => toggleOpen(rule.id)}
+        >
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <ChevronRight
+              className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`}
+            />
+            <div className="flex items-center gap-2 flex-wrap min-w-0">
+              <span className="text-sm font-semibold truncate">
+                {rule.rule_name || <span className="text-muted-foreground italic">Sem nome</span>}
+              </span>
+              <span className="text-xs text-muted-foreground">|</span>
+              <span className="text-xs text-muted-foreground">
+                {rule.group_ids.length} grupo{rule.group_ids.length !== 1 ? "s" : ""}
+              </span>
+              <span className="text-xs text-muted-foreground">|</span>
+              <span className="text-xs font-medium text-foreground">
+                {formatCurrency(totalRevenue)}
+              </span>
+              {!rule.is_active && (
+                <Badge variant="secondary" className="text-[10px]">Inativa</Badge>
+              )}
+              {isDirty && (
+                <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-500">
+                  Não salvo
+                </Badge>
+              )}
             </div>
-            <p className="text-[10px] text-muted-foreground">
-              {rule.group_ids.length} grupo{rule.group_ids.length !== 1 ? "s" : ""}
-              {" · "}{allSOs.length} OS · Receita: {formatCurrency(totalRevenue)}
-            </p>
           </div>
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
             {isDirty && (
               <>
                 <Button
@@ -492,18 +515,6 @@ export function ProfitDistribution() {
                 </Button>
               </>
             )}
-            {!rule._isNew && !isDirty && (
-              <Button
-                size="icon"
-                className="h-8 w-8"
-                disabled={!isRuleValid(rule) || saveRuleMutation.isPending}
-                onClick={() => saveRuleMutation.mutate(rule)}
-                title="Salvar"
-                variant="outline"
-              >
-                <Save className="h-4 w-4" />
-              </Button>
-            )}
             {!rule._isNew && (
               <Button
                 variant="destructive"
@@ -518,7 +529,24 @@ export function ProfitDistribution() {
             )}
           </div>
         </CardHeader>
+        {isOpen && (
         <CardContent className="space-y-4">
+          {/* Rule name + active toggle (editable inside) */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Input
+              value={rule.rule_name}
+              onChange={(e) => handleRuleNameChange(rule.id, e.target.value)}
+              placeholder="Nome da regra"
+              className="h-8 text-sm font-semibold max-w-[250px]"
+            />
+            <div className="flex items-center gap-1.5">
+              <Switch
+                checked={rule.is_active}
+                onCheckedChange={(v) => updateLocalRule(rule.id, r => ({ ...r, is_active: v }))}
+              />
+              <span className="text-[10px] text-muted-foreground">{rule.is_active ? "Ativa" : "Inativa"}</span>
+            </div>
+          </div>
           {/* Selected groups + dropdown multi-select */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -842,6 +870,7 @@ export function ProfitDistribution() {
             </div>
           )}
         </CardContent>
+        )}
       </Card>
     );
   };
@@ -931,6 +960,27 @@ export function ProfitDistribution() {
         </div>
       </div>
 
+      {/* Search */}
+      {allRules.length > 0 && (
+        <div className="relative">
+          <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar regra (nome, participante ou grupo)..."
+            className="h-9 pl-9 text-sm"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      )}
+
       {allRules.length === 0 && (
         <Card className="border-dashed border-2 border-muted-foreground/20">
           <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
@@ -941,7 +991,27 @@ export function ProfitDistribution() {
         </Card>
       )}
 
-      {allRules.map(renderRuleCard)}
+      {(() => {
+        const q = search.trim().toLowerCase();
+        const filtered = q
+          ? allRules.filter(r => {
+              if (r.rule_name.toLowerCase().includes(q)) return true;
+              if (r.items.some(i => i.participant_name.toLowerCase().includes(q))) return true;
+              if (r.group_ids.some(g => g.toLowerCase().includes(q))) return true;
+              return false;
+            })
+          : allRules;
+        if (q && filtered.length === 0) {
+          return (
+            <Card className="border-dashed border-2 border-muted-foreground/20">
+              <CardContent className="py-8 text-center text-xs text-muted-foreground">
+                Nenhuma regra corresponde à busca "{search}"
+              </CardContent>
+            </Card>
+          );
+        }
+        return filtered.map(renderRuleCard);
+      })()}
 
       {/* Summary */}
       <Card className="border-border/50">
