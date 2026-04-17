@@ -280,7 +280,7 @@ export default function TechnicianDetailTab({ showAddModal, onShowAddModal }: { 
 
   const companyTotal = techDataList.reduce((sum, td) => {
     const blocks = getYearBlocks(td, td.spreadsheet.columns);
-    return sum + blocks.reduce((s, yb) => s + yb.result, 0);
+    return sum + blocks.reduce((s, yb) => s + yb.technicianResult, 0);
   }, 0);
 
   return (
