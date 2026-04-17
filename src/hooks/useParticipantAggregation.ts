@@ -289,11 +289,30 @@ export function useParticipantAggregation() {
       // eslint-disable-next-line no-console
       console.debug("[ParticipantAggregation] per-OS trace", traceRows);
 
+      // FINAL rounding to 2 decimals — only at the last step, never intermediate.
+      // Matches the rounding used by the Profit Distribution module.
+      const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+      for (const name of Object.keys(byParticipant)) {
+        const a = byParticipant[name];
+        a.expected = round2(a.expected);
+        a.received = round2(a.received);
+        a.difference = round2(a.expected - a.received);
+      }
+      for (const week of Object.keys(byParticipantWeek)) {
+        const map = byParticipantWeek[week];
+        for (const name of Object.keys(map)) {
+          const a = map[name];
+          a.expected = round2(a.expected);
+          a.received = round2(a.received);
+          a.difference = round2(a.expected - a.received);
+        }
+      }
+
       const totals = Object.values(byParticipant).reduce(
         (s, a) => ({
-          expected: s.expected + a.expected,
-          received: s.received + a.received,
-          difference: s.difference + a.difference,
+          expected: round2(s.expected + a.expected),
+          received: round2(s.received + a.received),
+          difference: round2(s.difference + a.difference),
         }),
         { expected: 0, received: 0, difference: 0 },
       );
