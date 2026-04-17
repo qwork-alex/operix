@@ -2,6 +2,12 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { partialPaymentsStore } from "@/lib/partialPaymentsStore";
+import {
+  toCents,
+  centsToEuros,
+  splitCents,
+  splitReceivedCents,
+} from "@/lib/distributionMath";
 
 /**
  * READ-ONLY group/distribution-driven financial engine.
@@ -150,36 +156,8 @@ export function useParticipantAggregation() {
       }
 
       // ── INTEGER CENTS MATH ──
-      // All money flows through integer cents (€ × 100) until the final
-      // display step. This guarantees sum(parts) == total exactly and
-      // matches the canonical splitter used by Profit Distribution.
-      const toCents = (n: number) => Math.round(Number(n || 0) * 100);
-
-      /**
-       * Canonical largest-remainder splitter — SHARED contract with
-       * ProfitDistribution. Splits `totalCents` across percentages so that
-       * the integer parts always sum back to `totalCents` (no cent loss).
-       */
-      const splitCents = (
-        totalCents: number,
-        pcts: number[],
-      ): number[] => {
-        const n = pcts.length;
-        if (n === 0) return [];
-        const raw = pcts.map((p) => (totalCents * p) / 100);
-        const floors = raw.map((x) => Math.floor(x));
-        let remainder = totalCents - floors.reduce((s, x) => s + x, 0);
-        const order = raw
-          .map((x, i) => ({ i, frac: x - Math.floor(x) }))
-          .sort((a, b) => b.frac - a.frac);
-        const out = floors.slice();
-        for (let k = 0; k < order.length && remainder > 0; k++) {
-          out[order[k].i] += 1;
-          remainder -= 1;
-        }
-        return out;
-      };
-
+      // splitCents/toCents are imported from src/lib/distributionMath.ts
+      // — the SINGLE source of truth shared with ProfitDistribution.
       // Resolve final distribution per OS in CENTS:
       //   1) snapshot wins (immutable, but re-balanced via splitCents to
       //      kill any historical 1¢ drift in stored calculated_value)
@@ -310,20 +288,10 @@ export function useParticipantAggregation() {
         const paidCents = paidCentsBySo.get(so.id) ?? 0;
         weeksFound.add(week);
 
-        // Distribute paid cents across participants using the SAME
-        // largest-remainder splitter, weighted by each participant's
-        // expected cents — guarantees sum(received_parts) == paidCents.
+        // Distribute paid cents across participants using the SHARED
+        // splitter — guarantees sum(received_parts) == paidCents.
         const expectedParts = dists.map((d) => d.cents);
-        const sumExpected = expectedParts.reduce((s, x) => s + x, 0);
-        let receivedParts: number[];
-        if (paidCents <= 0 || sumExpected <= 0) {
-          receivedParts = expectedParts.map(() => 0);
-        } else if (paidCents >= sumExpected) {
-          receivedParts = expectedParts.slice();
-        } else {
-          const pcts = expectedParts.map((c) => (c * 100) / sumExpected);
-          receivedParts = splitCents(paidCents, pcts);
-        }
+        const receivedParts = splitReceivedCents(paidCents, expectedParts);
 
         for (let i = 0; i < dists.length; i++) {
           const d = dists[i];
@@ -344,9 +312,7 @@ export function useParticipantAggregation() {
       // eslint-disable-next-line no-console
       console.debug("[ParticipantAggregation] per-OS trace", traceRows);
 
-      // FINAL conversion: integer cents → euros. Single division, no float
-      // intermediate math, no Math.round / toFixed beyond this point.
-      const centsToEuros = (c: number) => c / 100;
+      // FINAL conversion: integer cents → euros (via shared centsToEuros).
       const finalize = (a: ParticipantAgg) => {
         const exp = (a as any)._expCents ?? 0;
         const rec = (a as any)._recCents ?? 0;
