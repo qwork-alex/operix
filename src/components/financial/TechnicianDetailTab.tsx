@@ -720,7 +720,7 @@ function YearBlock({ techName, block, columns, allSpreadsheet, allMovements, onS
               <div className="flex items-center gap-2">
                 {isPositive ? <TrendingUp className="h-4 w-4 text-emerald-400" /> : <TrendingDown className="h-4 w-4 text-destructive" />}
                 <span className={`text-sm font-bold tabular-nums ${isPositive ? "text-emerald-400" : "text-destructive"}`}>
-                  {formatCurrency(Math.abs(block.technicianResult))}
+                  {formatCurrency(Math.abs(effectiveTechnicianResult))}
                 </span>
               </div>
             </div>
