@@ -652,8 +652,22 @@ function YearBlock({ techName, block, columns, allSpreadsheet, allMovements, onS
   const [editingYear, setEditingYear] = useState(false);
   const [yearDraft, setYearDraft] = useState(block.year);
   const [newPeriodInput, setNewPeriodInput] = useState("");
-  const isPositive = block.technicianResult >= 0;
   const yearSuffix = block.year.slice(2);
+
+  // ── EFFECTIVE values: derivedAgg (real PO data) takes priority over manual entries.
+  // CASH must reflect REAL money received from payment orders, not just manual inputs.
+  const effectiveReceived = derivedAgg && derivedAgg.received > 0 ? derivedAgg.received : block.revenueReceived;
+  const effectiveExpected = derivedAgg && derivedAgg.expected > 0 ? derivedAgg.expected : block.revenueExpected;
+
+  // CASH = received + incoming loans − paid expenses (company-owned money)
+  const effectiveCash = effectiveReceived + block.loansIncoming - block.totalExpenses;
+  // TECHNICIAN RESULT = expected − expenses (operational, no loans)
+  const effectiveTechnicianResult = effectiveExpected - block.totalExpenses;
+  // PAYABLE TO TECHNICIAN: positive operational result becomes a liability owed to the tech
+  const payableToTechnician = Math.max(0, effectiveReceived - block.totalExpenses);
+  // Total obligations = partner debts (Sanchez/loans) + tech payable
+  const totalObligations = block.obligationsTotal + payableToTechnician;
+  const isPositive = effectiveTechnicianResult >= 0;
 
   const handleYearMovementsChange = useCallback((yearMovements: FinancialMovement[]) => {
     const otherMovements = allMovements.filter((m) => getYearFromPeriod(m.period) !== block.year);
