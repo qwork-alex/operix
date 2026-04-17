@@ -58,8 +58,9 @@ export function normalizeMonth(raw: string): string | null {
 export interface FinancialMovement {
   id: string;
   period: string; // stored as "Jan/YY" internally
-  type: "loan" | "manual_entry";
+  type: "loan" | "manual_entry" | "payment";
   origin: string;
+  reason?: string; // "Motivo" — short description of the movement
   amount: number;
   paidAmount: number;
   status: "pending" | "paid" | "partial";
@@ -70,6 +71,8 @@ interface Props {
   onChange: (movements: FinancialMovement[]) => void;
   formatCurrency: (v: number) => string;
   constrainToYear?: string; // e.g. "2024" — blocks periods outside this year
+  /** Available cash for the period — blocks marking "paid" if amount > cash. */
+  availableCash?: number;
 }
 
 const STATUS_LABELS: Record<string, string> = {
