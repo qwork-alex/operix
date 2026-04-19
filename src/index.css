@@ -3,6 +3,7 @@
 @tailwind utilities;
 
 @import "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
 
 @layer base {
   :root {
@@ -15,8 +16,8 @@
     --popover: 220 14% 11%;
     --popover-foreground: 40 10% 92%;
 
-    --primary: 43 85% 55%;
-    --primary-foreground: 220 15% 8%;
+    --primary: 142 71% 45%;
+    --primary-foreground: 0 0% 100%;
 
     --secondary: 220 14% 16%;
     --secondary-foreground: 40 10% 82%;
@@ -38,18 +39,18 @@
 
     --border: 220 12% 18%;
     --input: 220 12% 18%;
-    --ring: 43 85% 55%;
+    --ring: 142 71% 45%;
 
     --radius: 0.5rem;
 
     --sidebar-background: 220 16% 6%;
     --sidebar-foreground: 40 10% 75%;
-    --sidebar-primary: 43 85% 55%;
-    --sidebar-primary-foreground: 220 15% 8%;
+    --sidebar-primary: 142 71% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 220 14% 12%;
     --sidebar-accent-foreground: 40 10% 92%;
     --sidebar-border: 220 12% 14%;
-    --sidebar-ring: 43 85% 55%;
+    --sidebar-ring: 142 71% 45%;
 
     --chart-1: 43 85% 55%;
     --chart-2: 210 80% 55%;
@@ -66,7 +67,8 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: 'Sora', 'Inter', system-ui, -apple-system, sans-serif;
+    font-feature-settings: 'cv11', 'ss01', 'ss03';
   }
 
   /* Custom scrollbar */
@@ -88,7 +90,7 @@
 
 @layer utilities {
   .glow-gold {
-    box-shadow: 0 0 20px hsl(43 85% 55% / 0.15), 0 0 40px hsl(43 85% 55% / 0.05);
+    box-shadow: 0 0 20px hsl(142 71% 45% / 0.18), 0 0 40px hsl(142 71% 45% / 0.06);
   }
   .glow-blue {
     box-shadow: 0 0 20px hsl(210 80% 55% / 0.15), 0 0 40px hsl(210 80% 55% / 0.05);
