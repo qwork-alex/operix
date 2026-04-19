@@ -33,7 +33,7 @@ export function AppSidebar() {
     }
   };
 
-  const displayName = brandConfig.name || BRAND.name;
+  const displayName = brandConfig.name || appBrand.appName;
 
   const allNav = [
     { title: t("nav.dashboard"), url: "/", icon: LayoutDashboard, roles: ["admin", "tecnico", "socio", "cliente"] },
