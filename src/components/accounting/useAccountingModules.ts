@@ -2,10 +2,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { ModuleEntry } from "./ModulePanel";
 
-type ModuleKey = "revenue" | "expenses" | "fuel" | "purchases" | "government" | "withdrawals";
+type ModuleKey = "rentals" | "expenses" | "fuel" | "purchases" | "government" | "withdrawals";
 
 const CATEGORY_MAP: Record<ModuleKey, { type: string; category?: string; source?: string }> = {
-  revenue: { type: "revenue", source: "payment_orders" },
+  rentals: { type: "expense", category: "rent" },
   expenses: { type: "expense" },
   fuel: { type: "expense", category: "fuel" },
   purchases: { type: "expense", category: "material" },
