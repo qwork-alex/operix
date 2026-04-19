@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, memo, useMemo } from "react";
 import {
   DollarSign,
   Receipt,
@@ -23,30 +23,97 @@ interface ModuleDef {
 }
 
 const MODULES: ModuleDef[] = [
-  { key: "revenue",     label: "Receitas",    icon: DollarSign,   color: "43 85% 55%"  }, // yellow
-  { key: "expenses",    label: "Despesas",    icon: Receipt,      color: "0 72% 55%"   }, // red
-  { key: "fuel",        label: "Combustível", icon: Fuel,         color: "210 80% 55%" }, // blue
-  { key: "purchases",   label: "Compras",     icon: ShoppingCart, color: "280 60% 60%" }, // purple
-  { key: "government",  label: "Governo",     icon: Landmark,     color: "152 60% 45%" }, // green
-  { key: "withdrawals", label: "Retiradas",   icon: Wallet,       color: "28 92% 55%"  }, // orange
+  { key: "revenue",     label: "Receitas",    icon: DollarSign,   color: "43 85% 55%"  },
+  { key: "expenses",    label: "Despesas",    icon: Receipt,      color: "0 72% 55%"   },
+  { key: "fuel",        label: "Combustível", icon: Fuel,         color: "210 80% 55%" },
+  { key: "purchases",   label: "Compras",     icon: ShoppingCart, color: "280 60% 60%" },
+  { key: "government",  label: "Governo",     icon: Landmark,     color: "152 60% 45%" },
+  { key: "withdrawals", label: "Retiradas",   icon: Wallet,       color: "28 92% 55%"  },
 ];
+
+// ---------- Memoized orbital button (GPU transform only) ----------
+interface OrbitButtonProps {
+  mod: ModuleDef;
+  x: number;
+  y: number;
+  isActive: boolean;
+  onSelect: (key: ModuleKey) => void;
+}
+const OrbitButton = memo(function OrbitButton({ mod, x, y, isActive, onSelect }: OrbitButtonProps) {
+  const Icon = mod.icon;
+  return (
+    <button
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        onSelect(mod.key);
+      }}
+      className="absolute z-20 flex flex-col items-center gap-1.5 group left-0 top-0"
+      style={{
+        transform: `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)`,
+        willChange: "transform",
+      }}
+    >
+      <div
+        className={cn(
+          "w-14 h-14 rounded-2xl flex items-center justify-center border",
+          "transition-[background-color,border-color,box-shadow,transform] duration-200 ease-out",
+          "group-hover:scale-105"
+        )}
+        style={{
+          borderColor: isActive ? `hsl(${mod.color} / 0.7)` : "hsl(var(--border) / 0.5)",
+          background: isActive ? `hsl(${mod.color} / 0.15)` : "hsl(var(--card) / 0.8)",
+          boxShadow: isActive
+            ? `0 0 15px hsl(${mod.color} / 0.55), 0 0 30px hsl(${mod.color} / 0.25)`
+            : undefined,
+        }}
+      >
+        <Icon
+          size={22}
+          style={{ color: isActive ? `hsl(${mod.color})` : "hsl(var(--muted-foreground))" }}
+        />
+      </div>
+      <span
+        className={cn(
+          "text-[11px] font-medium tracking-wide whitespace-nowrap",
+          isActive ? "text-foreground" : "text-muted-foreground"
+        )}
+      >
+        {mod.label}
+      </span>
+    </button>
+  );
+});
 
 export function AccountingControlCenter() {
   const [activeModule, setActiveModule] = useState<ModuleKey | null>(null);
 
-  // Orbit rotation (in radians). Drag updates this; inertia decays it.
-  const [orbitAngle, setOrbitAngle] = useState(0);
+  // Orbit angle stored in ref; we mutate DOM/SVG directly to avoid React re-renders per frame
   const orbitAngleRef = useRef(0);
-  const velocityRef = useRef(0); // rad / frame
+  const velocityRef = useRef(0);
   const draggingRef = useRef(false);
   const lastPointerRef = useRef<{ x: number; y: number; t: number } | null>(null);
   const rafRef = useRef<number | null>(null);
 
+  // We still keep a state value, but only update it when needed (drag end / module click)
+  // Frame-by-frame updates go through refs + direct style mutation.
+  const [, forceTick] = useState(0);
+  const tickScheduledRef = useRef(false);
+  const scheduleTick = useCallback(() => {
+    if (tickScheduledRef.current) return;
+    tickScheduledRef.current = true;
+    requestAnimationFrame(() => {
+      tickScheduledRef.current = false;
+      forceTick((n) => (n + 1) % 1000000);
+    });
+  }, []);
+
   const stageRef = useRef<HTMLDivElement>(null);
   const [stage, setStage] = useState({ w: 800, h: 600 });
 
-  // Keep ref in sync
-  useEffect(() => { orbitAngleRef.current = orbitAngle; }, [orbitAngle]);
+  // Refs to per-button DOM nodes & per-line SVG nodes for direct mutation
+  const buttonRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const lineRefs = useRef<Array<SVGLineElement | null>>([]);
 
   // Resize observer
   useEffect(() => {
@@ -61,21 +128,61 @@ export function AccountingControlCenter() {
     return () => ro.disconnect();
   }, []);
 
-  // Inertia / floating animation loop
+  // Layout calculations (memoized)
+  const panelOpen = activeModule !== null;
+  const layout = useMemo(() => {
+    const globeAreaW = panelOpen ? stage.w * 0.7 : stage.w;
+    const globeAreaH = stage.h;
+    const centerX = globeAreaW / 2;
+    const centerY = globeAreaH / 2;
+    const minSide = Math.min(globeAreaW, globeAreaH);
+    return {
+      centerX,
+      centerY,
+      globeSize: minSide * 0.62,
+      orbitRadius: minSide * 0.42,
+    };
+  }, [stage.w, stage.h, panelOpen]);
+
+  // Direct DOM updater — avoids React reconciliation per frame
+  const applyOrbitToDom = useCallback(() => {
+    const { centerX, centerY, orbitRadius } = layout;
+    const angle0 = orbitAngleRef.current;
+    const count = MODULES.length;
+    for (let i = 0; i < count; i++) {
+      const a = angle0 + (i * Math.PI * 2) / count - Math.PI / 2;
+      const x = centerX + Math.cos(a) * orbitRadius;
+      const y = centerY + Math.sin(a) * orbitRadius;
+      const btn = buttonRefs.current[i];
+      if (btn) {
+        btn.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)`;
+      }
+      const line = lineRefs.current[i];
+      if (line) {
+        line.setAttribute("x2", String(x));
+        line.setAttribute("y2", String(y));
+      }
+    }
+  }, [layout]);
+
+  // Apply DOM positions whenever layout changes (resize, panel open/close)
+  useEffect(() => {
+    applyOrbitToDom();
+  }, [applyOrbitToDom]);
+
+  // Animation loop — pure DOM updates, no React state in hot path
   useEffect(() => {
     const loop = () => {
-      // Apply velocity with damping when not dragging and no module selected
       if (!draggingRef.current && !activeModule) {
         if (Math.abs(velocityRef.current) > 0.00005) {
           orbitAngleRef.current += velocityRef.current;
-          velocityRef.current *= 0.94; // friction
-          setOrbitAngle(orbitAngleRef.current);
+          velocityRef.current *= 0.94;
+          applyOrbitToDom();
         } else if (velocityRef.current !== 0) {
           velocityRef.current = 0;
         } else {
-          // Subtle ambient drift (alive feel)
           orbitAngleRef.current += 0.0008;
-          setOrbitAngle(orbitAngleRef.current);
+          applyOrbitToDom();
         }
       }
       rafRef.current = requestAnimationFrame(loop);
@@ -84,11 +191,10 @@ export function AccountingControlCenter() {
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [activeModule]);
+  }, [activeModule, applyOrbitToDom]);
 
-  // Pointer drag handlers (on the stage)
+  // Pointer drag handlers
   const onPointerDown = useCallback((e: React.PointerEvent) => {
-    // Don't start drag when clicking on a module button (it has its own handler & stops propagation)
     draggingRef.current = true;
     velocityRef.current = 0;
     lastPointerRef.current = { x: e.clientX, y: e.clientY, t: performance.now() };
@@ -107,38 +213,36 @@ export function AccountingControlCenter() {
     if (delta > Math.PI) delta -= 2 * Math.PI;
     if (delta < -Math.PI) delta += 2 * Math.PI;
     orbitAngleRef.current += delta;
-    setOrbitAngle(orbitAngleRef.current);
+    applyOrbitToDom();
     const now = performance.now();
     const dt = Math.max(1, now - prev.t);
-    // velocity in rad per frame (~16ms)
     velocityRef.current = (delta / dt) * 16;
     lastPointerRef.current = { x: e.clientX, y: e.clientY, t: now };
-  }, []);
+  }, [applyOrbitToDom]);
 
   const onPointerUp = useCallback(() => {
     draggingRef.current = false;
     lastPointerRef.current = null;
   }, []);
 
-  const handleModuleClick = (key: ModuleKey) => {
+  const handleModuleClick = useCallback((key: ModuleKey) => {
     velocityRef.current = 0;
     setActiveModule((curr) => (curr === key ? null : key));
-  };
-
-  // Layout calculations
-  const panelOpen = activeModule !== null;
-  const globeArea = {
-    w: panelOpen ? stage.w * 0.7 : stage.w,
-    h: stage.h,
-  };
-  const centerX = globeArea.w / 2;
-  const centerY = globeArea.h / 2;
-  const minSide = Math.min(globeArea.w, globeArea.h);
-  // Larger globe (~30% bigger), tighter orbit
-  const globeSize = minSide * 0.62;
-  const orbitRadius = minSide * 0.42;
+  }, []);
 
   const activeMod = MODULES.find((m) => m.key === activeModule) ?? null;
+  const { centerX, centerY, globeSize, orbitRadius } = layout;
+
+  // Compute initial positions for SSR/first render (DOM updater overwrites on next frame)
+  const initialPositions = useMemo(() => {
+    return MODULES.map((_, i) => {
+      const a = orbitAngleRef.current + (i * Math.PI * 2) / MODULES.length - Math.PI / 2;
+      return {
+        x: centerX + Math.cos(a) * orbitRadius,
+        y: centerY + Math.sin(a) * orbitRadius,
+      };
+    });
+  }, [centerX, centerY, orbitRadius]);
 
   return (
     <div className="h-full flex flex-col">
@@ -152,10 +256,10 @@ export function AccountingControlCenter() {
 
       {/* Main split area */}
       <div className="relative flex-1 min-h-[500px] rounded-xl border border-border/30 bg-card/30 overflow-hidden flex">
-        {/* Globe stage (resizes when panel opens) */}
+        {/* Globe stage */}
         <div
           ref={stageRef}
-          className="relative transition-[width] duration-500 ease-out"
+          className="relative transition-[width] duration-300 ease-out"
           style={{ width: panelOpen ? "70%" : "100%", height: "100%" }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
@@ -176,51 +280,37 @@ export function AccountingControlCenter() {
             />
           </svg>
 
-          {/* Connection lines layer */}
+          {/* Connection lines */}
           <svg className="absolute inset-0 pointer-events-none z-0" width="100%" height="100%">
             {MODULES.map((mod, i) => {
-              const angle = orbitAngle + (i * Math.PI * 2) / MODULES.length - Math.PI / 2;
-              const x = centerX + Math.cos(angle) * orbitRadius;
-              const y = centerY + Math.sin(angle) * orbitRadius;
               const isActive = activeModule === mod.key;
+              const pos = initialPositions[i];
               return (
-                <g key={mod.key}>
-                  <line
-                    x1={centerX}
-                    y1={centerY}
-                    x2={x}
-                    y2={y}
-                    stroke={`hsl(${mod.color})`}
-                    strokeWidth={isActive ? 2 : 1}
-                    strokeOpacity={isActive ? 0.7 : 0.12}
-                    strokeDasharray={isActive ? "none" : "4 4"}
-                    style={{ transition: "stroke-opacity 0.3s ease, stroke-width 0.3s ease" }}
-                  />
-                  {isActive && (
-                    <circle r="3" fill={`hsl(${mod.color})`} opacity="0.85">
-                      <animateMotion
-                        dur="2s"
-                        repeatCount="indefinite"
-                        path={`M${centerX},${centerY} L${x},${y}`}
-                      />
-                    </circle>
-                  )}
-                </g>
+                <line
+                  key={mod.key}
+                  ref={(el) => (lineRefs.current[i] = el)}
+                  x1={centerX}
+                  y1={centerY}
+                  x2={pos.x}
+                  y2={pos.y}
+                  stroke={`hsl(${mod.color})`}
+                  strokeWidth={isActive ? 2 : 1}
+                  strokeOpacity={isActive ? 0.7 : 0.12}
+                  strokeDasharray={isActive ? "none" : "4 4"}
+                />
               );
             })}
           </svg>
 
-          {/* Globe (centered) */}
+          {/* Globe */}
           <div
-            className="absolute z-10 pointer-events-none"
+            className="absolute z-10 pointer-events-none left-0 top-0"
             style={{
-              left: centerX - globeSize / 2,
-              top: centerY - globeSize / 2,
-              transition: "left 0.5s ease-out, top 0.5s ease-out, width 0.5s, height 0.5s",
+              transform: `translate3d(${centerX - globeSize / 2}px, ${centerY - globeSize / 2}px, 0)`,
+              willChange: "transform",
             }}
           >
             <Globe size={globeSize} />
-            {/* Center icon (replaces text) */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div
                 className="rounded-full bg-background/50 backdrop-blur-sm border border-primary/20 p-3 shadow-lg"
@@ -231,67 +321,65 @@ export function AccountingControlCenter() {
             </div>
           </div>
 
-          {/* Orbital module buttons */}
+          {/* Orbital module buttons (positions mutated directly in DOM) */}
           {MODULES.map((mod, i) => {
-            const angle = orbitAngle + (i * Math.PI * 2) / MODULES.length - Math.PI / 2;
-            const x = centerX + Math.cos(angle) * orbitRadius;
-            const y = centerY + Math.sin(angle) * orbitRadius;
             const isActive = activeModule === mod.key;
             const Icon = mod.icon;
+            const pos = initialPositions[i];
             return (
-              <button
+              <div
                 key={mod.key}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleModuleClick(mod.key);
-                }}
-                className={cn(
-                  "absolute z-20 flex flex-col items-center gap-1.5 group",
-                  "transition-transform duration-300 hover:scale-105"
-                )}
+                ref={(el) => (buttonRefs.current[i] = el)}
+                className="absolute z-20 left-0 top-0"
                 style={{
-                  left: x,
-                  top: y,
-                  transform: "translate(-50%, -50%)",
+                  transform: `translate3d(${pos.x}px, ${pos.y}px, 0) translate(-50%, -50%)`,
+                  willChange: "transform",
                 }}
               >
-                <div
-                  className={cn(
-                    "w-14 h-14 rounded-2xl flex items-center justify-center border backdrop-blur-sm",
-                    "transition-all duration-300"
-                  )}
-                  style={{
-                    borderColor: isActive ? `hsl(${mod.color} / 0.7)` : "hsl(var(--border) / 0.5)",
-                    background: isActive
-                      ? `hsl(${mod.color} / 0.15)`
-                      : "hsl(var(--card) / 0.8)",
-                    boxShadow: isActive
-                      ? `0 0 15px hsl(${mod.color} / 0.55), 0 0 30px hsl(${mod.color} / 0.25)`
-                      : undefined,
+                <button
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleModuleClick(mod.key);
                   }}
+                  className="flex flex-col items-center gap-1.5 group"
                 >
-                  <Icon
-                    size={22}
-                    style={{ color: isActive ? `hsl(${mod.color})` : "hsl(var(--muted-foreground))" }}
-                    className="transition-colors duration-300"
-                  />
-                </div>
-                <span
-                  className={cn(
-                    "text-[11px] font-medium tracking-wide whitespace-nowrap transition-colors duration-300",
-                    isActive ? "text-foreground" : "text-muted-foreground"
-                  )}
-                  style={isActive ? { textShadow: `0 0 8px hsl(${mod.color} / 0.5)` } : undefined}
-                >
-                  {mod.label}
-                </span>
-              </button>
+                  <div
+                    className={cn(
+                      "w-14 h-14 rounded-2xl flex items-center justify-center border",
+                      "transition-[background-color,border-color,box-shadow] duration-200 ease-out",
+                      "group-hover:scale-105"
+                    )}
+                    style={{
+                      borderColor: isActive ? `hsl(${mod.color} / 0.7)` : "hsl(var(--border) / 0.5)",
+                      background: isActive
+                        ? `hsl(${mod.color} / 0.15)`
+                        : "hsl(var(--card) / 0.8)",
+                      boxShadow: isActive
+                        ? `0 0 15px hsl(${mod.color} / 0.55), 0 0 30px hsl(${mod.color} / 0.25)`
+                        : undefined,
+                    }}
+                  >
+                    <Icon
+                      size={22}
+                      style={{ color: isActive ? `hsl(${mod.color})` : "hsl(var(--muted-foreground))" }}
+                    />
+                  </div>
+                  <span
+                    className={cn(
+                      "text-[11px] font-medium tracking-wide whitespace-nowrap",
+                      isActive ? "text-foreground" : "text-muted-foreground"
+                    )}
+                  >
+                    {mod.label}
+                  </span>
+                </button>
+              </div>
             );
           })}
         </div>
 
-        {/* Side panel area (30%) */}
+        {/* Side panel */}
         {activeMod && (
           <div
             className="relative animate-slide-in-right border-l"
@@ -314,7 +402,7 @@ export function AccountingControlCenter() {
   );
 }
 
-function ActiveModulePanel({
+const ActiveModulePanel = memo(function ActiveModulePanel({
   moduleKey,
   color,
   label,
@@ -343,4 +431,4 @@ function ActiveModulePanel({
       allowAdd={allowAdd}
     />
   );
-}
+});
