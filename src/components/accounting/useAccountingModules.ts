@@ -33,9 +33,7 @@ export function useAccountingModule(moduleKey: ModuleKey) {
     queryFn: async () => {
       let q = supabase.from("financial_records").select("*");
 
-      if (moduleKey === "revenue") {
-        q = q.eq("type", "revenue");
-      } else if (config.category) {
+      if (config.category) {
         q = q.eq("type", "expense").eq("category", config.category);
       } else if (moduleKey === "expenses") {
         // All expenses not in specific categories
@@ -49,7 +47,7 @@ export function useAccountingModule(moduleKey: ModuleKey) {
     },
   });
 
-  const isManualEditable = moduleKey !== "revenue";
+  const isManualEditable = true;
 
   const entries: ModuleEntry[] = buildEntries(query.data || [], isManualEditable);
   const total = entries.reduce((s, e) => s + e.amount, 0);
