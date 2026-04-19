@@ -6,9 +6,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
-import { Plus, Trash2, MoreVertical, Copy } from "lucide-react";
+import { Plus, Trash2, MoreVertical, Copy, Lock } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
+import {
+  useAccountingExpensesByPeriod,
+  ACCOUNTING_COLUMNS,
+  type AccountingBucketKey,
+} from "@/hooks/useAccountingExpensesByPeriod";
 
 /* ── types ── */
 export interface SpreadsheetColumn {
@@ -119,57 +124,6 @@ function EditableCell({ value, onChange }: { value: number; onChange: (v: number
   );
 }
 
-/* ── editable header ── */
-function EditableHeader({ label, onChange }: { label: string; onChange: (v: string) => void }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(label);
-  const ref = useRef<HTMLInputElement>(null);
-  useEffect(() => { if (editing) ref.current?.focus(); }, [editing]);
-
-  if (!editing) {
-    return <span className="cursor-text" onClick={() => { setDraft(label); setEditing(true); }}>{label}</span>;
-  }
-  const commit = () => { if (draft.trim()) onChange(draft.trim()); setEditing(false); };
-  return (
-    <Input ref={ref} className="h-6 text-xs w-24 text-center"
-      value={draft} onChange={(e) => setDraft(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") setEditing(false); }}
-    />
-  );
-}
-
-/* ── column header menu ── */
-function ColumnHeaderMenu({ col, onRename, onDelete, onDuplicate }: {
-  col: SpreadsheetColumn;
-  onRename: (id: string, label: string) => void;
-  onDelete: (id: string) => void;
-  onDuplicate: (id: string) => void;
-}) {
-  return (
-    <th className="px-2 py-2 text-center align-middle text-xs font-medium text-muted-foreground min-w-[100px] group">
-      <div className="flex items-center justify-center gap-1">
-        <EditableHeader label={col.label} onChange={(v) => onRename(col.id, v)} />
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground">
-              <MoreVertical className="h-3 w-3" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-[140px]">
-            <DropdownMenuItem onClick={() => onDuplicate(col.id)}>
-              <Copy className="h-3 w-3 mr-2" /> Duplicar coluna
-            </DropdownMenuItem>
-            <DropdownMenuItem className="text-destructive" onClick={() => onDelete(col.id)}>
-              <Trash2 className="h-3 w-3 mr-2" /> Remover coluna
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </th>
-  );
-}
-
 /* ── insert period button between rows ── */
 function InsertPeriodButton({ suggestion, onInsert }: { suggestion: string | null; onInsert: (period: string) => void }) {
   const [hovering, setHovering] = useState(false);
@@ -213,8 +167,7 @@ function getMissingSuggestion(current: string, next: string | null): string | nu
 
 /* ── main component ── */
 export default function ExpenseSpreadsheet({ data, onChange, formatCurrency, filterYear }: Props) {
-  const [showAddCol, setShowAddCol] = useState(false);
-  const [newColName, setNewColName] = useState("");
+  const { data: accountingMap = {} } = useAccountingExpensesByPeriod();
 
   const sortedRows = useMemo(() => {
     let rows = [...data.rows].sort((a, b) => periodSortKey(a.period) - periodSortKey(b.period));
@@ -222,41 +175,45 @@ export default function ExpenseSpreadsheet({ data, onChange, formatCurrency, fil
     return rows;
   }, [data.rows, filterYear]);
 
-  const updateCell = useCallback((rowId: string, colId: string, value: number) => {
-    const rows = data.rows.map((r) => r.id === rowId ? { ...r, values: { ...r.values, [colId]: value } } : r);
-    onChange({ ...data, rows });
+  // The single editable column: "Manual". We merge any pre-existing custom
+  // columns into one logical Manual bucket per row (sum of all values).
+  const manualForRow = useCallback((row: SpreadsheetRow) => {
+    return data.columns.reduce((s, c) => s + (row.values[c.id] || 0), 0);
+  }, [data.columns]);
+
+  // Ensure there is exactly one "manual_main" column and update its value.
+  const updateManualCell = useCallback((rowId: string, value: number) => {
+    const MANUAL_ID = "manual_main";
+    let columns = data.columns;
+    if (!columns.some((c) => c.id === MANUAL_ID)) {
+      columns = [...columns, { id: MANUAL_ID, label: "Manual", type: "custom" }];
+    }
+    const rows = data.rows.map((r) => {
+      if (r.id !== rowId) return r;
+      // Reset all legacy custom column values into the single manual column
+      const cleared: Record<string, number> = {};
+      cleared[MANUAL_ID] = value;
+      return { ...r, values: cleared };
+    });
+    onChange({ columns, rows });
   }, [data, onChange]);
 
-  const addColumn = () => {
-    if (!newColName.trim()) return;
-    const id = `custom_${Date.now()}`;
-    onChange({ ...data, columns: [...data.columns, { id, label: newColName.trim(), type: "custom" }] });
-    setNewColName(""); setShowAddCol(false);
-    toast.success("Coluna adicionada");
-  };
+  const accValueFor = useCallback((period: string, bucket: AccountingBucketKey): number => {
+    return accountingMap[period]?.[bucket] || 0;
+  }, [accountingMap]);
 
-  const removeColumn = (colId: string) => {
-    const cols = data.columns.filter((c) => c.id !== colId);
-    const rows = data.rows.map((r) => { const v = { ...r.values }; delete v[colId]; return { ...r, values: v }; });
-    onChange({ columns: cols, rows });
-    toast.success("Coluna removida");
-  };
+  const rowAccTotal = useCallback((period: string) => {
+    return ACCOUNTING_COLUMNS.reduce((s, c) => s + accValueFor(period, c.id), 0);
+  }, [accValueFor]);
 
-  const duplicateColumn = (colId: string) => {
-    const source = data.columns.find((c) => c.id === colId);
-    if (!source) return;
-    const newId = `custom_${Date.now()}`;
-    const newCol: SpreadsheetColumn = { id: newId, label: `${source.label} (cópia)`, type: "custom" };
-    const idx = data.columns.findIndex((c) => c.id === colId);
-    const cols = [...data.columns]; cols.splice(idx + 1, 0, newCol);
-    const rows = data.rows.map((r) => ({ ...r, values: { ...r.values, [newId]: r.values[colId] || 0 } }));
-    onChange({ columns: cols, rows });
-    toast.success("Coluna duplicada");
-  };
+  const rowTotal = useCallback((row: SpreadsheetRow) => {
+    return rowAccTotal(row.period) + manualForRow(row);
+  }, [rowAccTotal, manualForRow]);
 
-  const renameColumn = (colId: string, label: string) => {
-    onChange({ ...data, columns: data.columns.map((c) => c.id === colId ? { ...c, label } : c) });
-  };
+  const grandManual = sortedRows.reduce((s, r) => s + manualForRow(r), 0);
+  const grandAccByBucket = (bucket: AccountingBucketKey) =>
+    sortedRows.reduce((s, r) => s + accValueFor(r.period, bucket), 0);
+  const grandTotal = sortedRows.reduce((s, r) => s + rowTotal(r), 0);
 
   const commitAddRow = (period: string) => {
     const newRow: SpreadsheetRow = { id: `row_${Date.now()}`, period, values: {} };
@@ -272,9 +229,6 @@ export default function ExpenseSpreadsheet({ data, onChange, formatCurrency, fil
     commitAddRow(period);
   };
 
-  const rowTotal = (row: SpreadsheetRow) => data.columns.reduce((s, c) => s + (row.values[c.id] || 0), 0);
-  const grandTotal = data.rows.reduce((s, r) => s + rowTotal(r), 0);
-
   return (
     <div className="space-y-3">
       {data.rows.length === 0 ? (
@@ -287,24 +241,25 @@ export default function ExpenseSpreadsheet({ data, onChange, formatCurrency, fil
             <thead>
               <tr className="border-b border-border/50 bg-muted/30">
                 <th className="px-3 py-2 text-center align-middle text-xs font-medium text-muted-foreground w-20">Mês</th>
-                {data.columns.map((col) => (
-                  <ColumnHeaderMenu key={col.id} col={col}
-                    onRename={renameColumn} onDelete={removeColumn} onDuplicate={duplicateColumn}
-                  />
+                {ACCOUNTING_COLUMNS.map((col) => (
+                  <th
+                    key={col.id}
+                    className="px-2 py-2 text-center align-middle text-xs font-medium min-w-[100px]"
+                    style={{ color: `hsl(${col.color})` }}
+                  >
+                    <div className="flex items-center justify-center gap-1">
+                      <span>{col.label}</span>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Lock className="h-2.5 w-2.5 opacity-50" />
+                        </TooltipTrigger>
+                        <TooltipContent>Somado da Contabilidade</TooltipContent>
+                      </Tooltip>
+                    </div>
+                  </th>
                 ))}
-                {/* Add column button — appears inline after last custom column header */}
-                <th className="w-6 p-0 relative group/addcol">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        className="opacity-0 group-hover/addcol:opacity-100 hover:opacity-100 transition-opacity p-1 rounded hover:bg-primary/10"
-                        onClick={() => setShowAddCol(true)}
-                      >
-                        <Plus className="h-3 w-3 text-primary" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>Adicionar coluna</TooltipContent>
-                  </Tooltip>
+                <th className="px-2 py-2 text-center align-middle text-xs font-medium text-muted-foreground min-w-[100px]">
+                  Manual
                 </th>
                 <th className="px-3 py-2 text-center align-middle text-xs font-semibold text-foreground w-28">Total</th>
               </tr>
@@ -314,13 +269,24 @@ export default function ExpenseSpreadsheet({ data, onChange, formatCurrency, fil
                 <React.Fragment key={row.id}>
                   <tr className="border-b border-border/30 hover:bg-muted/20 transition-colors group/row relative">
                     <td className="px-3 py-1.5 text-sm font-medium text-foreground text-center align-middle">{displayMonth(row.period)}</td>
-                    {data.columns.map((col) => (
-                      <td key={col.id} className="px-1 py-0.5 text-center align-middle">
-                        <EditableCell value={row.values[col.id] || 0} onChange={(v) => updateCell(row.id, col.id, v)} />
-                      </td>
-                    ))}
-                    {/* Spacer cell for add-column area */}
-                    <td className="w-6 p-0" />
+                    {ACCOUNTING_COLUMNS.map((col) => {
+                      const v = accValueFor(row.period, col.id);
+                      return (
+                        <td
+                          key={col.id}
+                          className="px-2 py-1.5 text-center align-middle tabular-nums text-sm bg-muted/10"
+                          style={{ color: v > 0 ? `hsl(${col.color})` : undefined }}
+                        >
+                          {v > 0 ? formatCurrency(v) : "—"}
+                        </td>
+                      );
+                    })}
+                    <td className="px-1 py-0.5 text-center align-middle">
+                      <EditableCell
+                        value={manualForRow(row)}
+                        onChange={(v) => updateManualCell(row.id, v)}
+                      />
+                    </td>
                     <td className="px-3 py-1.5 text-center align-middle text-sm font-semibold tabular-nums text-foreground">
                       {formatCurrency(rowTotal(row))}
                     </td>
@@ -344,34 +310,24 @@ export default function ExpenseSpreadsheet({ data, onChange, formatCurrency, fil
             <tfoot>
               <tr className="border-t border-border/50 bg-muted/20">
                 <td className="px-3 py-2 text-xs font-semibold text-muted-foreground text-center align-middle">Total</td>
-                {data.columns.map((col) => {
-                  const colTotal = data.rows.reduce((s, r) => s + (r.values[col.id] || 0), 0);
-                  return <td key={col.id} className="px-2 py-2 text-center align-middle text-xs tabular-nums text-muted-foreground">{formatCurrency(colTotal)}</td>;
-                })}
-                <td className="w-6 p-0" />
+                {ACCOUNTING_COLUMNS.map((col) => (
+                  <td
+                    key={col.id}
+                    className="px-2 py-2 text-center align-middle text-xs tabular-nums"
+                    style={{ color: `hsl(${col.color})` }}
+                  >
+                    {formatCurrency(grandAccByBucket(col.id))}
+                  </td>
+                ))}
+                <td className="px-2 py-2 text-center align-middle text-xs tabular-nums text-muted-foreground">
+                  {formatCurrency(grandManual)}
+                </td>
                 <td className="px-3 py-2 text-center align-middle text-sm font-bold tabular-nums text-foreground">{formatCurrency(grandTotal)}</td>
               </tr>
             </tfoot>
           </table>
         </div>
       )}
-
-      {/* add column dialog */}
-      <Dialog open={showAddCol} onOpenChange={setShowAddCol}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader><DialogTitle>Adicionar coluna</DialogTitle></DialogHeader>
-          <div className="space-y-2 py-2">
-            <Label>Nome da coluna</Label>
-            <Input placeholder="Ex: Combustível, Hotel..."
-              value={newColName} onChange={(e) => setNewColName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addColumn()} />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddCol(false)}>Cancelar</Button>
-            <Button onClick={addColumn} disabled={!newColName.trim()}>Adicionar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
