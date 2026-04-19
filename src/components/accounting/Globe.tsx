@@ -53,6 +53,7 @@ function EarthMesh() {
       uNight: { value: nightMap },
       uSpec:  { value: specMap },
       uLightDir: { value: lightDirRef.current.clone() },
+      uTime: { value: 0 },
     }),
     [dayMap, nightMap, specMap]
   );
