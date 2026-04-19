@@ -1,5 +1,7 @@
 import { Bell, Globe, LogOut, Check, Trash2, FileText, CreditCard, AlertTriangle, Info, Clock } from "lucide-react";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
+import { BrandLogo } from "@/components/BrandLogo";
+import { brandConfig } from "@/brand.config";
 import { Button } from "@/components/ui/button";
 import { useAgingAlerts } from "@/hooks/useAgingAlerts";
 import {
