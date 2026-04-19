@@ -307,12 +307,13 @@ export function AccountingControlCenter() {
             })}
           </svg>
 
-          {/* Globe */}
+          {/* Globe — overflow visible so the atmospheric halo isn't clipped */}
           <div
             className="absolute z-10 pointer-events-none left-0 top-0"
             style={{
               transform: `translate3d(${centerX - globeSize / 2}px, ${centerY - globeSize / 2}px, 0)`,
               willChange: "transform",
+              overflow: "visible",
             }}
           >
             <Globe size={globeSize} />
