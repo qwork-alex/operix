@@ -123,9 +123,6 @@ export default function OverviewTab({ summary: s, hasNoData }: OverviewTabProps)
         </Card>
       </div>
 
-      {/* Expenses aggregated by accounting category */}
-      <ExpensesByCategoryCard />
-
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="border-border/50 lg:col-span-2">
