@@ -113,6 +113,42 @@ export function SpaceBackground() {
       ctx.fillRect(0, 0, width, height);
     };
 
+    const drawPlanets = (dt: number) => {
+      for (let i = 0; i < planets.length; i++) {
+        const p = planets[i];
+        // Very slow horizontal drift in relative space
+        p.xRel += (p.vx * dt) / Math.max(width, 1);
+        if (p.xRel < -0.1) p.xRel = 1.1;
+        else if (p.xRel > 1.1) p.xRel = -0.1;
+
+        const cx = p.xRel * width;
+        const cy = p.yRel * height;
+        const r = p.r;
+
+        // Soft outer halo
+        const halo = ctx.createRadialGradient(cx, cy, r * 0.2, cx, cy, r * 2.4);
+        halo.addColorStop(0, `hsl(${p.hue} ${p.sat}% ${p.light}% / 0.18)`);
+        halo.addColorStop(1, `hsl(${p.hue} ${p.sat}% ${p.light}% / 0)`);
+        ctx.fillStyle = halo;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r * 2.4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Planet body with soft side-shading (simulated lighting)
+        const body = ctx.createRadialGradient(
+          cx - r * 0.35, cy - r * 0.35, r * 0.1,
+          cx, cy, r
+        );
+        body.addColorStop(0, `hsl(${p.hue} ${p.sat}% ${Math.min(80, p.light + 18)}% / 0.55)`);
+        body.addColorStop(0.55, `hsl(${p.hue} ${p.sat}% ${p.light}% / 0.42)`);
+        body.addColorStop(1, `hsl(${p.hue} ${Math.max(20, p.sat - 15)}% ${Math.max(8, p.light - 25)}% / 0.05)`);
+        ctx.fillStyle = body;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    };
+
     const drawStars = (stars: Star[], twinkleAmp: number, dt: number) => {
       for (let i = 0; i < stars.length; i++) {
         const s = stars[i];
