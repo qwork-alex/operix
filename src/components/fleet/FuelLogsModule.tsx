@@ -155,20 +155,12 @@ export default function FuelLogsModule() {
       } else {
         const { error } = await supabase.from("fleet_fuel_logs").insert(payload);
         if (error) throw error;
-
-        const vehicle = vehicles.find((v: any) => v.id === form.vehicle_id);
-        await supabase.from("financial_records").insert({
-          type: "expense", source: "fleet", category: "fuel",
-          amount: totalCost,
-          label: `Combustível — ${vehicle?.brand || ""} ${vehicle?.model || ""} ${vehicle?.license_plate || ""}`.trim(),
-          notes: `${liters}L @ ${form.km_at_fuel || "?"} km`,
-          status: "confirmed",
-        });
       }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["fleet_fuel_logs"] });
-      qc.invalidateQueries({ queryKey: ["financial_records"] });
+      qc.invalidateQueries({ queryKey: ["accounting-module", "fuel", "fleet-mirror"] });
+      qc.invalidateQueries({ queryKey: ["accounting-expenses-by-period"] });
       closeDialog();
       toast.success(editId ? "Abastecimento atualizado" : "Abastecimento registrado");
     },

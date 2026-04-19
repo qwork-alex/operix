@@ -63,22 +63,40 @@ export function useAccountingExpensesByPeriod() {
   return useQuery({
     queryKey: ["accounting-expenses-by-period"],
     queryFn: async (): Promise<AccountingPeriodMap> => {
-      const { data, error } = await supabase
-        .from("financial_records")
-        .select("amount, category, source, type, created_at")
-        .eq("type", "expense");
-      if (error) throw error;
+      // Fuel is sourced exclusively from fleet_fuel_logs (Frota = single source of truth)
+      const [{ data: records, error: e1 }, { data: fuelLogs, error: e2 }] = await Promise.all([
+        supabase
+          .from("financial_records")
+          .select("amount, category, source, type, created_at")
+          .eq("type", "expense"),
+        supabase
+          .from("fleet_fuel_logs")
+          .select("total_cost, date, created_at"),
+      ]);
+      if (e1) throw e1;
+      if (e2) throw e2;
 
       const map: AccountingPeriodMap = {};
-      for (const r of data || []) {
+      for (const r of records || []) {
         // Skip manual entries — they live in the Manual column
         if ((r as any).source === "manual_financial") continue;
+        // Skip fuel from financial_records — fuel comes only from fleet_fuel_logs now
+        if ((r as any).category === "fuel") continue;
         const bucket = categoryToBucket((r as any).category);
         if (!bucket) continue;
         const period = dateToPeriodKey(new Date((r as any).created_at));
         if (!map[period]) map[period] = {};
         map[period]![bucket] = (map[period]![bucket] || 0) + Number((r as any).amount || 0);
       }
+
+      for (const f of fuelLogs || []) {
+        const dateStr = (f as any).date || (f as any).created_at;
+        if (!dateStr) continue;
+        const period = dateToPeriodKey(new Date(dateStr));
+        if (!map[period]) map[period] = {};
+        map[period]!["acc_fuel"] = (map[period]!["acc_fuel"] || 0) + Number((f as any).total_cost || 0);
+      }
+
       return map;
     },
   });
