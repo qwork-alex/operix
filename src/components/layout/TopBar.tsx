@@ -65,33 +65,34 @@ export function TopBar() {
   const glowIntensity = brandConfig.glowIntensity ?? 0;
 
   return (
-    <header className="flex h-14 items-center justify-between border-b border-border/50 px-4 glass-panel">
+    <header className="relative flex h-14 items-center justify-between border-b border-border/50 px-4 glass-panel">
       <div className="flex items-center gap-2">
         <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
-        {collapsed && (
-          <div className="flex items-center gap-2 animate-fade-in">
-            {logoUrl ? (
-              <img src={logoUrl} alt="Logo" className="shrink-0 rounded object-contain" style={{ height: logoSizeNum, width: logoSizeNum }} />
-            ) : (
-              <div className="flex shrink-0 items-center justify-center rounded bg-primary font-bold text-primary-foreground text-[10px]" style={{ height: logoSizeNum, width: logoSizeNum }}>
-                Q
-              </div>
-            )}
-            <span
-              className="text-sm font-semibold text-foreground whitespace-nowrap"
-              style={{
-                fontFamily: brandConfig.fontFamily || undefined,
-                color: brandConfig.color || undefined,
-                fontWeight: brandConfig.bold ? 700 : 600,
-                fontStyle: brandConfig.italic ? "italic" : undefined,
-                textShadow: glowIntensity > 0 ? `0 0 ${glowIntensity}px ${brandConfig.color || "#fff"}` : undefined,
-              }}
-            >
-              {displayName}
-            </span>
-          </div>
-        )}
       </div>
+
+      {collapsed && (
+        <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2 animate-fade-in transition-all duration-300">
+          {logoUrl ? (
+            <img src={logoUrl} alt="Logo" className="shrink-0 object-contain" style={{ height: logoSizeNum, width: logoSizeNum, background: "transparent" }} />
+          ) : (
+            <div className="flex shrink-0 items-center justify-center font-bold text-foreground text-[10px]" style={{ height: logoSizeNum, width: logoSizeNum }}>
+              Q
+            </div>
+          )}
+          <span
+            className="text-sm font-semibold text-foreground whitespace-nowrap"
+            style={{
+              fontFamily: brandConfig.fontFamily || undefined,
+              color: brandConfig.color || undefined,
+              fontWeight: brandConfig.bold ? 700 : 600,
+              fontStyle: brandConfig.italic ? "italic" : undefined,
+              textShadow: glowIntensity > 0 ? `0 0 ${glowIntensity}px ${brandConfig.color || "#fff"}` : undefined,
+            }}
+          >
+            {displayName}
+          </span>
+        </div>
+      )}
 
       <div className="flex items-center gap-1">
         {role && (
