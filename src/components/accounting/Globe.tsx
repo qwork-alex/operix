@@ -212,21 +212,49 @@ export function Globe({ size = 400 }: GlobeProps) {
     );
   }
 
+  // Oversize the canvas so the atmosphere shader sphere (radius 1.65) is not clipped
+  // at the canvas edges. The visible globe still measures `size` because the camera
+  // framing is preserved — we just give the halo more room to fade.
+  const overscan = 1.5; // 50% larger canvas around the globe
+  const canvasSize = size * overscan;
+
   return (
-    <div className="relative select-none pointer-events-none" style={{ width: size, height: size }}>
-      <Canvas
-        camera={{ position: [0, 0.6, 4.2], fov: 42 }}
-        dpr={[1, 1.5]}
-        gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
-        frameloop={tabActive ? "always" : "never"}
-        style={{ background: "transparent" }}
+    <div
+      className="globe-wrapper relative select-none pointer-events-none flex items-center justify-center"
+      style={{ width: size, height: size, overflow: "visible" }}
+    >
+      {/* Soft CSS atmospheric halo (fades to transparent, no hard edges) */}
+      <div
+        aria-hidden
+        className="absolute rounded-full"
+        style={{
+          width: canvasSize,
+          height: canvasSize,
+          background:
+            "radial-gradient(circle, rgba(80,140,255,0.22) 0%, rgba(80,140,255,0.12) 38%, rgba(80,140,255,0.04) 60%, transparent 75%)",
+          filter: "blur(20px)",
+          zIndex: 1,
+        }}
+      />
+      {/* Oversized canvas — keeps camera framing identical, prevents shader clipping */}
+      <div
+        className="absolute"
+        style={{ width: canvasSize, height: canvasSize, zIndex: 2, overflow: "visible" }}
       >
-        <ambientLight intensity={0.18} />
-        <Suspense fallback={null}>
-          <EarthMesh />
-          <Atmosphere />
-        </Suspense>
-      </Canvas>
+        <Canvas
+          camera={{ position: [0, 0.6, 4.2 * overscan], fov: 42 }}
+          dpr={[1, 1.5]}
+          gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
+          frameloop={tabActive ? "always" : "never"}
+          style={{ background: "transparent", width: "100%", height: "100%" }}
+        >
+          <ambientLight intensity={0.18} />
+          <Suspense fallback={null}>
+            <EarthMesh />
+            <Atmosphere />
+          </Suspense>
+        </Canvas>
+      </div>
     </div>
   );
 }
