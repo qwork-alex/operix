@@ -52,6 +52,8 @@ export function TopBar() {
   const { t, lang, setLang } = useLanguage();
   const { notifications, unreadCount, markAsRead, markAllRead, clearAll } = useNotifications();
   const { data: agingAlerts = [] } = useAgingAlerts();
+  const { state } = useSidebar();
+  const collapsed = state === "collapsed";
   const totalAlertCount = unreadCount + agingAlerts.length;
 
   const initials = profile?.full_name
@@ -63,6 +65,13 @@ export function TopBar() {
       <div className="flex items-center gap-2">
         <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
       </div>
+
+      {collapsed && (
+        <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2 animate-fade-in">
+          <BrandLogo size={24} />
+          <span className="text-sm font-semibold text-foreground">{brandConfig.appName}</span>
+        </div>
+      )}
 
       <div className="flex items-center gap-1">
         {role && (
