@@ -55,6 +55,7 @@ export function AppSidebar() {
       <div className={`flex h-14 items-center border-b border-border/50 ${collapsed ? "justify-center px-0" : "px-4"}`}>
         {!collapsed && (
           <div className="flex items-center gap-2 overflow-hidden">
+            <BrandLogo size={28} />
             {isAdmin ? (
               <BrandNameEditor config={brandConfig} onSave={handleBrandSave}>
                 <button className="overflow-hidden hover:opacity-80 transition-opacity cursor-pointer text-left" title="Clique para personalizar">
