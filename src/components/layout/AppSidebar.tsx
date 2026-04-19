@@ -1,8 +1,7 @@
-import { useRef } from "react";
 import { Link } from "react-router-dom";
 import {
   LayoutDashboard, FileText, CreditCard, TrendingUp, PieChart,
-  BookOpen, Car, FolderOpen, Users, Settings, Loader2,
+  BookOpen, Car, FolderOpen, Users, Settings,
 } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
@@ -14,7 +13,6 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { useRole } from "@/hooks/useRole";
 import { useCompanyLogo } from "@/hooks/useCompanyLogo";
 import { BrandNameEditor, type BrandConfig } from "@/components/layout/BrandNameEditor";
-import { Brand } from "@/components/layout/Brand";
 import { BRAND } from "@/config/brand";
 import { toast } from "sonner";
 
