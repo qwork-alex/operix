@@ -232,6 +232,7 @@ export function SpaceBackground() {
       // Single static paint
       ctx.clearRect(0, 0, width, height);
       drawStaticBackdrop();
+      drawPlanets(0);
       drawStars(layerFar, 0, 0);
       drawStars(layerMid, 0, 0);
       drawStars(layerNear, 0, 0);
