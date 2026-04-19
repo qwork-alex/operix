@@ -181,8 +181,8 @@ function Atmosphere() {
   const fragmentShader = /* glsl */ `
     varying vec3 vNormal;
     void main() {
-      float intensity = pow(0.7 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 2.5);
-      gl_FragColor = vec4(0.35, 0.6, 1.0, 1.0) * intensity;
+      float intensity = pow(0.62 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 3.2);
+      gl_FragColor = vec4(0.28, 0.5, 0.9, 1.0) * intensity * 0.6;
     }
   `;
   return (
