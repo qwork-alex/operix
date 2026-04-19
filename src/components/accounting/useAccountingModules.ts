@@ -31,13 +31,14 @@ export function useAccountingModule(moduleKey: ModuleKey) {
   const query = useQuery({
     queryKey: ["accounting-module", moduleKey],
     queryFn: async () => {
-      let q = supabase.from("financial_records").select("*");
+      let q = supabase.from("financial_records").select("*").eq("type", "expense");
 
       if (config.category) {
-        q = q.eq("type", "expense").eq("category", config.category);
+        // Strict category match — each module owns its own bucket
+        q = q.eq("category", config.category);
       } else if (moduleKey === "expenses") {
-        // All expenses not in specific categories
-        q = q.eq("type", "expense");
+        // "Despesas" module owns ONLY entries explicitly categorized as "other"
+        q = q.eq("category", "other");
       }
 
       q = q.order("created_at", { ascending: false });
