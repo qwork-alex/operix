@@ -132,13 +132,14 @@ function EarthMesh() {
     }
   `;
 
+  // Sun is a FIXED directional light source (off-screen upper-right).
+  // It never moves with the globe rotation — the planet rotates beneath constant sunlight.
   useFrame((state, delta) => {
     if (meshRef.current) meshRef.current.rotation.y += delta * 0.04;
     if (cloudsRef.current) cloudsRef.current.rotation.y += delta * 0.05;
-    const t = state.clock.elapsedTime * 0.05;
-    lightDirRef.current.set(Math.cos(t), 0.3, Math.sin(t)).normalize();
     if (matRef.current) {
-      (matRef.current.uniforms.uLightDir.value as THREE.Vector3).copy(lightDirRef.current);
+      // Constant light direction — independent of time/rotation
+      (matRef.current.uniforms.uLightDir.value as THREE.Vector3).set(0.85, 0.35, 0.55).normalize();
       matRef.current.uniforms.uTime.value = state.clock.elapsedTime;
     }
   });
