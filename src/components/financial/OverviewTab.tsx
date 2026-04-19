@@ -7,6 +7,7 @@ import {
   ResponsiveContainer, AreaChart, Area, CartesianGrid, XAxis, YAxis, Tooltip, Legend,
   PieChart, Pie, Cell, BarChart, Bar,
 } from "recharts";
+import ExpensesByCategoryCard from "./ExpensesByCategoryCard";
 
 const PIE_COLORS = [
   "hsl(152, 60%, 45%)", "hsl(0, 72%, 55%)", "hsl(38, 92%, 55%)", "hsl(210, 80%, 55%)"
@@ -121,6 +122,9 @@ export default function OverviewTab({ summary: s, hasNoData }: OverviewTabProps)
           </CardContent>
         </Card>
       </div>
+
+      {/* Expenses aggregated by accounting category */}
+      <ExpensesByCategoryCard />
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
