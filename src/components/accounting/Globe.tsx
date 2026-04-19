@@ -1,177 +1,198 @@
-import { useRef, useMemo, Suspense } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { useRef, useMemo, Suspense, useEffect, useState } from "react";
+import { Canvas, useFrame, useLoader } from "@react-three/fiber";
 import { Sphere } from "@react-three/drei";
 import * as THREE from "three";
 
 /* ------------------------------------------------------------------ */
-/*  Realistic Earth-like procedural texture (lightweight, no downloads)*/
+/*  WebGL detection                                                    */
 /* ------------------------------------------------------------------ */
-function createEarthTexture(size = 1024): THREE.CanvasTexture {
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size / 2;
-  const ctx = canvas.getContext("2d")!;
-
-  // Deep ocean gradient (equator warmer, poles cooler)
-  const ocean = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  ocean.addColorStop(0, "#0a1830");
-  ocean.addColorStop(0.25, "#0d2348");
-  ocean.addColorStop(0.5, "#103257");
-  ocean.addColorStop(0.75, "#0d2348");
-  ocean.addColorStop(1, "#0a1830");
-  ctx.fillStyle = ocean;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  // Continent silhouettes (rough but recognizable shapes)
-  const w = canvas.width;
-  const h = canvas.height;
-  const drawLand = (path: [number, number][], shade = 0.85) => {
-    ctx.beginPath();
-    ctx.moveTo(path[0][0] * w, path[0][1] * h);
-    for (let i = 1; i < path.length; i++) ctx.lineTo(path[i][0] * w, path[i][1] * h);
-    ctx.closePath();
-    const grad = ctx.createRadialGradient(
-      path[0][0] * w, path[0][1] * h, 0,
-      path[0][0] * w, path[0][1] * h, w * 0.18
-    );
-    grad.addColorStop(0, `rgba(56, 102, 65, ${shade})`);
-    grad.addColorStop(0.5, `rgba(42, 82, 52, ${shade * 0.85})`);
-    grad.addColorStop(1, `rgba(28, 60, 38, ${shade * 0.6})`);
-    ctx.fillStyle = grad;
-    ctx.fill();
-  };
-
-  // North America
-  drawLand([
-    [0.12, 0.22], [0.20, 0.18], [0.27, 0.22], [0.28, 0.32],
-    [0.24, 0.40], [0.20, 0.48], [0.16, 0.46], [0.13, 0.38], [0.10, 0.28],
-  ]);
-  // Central / South America
-  drawLand([
-    [0.24, 0.48], [0.27, 0.52], [0.30, 0.62], [0.28, 0.74],
-    [0.25, 0.82], [0.22, 0.78], [0.21, 0.65], [0.22, 0.55],
-  ]);
-  // Europe
-  drawLand([
-    [0.46, 0.24], [0.52, 0.22], [0.55, 0.28], [0.52, 0.34],
-    [0.48, 0.34], [0.45, 0.30],
-  ], 0.75);
-  // Africa
-  drawLand([
-    [0.48, 0.38], [0.54, 0.40], [0.57, 0.50], [0.55, 0.62],
-    [0.52, 0.72], [0.48, 0.66], [0.46, 0.54], [0.46, 0.44],
-  ]);
-  // Asia
-  drawLand([
-    [0.55, 0.20], [0.68, 0.18], [0.78, 0.22], [0.80, 0.32],
-    [0.74, 0.40], [0.66, 0.42], [0.58, 0.38], [0.55, 0.30],
-  ]);
-  // India
-  drawLand([
-    [0.66, 0.42], [0.70, 0.44], [0.69, 0.52], [0.66, 0.50],
-  ], 0.75);
-  // Southeast Asia / Indonesia
-  drawLand([
-    [0.76, 0.50], [0.80, 0.52], [0.82, 0.56], [0.78, 0.58], [0.74, 0.54],
-  ], 0.7);
-  // Australia
-  drawLand([
-    [0.80, 0.62], [0.88, 0.62], [0.90, 0.70], [0.84, 0.72], [0.79, 0.68],
-  ]);
-  // Antarctica strip
-  ctx.fillStyle = "rgba(220, 230, 240, 0.55)";
-  ctx.fillRect(0, h * 0.92, w, h * 0.08);
-
-  // Subtle latitude grid (very faint)
-  ctx.strokeStyle = "rgba(120, 180, 220, 0.05)";
-  ctx.lineWidth = 0.5;
-  for (let i = 1; i < 12; i++) {
-    const px = (i / 12) * w;
-    ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, h); ctx.stroke();
+function isWebGLAvailable(): boolean {
+  try {
+    const canvas = document.createElement("canvas");
+    return !!(window.WebGLRenderingContext && (canvas.getContext("webgl") || canvas.getContext("experimental-webgl")));
+  } catch {
+    return false;
   }
-  for (let i = 1; i < 6; i++) {
-    const py = (i / 6) * h;
-    ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(w, py); ctx.stroke();
-  }
-
-  // Soft cloud wisps
-  ctx.globalAlpha = 0.08;
-  for (let i = 0; i < 30; i++) {
-    const cx = Math.random() * w;
-    const cy = Math.random() * h;
-    const r = 20 + Math.random() * 60;
-    const cg = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-    cg.addColorStop(0, "rgba(255,255,255,0.9)");
-    cg.addColorStop(1, "rgba(255,255,255,0)");
-    ctx.fillStyle = cg;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.globalAlpha = 1;
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.ClampToEdgeWrapping;
-  tex.anisotropy = 4;
-  return tex;
 }
 
-function createGlowTexture(size = 256): THREE.CanvasTexture {
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d")!;
-  const grad = ctx.createRadialGradient(size / 2, size / 2, size * 0.30, size / 2, size / 2, size / 2);
-  grad.addColorStop(0, "rgba(80, 170, 255, 0.22)");
-  grad.addColorStop(0.5, "rgba(50, 120, 200, 0.06)");
-  grad.addColorStop(1, "rgba(0, 0, 0, 0)");
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, size, size);
-  return new THREE.CanvasTexture(canvas);
-}
+/* ------------------------------------------------------------------ */
+/*  Texture URLs (free 2K NASA Blue Marble + Black Marble via jsDelivr)*/
+/* ------------------------------------------------------------------ */
+const TEX_DAY    = "https://cdn.jsdelivr.net/gh/mrdoob/three.js@r150/examples/textures/planets/earth_atmos_2048.jpg";
+const TEX_NIGHT  = "https://cdn.jsdelivr.net/gh/mrdoob/three.js@r150/examples/textures/planets/earth_lights_2048.png";
+const TEX_SPEC   = "https://cdn.jsdelivr.net/gh/mrdoob/three.js@r150/examples/textures/planets/earth_specular_2048.jpg";
+const TEX_CLOUDS = "https://cdn.jsdelivr.net/gh/mrdoob/three.js@r150/examples/textures/planets/earth_clouds_1024.png";
 
-function Atmosphere() {
-  const glowTex = useMemo(() => createGlowTexture(), []);
-  return (
-    <sprite scale={[3.9, 3.9, 1]}>
-      <spriteMaterial map={glowTex} transparent depthWrite={false} />
-    </sprite>
-  );
-}
-
-function Planet({ autoRotate = true }: { autoRotate?: boolean }) {
+/* ------------------------------------------------------------------ */
+/*  Custom shader: blend day/night by light direction                  */
+/* ------------------------------------------------------------------ */
+function EarthMesh() {
   const meshRef = useRef<THREE.Mesh>(null);
-  const lightRef = useRef<THREE.DirectionalLight>(null);
-  const texture = useMemo(() => createEarthTexture(1024), []);
+  const cloudsRef = useRef<THREE.Mesh>(null);
+  const matRef = useRef<THREE.ShaderMaterial>(null);
+  const lightDirRef = useRef(new THREE.Vector3(1, 0.3, 1).normalize());
+
+  const [dayMap, nightMap, specMap, cloudsMap] = useLoader(THREE.TextureLoader, [
+    TEX_DAY,
+    TEX_NIGHT,
+    TEX_SPEC,
+    TEX_CLOUDS,
+  ]);
+
+  // Optimize textures
+  useMemo(() => {
+    [dayMap, nightMap, specMap, cloudsMap].forEach((t) => {
+      t.anisotropy = 4;
+      t.colorSpace = THREE.SRGBColorSpace;
+    });
+  }, [dayMap, nightMap, specMap, cloudsMap]);
+
+  const uniforms = useMemo(
+    () => ({
+      uDay:   { value: dayMap },
+      uNight: { value: nightMap },
+      uSpec:  { value: specMap },
+      uLightDir: { value: lightDirRef.current.clone() },
+    }),
+    [dayMap, nightMap, specMap]
+  );
+
+  const vertexShader = /* glsl */ `
+    varying vec2 vUv;
+    varying vec3 vNormal;
+    void main() {
+      vUv = uv;
+      vNormal = normalize(normalMatrix * normal);
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `;
+
+  const fragmentShader = /* glsl */ `
+    uniform sampler2D uDay;
+    uniform sampler2D uNight;
+    uniform sampler2D uSpec;
+    uniform vec3 uLightDir;
+    varying vec2 vUv;
+    varying vec3 vNormal;
+
+    void main() {
+      vec3 n = normalize(vNormal);
+      float lambert = dot(n, normalize(uLightDir));
+      // Smooth day/night terminator
+      float dayMix = smoothstep(-0.15, 0.25, lambert);
+
+      vec3 dayColor = texture2D(uDay, vUv).rgb;
+      vec3 nightColor = texture2D(uNight, vUv).rgb * 1.4; // brighten city lights
+
+      // Subtle sun glint on oceans
+      float spec = texture2D(uSpec, vUv).r;
+      float glint = pow(max(dayMix, 0.0), 8.0) * spec * 0.25;
+
+      vec3 color = mix(nightColor, dayColor, dayMix) + vec3(glint);
+
+      // Atmosphere rim (Fresnel)
+      float rim = pow(1.0 - max(dot(n, vec3(0.0, 0.0, 1.0)), 0.0), 2.5);
+      color += vec3(0.25, 0.45, 0.85) * rim * 0.35;
+
+      gl_FragColor = vec4(color, 1.0);
+    }
+  `;
 
   useFrame((state, delta) => {
-    if (autoRotate && meshRef.current) {
-      // very slow, luxury feel
-      meshRef.current.rotation.y += delta * 0.04;
-    }
-    // Moving light highlight (subtle)
-    if (lightRef.current) {
-      const t = state.clock.elapsedTime * 0.15;
-      lightRef.current.position.x = Math.cos(t) * 5;
-      lightRef.current.position.z = Math.sin(t) * 5;
+    if (meshRef.current) meshRef.current.rotation.y += delta * 0.04;
+    if (cloudsRef.current) cloudsRef.current.rotation.y += delta * 0.05;
+    // Slow ambient sun motion for living highlight
+    const t = state.clock.elapsedTime * 0.05;
+    lightDirRef.current.set(Math.cos(t), 0.3, Math.sin(t)).normalize();
+    if (matRef.current) {
+      (matRef.current.uniforms.uLightDir.value as THREE.Vector3).copy(lightDirRef.current);
     }
   });
 
   return (
     <group>
-      <directionalLight ref={lightRef} position={[5, 3, 5]} intensity={1.0} color="#ffe8c0" />
       <Sphere ref={meshRef} args={[1.5, 64, 64]}>
-        <meshStandardMaterial
-          map={texture}
-          roughness={0.78}
-          metalness={0.12}
-          emissive={new THREE.Color("#0a1f3a")}
-          emissiveIntensity={0.18}
+        <shaderMaterial
+          ref={matRef}
+          uniforms={uniforms}
+          vertexShader={vertexShader}
+          fragmentShader={fragmentShader}
         />
       </Sphere>
-      <Atmosphere />
+      {/* Subtle cloud layer */}
+      <Sphere ref={cloudsRef} args={[1.515, 48, 48]}>
+        <meshStandardMaterial
+          map={cloudsMap}
+          transparent
+          opacity={0.18}
+          depthWrite={false}
+        />
+      </Sphere>
     </group>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Atmosphere glow (back-side sphere with Fresnel)                    */
+/* ------------------------------------------------------------------ */
+function Atmosphere() {
+  const matRef = useRef<THREE.ShaderMaterial>(null);
+  const vertexShader = /* glsl */ `
+    varying vec3 vNormal;
+    void main() {
+      vNormal = normalize(normalMatrix * normal);
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `;
+  const fragmentShader = /* glsl */ `
+    varying vec3 vNormal;
+    void main() {
+      float intensity = pow(0.7 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 2.5);
+      gl_FragColor = vec4(0.35, 0.6, 1.0, 1.0) * intensity;
+    }
+  `;
+  return (
+    <Sphere args={[1.65, 48, 48]}>
+      <shaderMaterial
+        ref={matRef}
+        vertexShader={vertexShader}
+        fragmentShader={fragmentShader}
+        blending={THREE.AdditiveBlending}
+        side={THREE.BackSide}
+        transparent
+        depthWrite={false}
+      />
+    </Sphere>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Pause render when tab inactive                                     */
+/* ------------------------------------------------------------------ */
+function useTabActive() {
+  const [active, setActive] = useState(!document.hidden);
+  useEffect(() => {
+    const onVis = () => setActive(!document.hidden);
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
+  return active;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Static fallback (no WebGL)                                         */
+/* ------------------------------------------------------------------ */
+function StaticFallback({ size }: { size: number }) {
+  return (
+    <div
+      className="rounded-full"
+      style={{
+        width: size,
+        height: size,
+        backgroundImage: `radial-gradient(circle at 35% 35%, hsl(210 70% 35%), hsl(220 60% 15%) 60%, hsl(220 80% 8%) 100%)`,
+        boxShadow: "0 0 40px hsl(210 80% 50% / 0.35), inset -20px -20px 60px rgba(0,0,0,0.6)",
+      }}
+    />
   );
 }
 
@@ -180,18 +201,30 @@ interface GlobeProps {
 }
 
 export function Globe({ size = 400 }: GlobeProps) {
+  const [webgl] = useState(() => isWebGLAvailable());
+  const tabActive = useTabActive();
+
+  if (!webgl) {
+    return (
+      <div className="relative select-none pointer-events-none flex items-center justify-center" style={{ width: size, height: size }}>
+        <StaticFallback size={size} />
+      </div>
+    );
+  }
+
   return (
     <div className="relative select-none pointer-events-none" style={{ width: size, height: size }}>
       <Canvas
-        camera={{ position: [0, 0, 4.0], fov: 45 }}
+        camera={{ position: [0, 0.6, 4.2], fov: 42 }}
         dpr={[1, 1.5]}
-        gl={{ antialias: true, alpha: true, powerPreference: "low-power" }}
+        gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
+        frameloop={tabActive ? "always" : "never"}
         style={{ background: "transparent" }}
       >
-        <ambientLight intensity={0.32} />
-        <directionalLight position={[-3, -2, -3]} intensity={0.18} color="#6090ff" />
+        <ambientLight intensity={0.18} />
         <Suspense fallback={null}>
-          <Planet autoRotate />
+          <EarthMesh />
+          <Atmosphere />
         </Suspense>
       </Canvas>
     </div>
