@@ -265,8 +265,8 @@ export function Globe({ size = 400 }: GlobeProps) {
           width: canvasSize,
           height: canvasSize,
           background:
-            "radial-gradient(circle, rgba(80,140,255,0.22) 0%, rgba(80,140,255,0.12) 38%, rgba(80,140,255,0.04) 60%, transparent 75%)",
-          filter: "blur(20px)",
+            "radial-gradient(circle, rgba(80,140,255,0.14) 0%, rgba(80,140,255,0.07) 40%, rgba(80,140,255,0.02) 62%, transparent 78%)",
+          filter: "blur(24px)",
           zIndex: 1,
         }}
       />
