@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, memo, useMemo } from "react";
 import {
-  DollarSign,
+  Home,
   Receipt,
   Fuel,
   ShoppingCart,
@@ -13,7 +13,7 @@ import { ModulePanel } from "./ModulePanel";
 import { useAccountingModule } from "./useAccountingModules";
 import { cn } from "@/lib/utils";
 
-type ModuleKey = "revenue" | "expenses" | "fuel" | "purchases" | "government" | "withdrawals";
+type ModuleKey = "rentals" | "expenses" | "fuel" | "purchases" | "government" | "withdrawals";
 
 interface ModuleDef {
   key: ModuleKey;
@@ -23,7 +23,7 @@ interface ModuleDef {
 }
 
 const MODULES: ModuleDef[] = [
-  { key: "revenue",     label: "Receitas",    icon: DollarSign,   color: "43 85% 55%"  },
+  { key: "rentals",     label: "Aluguéis",    icon: Home,         color: "43 85% 55%"  },
   { key: "expenses",    label: "Despesas",    icon: Receipt,      color: "0 72% 55%"   },
   { key: "fuel",        label: "Combustível", icon: Fuel,         color: "210 80% 55%" },
   { key: "purchases",   label: "Compras",     icon: ShoppingCart, color: "280 60% 60%" },

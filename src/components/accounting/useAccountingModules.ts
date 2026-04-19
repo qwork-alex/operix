@@ -2,10 +2,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { ModuleEntry } from "./ModulePanel";
 
-type ModuleKey = "revenue" | "expenses" | "fuel" | "purchases" | "government" | "withdrawals";
+type ModuleKey = "rentals" | "expenses" | "fuel" | "purchases" | "government" | "withdrawals";
 
 const CATEGORY_MAP: Record<ModuleKey, { type: string; category?: string; source?: string }> = {
-  revenue: { type: "revenue", source: "payment_orders" },
+  rentals: { type: "expense", category: "rent" },
   expenses: { type: "expense" },
   fuel: { type: "expense", category: "fuel" },
   purchases: { type: "expense", category: "material" },
@@ -33,9 +33,7 @@ export function useAccountingModule(moduleKey: ModuleKey) {
     queryFn: async () => {
       let q = supabase.from("financial_records").select("*");
 
-      if (moduleKey === "revenue") {
-        q = q.eq("type", "revenue");
-      } else if (config.category) {
+      if (config.category) {
         q = q.eq("type", "expense").eq("category", config.category);
       } else if (moduleKey === "expenses") {
         // All expenses not in specific categories
@@ -49,7 +47,7 @@ export function useAccountingModule(moduleKey: ModuleKey) {
     },
   });
 
-  const isManualEditable = moduleKey !== "revenue";
+  const isManualEditable = true;
 
   const entries: ModuleEntry[] = buildEntries(query.data || [], isManualEditable);
   const total = entries.reduce((s, e) => s + e.amount, 0);
