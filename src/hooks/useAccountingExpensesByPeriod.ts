@@ -46,12 +46,8 @@ function categoryToBucket(category: string | null | undefined): AccountingBucket
     case "fuel":     return "acc_fuel";
     case "salary":   return "acc_withdrawals";
     case "rent":     return "acc_rentals";
-    case "other":
-    case null:
-    case undefined:
-      return "acc_expenses";
-    default:
-      return null;
+    case "other":    return "acc_expenses";
+    default:         return null;
   }
 }
 
