@@ -8,7 +8,6 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Loader2, Eye, EyeOff } from "lucide-react";
 import { BRAND } from "@/config/brand";
-import { Brand } from "@/components/layout/Brand";
 
 export default function Auth() {
   const { session, loading, signIn } = useAuth();
