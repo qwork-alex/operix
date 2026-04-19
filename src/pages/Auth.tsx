@@ -8,7 +8,6 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Loader2, Eye, EyeOff } from "lucide-react";
 import { BRAND } from "@/config/brand";
-import { Brand } from "@/components/layout/Brand";
 
 export default function Auth() {
   const { session, loading, signIn } = useAuth();
@@ -42,7 +41,6 @@ export default function Auth() {
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm space-y-8">
         <div className="flex flex-col items-center text-center space-y-2">
-          <Brand size={56} showName={false} />
           <h1 className="text-2xl font-bold text-foreground tracking-tight">{BRAND.name}</h1>
           <p className="text-sm text-muted-foreground">{t("auth.signInTitle")}</p>
         </div>

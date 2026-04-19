@@ -1,8 +1,7 @@
-import { useRef } from "react";
 import { Link } from "react-router-dom";
 import {
   LayoutDashboard, FileText, CreditCard, TrendingUp, PieChart,
-  BookOpen, Car, FolderOpen, Users, Settings, Loader2,
+  BookOpen, Car, FolderOpen, Users, Settings,
 } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
@@ -14,7 +13,6 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { useRole } from "@/hooks/useRole";
 import { useCompanyLogo } from "@/hooks/useCompanyLogo";
 import { BrandNameEditor, type BrandConfig } from "@/components/layout/BrandNameEditor";
-import { Brand } from "@/components/layout/Brand";
 import { BRAND } from "@/config/brand";
 import { toast } from "sonner";
 
@@ -23,35 +21,7 @@ export function AppSidebar() {
   const collapsed = state === "collapsed";
   const { t } = useLanguage();
   const { isAdmin, role } = useRole();
-  const { logoUrl, brandConfig, uploadLogo, isUploading, saveBrandConfig } = useCompanyLogo();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleLogoClick = (e: React.MouseEvent) => {
-    if (!isAdmin) return;
-    e.preventDefault();
-    e.stopPropagation();
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = "";
-    if (!file.type.startsWith("image/")) {
-      toast.error("Apenas imagens são permitidas");
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Imagem deve ter no máximo 5MB");
-      return;
-    }
-    try {
-      await uploadLogo(file);
-      toast.success("Logo atualizado com sucesso");
-    } catch {
-      toast.error("Erro ao atualizar logo");
-    }
-  };
+  const { brandConfig, saveBrandConfig } = useCompanyLogo();
 
   const handleBrandSave = async (config: BrandConfig) => {
     try {
@@ -63,7 +33,6 @@ export function AppSidebar() {
   };
 
   const displayName = brandConfig.name || BRAND.name;
-  const logoSizeNum = brandConfig.logoSizeNum ?? 32;
 
   const allNav = [
     { title: t("nav.dashboard"), url: "/", icon: LayoutDashboard, roles: ["admin", "tecnico", "socio", "cliente"] },
@@ -81,37 +50,14 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon" className="border-r border-border/50">
-      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
 
       <div className={`flex h-14 items-center border-b border-border/50 ${collapsed ? "justify-center px-0" : "px-4"}`}>
-        {/* DEFAULT state only — when collapsed (focus), logo moves to TopBar */}
         {!collapsed && (
           <div className="flex items-center gap-2 overflow-hidden">
-            <div
-              onClick={handleLogoClick}
-              className={`relative group ${isAdmin ? "cursor-pointer" : ""}`}
-              title={isAdmin ? "Clique para alterar o logo" : undefined}
-            >
-              {isUploading ? (
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                </div>
-              ) : (
-                <>
-                  <Brand size={logoSizeNum} showName={false} allowOverride />
-                  {isAdmin && (
-                    <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <span className="text-[8px] text-white font-medium">Editar</span>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-
             {isAdmin ? (
               <BrandNameEditor config={brandConfig} onSave={handleBrandSave}>
                 <button className="overflow-hidden hover:opacity-80 transition-opacity cursor-pointer text-left" title="Clique para personalizar">
-                  <Brand size={0} showName={true} allowOverride className="!gap-0" />
+                  <span className="text-sm font-semibold text-foreground">{displayName}</span>
                 </button>
               </BrandNameEditor>
             ) : (

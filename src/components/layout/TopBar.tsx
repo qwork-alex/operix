@@ -1,5 +1,5 @@
 import { Bell, Globe, LogOut, Check, Trash2, FileText, CreditCard, AlertTriangle, Info, Clock } from "lucide-react";
-import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { useAgingAlerts } from "@/hooks/useAgingAlerts";
 import {
@@ -10,8 +10,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { useRole } from "@/hooks/useRole";
 import { useLanguage, type LangCode } from "@/hooks/useLanguage";
 import { useNotifications } from "@/hooks/useNotifications";
-import { useCompanyLogo } from "@/hooks/useCompanyLogo";
-import { Brand } from "@/components/layout/Brand";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 const languages: { code: LangCode; label: string }[] = [
@@ -52,9 +50,6 @@ export function TopBar() {
   const { t, lang, setLang } = useLanguage();
   const { notifications, unreadCount, markAsRead, markAllRead, clearAll } = useNotifications();
   const { data: agingAlerts = [] } = useAgingAlerts();
-  const { brandConfig } = useCompanyLogo();
-  const { state } = useSidebar();
-  const collapsed = state === "collapsed";
   const totalAlertCount = unreadCount + agingAlerts.length;
 
   const initials = profile?.full_name
@@ -66,13 +61,6 @@ export function TopBar() {
       <div className="flex items-center gap-2">
         <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
       </div>
-
-      {/* FOCUS state — single controlled brand render when sidebar is collapsed */}
-      {collapsed && (
-        <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 animate-fade-in">
-          <Brand size={brandConfig.logoSizeNum ?? 24} allowOverride />
-        </div>
-      )}
 
       <div className="flex items-center gap-1">
         {role && (
