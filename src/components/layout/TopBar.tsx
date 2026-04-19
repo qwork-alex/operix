@@ -1,5 +1,7 @@
 import { Bell, Globe, LogOut, Check, Trash2, FileText, CreditCard, AlertTriangle, Info, Clock } from "lucide-react";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
+import { BrandLogo } from "@/components/BrandLogo";
+import { brandConfig } from "@/brand.config";
 import { Button } from "@/components/ui/button";
 import { useAgingAlerts } from "@/hooks/useAgingAlerts";
 import {
@@ -50,6 +52,8 @@ export function TopBar() {
   const { t, lang, setLang } = useLanguage();
   const { notifications, unreadCount, markAsRead, markAllRead, clearAll } = useNotifications();
   const { data: agingAlerts = [] } = useAgingAlerts();
+  const { state } = useSidebar();
+  const collapsed = state === "collapsed";
   const totalAlertCount = unreadCount + agingAlerts.length;
 
   const initials = profile?.full_name
@@ -61,6 +65,13 @@ export function TopBar() {
       <div className="flex items-center gap-2">
         <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
       </div>
+
+      {collapsed && (
+        <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2 animate-fade-in">
+          <BrandLogo size={24} />
+          <span className="text-sm font-semibold text-foreground">{brandConfig.appName}</span>
+        </div>
+      )}
 
       <div className="flex items-center gap-1">
         {role && (

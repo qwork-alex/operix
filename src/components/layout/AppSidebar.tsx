@@ -13,7 +13,8 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { useRole } from "@/hooks/useRole";
 import { useCompanyLogo } from "@/hooks/useCompanyLogo";
 import { BrandNameEditor, type BrandConfig } from "@/components/layout/BrandNameEditor";
-import { BRAND } from "@/config/brand";
+import { BrandLogo } from "@/components/BrandLogo";
+import { brandConfig as appBrand } from "@/brand.config";
 import { toast } from "sonner";
 
 export function AppSidebar() {
@@ -32,7 +33,7 @@ export function AppSidebar() {
     }
   };
 
-  const displayName = brandConfig.name || BRAND.name;
+  const displayName = brandConfig.name || appBrand.appName;
 
   const allNav = [
     { title: t("nav.dashboard"), url: "/", icon: LayoutDashboard, roles: ["admin", "tecnico", "socio", "cliente"] },
@@ -54,6 +55,7 @@ export function AppSidebar() {
       <div className={`flex h-14 items-center border-b border-border/50 ${collapsed ? "justify-center px-0" : "px-4"}`}>
         {!collapsed && (
           <div className="flex items-center gap-2 overflow-hidden">
+            <BrandLogo size={28} />
             {isAdmin ? (
               <BrandNameEditor config={brandConfig} onSave={handleBrandSave}>
                 <button className="overflow-hidden hover:opacity-80 transition-opacity cursor-pointer text-left" title="Clique para personalizar">
