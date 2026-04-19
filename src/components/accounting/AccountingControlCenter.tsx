@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, memo, useMemo } from "react";
 import {
-  DollarSign,
+  Home,
   Receipt,
   Fuel,
   ShoppingCart,
