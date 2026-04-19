@@ -98,7 +98,7 @@ export function AppSidebar() {
                 </div>
               ) : (
                 <>
-                  <Brand size={logoSizeNum} showName={false} />
+                  <Brand size={logoSizeNum} showName={false} allowOverride />
                   {isAdmin && (
                     <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity">
                       <span className="text-[8px] text-white font-medium">Editar</span>
@@ -111,7 +111,7 @@ export function AppSidebar() {
             {isAdmin ? (
               <BrandNameEditor config={brandConfig} onSave={handleBrandSave}>
                 <button className="overflow-hidden hover:opacity-80 transition-opacity cursor-pointer text-left" title="Clique para personalizar">
-                  <Brand size={0} showName={true} className="!gap-0" />
+                  <Brand size={0} showName={true} allowOverride className="!gap-0" />
                 </button>
               </BrandNameEditor>
             ) : (

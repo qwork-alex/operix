@@ -70,7 +70,7 @@ export function TopBar() {
       {/* FOCUS state — single controlled brand render when sidebar is collapsed */}
       {collapsed && (
         <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 animate-fade-in">
-          <Brand size={brandConfig.logoSizeNum ?? 24} />
+          <Brand size={brandConfig.logoSizeNum ?? 24} allowOverride />
         </div>
       )}
 
