@@ -109,45 +109,45 @@ export function AppSidebar() {
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
 
       <div className={`flex h-14 items-center border-b border-border/50 ${collapsed ? "justify-center px-0" : "px-4"}`}>
-        <div className={`flex items-center gap-2 overflow-hidden ${collapsed ? "flex-col gap-0.5" : ""}`}>
-          {/* Logo */}
-          <div
-            onClick={handleLogoClick}
-            className={`relative group ${isAdmin ? "cursor-pointer" : ""}`}
-            title={isAdmin ? "Clique para alterar o logo" : undefined}
-          >
-            {isUploading ? (
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-              </div>
+        {!collapsed && (
+          <div className="flex items-center gap-2 overflow-hidden">
+            <div
+              onClick={handleLogoClick}
+              className={`relative group ${isAdmin ? "cursor-pointer" : ""}`}
+              title={isAdmin ? "Clique para alterar o logo" : undefined}
+            >
+              {isUploading ? (
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <>
+                  {logoElement}
+                  {isAdmin && (
+                    <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <span className="text-[8px] text-white font-medium">Editar</span>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {isAdmin ? (
+              <BrandNameEditor config={brandConfig} onSave={handleBrandSave}>
+                <button
+                  className="overflow-hidden hover:opacity-80 transition-opacity cursor-pointer text-left"
+                  title="Clique para personalizar"
+                >
+                  {nameElement}
+                </button>
+              </BrandNameEditor>
             ) : (
-              <>
-                {logoElement}
-                {isAdmin && (
-                  <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <span className="text-[8px] text-white font-medium">Editar</span>
-                  </div>
-                )}
-              </>
+              <Link to="/" className="overflow-hidden">
+                {nameElement}
+              </Link>
             )}
           </div>
-
-          {/* Name */}
-          {isAdmin ? (
-            <BrandNameEditor config={brandConfig} onSave={handleBrandSave}>
-              <button
-                className="overflow-hidden hover:opacity-80 transition-opacity cursor-pointer text-left"
-                title="Clique para personalizar"
-              >
-                {nameElement}
-              </button>
-            </BrandNameEditor>
-          ) : (
-            <Link to="/" className="overflow-hidden">
-              {nameElement}
-            </Link>
-          )}
-        </div>
+        )}
       </div>
 
       <SidebarContent className="pt-2">
