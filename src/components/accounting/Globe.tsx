@@ -79,44 +79,54 @@ function EarthMesh() {
 
     void main() {
       vec3 n = normalize(vNormal);
-      float lambert = dot(n, normalize(uLightDir));
-      float dayMix = smoothstep(-0.15, 0.25, lambert);
+      vec3 L = normalize(uLightDir);
+      float lambert = dot(n, L);
+
+      // Smooth terminator (day/night transition) — soft but defined, no harsh line
+      float dayMix = smoothstep(-0.12, 0.22, lambert);
 
       vec3 dayColor = texture2D(uDay, vUv).rgb;
-      vec3 nightColor = texture2D(uNight, vUv).rgb * 1.4;
+      vec3 nightColor = texture2D(uNight, vUv).rgb * 1.5;
 
       // Ocean mask from specular map (water = bright in spec map)
       float oceanMask = texture2D(uSpec, vUv).r;
 
-      // Deep ocean color palette — realistic, cinematic
-      vec3 deepOcean = vec3(0.039, 0.122, 0.267);   // #0a1f44
-      vec3 shallowOcean = vec3(0.071, 0.227, 0.420); // #123a6b
-
-      // Depth variation using latitude + subtle noise from UV
+      // Deep ocean palette — richer when sun-lit
+      vec3 deepOcean = vec3(0.035, 0.110, 0.255);
+      vec3 shallowOcean = vec3(0.082, 0.255, 0.470);
       float depthVar = smoothstep(0.0, 1.0, abs(vUv.y - 0.5) * 1.6);
       float coastNoise = sin(vUv.x * 40.0) * sin(vUv.y * 30.0) * 0.5 + 0.5;
-      vec3 oceanColor = mix(deepOcean, shallowOcean, depthVar * 0.6 + coastNoise * 0.15);
+      vec3 oceanColor = mix(deepOcean, shallowOcean, depthVar * 0.55 + coastNoise * 0.18);
 
-      // Replace bright/grey ocean from texture with our deep ocean tone
-      // Preserve land detail by only blending where oceanMask is high
+      // Boost ocean richness on the lit side
+      oceanColor *= mix(0.75, 1.15, dayMix);
+
       vec3 correctedDay = mix(dayColor, oceanColor, oceanMask * 0.85);
 
-      // Subtle animated shimmer on water (very slow, barely visible)
+      // Slight contrast/brightness lift on land for the lit side
+      correctedDay = mix(correctedDay, correctedDay * 1.12, (1.0 - oceanMask) * dayMix);
+
+      // Subtle animated shimmer on lit water only
       float shimmer = sin(vUv.x * 120.0 + uTime * 0.3) * sin(vUv.y * 90.0 + uTime * 0.2);
       shimmer = shimmer * 0.5 + 0.5;
       correctedDay += vec3(0.02, 0.04, 0.07) * shimmer * oceanMask * dayMix * 0.4;
 
-      // Specular sun glint on oceans — soft living surface
+      // Directional specular (sun glint) — only on lit ocean
       vec3 viewDir = vec3(0.0, 0.0, 1.0);
-      vec3 halfDir = normalize(normalize(uLightDir) + viewDir);
+      vec3 halfDir = normalize(L + viewDir);
       float specAngle = max(dot(n, halfDir), 0.0);
-      float glint = pow(specAngle, 32.0) * oceanMask * dayMix * 0.6;
+      float glint = pow(specAngle, 40.0) * oceanMask * dayMix * 0.55;
 
-      vec3 color = mix(nightColor, correctedDay, dayMix) + vec3(0.5, 0.7, 1.0) * glint;
+      // Apply directional light intensity to day color (no center flashlight,
+      // it scales with the actual sun-facing hemisphere)
+      vec3 litDay = correctedDay * (0.55 + 0.65 * max(lambert, 0.0));
 
-      // Atmosphere rim (Fresnel) — blend ocean with atmospheric blue
-      float rim = pow(1.0 - max(dot(n, vec3(0.0, 0.0, 1.0)), 0.0), 2.5);
-      color += vec3(0.25, 0.45, 0.85) * rim * 0.4;
+      vec3 color = mix(nightColor, litDay, dayMix) + vec3(0.55, 0.72, 1.0) * glint;
+
+      // Soft atmospheric rim — brighter on day side, subtle on night side
+      float rim = pow(1.0 - max(dot(n, vec3(0.0, 0.0, 1.0)), 0.0), 2.8);
+      vec3 rimColor = mix(vec3(0.10, 0.18, 0.38), vec3(0.35, 0.55, 0.95), dayMix);
+      color += rimColor * rim * 0.35;
 
       gl_FragColor = vec4(color, 1.0);
     }
@@ -171,8 +181,8 @@ function Atmosphere() {
   const fragmentShader = /* glsl */ `
     varying vec3 vNormal;
     void main() {
-      float intensity = pow(0.7 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 2.5);
-      gl_FragColor = vec4(0.35, 0.6, 1.0, 1.0) * intensity;
+      float intensity = pow(0.62 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 3.2);
+      gl_FragColor = vec4(0.28, 0.5, 0.9, 1.0) * intensity * 0.6;
     }
   `;
   return (
@@ -255,8 +265,8 @@ export function Globe({ size = 400 }: GlobeProps) {
           width: canvasSize,
           height: canvasSize,
           background:
-            "radial-gradient(circle, rgba(80,140,255,0.22) 0%, rgba(80,140,255,0.12) 38%, rgba(80,140,255,0.04) 60%, transparent 75%)",
-          filter: "blur(20px)",
+            "radial-gradient(circle, rgba(80,140,255,0.14) 0%, rgba(80,140,255,0.07) 40%, rgba(80,140,255,0.02) 62%, transparent 78%)",
+          filter: "blur(24px)",
           zIndex: 1,
         }}
       />
