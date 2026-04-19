@@ -14,6 +14,8 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { useRole } from "@/hooks/useRole";
 import { useCompanyLogo } from "@/hooks/useCompanyLogo";
 import { BrandNameEditor, type BrandConfig } from "@/components/layout/BrandNameEditor";
+import { Brand } from "@/components/layout/Brand";
+import { BRAND } from "@/config/brand";
 import { toast } from "sonner";
 
 export function AppSidebar() {
@@ -60,21 +62,8 @@ export function AppSidebar() {
     }
   };
 
-  const displayName = brandConfig.name || "QWork Nexus";
-  const shortName = brandConfig.name?.split(" ")[0] || "QWork";
-
+  const displayName = brandConfig.name || BRAND.name;
   const logoSizeNum = brandConfig.logoSizeNum ?? 32;
-  const logoPixels = collapsed ? Math.min(logoSizeNum, 24) : logoSizeNum;
-  const glowIntensity = brandConfig.glowIntensity ?? 0;
-
-  const nameStyle: React.CSSProperties = {
-    fontFamily: brandConfig.fontFamily || undefined,
-    color: brandConfig.color || undefined,
-    fontSize: collapsed ? "8px" : (brandConfig.fontSize || undefined),
-    fontWeight: brandConfig.bold ? 700 : 600,
-    fontStyle: brandConfig.italic ? "italic" : undefined,
-    textShadow: glowIntensity > 0 ? `0 0 ${glowIntensity}px ${brandConfig.color || "#fff"}` : undefined,
-  };
 
   const allNav = [
     { title: t("nav.dashboard"), url: "/", icon: LayoutDashboard, roles: ["admin", "tecnico", "socio", "cliente"] },
@@ -90,25 +79,12 @@ export function AppSidebar() {
 
   const mainNav = allNav.filter((item) => !role || item.roles.includes(role));
 
-  const logoElement = logoUrl ? (
-    <img src={logoUrl} alt="Logo" className="shrink-0 object-contain" style={{ height: logoPixels, width: logoPixels, maxHeight: 80, background: "transparent" }} />
-  ) : (
-    <div className="flex shrink-0 items-center justify-center font-bold text-foreground text-sm" style={{ height: logoPixels, width: logoPixels, maxHeight: 80 }}>
-      Q
-    </div>
-  );
-
-  const nameElement = (
-    <span className="whitespace-nowrap leading-none tracking-tight" style={nameStyle}>
-      {collapsed ? shortName : displayName}
-    </span>
-  );
-
   return (
     <Sidebar collapsible="icon" className="border-r border-border/50">
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
 
       <div className={`flex h-14 items-center border-b border-border/50 ${collapsed ? "justify-center px-0" : "px-4"}`}>
+        {/* DEFAULT state only — when collapsed (focus), logo moves to TopBar */}
         {!collapsed && (
           <div className="flex items-center gap-2 overflow-hidden">
             <div
@@ -122,7 +98,7 @@ export function AppSidebar() {
                 </div>
               ) : (
                 <>
-                  {logoElement}
+                  <Brand size={logoSizeNum} showName={false} />
                   {isAdmin && (
                     <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity">
                       <span className="text-[8px] text-white font-medium">Editar</span>
@@ -134,16 +110,13 @@ export function AppSidebar() {
 
             {isAdmin ? (
               <BrandNameEditor config={brandConfig} onSave={handleBrandSave}>
-                <button
-                  className="overflow-hidden hover:opacity-80 transition-opacity cursor-pointer text-left"
-                  title="Clique para personalizar"
-                >
-                  {nameElement}
+                <button className="overflow-hidden hover:opacity-80 transition-opacity cursor-pointer text-left" title="Clique para personalizar">
+                  <Brand size={0} showName={true} className="!gap-0" />
                 </button>
               </BrandNameEditor>
             ) : (
               <Link to="/" className="overflow-hidden">
-                {nameElement}
+                <span className="text-sm font-semibold text-foreground">{displayName}</span>
               </Link>
             )}
           </div>

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Loader2, Eye, EyeOff } from "lucide-react";
+import { BRAND } from "@/config/brand";
 
 export default function Auth() {
   const { session, loading, signIn } = useAuth();
@@ -40,10 +41,15 @@ export default function Auth() {
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm space-y-8">
         <div className="text-center space-y-2">
-          <div className="inline-flex h-14 w-14 items-center justify-center rounded-xl bg-primary font-bold text-primary-foreground text-2xl">
-            Q
-          </div>
-          <h1 className="text-2xl font-bold text-foreground tracking-tight">QWork Nexus</h1>
+          <img
+            src={BRAND.logo}
+            alt={`${BRAND.name} logo`}
+            width={56}
+            height={56}
+            className="mx-auto"
+            style={{ background: "transparent" }}
+          />
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">{BRAND.name}</h1>
           <p className="text-sm text-muted-foreground">{t("auth.signInTitle")}</p>
         </div>
 
