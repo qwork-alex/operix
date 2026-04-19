@@ -13,7 +13,8 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { useRole } from "@/hooks/useRole";
 import { useCompanyLogo } from "@/hooks/useCompanyLogo";
 import { BrandNameEditor, type BrandConfig } from "@/components/layout/BrandNameEditor";
-import { BRAND } from "@/config/brand";
+import { BrandLogo } from "@/components/BrandLogo";
+import { brandConfig as appBrand } from "@/brand.config";
 import { toast } from "sonner";
 
 export function AppSidebar() {
