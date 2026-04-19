@@ -6,9 +6,9 @@ import {
   ShoppingCart,
   Landmark,
   Wallet,
-  TrendingUp,
 } from "lucide-react";
 import { Globe } from "./Globe";
+import { SpaceBackground } from "./SpaceBackground";
 import { ModulePanel } from "./ModulePanel";
 import { useAccountingModule } from "./useAccountingModules";
 import { cn } from "@/lib/utils";
@@ -255,11 +255,16 @@ export function AccountingControlCenter() {
       </div>
 
       {/* Main split area */}
-      <div className="relative flex-1 min-h-[500px] rounded-xl border border-border/30 bg-card/30 overflow-hidden flex">
+      <div className="relative flex-1 min-h-[500px] rounded-xl border border-border/30 overflow-hidden flex">
+        {/* Cinematic space backdrop (full container, behind everything) */}
+        <div className="absolute inset-0 z-0">
+          <SpaceBackground />
+        </div>
+
         {/* Globe stage */}
         <div
           ref={stageRef}
-          className="relative transition-[width] duration-300 ease-out"
+          className="relative z-10 transition-[width] duration-300 ease-out"
           style={{ width: panelOpen ? "70%" : "100%", height: "100%" }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
@@ -311,14 +316,6 @@ export function AccountingControlCenter() {
             }}
           >
             <Globe size={globeSize} />
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div
-                className="rounded-full bg-background/50 backdrop-blur-sm border border-primary/20 p-3 shadow-lg"
-                style={{ boxShadow: "0 0 20px hsl(var(--primary) / 0.25)" }}
-              >
-                <TrendingUp size={Math.max(20, globeSize * 0.07)} className="text-primary" />
-              </div>
-            </div>
           </div>
 
           {/* Orbital module buttons (positions mutated directly in DOM) */}
@@ -382,7 +379,7 @@ export function AccountingControlCenter() {
         {/* Side panel */}
         {activeMod && (
           <div
-            className="relative animate-slide-in-right border-l"
+            className="relative z-10 animate-slide-in-right border-l bg-card/40 backdrop-blur-md"
             style={{
               width: "30%",
               borderColor: `hsl(${activeMod.color} / 0.35)`,
