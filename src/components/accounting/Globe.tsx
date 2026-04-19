@@ -53,6 +53,7 @@ function EarthMesh() {
       uNight: { value: nightMap },
       uSpec:  { value: specMap },
       uLightDir: { value: lightDirRef.current.clone() },
+      uTime: { value: 0 },
     }),
     [dayMap, nightMap, specMap]
   );
@@ -72,27 +73,50 @@ function EarthMesh() {
     uniform sampler2D uNight;
     uniform sampler2D uSpec;
     uniform vec3 uLightDir;
+    uniform float uTime;
     varying vec2 vUv;
     varying vec3 vNormal;
 
     void main() {
       vec3 n = normalize(vNormal);
       float lambert = dot(n, normalize(uLightDir));
-      // Smooth day/night terminator
       float dayMix = smoothstep(-0.15, 0.25, lambert);
 
       vec3 dayColor = texture2D(uDay, vUv).rgb;
-      vec3 nightColor = texture2D(uNight, vUv).rgb * 1.4; // brighten city lights
+      vec3 nightColor = texture2D(uNight, vUv).rgb * 1.4;
 
-      // Subtle sun glint on oceans
-      float spec = texture2D(uSpec, vUv).r;
-      float glint = pow(max(dayMix, 0.0), 8.0) * spec * 0.25;
+      // Ocean mask from specular map (water = bright in spec map)
+      float oceanMask = texture2D(uSpec, vUv).r;
 
-      vec3 color = mix(nightColor, dayColor, dayMix) + vec3(glint);
+      // Deep ocean color palette — realistic, cinematic
+      vec3 deepOcean = vec3(0.039, 0.122, 0.267);   // #0a1f44
+      vec3 shallowOcean = vec3(0.071, 0.227, 0.420); // #123a6b
 
-      // Atmosphere rim (Fresnel)
+      // Depth variation using latitude + subtle noise from UV
+      float depthVar = smoothstep(0.0, 1.0, abs(vUv.y - 0.5) * 1.6);
+      float coastNoise = sin(vUv.x * 40.0) * sin(vUv.y * 30.0) * 0.5 + 0.5;
+      vec3 oceanColor = mix(deepOcean, shallowOcean, depthVar * 0.6 + coastNoise * 0.15);
+
+      // Replace bright/grey ocean from texture with our deep ocean tone
+      // Preserve land detail by only blending where oceanMask is high
+      vec3 correctedDay = mix(dayColor, oceanColor, oceanMask * 0.85);
+
+      // Subtle animated shimmer on water (very slow, barely visible)
+      float shimmer = sin(vUv.x * 120.0 + uTime * 0.3) * sin(vUv.y * 90.0 + uTime * 0.2);
+      shimmer = shimmer * 0.5 + 0.5;
+      correctedDay += vec3(0.02, 0.04, 0.07) * shimmer * oceanMask * dayMix * 0.4;
+
+      // Specular sun glint on oceans — soft living surface
+      vec3 viewDir = vec3(0.0, 0.0, 1.0);
+      vec3 halfDir = normalize(normalize(uLightDir) + viewDir);
+      float specAngle = max(dot(n, halfDir), 0.0);
+      float glint = pow(specAngle, 32.0) * oceanMask * dayMix * 0.6;
+
+      vec3 color = mix(nightColor, correctedDay, dayMix) + vec3(0.5, 0.7, 1.0) * glint;
+
+      // Atmosphere rim (Fresnel) — blend ocean with atmospheric blue
       float rim = pow(1.0 - max(dot(n, vec3(0.0, 0.0, 1.0)), 0.0), 2.5);
-      color += vec3(0.25, 0.45, 0.85) * rim * 0.35;
+      color += vec3(0.25, 0.45, 0.85) * rim * 0.4;
 
       gl_FragColor = vec4(color, 1.0);
     }
@@ -101,11 +125,11 @@ function EarthMesh() {
   useFrame((state, delta) => {
     if (meshRef.current) meshRef.current.rotation.y += delta * 0.04;
     if (cloudsRef.current) cloudsRef.current.rotation.y += delta * 0.05;
-    // Slow ambient sun motion for living highlight
     const t = state.clock.elapsedTime * 0.05;
     lightDirRef.current.set(Math.cos(t), 0.3, Math.sin(t)).normalize();
     if (matRef.current) {
       (matRef.current.uniforms.uLightDir.value as THREE.Vector3).copy(lightDirRef.current);
+      matRef.current.uniforms.uTime.value = state.clock.elapsedTime;
     }
   });
 
