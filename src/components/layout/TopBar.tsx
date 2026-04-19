@@ -10,8 +10,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { useRole } from "@/hooks/useRole";
 import { useLanguage, type LangCode } from "@/hooks/useLanguage";
 import { useNotifications } from "@/hooks/useNotifications";
-import { useCompanyLogo } from "@/hooks/useCompanyLogo";
-import { Brand } from "@/components/layout/Brand";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 const languages: { code: LangCode; label: string }[] = [
