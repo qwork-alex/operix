@@ -184,6 +184,7 @@ export function SpaceBackground() {
       last = now;
       ctx.clearRect(0, 0, width, height);
       drawStaticBackdrop();
+      drawPlanets(dt);
       drawStars(layerFar, 0.08, dt);
       drawStars(layerMid, 0.15, dt);
       drawStars(layerNear, 0.22, dt);
