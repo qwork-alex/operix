@@ -43,6 +43,16 @@ export function SpaceBackground() {
     let meteor: Meteor | null = null;
     let nextMeteorAt = performance.now() + 20000 + Math.random() * 20000;
 
+    type Planet = { xRel: number; yRel: number; r: number; hue: number; sat: number; light: number; vx: number };
+    let planets: Planet[] = [
+      // Jupiter-like (soft orange/brown), upper-left far
+      { xRel: 0.12, yRel: 0.22, r: 38, hue: 28,  sat: 45, light: 42, vx: 0.0008 },
+      // Neptune-like (deep blue), lower-right far
+      { xRel: 0.86, yRel: 0.78, r: 28, hue: 218, sat: 55, light: 38, vx: -0.0006 },
+      // Distant warm sun-glow, mid-right
+      { xRel: 0.92, yRel: 0.18, r: 18, hue: 38,  sat: 65, light: 60, vx: 0.0004 },
+    ];
+
     const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
     const seed = () => {
