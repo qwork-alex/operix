@@ -28,6 +28,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { RolePermissionsManager } from "@/components/permissions/RolePermissionsManager";
 import { UserPermissionsDialog } from "@/components/permissions/UserPermissionsDialog";
+import { Can } from "@/components/Can";
 
 // ─── PROFIT DISTRIBUTION ───
 // Moved to src/components/profit/ProfitDistribution.tsx
@@ -173,10 +174,11 @@ export function AccountingLegacy() {
             <p className="text-xs text-muted-foreground">{t("acc.subtitle")}</p>
           </div>
         </div>
-        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setEditId(null); }}>
-          <DialogTrigger asChild>
-            <Button size="sm"><Plus className="h-4 w-4 mr-1" />{t("acc.addEntry")}</Button>
-          </DialogTrigger>
+        <Can permission="accounting.create">
+          <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setEditId(null); }}>
+            <DialogTrigger asChild>
+              <Button size="sm"><Plus className="h-4 w-4 mr-1" />{t("acc.addEntry")}</Button>
+            </DialogTrigger>
           <DialogContent className="bg-card border-border">
             <DialogHeader><DialogTitle>{editId ? t("action.edit") : t("acc.newEntry")}</DialogTitle></DialogHeader>
             <div className="space-y-3 pt-2">
@@ -366,12 +368,16 @@ export function AccountingLegacy() {
                     <TableCell className="text-muted-foreground">{formatDate(r.created_at)}</TableCell>
                     <TableCell>
                       <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(r)}>
-                          <Pencil className="h-3 w-3" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteMutation.mutate(r.id)}>
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
+                        <Can permission="accounting.edit">
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(r)}>
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                        </Can>
+                        <Can permission="accounting.delete">
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteMutation.mutate(r.id)}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </Can>
                       </div>
                     </TableCell>
                   </TableRow>
