@@ -1466,6 +1466,22 @@ export function UsersPage() {
           </Table>
         </div>
       )}
+
+      {/* Role permissions manager — só admin */}
+      {isAdmin && (
+        <div className="pt-6 border-t border-border/50">
+          <RolePermissionsManager />
+        </div>
+      )}
+
+      {/* Dialog de permissões por utilizador */}
+      <UserPermissionsDialog
+        open={!!permsTarget}
+        onOpenChange={(v) => { if (!v) setPermsTarget(null); }}
+        userId={permsTarget?.id ?? null}
+        userName={permsTarget?.name}
+        userRole={permsTarget?.role}
+      />
     </div>
   );
 }
