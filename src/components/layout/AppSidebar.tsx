@@ -27,9 +27,9 @@ export function AppSidebar() {
   const handleBrandSave = async (config: BrandConfig) => {
     try {
       await saveBrandConfig(config);
-      toast.success("Nome atualizado com sucesso");
+      toast.success(t("brand.nameUpdated"));
     } catch {
-      toast.error("Erro ao atualizar nome");
+      toast.error(t("brand.nameUpdateError"));
     }
   };
 
@@ -58,7 +58,7 @@ export function AppSidebar() {
             <BrandLogo size={28} />
             {isAdmin ? (
               <BrandNameEditor config={brandConfig} onSave={handleBrandSave}>
-                <button className="overflow-hidden hover:opacity-80 transition-opacity cursor-pointer text-left" title="Clique para personalizar">
+                <button className="overflow-hidden hover:opacity-80 transition-opacity cursor-pointer text-left" title={t("brand.editTooltip")}>
                   <span className="text-sm font-semibold text-foreground">{displayName}</span>
                 </button>
               </BrandNameEditor>
