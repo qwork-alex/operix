@@ -234,7 +234,8 @@ export function AccountingLegacy() {
               </Button>
             </div>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </Can>
       </div>
 
       {/* Summary cards */}
