@@ -216,6 +216,7 @@ export type Database = {
           module: string
           name: string
           parent_id: string | null
+          service_order_id: string | null
           size_bytes: number | null
           storage_path: string | null
           type: string
@@ -230,6 +231,7 @@ export type Database = {
           module?: string
           name: string
           parent_id?: string | null
+          service_order_id?: string | null
           size_bytes?: number | null
           storage_path?: string | null
           type?: string
@@ -244,6 +246,7 @@ export type Database = {
           module?: string
           name?: string
           parent_id?: string | null
+          service_order_id?: string | null
           size_bytes?: number | null
           storage_path?: string | null
           type?: string
@@ -255,6 +258,13 @@ export type Database = {
             columns: ["parent_id"]
             isOneToOne: false
             referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_service_order_id_fkey"
+            columns: ["service_order_id"]
+            isOneToOne: false
+            referencedRelation: "service_orders"
             referencedColumns: ["id"]
           },
         ]
