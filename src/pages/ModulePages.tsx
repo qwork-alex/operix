@@ -23,9 +23,11 @@ import {
   PieChart as PieChartIcon, BookOpen, Car, FolderOpen, Users, Settings,
   Plus, Save, Trash2, Upload, FolderPlus, ChevronRight, Loader2, Pencil,
   CheckSquare, MoveRight, Eye, Download, Printer, FileText, Check, X, Crown,
-  Copy, Link, AlertTriangle,
+  Copy, Link, AlertTriangle, Shield,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { RolePermissionsManager } from "@/components/permissions/RolePermissionsManager";
+import { UserPermissionsDialog } from "@/components/permissions/UserPermissionsDialog";
 
 // ─── PROFIT DISTRIBUTION ───
 // Moved to src/components/profit/ProfitDistribution.tsx
@@ -1152,6 +1154,7 @@ export function UsersPage() {
   const [createForm, setCreateForm] = useState({ email: "", full_name: "", role: "technician" });
   const [creating, setCreating] = useState(false);
   const [tempPassword, setTempPassword] = useState<string | null>(null);
+  const [permsTarget, setPermsTarget] = useState<{ id: string; name: string; role: string } | null>(null);
 
   const roleLabels: Record<string, string> = {
     admin: t("role.admin"),
@@ -1439,9 +1442,20 @@ export function UsersPage() {
                     <TableCell>
                       <div className="flex gap-1">
                         {!u.isOwner && isAdmin && (
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget(u.id)}>
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              title="Permissões"
+                              onClick={() => setPermsTarget({ id: u.id, name: u.full_name || u.email, role: u.role })}
+                            >
+                              <Shield className="h-3 w-3" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget(u.id)}>
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </>
                         )}
                       </div>
                     </TableCell>
@@ -1452,6 +1466,22 @@ export function UsersPage() {
           </Table>
         </div>
       )}
+
+      {/* Role permissions manager — só admin */}
+      {isAdmin && (
+        <div className="pt-6 border-t border-border/50">
+          <RolePermissionsManager />
+        </div>
+      )}
+
+      {/* Dialog de permissões por utilizador */}
+      <UserPermissionsDialog
+        open={!!permsTarget}
+        onOpenChange={(v) => { if (!v) setPermsTarget(null); }}
+        userId={permsTarget?.id ?? null}
+        userName={permsTarget?.name}
+        userRole={permsTarget?.role}
+      />
     </div>
   );
 }
