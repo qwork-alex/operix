@@ -1442,9 +1442,20 @@ export function UsersPage() {
                     <TableCell>
                       <div className="flex gap-1">
                         {!u.isOwner && isAdmin && (
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget(u.id)}>
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              title="Permissões"
+                              onClick={() => setPermsTarget({ id: u.id, name: u.full_name || u.email, role: u.role })}
+                            >
+                              <Shield className="h-3 w-3" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget(u.id)}>
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </>
                         )}
                       </div>
                     </TableCell>
