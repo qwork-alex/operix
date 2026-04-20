@@ -51,11 +51,9 @@ export function AppSidebar() {
   // Bulk-load all permission keys at once
   const { map: permMap, isLoading: permsLoading } = usePermissions(allNav.map((n) => n.perm));
 
-  const mainNav = allNav.filter((item) => {
+  const mainNav = permsLoading && !isAdmin ? [] : allNav.filter((item) => {
     if (role && !item.roles.includes(role)) return false;
     if (isAdmin) return true;
-    // While loading, hide nothing extra (role filter still applies)
-    if (permsLoading) return true;
     return permMap[item.perm] === true;
   });
 
