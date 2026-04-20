@@ -20,6 +20,7 @@ import { AlertTriangle, Clock } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { BulkDeleteDialog } from "@/components/shared/BulkDeleteDialog";
 import { useTechnicianEarnings, getTechEarnings } from "@/hooks/useTechnicianEarnings";
+import { Can } from "@/components/Can";
 
 interface ServiceOrderRow {
   id: string;
@@ -355,14 +356,16 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
       {selected.size > 0 && (
         <div className="flex items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2">
           <span className="text-sm font-medium">{selected.size} selecionado(s)</span>
-          <Button
-            variant="destructive"
-            size="sm"
-            className="h-7 text-xs"
-            onClick={() => setShowDeleteDialog(true)}
-          >
-            <Trash2 className="h-3 w-3 mr-1" /> Excluir selecionados
-          </Button>
+          <Can permission="service_orders.delete">
+            <Button
+              variant="destructive"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setShowDeleteDialog(true)}
+            >
+              <Trash2 className="h-3 w-3 mr-1" /> Excluir selecionados
+            </Button>
+          </Can>
           <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setSelected(new Set())}>
             Limpar seleção
           </Button>
@@ -566,12 +569,16 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(o)}>
-                            <Pencil className="h-3 w-3" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteMutation.mutate(o.id)}>
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
+                          <Can permission="service_orders.edit">
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(o)}>
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                          </Can>
+                          <Can permission="service_orders.delete">
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteMutation.mutate(o.id)}>
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </Can>
                         </div>
                       </TableCell>
                     </TableRow>
