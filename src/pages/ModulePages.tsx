@@ -1154,6 +1154,7 @@ export function UsersPage() {
   const [createForm, setCreateForm] = useState({ email: "", full_name: "", role: "technician" });
   const [creating, setCreating] = useState(false);
   const [tempPassword, setTempPassword] = useState<string | null>(null);
+  const [permsTarget, setPermsTarget] = useState<{ id: string; name: string; role: string } | null>(null);
 
   const roleLabels: Record<string, string> = {
     admin: t("role.admin"),
