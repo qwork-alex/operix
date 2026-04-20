@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { RotateCcw } from "lucide-react";
 import { PermissionsMatrix, type PermissionRow } from "./PermissionsMatrix";
+import { useInvalidatePermissions } from "@/hooks/usePermission";
 
 interface UserPermissionsDialogProps {
   open: boolean;
@@ -23,6 +24,7 @@ export function UserPermissionsDialog({
   userRole,
 }: UserPermissionsDialogProps) {
   const queryClient = useQueryClient();
+  const invalidatePerms = useInvalidatePermissions();
 
   const { data: permissions = [], isLoading: loadingPerms } = useQuery({
     queryKey: ["permissions-catalog"],
@@ -106,6 +108,7 @@ export function UserPermissionsDialog({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["user-permissions", userId] });
+      invalidatePerms();
     },
     onError: (err) => toast.error((err as Error).message),
   });
@@ -121,6 +124,7 @@ export function UserPermissionsDialog({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["user-permissions", userId] });
+      invalidatePerms();
       toast.success("Overrides removidos. O utilizador volta aos defaults da função.");
     },
     onError: (err) => toast.error((err as Error).message),

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Shield } from "lucide-react";
 import { PermissionsMatrix, type PermissionRow } from "./PermissionsMatrix";
+import { useInvalidatePermissions } from "@/hooks/usePermission";
 
 type DbRole = "admin" | "partner" | "technician" | "client";
 
@@ -16,6 +17,7 @@ const ROLE_TABS: { key: DbRole; label: string }[] = [
 
 export function RolePermissionsManager() {
   const queryClient = useQueryClient();
+  const invalidatePerms = useInvalidatePermissions();
   const [activeRole, setActiveRole] = useState<DbRole>("partner");
 
   const { data: permissions = [], isLoading: loadingPerms } = useQuery({
@@ -67,6 +69,7 @@ export function RolePermissionsManager() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["role-permissions", activeRole] });
+      invalidatePerms();
     },
     onError: (err) => toast.error((err as Error).message),
   });
