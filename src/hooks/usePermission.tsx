@@ -69,20 +69,31 @@ function useMyPermissionsMap() {
 
       const perms = permsRes.data ?? [];
       const rolePermIds = new Set((rolePermsRes.data ?? []).map((r: any) => r.permission_id as string));
-      const overrides = new Map<string, boolean>(
-        (userPermsRes.data ?? []).map((u: any) => [u.permission_id as string, u.allow as boolean]),
-      );
+
+      // Deduplicate overrides — last write wins for any duplicate (user_id, permission_id) row.
+      const overrides = new Map<string, boolean>();
+      for (const u of (userPermsRes.data ?? []) as Array<{ permission_id: string; allow: boolean }>) {
+        overrides.set(u.permission_id, u.allow === true);
+      }
+
+      // Deterministic resolver: override > role > deny. Admin is handled above.
+      const resolve = (
+        userPerm: boolean | null | undefined,
+        rolePerm: boolean | null | undefined,
+      ): { allowed: boolean; source: "override" | "role" | "default-deny" } => {
+        if (userPerm !== null && userPerm !== undefined) return { allowed: userPerm === true, source: "override" };
+        if (rolePerm !== null && rolePerm !== undefined) return { allowed: rolePerm === true, source: "role" };
+        return { allowed: false, source: "default-deny" };
+      };
 
       const map: Record<string, { allowed: boolean; source: "admin" | "override" | "role" | "default-deny" }> = {};
       for (const p of perms) {
         const key = `${p.module}.${p.action}`;
-        if (overrides.has(p.id)) {
-          map[key] = { allowed: overrides.get(p.id) === true, source: "override" };
-        } else if (rolePermIds.has(p.id)) {
-          map[key] = { allowed: true, source: "role" };
-        } else {
-          map[key] = { allowed: false, source: "default-deny" };
-        }
+        const userPerm = overrides.has(p.id) ? overrides.get(p.id)! : null;
+        const rolePerm = rolePermIds.has(p.id) ? true : null;
+        const resolved = resolve(userPerm, rolePerm);
+        map[key] = resolved;
+        if (DEBUG) console.log("[Permission:resolve]", { key, userPerm, rolePerm, result: resolved.allowed, source: resolved.source });
       }
       return { admin: false, map };
     },
