@@ -915,6 +915,30 @@ export type Database = {
           },
         ]
       }
+      permissions: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          label: string | null
+          module: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          label?: string | null
+          module: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          label?: string | null
+          module?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -1113,6 +1137,35 @@ export type Database = {
             columns: ["service_order_id"]
             isOneToOne: false
             referencedRelation: "service_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      role_permissions: {
+        Row: {
+          created_at: string
+          id: string
+          permission_id: string
+          role: Database["public"]["Enums"]["app_role"]
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          permission_id: string
+          role: Database["public"]["Enums"]["app_role"]
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          permission_id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_permissions_permission_id_fkey"
+            columns: ["permission_id"]
+            isOneToOne: false
+            referencedRelation: "permissions"
             referencedColumns: ["id"]
           },
         ]
@@ -1323,6 +1376,41 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: []
+      }
+      user_permissions: {
+        Row: {
+          allow: boolean
+          created_at: string
+          created_by: string | null
+          id: string
+          permission_id: string
+          user_id: string
+        }
+        Insert: {
+          allow: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          permission_id: string
+          user_id: string
+        }
+        Update: {
+          allow?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          permission_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_permissions_permission_id_fkey"
+            columns: ["permission_id"]
+            isOneToOne: false
+            referencedRelation: "permissions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
@@ -1617,6 +1705,10 @@ export type Database = {
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
+      }
+      has_permission: {
+        Args: { _action: string; _module: string; _user_id: string }
+        Returns: boolean
       }
       has_role: {
         Args: {
