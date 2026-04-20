@@ -138,7 +138,7 @@ export function TopBar() {
               {agingAlerts.length > 0 && (
                 <>
                   <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-amber-500 font-semibold bg-amber-500/5">
-                    Alertas de cobrança ({agingAlerts.length})
+                    {t("notif.agingTitle")} ({agingAlerts.length})
                   </div>
                   {agingAlerts.map((alert) => {
                     const isLevel2 = alert.level === "level2";
@@ -156,7 +156,7 @@ export function TopBar() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between">
                             <p className={`text-xs font-semibold ${isLevel2 ? "text-red-500" : "text-amber-500"}`}>
-                              {isLevel2 ? "Urgente" : "Atenção"} — {alert.daysOld}d
+                              {isLevel2 ? t("notif.urgent") : t("notif.attention")} — {alert.daysOld}d
                             </p>
                             <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${
                               isLevel2 ? "bg-red-500/20 text-red-500" : "bg-amber-500/20 text-amber-500"
