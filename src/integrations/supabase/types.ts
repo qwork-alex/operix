@@ -209,6 +209,8 @@ export type Database = {
       documents: {
         Row: {
           created_at: string
+          entity_id: string | null
+          entity_type: string | null
           id: string
           mime_type: string | null
           module: string
@@ -222,6 +224,8 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
           id?: string
           mime_type?: string | null
           module?: string
@@ -235,6 +239,8 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
           id?: string
           mime_type?: string | null
           module?: string
