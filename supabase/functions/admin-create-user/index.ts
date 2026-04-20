@@ -62,17 +62,49 @@ Deno.serve(async (req) => {
       const { user_id } = body;
       if (!user_id) return jsonResp({ error: "user_id required" }, 400);
 
-      // Cascade FKs handle profiles + user_roles cleanup
+      // Protect system owner
+      const { data: targetAuth } = await adminClient.auth.admin.getUserById(user_id);
+      if (targetAuth?.user?.email === "qwork@qworkgroup.com") {
+        return jsonResp({ error: "owner_protected" }, 403);
+      }
+
+      // Resolve app_user_id (memberships reference app_users.id, not auth uid)
+      const { data: appUser } = await adminClient
+        .from("app_users")
+        .select("id")
+        .eq("auth_user_id", user_id)
+        .maybeSingle();
+      const appUserId = appUser?.id;
+
+      // 1. Wipe all dependents BEFORE deleting auth user (no CASCADE in DB)
+      const cleanups: Promise<any>[] = [
+        adminClient.from("user_permissions").delete().eq("user_id", user_id),
+        adminClient.from("user_roles").delete().eq("user_id", user_id),
+        adminClient.from("notifications").delete().eq("user_id", user_id),
+        adminClient.from("partner_clients").delete().eq("partner_user_id", user_id),
+        adminClient.from("user_usage").delete().eq("user_id", user_id),
+        // Detach (don't delete) operational data so history is preserved
+        adminClient.from("technicians").update({ user_id: null }).eq("user_id", user_id),
+        adminClient.from("profiles").delete().eq("id", user_id),
+      ];
+      if (appUserId) {
+        cleanups.push(
+          adminClient.from("memberships").delete().eq("user_id", appUserId),
+          adminClient.from("app_users").delete().eq("id", appUserId),
+        );
+      }
+      const results = await Promise.allSettled(cleanups);
+      const failures = results
+        .map((r, i) => (r.status === "rejected" ? `[${i}] ${(r.reason as Error)?.message}` : null))
+        .filter(Boolean);
+      if (failures.length) {
+        console.warn("[delete_user] cleanup warnings:", failures);
+      }
+
+      // 2. Delete the auth user
       const { error } = await adminClient.auth.admin.deleteUser(user_id);
-      if (error) {
-        // User may already be deleted — treat as success
-        if (error.message?.includes("not found")) {
-          // Clean up orphaned rows just in case
-          await adminClient.from("user_roles").delete().eq("user_id", user_id);
-          await adminClient.from("profiles").delete().eq("id", user_id);
-          return jsonResp({ success: true });
-        }
-        return jsonResp({ error: error.message }, 400);
+      if (error && !error.message?.includes("not found") && !error.message?.includes("User not found")) {
+        return jsonResp({ error: `auth.deleteUser: ${error.message}` }, 400);
       }
 
       return jsonResp({ success: true });
