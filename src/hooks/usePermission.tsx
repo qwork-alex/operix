@@ -36,8 +36,11 @@ function useMyPermissionsMap() {
   // Realtime: invalidate cache when role/user permissions change anywhere.
   useEffect(() => {
     if (!user?.id) return;
+    // Unique channel name per mount avoids "callbacks after subscribe()" when React
+    // re-runs effects (StrictMode/HMR) and would otherwise reuse the same channel.
+    const channelName = `perms-${user.id}-${Math.random().toString(36).slice(2, 8)}`;
     const channel = supabase
-      .channel(`perms-${user.id}`)
+      .channel(channelName)
       .on("postgres_changes", { event: "*", schema: "public", table: "user_permissions", filter: `user_id=eq.${user.id}` },
         () => qc.invalidateQueries({ queryKey: PERMS_QUERY_KEY }))
       .on("postgres_changes", { event: "*", schema: "public", table: "role_permissions" },
