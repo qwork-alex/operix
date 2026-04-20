@@ -23,6 +23,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTechnicianEarnings, getTechEarnings } from "@/hooks/useTechnicianEarnings";
+import { Can } from "@/components/Can";
 
 export default function ServiceOrdersPage() {
   const { t } = useLanguage();
@@ -155,8 +156,10 @@ export default function ServiceOrdersPage() {
       {/* Stage indicator */}
       {extractions.length === 0 && <ExtractionStages current="upload" />}
 
-      {/* Upload */}
-      <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} />
+      {/* Upload — gated by create permission */}
+      <Can permission="service_orders.create">
+        <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} />
+      </Can>
 
       {/* Embedded file manager */}
       <EmbeddedFileManager entityType="service_order" sessionFileNames={sessionFiles} />

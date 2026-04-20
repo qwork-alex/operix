@@ -23,6 +23,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import type { Json } from "@/integrations/supabase/types";
+import { Can } from "@/components/Can";
 
 export default function PaymentOrdersPage() {
   const { t } = useLanguage();
@@ -131,7 +132,9 @@ export default function PaymentOrdersPage() {
 
       {extractions.length === 0 && <ExtractionStages current="upload" />}
 
-      <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} />
+      <Can permission="payment_orders.create">
+        <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} />
+      </Can>
 
       <UploadQueue queue={queue} onClearCompleted={clearCompleted} />
 
