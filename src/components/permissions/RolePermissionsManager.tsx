@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Shield } from "lucide-react";
+import { Shield, ChevronDown } from "lucide-react";
 import { PermissionsMatrix, type PermissionRow } from "./PermissionsMatrix";
 import { useInvalidatePermissions } from "@/hooks/usePermission";
 
@@ -19,6 +19,7 @@ export function RolePermissionsManager() {
   const queryClient = useQueryClient();
   const invalidatePerms = useInvalidatePermissions();
   const [activeRole, setActiveRole] = useState<DbRole>("partner");
+  const [open, setOpen] = useState(false);
 
   const { data: permissions = [], isLoading: loadingPerms } = useQuery({
     queryKey: ["permissions-catalog"],
@@ -76,37 +77,47 @@ export function RolePermissionsManager() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-3 w-full text-left hover:opacity-80 transition-opacity"
+      >
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
           <Shield className="h-4 w-4 text-primary" />
         </div>
-        <div>
+        <div className="flex-1">
           <h2 className="text-sm font-semibold text-foreground">Permissões por Função</h2>
           <p className="text-[11px] text-muted-foreground">
             Define o que cada função pode fazer por defeito. Admin tem sempre acesso total.
           </p>
         </div>
-      </div>
+        <ChevronDown
+          className={`h-5 w-5 text-muted-foreground shrink-0 transition-transform duration-200 ${
+            open ? "rotate-180" : ""
+          }`}
+        />
+      </button>
 
-      <Tabs value={activeRole} onValueChange={(v) => setActiveRole(v as DbRole)}>
-        <TabsList>
+      {open && (
+        <Tabs value={activeRole} onValueChange={(v) => setActiveRole(v as DbRole)}>
+          <TabsList>
+            {ROLE_TABS.map((r) => (
+              <TabsTrigger key={r.key} value={r.key} className="text-xs">{r.label}</TabsTrigger>
+            ))}
+          </TabsList>
           {ROLE_TABS.map((r) => (
-            <TabsTrigger key={r.key} value={r.key} className="text-xs">{r.label}</TabsTrigger>
+            <TabsContent key={r.key} value={r.key} className="mt-4">
+              <PermissionsMatrix
+                permissions={permissions}
+                values={values}
+                isLoading={loadingPerms || loadingRolePerms}
+                onToggle={(permissionId, next) =>
+                  toggleMutation.mutate({ permissionId, next: Boolean(next) })
+                }
+              />
+            </TabsContent>
           ))}
-        </TabsList>
-        {ROLE_TABS.map((r) => (
-          <TabsContent key={r.key} value={r.key} className="mt-4">
-            <PermissionsMatrix
-              permissions={permissions}
-              values={values}
-              isLoading={loadingPerms || loadingRolePerms}
-              onToggle={(permissionId, next) =>
-                toggleMutation.mutate({ permissionId, next: Boolean(next) })
-              }
-            />
-          </TabsContent>
-        ))}
-      </Tabs>
+        </Tabs>
+      )}
     </div>
   );
 }
