@@ -160,3 +160,35 @@ export function usePermissions(keys: string[]): { allowed: boolean; isLoading: b
   const allowed = keys.every((k) => map[k]);
   return { allowed, isLoading: false, map };
 }
+
+/**
+ * SINGLE SOURCE OF TRUTH — `can(module, action)` resolver.
+ * Returns a stable function that resolves any permission deterministically:
+ *   1. admin → true
+ *   2. user override (allow=true|false) → use it
+ *   3. role permission → use it
+ *   4. default → false
+ *
+ * Usage:
+ *   const { can, isLoading } = useCan();
+ *   if (can("financial", "view")) { ... }
+ *
+ * Do NOT mix role checks in components. This is the only resolver.
+ */
+export function useCan(): {
+  can: (module: string, action: string) => boolean;
+  isLoading: boolean;
+} {
+  const { isAdmin } = useRole();
+  const { data, isLoading } = useMyPermissionsMap();
+
+  const can = (module: string, action: string): boolean => {
+    if (isAdmin) return true;
+    if (!data) return false;
+    if (data.admin) return true;
+    const entry = data.map?.[`${module}.${action}`];
+    return entry?.allowed === true;
+  };
+
+  return { can, isLoading: isLoading && !isAdmin };
+}

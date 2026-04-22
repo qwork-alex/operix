@@ -7,7 +7,6 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { LanguageProvider } from "@/hooks/useLanguage";
 import { RoleProvider } from "@/hooks/useRole";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { RoleGuard } from "@/components/RoleGuard";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -64,12 +63,12 @@ const App = () => (
                             <Route path="/" element={<PermissionGuard permission="dashboard.view"><Index /></PermissionGuard>} />
                             <Route path="/service-orders" element={<PermissionGuard permission="service_orders.view"><ServiceOrdersPage /></PermissionGuard>} />
                             <Route path="/payment-orders" element={<PermissionGuard permission="payment_orders.view"><PaymentOrdersPage /></PermissionGuard>} />
-                            <Route path="/financial" element={<RoleGuard allowedRoles={["admin", "socio"]}><PermissionGuard permission="financial.view"><FinancialPage /></PermissionGuard></RoleGuard>} />
-                            <Route path="/profit" element={<RoleGuard allowedRoles={["admin", "socio"]}><PermissionGuard permission="profit.view"><ProfitDistribution /></PermissionGuard></RoleGuard>} />
-                            <Route path="/accounting" element={<RoleGuard allowedRoles={["admin"]}><PermissionGuard permission="accounting.view"><Accounting /></PermissionGuard></RoleGuard>} />
-                            <Route path="/fleet" element={<RoleGuard allowedRoles={["admin", "tecnico"]}><PermissionGuard permission="fleet.view"><FleetPage /></PermissionGuard></RoleGuard>} />
-                            <Route path="/documents" element={<RoleGuard allowedRoles={["admin", "tecnico", "socio"]}><PermissionGuard permission="documents.view"><Documents /></PermissionGuard></RoleGuard>} />
-                            <Route path="/users" element={<RoleGuard allowedRoles={["admin"]}><UsersPage /></RoleGuard>} />
+                            <Route path="/financial" element={<PermissionGuard permission="financial.view"><FinancialPage /></PermissionGuard>} />
+                            <Route path="/profit" element={<PermissionGuard permission="profit.view"><ProfitDistribution /></PermissionGuard>} />
+                            <Route path="/accounting" element={<PermissionGuard permission="accounting.view"><Accounting /></PermissionGuard>} />
+                            <Route path="/fleet" element={<PermissionGuard permission="fleet.view"><FleetPage /></PermissionGuard>} />
+                            <Route path="/documents" element={<PermissionGuard permission="documents.view"><Documents /></PermissionGuard>} />
+                            <Route path="/users" element={<PermissionGuard permission="users.view"><UsersPage /></PermissionGuard>} />
                             <Route path="/settings" element={<SettingsPage />} />
                             <Route path="*" element={<NotFound />} />
                           </Routes>
