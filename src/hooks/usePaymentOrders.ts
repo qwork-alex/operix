@@ -3,7 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import { useAuth } from "./useAuth";
-import { useRole } from "./useRole";
+import { useCan } from "./usePermission";
+import { applyScope, logScope } from "@/lib/applyScope";
 import { toast } from "sonner";
 import type { Json } from "@/integrations/supabase/types";
 
@@ -40,19 +41,22 @@ export function usePaymentOrders(filters?: {
 }) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { isAdmin } = useRole();
+  const { can, isLoading: permsLoading } = useCan();
+  const { allowed, scope } = can("payment_orders", "view");
 
   const query = useQuery({
-    queryKey: ["payment_orders", filters, isAdmin, user?.id],
+    queryKey: ["payment_orders", filters, allowed, scope, user?.id],
+    enabled: !permsLoading && allowed && !!user?.id,
     queryFn: async () => {
+      logScope("payment_orders", "view", scope, allowed);
+      if (!allowed) return [];
+
       let q = supabase
         .from("payment_orders")
         .select("*, clients(name), technicians(name)")
         .order("created_at", { ascending: false });
 
-      if (!isAdmin && user?.id) {
-        q = q.eq("created_by", user.id);
-      }
+      q = applyScope(q, scope, user);
 
       if (filters?.client_id) q = q.eq("client_id", filters.client_id);
       if (filters?.platform) q = q.eq("platform", filters.platform);
@@ -276,9 +280,13 @@ export function useDiscrepancyDetection() {
 }
 
 export function useDiscrepancies() {
+  const { can, isLoading: permsLoading } = useCan();
+  const { allowed } = can("financial", "view");
   return useQuery({
-    queryKey: ["discrepancies"],
+    queryKey: ["discrepancies", allowed],
+    enabled: !permsLoading && allowed,
     queryFn: async () => {
+      if (!allowed) return [];
       const { data, error } = await supabase
         .from("discrepancies")
         .select("*, service_orders(license_plate, car_name, total, platform, clients(name)), payment_orders(license_plate, car_name, total, platform, clients(name))")
@@ -290,12 +298,34 @@ export function useDiscrepancies() {
 }
 
 export function useFinancialSummary() {
+  const { user } = useAuth();
+  const { can, isLoading: permsLoading } = useCan();
+  const finView = can("financial", "view");
+  const soView = can("service_orders", "view");
+  const poView = can("payment_orders", "view");
+  const allowed = finView.allowed || soView.allowed || poView.allowed;
+
   return useQuery({
-    queryKey: ["financial-summary"],
+    queryKey: ["financial-summary", allowed, soView.scope, poView.scope, user?.id],
+    enabled: !permsLoading && allowed && !!user?.id,
     queryFn: async () => {
+      logScope("financial", "summary", finView.scope, allowed);
+      if (!allowed) {
+        return {
+          expectedRevenue: 0, realRevenue: 0, difference: 0, missingMoney: 0, mismatchDiff: 0,
+          totalDiscrepancies: 0, missingCount: 0, mismatchCount: 0, correctCount: 0,
+          discrepancies: [], serviceOrders: [], paymentOrders: [],
+        };
+      }
+
+      let soQ = supabase.from("service_orders").select("total, status, client_id, platform, clients(name)");
+      let poQ = supabase.from("payment_orders").select("total, status, client_id, platform, clients(name)");
+      soQ = applyScope(soQ, soView.allowed ? soView.scope : "own", user) as typeof soQ;
+      poQ = applyScope(poQ, poView.allowed ? poView.scope : "own", user) as typeof poQ;
+
       const [soRes, poRes, discRes] = await Promise.all([
-        supabase.from("service_orders").select("total, status, client_id, platform, clients(name)"),
-        supabase.from("payment_orders").select("total, status, client_id, platform, clients(name)"),
+        soQ,
+        poQ,
         supabase.from("discrepancies").select("*, service_orders(total, clients(name)), payment_orders(total, clients(name))"),
       ]);
 

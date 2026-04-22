@@ -3,7 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import { useAuth } from "./useAuth";
-import { useRole } from "./useRole";
+import { useCan } from "./usePermission";
+import { applyScope, logScope } from "@/lib/applyScope";
 import { toast } from "sonner";
 
 export type ServiceOrder = Tables<"service_orders">;
@@ -46,7 +47,7 @@ export function useServiceOrders(filters?: {
 }) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { isAdmin } = useRole();
+  const { can, isLoading: permsLoading } = useCan();
 
   const hasRequiredAuditFields = (payload: {
     id?: string;
@@ -55,18 +56,21 @@ export function useServiceOrders(filters?: {
     updated_at?: string;
   }) => Boolean(payload.id && payload.created_by && payload.created_at && payload.updated_at);
 
+  const { allowed, scope } = can("service_orders", "view");
+
   const query = useQuery({
-    queryKey: ["service_orders", filters, isAdmin, user?.id],
+    queryKey: ["service_orders", filters, allowed, scope, user?.id],
+    enabled: !permsLoading && allowed && !!user?.id,
     queryFn: async () => {
+      logScope("service_orders", "view", scope, allowed);
+      if (!allowed) return [];
+
       let q = supabase
         .from("service_orders")
         .select("*, clients(name), technicians(name)")
         .order("created_at", { ascending: false });
 
-      // Non-admin users see only their own data
-      if (!isAdmin && user?.id) {
-        q = q.eq("created_by", user.id);
-      }
+      q = applyScope(q, scope, user);
 
       if (filters?.client_id) q = q.eq("client_id", filters.client_id);
       if (filters?.platform) q = q.eq("platform", filters.platform);
