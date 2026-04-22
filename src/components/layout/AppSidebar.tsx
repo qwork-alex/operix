@@ -10,8 +10,7 @@ import {
 } from "@/components/ui/sidebar";
 import { NavLink } from "@/components/NavLink";
 import { useLanguage } from "@/hooks/useLanguage";
-import { useRole } from "@/hooks/useRole";
-import { usePermissions } from "@/hooks/usePermission";
+import { useCan } from "@/hooks/usePermission";
 import { useCompanyLogo } from "@/hooks/useCompanyLogo";
 import { BrandNameEditor, type BrandConfig } from "@/components/layout/BrandNameEditor";
 import { BrandLogo } from "@/components/BrandLogo";
@@ -22,7 +21,7 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const { t } = useLanguage();
-  const { isAdmin, role } = useRole();
+  const { can, isLoading: permsLoading } = useCan();
   const { brandConfig, saveBrandConfig } = useCompanyLogo();
 
   const handleBrandSave = async (config: BrandConfig) => {
@@ -36,24 +35,21 @@ export function AppSidebar() {
 
   const displayName = brandConfig.name || appBrand.appName;
 
+  // Single source of truth — useCan() resolves everything (admin, override, role, deny).
   const allNav = [
-    { title: t("nav.dashboard"), url: "/", icon: LayoutDashboard, perm: "dashboard.view" },
-    { title: t("nav.serviceOrders"), url: "/service-orders", icon: FileText, perm: "service_orders.view" },
-    { title: t("nav.paymentOrders"), url: "/payment-orders", icon: CreditCard, perm: "payment_orders.view" },
-    { title: t("nav.financial"), url: "/financial", icon: TrendingUp, perm: "financial.view" },
-    { title: t("nav.profit"), url: "/profit", icon: PieChart, perm: "profit.view" },
-    { title: t("nav.accounting"), url: "/accounting", icon: BookOpen, perm: "accounting.view" },
-    { title: t("nav.fleet"), url: "/fleet", icon: Car, perm: "fleet.view" },
-    { title: t("nav.documents"), url: "/documents", icon: FolderOpen, perm: "documents.view" },
-    { title: t("nav.users"), url: "/users", icon: Users, perm: "users.view" },
+    { title: t("nav.dashboard"), url: "/", icon: LayoutDashboard, module: "dashboard", action: "view" },
+    { title: t("nav.serviceOrders"), url: "/service-orders", icon: FileText, module: "service_orders", action: "view" },
+    { title: t("nav.paymentOrders"), url: "/payment-orders", icon: CreditCard, module: "payment_orders", action: "view" },
+    { title: t("nav.financial"), url: "/financial", icon: TrendingUp, module: "financial", action: "view" },
+    { title: t("nav.profit"), url: "/profit", icon: PieChart, module: "profit", action: "view" },
+    { title: t("nav.accounting"), url: "/accounting", icon: BookOpen, module: "accounting", action: "view" },
+    { title: t("nav.fleet"), url: "/fleet", icon: Car, module: "fleet", action: "view" },
+    { title: t("nav.documents"), url: "/documents", icon: FolderOpen, module: "documents", action: "view" },
+    { title: t("nav.users"), url: "/users", icon: Users, module: "users", action: "view" },
   ];
 
-  // Single source of truth — permissions decide visibility, NOT role.
-  const { map: permMap, isLoading: permsLoading } = usePermissions(allNav.map((n) => n.perm));
-
-  const mainNav = permsLoading && !isAdmin
-    ? []
-    : allNav.filter((item) => isAdmin || permMap[item.perm] === true);
+  const mainNav = permsLoading ? [] : allNav.filter((item) => can(item.module, item.action));
+  const showSettings = !permsLoading && can("settings", "view");
 
   return (
     <Sidebar collapsible="icon" className="border-r border-border/50">
@@ -62,7 +58,7 @@ export function AppSidebar() {
         {!collapsed && (
           <div className="flex items-center gap-2 overflow-hidden">
             <BrandLogo size={28} />
-            {isAdmin ? (
+            {can("settings", "edit") ? (
               <BrandNameEditor config={brandConfig} onSave={handleBrandSave}>
                 <button className="overflow-hidden hover:opacity-80 transition-opacity cursor-pointer text-left" title={t("brand.editTooltip")}>
                   <span className="text-sm font-semibold text-foreground">{displayName}</span>
@@ -104,22 +100,24 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-border/50">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild>
-              <NavLink
-                to="/settings"
-                className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                activeClassName="bg-sidebar-accent text-primary font-medium"
-              >
-                <Settings className="h-4 w-4 shrink-0" />
-                {!collapsed && <span>{t("nav.settings")}</span>}
-              </NavLink>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarFooter>
+      {showSettings && (
+        <SidebarFooter className="border-t border-border/50">
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild>
+                <NavLink
+                  to="/settings"
+                  className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  activeClassName="bg-sidebar-accent text-primary font-medium"
+                >
+                  <Settings className="h-4 w-4 shrink-0" />
+                  {!collapsed && <span>{t("nav.settings")}</span>}
+                </NavLink>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarFooter>
+      )}
     </Sidebar>
   );
 }
