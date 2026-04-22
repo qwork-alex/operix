@@ -15,6 +15,6 @@ export function Can({ permission, children, fallback = null }: CanProps) {
   const { can, isLoading } = useCan();
   const [module, action] = permission.split(".");
   if (isLoading) return null;
-  if (!can(module, action)) return <>{fallback}</>;
+  if (!can(module, action).allowed) return <>{fallback}</>;
   return <>{children}</>;
 }
