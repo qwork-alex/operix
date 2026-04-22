@@ -1,6 +1,6 @@
 import { Navigate } from "react-router-dom";
 import { Loader2, ShieldOff } from "lucide-react";
-import { usePermission } from "@/hooks/usePermission";
+import { useCan } from "@/hooks/usePermission";
 
 interface PermissionGuardProps {
   permission: string;             // e.g. "financial.view"
@@ -10,9 +10,8 @@ interface PermissionGuardProps {
 }
 
 /**
- * Route/page guard that enforces a single permission key.
- * Default fallback: shows an "Access Denied" panel.
- * Fail-safe: while loading → spinner; on missing perm → deny.
+ * Route/page guard — uses the SINGLE source-of-truth `can()` resolver.
+ * No role checks. No fallback to legacy logic.
  */
 export function PermissionGuard({
   permission,
@@ -20,7 +19,8 @@ export function PermissionGuard({
   fallback = "denied",
   redirectTo = "/",
 }: PermissionGuardProps) {
-  const { allowed, isLoading } = usePermission(permission);
+  const { can, isLoading } = useCan();
+  const [module, action] = permission.split(".");
 
   if (isLoading) {
     return (
@@ -30,7 +30,7 @@ export function PermissionGuard({
     );
   }
 
-  if (allowed) return <>{children}</>;
+  if (can(module, action)) return <>{children}</>;
 
   if (fallback === "hide") return null;
   if (fallback === "redirect") return <Navigate to={redirectTo} replace />;

@@ -37,25 +37,23 @@ export function AppSidebar() {
   const displayName = brandConfig.name || appBrand.appName;
 
   const allNav = [
-    { title: t("nav.dashboard"), url: "/", icon: LayoutDashboard, roles: ["admin", "tecnico", "socio", "cliente"], perm: "dashboard.view" },
-    { title: t("nav.serviceOrders"), url: "/service-orders", icon: FileText, roles: ["admin", "tecnico", "socio"], perm: "service_orders.view" },
-    { title: t("nav.paymentOrders"), url: "/payment-orders", icon: CreditCard, roles: ["admin", "socio"], perm: "payment_orders.view" },
-    { title: t("nav.financial"), url: "/financial", icon: TrendingUp, roles: ["admin", "socio"], perm: "financial.view" },
-    { title: t("nav.profit"), url: "/profit", icon: PieChart, roles: ["admin", "socio"], perm: "profit.view" },
-    { title: t("nav.accounting"), url: "/accounting", icon: BookOpen, roles: ["admin"], perm: "accounting.view" },
-    { title: t("nav.fleet"), url: "/fleet", icon: Car, roles: ["admin", "tecnico"], perm: "fleet.view" },
-    { title: t("nav.documents"), url: "/documents", icon: FolderOpen, roles: ["admin", "tecnico", "socio"], perm: "documents.view" },
-    { title: t("nav.users"), url: "/users", icon: Users, roles: ["admin"], perm: "users.view" },
+    { title: t("nav.dashboard"), url: "/", icon: LayoutDashboard, perm: "dashboard.view" },
+    { title: t("nav.serviceOrders"), url: "/service-orders", icon: FileText, perm: "service_orders.view" },
+    { title: t("nav.paymentOrders"), url: "/payment-orders", icon: CreditCard, perm: "payment_orders.view" },
+    { title: t("nav.financial"), url: "/financial", icon: TrendingUp, perm: "financial.view" },
+    { title: t("nav.profit"), url: "/profit", icon: PieChart, perm: "profit.view" },
+    { title: t("nav.accounting"), url: "/accounting", icon: BookOpen, perm: "accounting.view" },
+    { title: t("nav.fleet"), url: "/fleet", icon: Car, perm: "fleet.view" },
+    { title: t("nav.documents"), url: "/documents", icon: FolderOpen, perm: "documents.view" },
+    { title: t("nav.users"), url: "/users", icon: Users, perm: "users.view" },
   ];
 
-  // Bulk-load all permission keys at once
+  // Single source of truth — permissions decide visibility, NOT role.
   const { map: permMap, isLoading: permsLoading } = usePermissions(allNav.map((n) => n.perm));
 
-  const mainNav = permsLoading && !isAdmin ? [] : allNav.filter((item) => {
-    if (role && !item.roles.includes(role)) return false;
-    if (isAdmin) return true;
-    return permMap[item.perm] === true;
-  });
+  const mainNav = permsLoading && !isAdmin
+    ? []
+    : allNav.filter((item) => isAdmin || permMap[item.perm] === true);
 
   return (
     <Sidebar collapsible="icon" className="border-r border-border/50">
