@@ -51,7 +51,7 @@ export function usePaymentOrders(filters?: {
       logScope("payment_orders", "view", scope, allowed);
       if (!allowed) return [];
 
-      let q = supabase
+      let q: any = supabase
         .from("payment_orders")
         .select("*, clients(name), technicians(name)")
         .order("created_at", { ascending: false });
@@ -318,10 +318,10 @@ export function useFinancialSummary() {
         };
       }
 
-      let soQ = supabase.from("service_orders").select("total, status, client_id, platform, clients(name)");
-      let poQ = supabase.from("payment_orders").select("total, status, client_id, platform, clients(name)");
-      soQ = applyScope(soQ, soView.allowed ? soView.scope : "own", user) as typeof soQ;
-      poQ = applyScope(poQ, poView.allowed ? poView.scope : "own", user) as typeof poQ;
+      let soQ: any = supabase.from("service_orders").select("total, status, client_id, platform, clients(name)");
+      let poQ: any = supabase.from("payment_orders").select("total, status, client_id, platform, clients(name)");
+      soQ = applyScope(soQ, soView.allowed ? soView.scope : "own", user);
+      poQ = applyScope(poQ, poView.allowed ? poView.scope : "own", user);
 
       const [soRes, poRes, discRes] = await Promise.all([
         soQ,

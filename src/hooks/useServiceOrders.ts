@@ -65,7 +65,7 @@ export function useServiceOrders(filters?: {
       logScope("service_orders", "view", scope, allowed);
       if (!allowed) return [];
 
-      let q = supabase
+      let q: any = supabase
         .from("service_orders")
         .select("*, clients(name), technicians(name)")
         .order("created_at", { ascending: false });

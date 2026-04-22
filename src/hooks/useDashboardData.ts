@@ -18,11 +18,11 @@ export function useDashboardStats() {
     queryFn: async () => {
       logScope("dashboard", "view", soView.scope, allowed);
 
-      let soQ = supabase.from("service_orders").select("total, status, created_at, created_by");
-      let poQ = supabase.from("payment_orders").select("total, status, created_at, created_by");
-      let frQ = supabase.from("financial_records").select("amount, type, status, created_by");
+      let soQ: any = supabase.from("service_orders").select("total, status, created_at, created_by");
+      let poQ: any = supabase.from("payment_orders").select("total, status, created_at, created_by");
+      let frQ: any = supabase.from("financial_records").select("amount, type, status, created_by");
       const techQ = supabase.from("technicians").select("id");
-      let clientQ = supabase.from("clients").select("id, created_by");
+      let clientQ: any = supabase.from("clients").select("id, created_by");
       const discQ = supabase.from("discrepancies").select("id, resolved");
 
       soQ = applyScope(soQ, soView.allowed ? soView.scope : "own", user);
