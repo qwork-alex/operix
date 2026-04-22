@@ -25,10 +25,10 @@ export function useDashboardStats() {
       let clientQ = supabase.from("clients").select("id, created_by");
       const discQ = supabase.from("discrepancies").select("id, resolved");
 
-      soQ = applyScope(soQ, soView.allowed ? soView.scope : "own", user) as typeof soQ;
-      poQ = applyScope(poQ, poView.allowed ? poView.scope : "own", user) as typeof poQ;
-      frQ = applyScope(frQ, finView.allowed ? finView.scope : "own", user) as typeof frQ;
-      clientQ = applyScope(clientQ, soView.allowed ? soView.scope : "own", user) as typeof clientQ;
+      soQ = applyScope(soQ, soView.allowed ? soView.scope : "own", user);
+      poQ = applyScope(poQ, poView.allowed ? poView.scope : "own", user);
+      frQ = applyScope(frQ, finView.allowed ? finView.scope : "own", user);
+      clientQ = applyScope(clientQ, soView.allowed ? soView.scope : "own", user);
 
       const [soRes, poRes, frRes, techRes, clientRes, discRes] = await Promise.all([
         soQ, poQ, frQ, techQ, clientQ, discQ,
