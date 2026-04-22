@@ -1147,18 +1147,21 @@ export type Database = {
           id: string
           permission_id: string
           role: Database["public"]["Enums"]["app_role"]
+          scope: Database["public"]["Enums"]["permission_scope"]
         }
         Insert: {
           created_at?: string
           id?: string
           permission_id: string
           role: Database["public"]["Enums"]["app_role"]
+          scope?: Database["public"]["Enums"]["permission_scope"]
         }
         Update: {
           created_at?: string
           id?: string
           permission_id?: string
           role?: Database["public"]["Enums"]["app_role"]
+          scope?: Database["public"]["Enums"]["permission_scope"]
         }
         Relationships: [
           {
@@ -1384,6 +1387,7 @@ export type Database = {
           created_by: string | null
           id: string
           permission_id: string
+          scope: Database["public"]["Enums"]["permission_scope"]
           user_id: string
         }
         Insert: {
@@ -1392,6 +1396,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           permission_id: string
+          scope?: Database["public"]["Enums"]["permission_scope"]
           user_id: string
         }
         Update: {
@@ -1400,6 +1405,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           permission_id?: string
+          scope?: Database["public"]["Enums"]["permission_scope"]
           user_id?: string
         }
         Relationships: [
@@ -1726,6 +1732,7 @@ export type Database = {
       app_role: "admin" | "partner" | "technician" | "client"
       membership_role: "admin" | "tecnico" | "cliente" | "socio"
       membership_status: "active" | "pending"
+      permission_scope: "own" | "team" | "all"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1856,6 +1863,7 @@ export const Constants = {
       app_role: ["admin", "partner", "technician", "client"],
       membership_role: ["admin", "tecnico", "cliente", "socio"],
       membership_status: ["active", "pending"],
+      permission_scope: ["own", "team", "all"],
     },
   },
 } as const

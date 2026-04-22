@@ -30,7 +30,7 @@ export function PermissionGuard({
     );
   }
 
-  if (can(module, action)) return <>{children}</>;
+  if (can(module, action).allowed) return <>{children}</>;
 
   if (fallback === "hide") return null;
   if (fallback === "redirect") return <Navigate to={redirectTo} replace />;
