@@ -48,8 +48,8 @@ export function AppSidebar() {
     { title: t("nav.users"), url: "/users", icon: Users, module: "users", action: "view" },
   ];
 
-  const mainNav = permsLoading ? [] : allNav.filter((item) => can(item.module, item.action));
-  const showSettings = !permsLoading && can("settings", "view");
+  const mainNav = permsLoading ? [] : allNav.filter((item) => can(item.module, item.action).allowed);
+  const showSettings = !permsLoading && can("settings", "view").allowed;
 
   return (
     <Sidebar collapsible="icon" className="border-r border-border/50">
@@ -58,7 +58,7 @@ export function AppSidebar() {
         {!collapsed && (
           <div className="flex items-center gap-2 overflow-hidden">
             <BrandLogo size={28} />
-            {can("settings", "edit") ? (
+            {can("settings", "edit").allowed ? (
               <BrandNameEditor config={brandConfig} onSave={handleBrandSave}>
                 <button className="overflow-hidden hover:opacity-80 transition-opacity cursor-pointer text-left" title={t("brand.editTooltip")}>
                   <span className="text-sm font-semibold text-foreground">{displayName}</span>
