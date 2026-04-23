@@ -336,7 +336,7 @@ export function ExtractedDataTable({
                   <TableCell className={cn("text-muted-foreground text-xs", errorRows.has(idx) && "text-destructive font-bold")}>{idx + 1}</TableCell>
                   <ConfidenceCell value={row.client} confidence={fc.client} onChange={(v) => update(idx, "client", v)} />
                   <ConfidenceCell value={row.platform} confidence={fc.platform} onChange={(v) => update(idx, "platform", v)} />
-                  <TechnicianSelectCell value={row.technician} confidence={fc.technician} technicians={technicians} disabled={!isAdmin} onChange={(v) => update(idx, "technician", v)} />
+                  <TechnicianSelectCell value={row.technician} confidence={fc.technician} technicians={technicians} disabled={!isAdmin} error={fieldErrors[`${idx}:technician`]} onChange={(v) => update(idx, "technician", v)} />
                   <ConfidenceCell value={row.week} confidence={fc.week} onChange={(v) => update(idx, "week", v)} />
                   <ConfidenceCell value={row.car_name} confidence={fc.car_name} onChange={(v) => update(idx, "car_name", v)} />
                   <ConfidenceCell value={row.license_plate} confidence={fc.license_plate} onChange={(v) => update(idx, "license_plate", v)} />
