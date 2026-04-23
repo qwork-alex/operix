@@ -24,8 +24,9 @@ export function PermissionGuard({
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-20">
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4">
         <Loader2 className="h-6 w-6 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">A verificar permissões…</p>
       </div>
     );
   }
