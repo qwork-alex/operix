@@ -1158,7 +1158,11 @@ export function UsersPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { isAdmin } = useRole();
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string; email: string } | null>(null);
+  const [deleteStep, setDeleteStep] = useState<"checking" | "clean" | "blocked">("checking");
+  const [deleteDeps, setDeleteDeps] = useState<any>(null);
+  const [reassignTo, setReassignTo] = useState<string>("");
+  const [deleting, setDeleting] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState({ email: "", full_name: "", role: "technician" });
   const [creating, setCreating] = useState(false);
