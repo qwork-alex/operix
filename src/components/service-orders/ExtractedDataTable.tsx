@@ -63,7 +63,12 @@ export function ExtractedDataTable({
   isAdmin = false,
   myTechnicianName = null,
 }: ExtractedDataTableProps) {
-  const [rows, setRows] = useState<ExtractedOrder[]>(initial);
+  // For non-admin users, lock technician name to their own profile
+  const [rows, setRows] = useState<ExtractedOrder[]>(() =>
+    !isAdmin && myTechnicianName
+      ? initial.map((r) => ({ ...r, technician: myTechnicianName }))
+      : initial
+  );
   const [stage, setStage] = useState<Stage>("review");
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [errorRows, setErrorRows] = useState<Set<number>>(new Set());
