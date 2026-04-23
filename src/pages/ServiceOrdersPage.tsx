@@ -214,6 +214,13 @@ export default function ServiceOrdersPage() {
           onSave={(rows) => handleSave(extraction._id, rows)}
           onDiscard={() => handleDiscard(extraction._id)}
           isSaving={saveMutation.isPending}
+          technicians={technicians}
+          isAdmin={isAdmin}
+          myTechnicianName={
+            myTechnicianId
+              ? technicians.find((t) => t.id === myTechnicianId)?.name ?? null
+              : null
+          }
         />
       ))}
 
