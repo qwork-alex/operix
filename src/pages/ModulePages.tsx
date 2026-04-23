@@ -1251,27 +1251,50 @@ export function UsersPage() {
     }
   };
 
-  const handleDeleteUser = async (userId: string) => {
+  const openDeleteDialog = async (target: { id: string; name: string; email: string }) => {
+    setDeleteTarget(target);
+    setDeleteStep("checking");
+    setDeleteDeps(null);
+    setReassignTo("");
     try {
-      const resp = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-create-user`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          },
-          body: JSON.stringify({ action: "delete_user", user_id: userId }),
-        }
-      );
-      const data = await resp.json();
-      if (!data.success) throw new Error(data.error || "Erro ao remover usuário");
+      const { data, error } = await supabase.functions.invoke("admin-create-user", {
+        body: { action: "check_user_dependencies", user_id: target.id },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.message || data.error);
+      setDeleteDeps(data);
+      setDeleteStep(data.has_dependencies ? "blocked" : "clean");
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao verificar dependências");
+      setDeleteTarget(null);
+    }
+  };
+
+  const handleDeleteUser = async (mode: "block" | "reassign" | "detach") => {
+    if (!deleteTarget) return;
+    if (mode === "reassign" && !reassignTo) {
+      toast.error("Selecione um usuário para reatribuição");
+      return;
+    }
+    setDeleting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-create-user", {
+        body: {
+          action: "delete_user",
+          user_id: deleteTarget.id,
+          mode,
+          reassign_to_user_id: mode === "reassign" ? reassignTo : undefined,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.message || data.error);
       queryClient.invalidateQueries({ queryKey: ["all-users-with-roles"] });
       setDeleteTarget(null);
       toast.success(t("toast.deleted"));
     } catch (err: any) {
       toast.error(err.message || "Erro ao remover usuário");
+    } finally {
+      setDeleting(false);
     }
   };
 
