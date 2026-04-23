@@ -417,3 +417,75 @@ function ConfidenceNumCell({ value, confidence, onChange }: { value: number | nu
     </TableCell>
   );
 }
+
+function TechnicianSelectCell({
+  value,
+  confidence,
+  technicians,
+  disabled,
+  onChange,
+}: {
+  value: string | null;
+  confidence?: FieldConfidence;
+  technicians: TechnicianOption[];
+  disabled: boolean;
+  onChange: (v: string) => void;
+}) {
+  const conf = confidence || "high";
+  const borderClass = fieldConfBorder[conf];
+  const current = value || "";
+  const isMissing = !current;
+
+  return (
+    <TableCell className="p-1">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div>
+            <Select
+              value={current}
+              onValueChange={onChange}
+              disabled={disabled}
+            >
+              <SelectTrigger
+                className={cn(
+                  "h-8 text-xs bg-transparent hover:border-border",
+                  borderClass,
+                  isMissing && !disabled && "border-destructive/60 bg-destructive/5",
+                  disabled && "opacity-80 cursor-not-allowed"
+                )}
+              >
+                <SelectValue placeholder="Selecione um técnico" />
+              </SelectTrigger>
+              <SelectContent className="max-h-64">
+                {technicians.length === 0 ? (
+                  <SelectItem value="__none__" disabled>
+                    Nenhum técnico cadastrado
+                  </SelectItem>
+                ) : (
+                  technicians.map((t) => (
+                    <SelectItem key={t.id} value={t.name}>
+                      {t.name}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+        </TooltipTrigger>
+        {disabled ? (
+          <TooltipContent className="text-xs">
+            🔒 Apenas administradores podem alterar o técnico
+          </TooltipContent>
+        ) : isMissing ? (
+          <TooltipContent className="text-xs">
+            ⚠️ Selecione um técnico antes de salvar
+          </TooltipContent>
+        ) : conf !== "high" ? (
+          <TooltipContent className="text-xs">
+            {conf === "low" ? "⚠️ Low confidence — please verify" : "⚡ Medium confidence — review recommended"}
+          </TooltipContent>
+        ) : null}
+      </Tooltip>
+    </TableCell>
+  );
+}
