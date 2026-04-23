@@ -450,34 +450,38 @@ function TechnicianSelectCell({
   confidence,
   technicians,
   disabled,
+  error,
   onChange,
 }: {
   value: string | null;
   confidence?: FieldConfidence;
   technicians: TechnicianOption[];
   disabled: boolean;
+  error?: string;
   onChange: (v: string) => void;
 }) {
   const conf = confidence || "high";
   const borderClass = fieldConfBorder[conf];
   const current = value || "";
   const isMissing = !current;
+  const showError = !!error || (isMissing && !disabled);
 
   return (
-    <TableCell className="p-1">
+    <TableCell className="p-1 align-top">
       <Tooltip>
         <TooltipTrigger asChild>
-          <div>
+          <div className="space-y-1">
             <Select
               value={current}
               onValueChange={onChange}
               disabled={disabled}
             >
               <SelectTrigger
+                aria-invalid={showError}
                 className={cn(
                   "h-8 text-xs bg-transparent hover:border-border",
                   borderClass,
-                  isMissing && !disabled && "border-destructive/60 bg-destructive/5",
+                  showError && "border-destructive bg-destructive/10 ring-1 ring-destructive/40",
                   disabled && "opacity-80 cursor-not-allowed"
                 )}
               >
@@ -497,6 +501,12 @@ function TechnicianSelectCell({
                 )}
               </SelectContent>
             </Select>
+            {error && (
+              <p className="text-[10px] font-medium text-destructive flex items-center gap-1 leading-tight">
+                <XCircle className="h-3 w-3 shrink-0" />
+                {error}
+              </p>
+            )}
           </div>
         </TooltipTrigger>
         {disabled ? (
