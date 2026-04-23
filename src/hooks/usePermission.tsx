@@ -108,9 +108,10 @@ export function useInvalidatePermissions() {
 }
 
 export function usePermission(key: string): { allowed: boolean; isLoading: boolean } {
-  const { isAdmin } = useRole();
+  const { isAdmin, isLoading: roleLoading } = useRole();
   const { data, isLoading } = useMyPermissionsMap();
 
+  if (roleLoading) return { allowed: false, isLoading: true };
   if (isAdmin) return { allowed: true, isLoading: false };
   if (isLoading || !data) return { allowed: false, isLoading: true };
   if (data.admin) return { allowed: true, isLoading: false };
@@ -120,9 +121,10 @@ export function usePermission(key: string): { allowed: boolean; isLoading: boole
 
 /** Bulk check: returns true only if ALL keys are allowed. */
 export function usePermissions(keys: string[]): { allowed: boolean; isLoading: boolean; map: Record<string, boolean> } {
-  const { isAdmin } = useRole();
+  const { isAdmin, isLoading: roleLoading } = useRole();
   const { data, isLoading } = useMyPermissionsMap();
 
+  if (roleLoading) return { allowed: false, isLoading: true, map: {} };
   if (isAdmin) {
     const map = Object.fromEntries(keys.map((k) => [k, true]));
     return { allowed: true, isLoading: false, map };
