@@ -1288,7 +1288,32 @@ export function UsersPage() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.message || data.error);
-      queryClient.invalidateQueries({ queryKey: ["all-users-with-roles"] });
+
+      // Force full refetch of all user/permission/technician-related queries
+      // to avoid ghost users and stale UI after deletion.
+      const keysToInvalidate = [
+        "all-users-with-roles",
+        "users",
+        "technicians",
+        "my-permissions",
+        "user-permissions",
+        "role-permissions",
+        "permissions",
+        "memberships",
+        "app_users",
+        "profiles",
+      ];
+      await Promise.all(
+        keysToInvalidate.map((key) =>
+          queryClient.invalidateQueries({ queryKey: [key] })
+        )
+      );
+      // Also remove cached entries scoped to the deleted user id
+      queryClient.removeQueries({ queryKey: ["user", deleteTarget.id] });
+      queryClient.removeQueries({ queryKey: ["user-permissions", deleteTarget.id] });
+      // Force immediate refetch of the main user list
+      await queryClient.refetchQueries({ queryKey: ["all-users-with-roles"], type: "active" });
+
       setDeleteTarget(null);
       toast.success(t("toast.deleted"));
     } catch (err: any) {
@@ -1305,6 +1330,7 @@ export function UsersPage() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
+      await queryClient.invalidateQueries({ queryKey: ["all-users-with-roles"] });
       toast.success(active ? "Usuário ativado" : "Usuário desativado");
     } catch (err: any) {
       toast.error(err.message);
