@@ -1158,7 +1158,11 @@ export function UsersPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { isAdmin } = useRole();
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string; email: string } | null>(null);
+  const [deleteStep, setDeleteStep] = useState<"checking" | "clean" | "blocked">("checking");
+  const [deleteDeps, setDeleteDeps] = useState<any>(null);
+  const [reassignTo, setReassignTo] = useState<string>("");
+  const [deleting, setDeleting] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState({ email: "", full_name: "", role: "technician" });
   const [creating, setCreating] = useState(false);
@@ -1247,27 +1251,50 @@ export function UsersPage() {
     }
   };
 
-  const handleDeleteUser = async (userId: string) => {
+  const openDeleteDialog = async (target: { id: string; name: string; email: string }) => {
+    setDeleteTarget(target);
+    setDeleteStep("checking");
+    setDeleteDeps(null);
+    setReassignTo("");
     try {
-      const resp = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-create-user`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          },
-          body: JSON.stringify({ action: "delete_user", user_id: userId }),
-        }
-      );
-      const data = await resp.json();
-      if (!data.success) throw new Error(data.error || "Erro ao remover usuário");
+      const { data, error } = await supabase.functions.invoke("admin-create-user", {
+        body: { action: "check_user_dependencies", user_id: target.id },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.message || data.error);
+      setDeleteDeps(data);
+      setDeleteStep(data.has_dependencies ? "blocked" : "clean");
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao verificar dependências");
+      setDeleteTarget(null);
+    }
+  };
+
+  const handleDeleteUser = async (mode: "block" | "reassign" | "detach") => {
+    if (!deleteTarget) return;
+    if (mode === "reassign" && !reassignTo) {
+      toast.error("Selecione um usuário para reatribuição");
+      return;
+    }
+    setDeleting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-create-user", {
+        body: {
+          action: "delete_user",
+          user_id: deleteTarget.id,
+          mode,
+          reassign_to_user_id: mode === "reassign" ? reassignTo : undefined,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.message || data.error);
       queryClient.invalidateQueries({ queryKey: ["all-users-with-roles"] });
       setDeleteTarget(null);
       toast.success(t("toast.deleted"));
     } catch (err: any) {
       toast.error(err.message || "Erro ao remover usuário");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -1381,18 +1408,115 @@ export function UsersPage() {
         )}
       </div>
 
-      {/* Delete confirmation dialog */}
-      <Dialog open={!!deleteTarget} onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}>
-        <DialogContent className="bg-card border-border">
-          <DialogHeader><DialogTitle>{t("users.deleteConfirm")}</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">{t("users.deleteWarning")}</p>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" size="sm" onClick={() => setDeleteTarget(null)}>{t("action.cancel")}</Button>
-            <Button variant="destructive" size="sm" onClick={() => deleteTarget && handleDeleteUser(deleteTarget)}>
-              <Trash2 className="h-4 w-4 mr-1" />
-              {t("action.delete")}
-            </Button>
-          </div>
+      {/* Smart delete dialog with dependency check */}
+      <Dialog open={!!deleteTarget} onOpenChange={(v) => { if (!v && !deleting) setDeleteTarget(null); }}>
+        <DialogContent className="bg-card border-border max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-destructive" />
+              Remover usuário
+            </DialogTitle>
+          </DialogHeader>
+
+          {deleteTarget && (
+            <div className="space-y-4 pt-2">
+              <div className="rounded-md border border-border/50 bg-muted/20 px-3 py-2">
+                <div className="text-sm font-medium text-foreground">{deleteTarget.name || deleteTarget.email}</div>
+                <div className="text-[11px] text-muted-foreground">{deleteTarget.email}</div>
+              </div>
+
+              {deleteStep === "checking" && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  A verificar dados vinculados…
+                </div>
+              )}
+
+              {deleteStep === "clean" && (
+                <p className="text-sm text-muted-foreground">
+                  {t("users.deleteWarning")} Nenhum dado vinculado encontrado.
+                </p>
+              )}
+
+              {deleteStep === "blocked" && deleteDeps && (
+                <div className="space-y-3">
+                  <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/5 p-3 space-y-2">
+                    <div className="text-sm font-semibold text-destructive">
+                      Usuário possui dados vinculados e não pode ser removido diretamente.
+                    </div>
+                    <ul className="text-xs text-muted-foreground space-y-0.5 pl-1">
+                      {deleteDeps.counts.service_orders_as_technician > 0 && (
+                        <li>• {deleteDeps.counts.service_orders_as_technician} ordem(ns) de serviço como técnico responsável</li>
+                      )}
+                      {deleteDeps.counts.payment_orders_as_technician > 0 && (
+                        <li>• {deleteDeps.counts.payment_orders_as_technician} ordem(ns) de pagamento como técnico</li>
+                      )}
+                      {deleteDeps.counts.service_orders_created > 0 && (
+                        <li>• {deleteDeps.counts.service_orders_created} ordem(ns) de serviço criadas por este usuário</li>
+                      )}
+                      {deleteDeps.counts.payment_orders_created > 0 && (
+                        <li>• {deleteDeps.counts.payment_orders_created} ordem(ns) de pagamento criadas</li>
+                      )}
+                      {deleteDeps.counts.financial_records > 0 && (
+                        <li>• {deleteDeps.counts.financial_records} registo(s) financeiro(s)</li>
+                      )}
+                      {deleteDeps.counts.fleet_trips > 0 && (
+                        <li>• {deleteDeps.counts.fleet_trips} trajeto(s) de frota</li>
+                      )}
+                      {deleteDeps.counts.documents > 0 && (
+                        <li>• {deleteDeps.counts.documents} documento(s)</li>
+                      )}
+                    </ul>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs">Reatribuir dados a outro usuário</Label>
+                    <Select value={reassignTo} onValueChange={setReassignTo}>
+                      <SelectTrigger className="h-9 text-xs">
+                        <SelectValue placeholder="Selecione um usuário…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {users
+                          .filter((u: any) => u.id !== deleteTarget.id && !u.isOwner)
+                          .map((u: any) => (
+                            <SelectItem key={u.id} value={u.id}>
+                              {u.full_name || u.email} · {roleLabels[u.role] || u.role}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-muted-foreground">
+                      Os registos serão transferidos para o usuário selecionado e o histórico fica preservado.
+                      Para ordens de serviço, o destino tem de ser um técnico.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" size="sm" onClick={() => setDeleteTarget(null)} disabled={deleting}>
+                  {t("action.cancel")}
+                </Button>
+                {deleteStep === "clean" && (
+                  <Button variant="destructive" size="sm" onClick={() => handleDeleteUser("block")} disabled={deleting}>
+                    {deleting ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Trash2 className="h-3 w-3 mr-1" />}
+                    {t("action.delete")}
+                  </Button>
+                )}
+                {deleteStep === "blocked" && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => handleDeleteUser("reassign")}
+                    disabled={deleting || !reassignTo}
+                  >
+                    {deleting ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Trash2 className="h-3 w-3 mr-1" />}
+                    Reatribuir e remover
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -1461,7 +1585,12 @@ export function UsersPage() {
                             >
                               <Shield className="h-3 w-3" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget(u.id)}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive"
+                              onClick={() => openDeleteDialog({ id: u.id, name: u.full_name, email: u.email })}
+                            >
                               <Trash2 className="h-3 w-3" />
                             </Button>
                           </>
