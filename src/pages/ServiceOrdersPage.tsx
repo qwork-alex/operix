@@ -30,6 +30,7 @@ import { Can } from "@/components/Can";
 export default function ServiceOrdersPage() {
   const { t } = useLanguage();
   const { user } = useAuth();
+  const { isAdmin } = useRole();
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState<{
     client_id?: string;
@@ -44,6 +45,7 @@ export default function ServiceOrdersPage() {
   const { extract } = useExtractServiceOrder();
   const { data: clients = [] } = useClients();
   const { data: technicians = [] } = useTechnicians();
+  const { data: myTechnicianId } = useMyTechnicianId();
   const { data: earningsMap } = useTechnicianEarnings();
   const { queue, isProcessing, addFiles, clearCompleted } = useFileQueue();
 
