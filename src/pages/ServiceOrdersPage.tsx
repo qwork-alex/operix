@@ -13,6 +13,7 @@ import {
   useExtractServiceOrder,
   useClients,
   useTechnicians,
+  useMyTechnicianId,
   type ExtractedOrder,
   type ExtractionResult,
   type ServiceOrderInsert,
@@ -20,6 +21,7 @@ import {
 import { useFileQueue, type QueueItemStatus } from "@/hooks/useFileQueue";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useAuth } from "@/hooks/useAuth";
+import { useRole } from "@/hooks/useRole";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTechnicianEarnings, getTechEarnings } from "@/hooks/useTechnicianEarnings";
