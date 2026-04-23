@@ -115,6 +115,12 @@ export function useServiceOrders(filters?: {
       const invalid = payload.find((p) => !hasRequiredAuditFields(p));
       if (invalid) throw new Error("Missing required audit fields (id, created_by, created_at, updated_at).");
 
+      // Hard guard: technician_id is mandatory
+      const missingTech = payload.find((p) => !p.technician_id);
+      if (missingTech) {
+        throw new Error("Technician is required. Please select a technician before saving.");
+      }
+
       console.log("Saving payload:", payload);
 
       const { data, error } = await supabase
@@ -332,6 +338,30 @@ export function useTechnicians() {
       const { data, error } = await supabase.from("technicians").select("id, name").order("name");
       if (error) throw error;
       return data;
+    },
+  });
+}
+
+/**
+ * Resolves the technicians.id row for the current authenticated user.
+ * Returns null if the user has no technician record (e.g. admin without one).
+ */
+export function useMyTechnicianId() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["my-technician-id", user?.id],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("technicians")
+        .select("id")
+        .eq("user_id", user!.id)
+        .maybeSingle();
+      if (error) {
+        console.error("[useMyTechnicianId] error:", error);
+        return null;
+      }
+      return (data?.id as string) ?? null;
     },
   });
 }

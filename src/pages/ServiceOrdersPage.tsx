@@ -13,6 +13,7 @@ import {
   useExtractServiceOrder,
   useClients,
   useTechnicians,
+  useMyTechnicianId,
   type ExtractedOrder,
   type ExtractionResult,
   type ServiceOrderInsert,
@@ -20,6 +21,7 @@ import {
 import { useFileQueue, type QueueItemStatus } from "@/hooks/useFileQueue";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useAuth } from "@/hooks/useAuth";
+import { useRole } from "@/hooks/useRole";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTechnicianEarnings, getTechEarnings } from "@/hooks/useTechnicianEarnings";
@@ -28,6 +30,7 @@ import { Can } from "@/components/Can";
 export default function ServiceOrdersPage() {
   const { t } = useLanguage();
   const { user } = useAuth();
+  const { isAdmin } = useRole();
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState<{
     client_id?: string;
@@ -42,6 +45,7 @@ export default function ServiceOrdersPage() {
   const { extract } = useExtractServiceOrder();
   const { data: clients = [] } = useClients();
   const { data: technicians = [] } = useTechnicians();
+  const { data: myTechnicianId } = useMyTechnicianId();
   const { data: earningsMap } = useTechnicianEarnings();
   const { queue, isProcessing, addFiles, clearCompleted } = useFileQueue();
 
@@ -80,18 +84,44 @@ export default function ServiceOrdersPage() {
     // rows = EXACTLY what the user sees in the edited table (source of truth)
     console.log("SAVING DATA (raw edited rows):", JSON.stringify(rows, null, 2));
 
-    const inserts: ServiceOrderInsert[] = rows.map((r) => {
+    // Resolve technician_id per row according to role rules:
+    //  - admin  -> must come from the row's selected technician (UI dropdown)
+    //  - others -> auto-fill with the current user's technicians.id
+    const inserts: ServiceOrderInsert[] = [];
+    const missingTechRows: number[] = [];
+
+    rows.forEach((r, idx) => {
       const clientMatch = clients.find(
         (c) => c.name.toLowerCase() === r.client?.toLowerCase()
       );
       const techMatch = technicians.find(
         (t) => t.name.toLowerCase() === r.technician?.toLowerCase()
       );
+
+      let technicianId: string | null = techMatch?.id ?? null;
+      let technicianName: string =
+        r.technician?.trim() || techMatch?.name || "";
+
+      if (!isAdmin) {
+        // Technician (or any non-admin) always saves under their own identity
+        if (myTechnicianId) {
+          technicianId = myTechnicianId;
+          if (!technicianName) {
+            const me = technicians.find((t) => t.id === myTechnicianId);
+            technicianName = me?.name || technicianName;
+          }
+        }
+      }
+
+      if (!technicianId) {
+        missingTechRows.push(idx + 1);
+      }
+
       const payload: Record<string, any> = {
         client_id: clientMatch?.id || null,
         client_name: r.client?.trim() || clientMatch?.name || "",
-        technician_id: techMatch?.id || null,
-        technician_name: r.technician?.trim() || techMatch?.name || "",
+        technician_id: technicianId,
+        technician_name: technicianName,
         platform: r.platform ?? null,
         week: r.week ?? null,
         car_name: r.car_name ?? null,
@@ -107,6 +137,7 @@ export default function ServiceOrdersPage() {
         total: r.total ?? null,
         status: "draft",
         group_id: r.week ?? null,
+        created_by: user?.id ?? null,
       };
 
       // Calculate technician earnings from profit distribution rules
@@ -115,8 +146,17 @@ export default function ServiceOrdersPage() {
       payload.technician_percentage = techEarn?.percentage ?? 0;
       payload.technician_earning = techEarn?.earnings ?? 0;
 
-      return payload as ServiceOrderInsert;
+      inserts.push(payload as ServiceOrderInsert);
     });
+
+    // Hard block: never let technician_id reach the DB as null
+    if (missingTechRows.length > 0) {
+      const msg = isAdmin
+        ? `Technician is required. Please select a technician for row(s): ${missingTechRows.join(", ")}`
+        : "Your account is not linked to a technician profile. Ask an admin to link it before saving.";
+      toast.error(msg, { duration: 7000 });
+      return;
+    }
 
     console.log("SAVING DATA (mapped inserts):", JSON.stringify(inserts, null, 2));
 
