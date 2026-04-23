@@ -91,6 +91,13 @@ export function ExtractedDataTable({
     // Clear previous validation when user edits — fields always editable
     setValidationErrors([]);
     setErrorRows(new Set());
+    setFieldErrors((prev) => {
+      const key = `${idx}:${field as string}`;
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
     setRows((prev) =>
       prev.map((r, i) => {
         if (i !== idx) return r;
