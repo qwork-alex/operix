@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { resolveTechnicianIdForFinancialRecord } from "@/lib/getTechnicianForRecord";
 import type { ModuleEntry } from "./ModulePanel";
 
 type ModuleKey = "rentals" | "expenses" | "fuel" | "purchases" | "government" | "withdrawals";
@@ -93,6 +94,7 @@ export function useAccountingModule(moduleKey: ModuleKey) {
     mutationFn: async (entry: { label: string; amount: number; notes: string }) => {
       if (isFuelMirror) throw new Error("Combustível é gerido na Frota");
       const { data: { user } } = await supabase.auth.getUser();
+      const technicianId = await resolveTechnicianIdForFinancialRecord();
       const { error } = await supabase.from("financial_records").insert({
         type: config.type || "expense",
         source: "manual",
@@ -102,6 +104,7 @@ export function useAccountingModule(moduleKey: ModuleKey) {
         notes: entry.notes,
         status: "confirmed",
         created_by: user?.id,
+        technician_id: technicianId,
       });
       if (error) throw error;
     },

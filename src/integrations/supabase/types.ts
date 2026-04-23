@@ -363,6 +363,7 @@ export type Database = {
           service_order_id: string | null
           source: string
           status: string
+          technician_id: string
           type: string
         }
         Insert: {
@@ -378,6 +379,7 @@ export type Database = {
           service_order_id?: string | null
           source: string
           status?: string
+          technician_id: string
           type: string
         }
         Update: {
@@ -393,6 +395,7 @@ export type Database = {
           service_order_id?: string | null
           source?: string
           status?: string
+          technician_id?: string
           type?: string
         }
         Relationships: [
@@ -408,6 +411,13 @@ export type Database = {
             columns: ["service_order_id"]
             isOneToOne: false
             referencedRelation: "service_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_records_technician_id_fkey"
+            columns: ["technician_id"]
+            isOneToOne: false
+            referencedRelation: "technicians"
             referencedColumns: ["id"]
           },
         ]
