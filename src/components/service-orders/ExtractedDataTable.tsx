@@ -280,12 +280,19 @@ export function ExtractedDataTable({
       </div>
 
       {validationErrors.length > 0 && (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 space-y-1">
-          <div className="flex items-center gap-2 text-sm font-medium text-destructive">
-            <XCircle className="h-4 w-4" />
-            {t("validate.failed")}
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 space-y-2 shadow-sm"
+        >
+          <div className="flex items-center gap-2 text-sm font-semibold text-destructive">
+            <XCircle className="h-5 w-5" />
+            Corrija os erros antes de salvar
           </div>
-          <ul className="list-disc list-inside text-xs text-destructive/80 space-y-0.5">
+          <p className="text-xs text-destructive/80">
+            {validationErrors.length} {validationErrors.length === 1 ? "problema encontrado" : "problemas encontrados"}. Revise os campos destacados abaixo:
+          </p>
+          <ul className="list-disc list-inside text-xs text-destructive/90 space-y-0.5">
             {validationErrors.map((e, i) => <li key={i}>{e}</li>)}
           </ul>
         </div>
