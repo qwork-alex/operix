@@ -480,6 +480,8 @@ export function Fleet() {
       // Auto-create fuel expense in accounting
       if (fuelCost > 0) {
         const vehicle = vehicles.find((v: any) => v.id === logVehicleId);
+        const { resolveTechnicianIdForFinancialRecord } = await import("@/lib/getTechnicianForRecord");
+        const technicianId = await resolveTechnicianIdForFinancialRecord();
         await supabase.from("financial_records").insert({
           type: "expense",
           source: "fleet",
@@ -488,6 +490,7 @@ export function Fleet() {
           label: `${t("fleet.fuel")} — ${vehicle?.name || vehicle?.license_plate || ""}`,
           notes: `${endKm - startKm} km, ${fuelLitres}L`,
           status: "confirmed",
+          technician_id: technicianId,
         });
       }
     },

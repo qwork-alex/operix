@@ -91,6 +91,7 @@ function useUpsertRevenue() {
         label: type === "manual_revenue_expected" ? "Receita esperada" : "Receita recebida",
         amount, status: "confirmed",
         notes: `tech:${techId}:${techName}:year:${year}`,
+        technician_id: techId,
       });
       if (error) throw error;
     },
@@ -110,6 +111,7 @@ function useSaveSpreadsheet() {
         amount: grandTotal, status: "confirmed",
         notes: `tech:${techId}:${techName}`,
         category: JSON.stringify(spreadsheet),
+        technician_id: techId,
       });
       if (error) throw error;
     },
@@ -128,6 +130,7 @@ function useSaveMovements() {
         amount: totalLoans, status: "confirmed",
         notes: `tech:${techId}:${techName}`,
         category: JSON.stringify(movements),
+        technician_id: techId,
       });
       if (error) throw error;
     },
