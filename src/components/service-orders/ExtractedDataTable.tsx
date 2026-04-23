@@ -180,6 +180,7 @@ export function ExtractedDataTable({
     });
     setValidationErrors(errors);
     setErrorRows(badRows);
+    setFieldErrors(fErrors);
     const blocking = errors.filter(e => !e.includes(t("validate.lowConfidencePrefix")));
     if (blocking.length === 0) {
       setStage("save");
