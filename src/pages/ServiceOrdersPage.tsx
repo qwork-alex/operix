@@ -163,6 +163,12 @@ export default function ServiceOrdersPage() {
     saveMutation.mutate(inserts, {
       onSuccess: () => {
         setExtractions(prev => prev.filter((e) => e._id !== extractionId));
+        toast.success(
+          inserts.length === 1
+            ? "Ordem salva com sucesso"
+            : `${inserts.length} ordens salvas com sucesso`,
+          { duration: 4000 }
+        );
       },
       onError: (err) => {
         const raw = (err as Error).message || "";
@@ -170,7 +176,7 @@ export default function ServiceOrdersPage() {
         if (/technician_id/i.test(raw)) {
           toast.error("Falha ao salvar: o técnico é obrigatório. Selecione um técnico antes de salvar.", { duration: 8000 });
         } else {
-          toast.error(`Falha ao salvar: ${raw}`, { duration: 8000 });
+          toast.error(`Erro ao salvar. Verifique os dados e tente novamente.\n${raw}`, { duration: 8000 });
         }
       },
     });
