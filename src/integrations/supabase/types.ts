@@ -1706,6 +1706,17 @@ export type Database = {
         Args: { _client_id: string; _user_id: string }
         Returns: boolean
       }
+      can_do: {
+        Args: { _action: string; _module: string; _user_id: string }
+        Returns: boolean
+      }
+      check_permission: {
+        Args: { _action: string; _module: string; _user_id: string }
+        Returns: {
+          allowed: boolean
+          scope: Database["public"]["Enums"]["permission_scope"]
+        }[]
+      }
       get_my_role: { Args: never; Returns: string }
       get_my_technician_id: { Args: never; Returns: string }
       get_user_role: {
@@ -1719,6 +1730,16 @@ export type Database = {
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      row_in_scope: {
+        Args: {
+          _action: string
+          _module: string
+          _row_created_by: string
+          _row_group_id: string
           _user_id: string
         }
         Returns: boolean
