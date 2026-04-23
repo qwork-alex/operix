@@ -152,8 +152,8 @@ export default function ServiceOrdersPage() {
     // Hard block: never let technician_id reach the DB as null
     if (missingTechRows.length > 0) {
       const msg = isAdmin
-        ? `Technician is required. Please select a technician for row(s): ${missingTechRows.join(", ")}`
-        : "Your account is not linked to a technician profile. Ask an admin to link it before saving.";
+        ? `Selecione um técnico antes de salvar (linha(s): ${missingTechRows.join(", ")})`
+        : "Sua conta não está vinculada a um perfil de técnico. Peça ao administrador para vinculá-la antes de salvar.";
       toast.error(msg, { duration: 7000 });
       return;
     }
@@ -163,6 +163,15 @@ export default function ServiceOrdersPage() {
     saveMutation.mutate(inserts, {
       onSuccess: () => {
         setExtractions(prev => prev.filter((e) => e._id !== extractionId));
+      },
+      onError: (err) => {
+        const raw = (err as Error).message || "";
+        // Surface DB-level technician_id rejection in plain language
+        if (/technician_id/i.test(raw)) {
+          toast.error("Falha ao salvar: o técnico é obrigatório. Selecione um técnico antes de salvar.", { duration: 8000 });
+        } else {
+          toast.error(`Falha ao salvar: ${raw}`, { duration: 8000 });
+        }
       },
     });
   };
@@ -214,6 +223,13 @@ export default function ServiceOrdersPage() {
           onSave={(rows) => handleSave(extraction._id, rows)}
           onDiscard={() => handleDiscard(extraction._id)}
           isSaving={saveMutation.isPending}
+          technicians={technicians}
+          isAdmin={isAdmin}
+          myTechnicianName={
+            myTechnicianId
+              ? technicians.find((t) => t.id === myTechnicianId)?.name ?? null
+              : null
+          }
         />
       ))}
 

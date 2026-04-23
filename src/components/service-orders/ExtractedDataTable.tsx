@@ -4,7 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Save, Trash2, AlertTriangle, Pencil, CheckCircle2, XCircle } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Save, Trash2, AlertTriangle, Pencil, CheckCircle2, XCircle, Lock, UserCheck } from "lucide-react";
 import type { ExtractedOrder, FieldConfidence } from "@/hooks/useServiceOrders";
 import { cn } from "@/lib/utils";
 import { formatLicensePlate } from "@/lib/formatPlate";
@@ -22,6 +23,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+interface TechnicianOption {
+  id: string;
+  name: string;
+}
+
 interface ExtractedDataTableProps {
   orders: ExtractedOrder[];
   confidence: "high" | "medium" | "low";
@@ -29,6 +35,9 @@ interface ExtractedDataTableProps {
   onSave: (orders: ExtractedOrder[]) => void;
   onDiscard: () => void;
   isSaving: boolean;
+  technicians?: TechnicianOption[];
+  isAdmin?: boolean;
+  myTechnicianName?: string | null;
 }
 
 const confidenceColors = {
@@ -43,8 +52,23 @@ const fieldConfBorder: Record<FieldConfidence, string> = {
   low: "border-red-500/50 bg-red-500/5",
 };
 
-export function ExtractedDataTable({ orders: initial, confidence, notes, onSave, onDiscard, isSaving }: ExtractedDataTableProps) {
-  const [rows, setRows] = useState<ExtractedOrder[]>(initial);
+export function ExtractedDataTable({
+  orders: initial,
+  confidence,
+  notes,
+  onSave,
+  onDiscard,
+  isSaving,
+  technicians = [],
+  isAdmin = false,
+  myTechnicianName = null,
+}: ExtractedDataTableProps) {
+  // For non-admin users, lock technician name to their own profile
+  const [rows, setRows] = useState<ExtractedOrder[]>(() =>
+    !isAdmin && myTechnicianName
+      ? initial.map((r) => ({ ...r, technician: myTechnicianName }))
+      : initial
+  );
   const [stage, setStage] = useState<Stage>("review");
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [errorRows, setErrorRows] = useState<Set<number>>(new Set());
@@ -213,6 +237,14 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
             <Pencil className="h-3 w-3 mr-1" />
             {t("edit.modeActive")}
           </Badge>
+          {/* Responsável indicator for non-admin users (locked to their identity) */}
+          {!isAdmin && myTechnicianName && (
+            <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-400 border-blue-500/30">
+              <UserCheck className="h-3 w-3 mr-1" />
+              Responsável: {myTechnicianName}
+              <Lock className="h-3 w-3 ml-1.5 opacity-70" />
+            </Badge>
+          )}
         </div>
         <div className="flex gap-2">
           <Button variant="ghost" size="sm" onClick={onDiscard} disabled={isSaving}>
@@ -277,7 +309,7 @@ export function ExtractedDataTable({ orders: initial, confidence, notes, onSave,
                   <TableCell className={cn("text-muted-foreground text-xs", errorRows.has(idx) && "text-destructive font-bold")}>{idx + 1}</TableCell>
                   <ConfidenceCell value={row.client} confidence={fc.client} onChange={(v) => update(idx, "client", v)} />
                   <ConfidenceCell value={row.platform} confidence={fc.platform} onChange={(v) => update(idx, "platform", v)} />
-                  <ConfidenceCell value={row.technician} confidence={fc.technician} onChange={(v) => update(idx, "technician", v)} />
+                  <TechnicianSelectCell value={row.technician} confidence={fc.technician} technicians={technicians} disabled={!isAdmin} onChange={(v) => update(idx, "technician", v)} />
                   <ConfidenceCell value={row.week} confidence={fc.week} onChange={(v) => update(idx, "week", v)} />
                   <ConfidenceCell value={row.car_name} confidence={fc.car_name} onChange={(v) => update(idx, "car_name", v)} />
                   <ConfidenceCell value={row.license_plate} confidence={fc.license_plate} onChange={(v) => update(idx, "license_plate", v)} />
@@ -381,6 +413,78 @@ function ConfidenceNumCell({ value, confidence, onChange }: { value: number | nu
             {conf === "low" ? "⚠️ Low confidence — please verify" : "⚡ Medium confidence — review recommended"}
           </TooltipContent>
         )}
+      </Tooltip>
+    </TableCell>
+  );
+}
+
+function TechnicianSelectCell({
+  value,
+  confidence,
+  technicians,
+  disabled,
+  onChange,
+}: {
+  value: string | null;
+  confidence?: FieldConfidence;
+  technicians: TechnicianOption[];
+  disabled: boolean;
+  onChange: (v: string) => void;
+}) {
+  const conf = confidence || "high";
+  const borderClass = fieldConfBorder[conf];
+  const current = value || "";
+  const isMissing = !current;
+
+  return (
+    <TableCell className="p-1">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div>
+            <Select
+              value={current}
+              onValueChange={onChange}
+              disabled={disabled}
+            >
+              <SelectTrigger
+                className={cn(
+                  "h-8 text-xs bg-transparent hover:border-border",
+                  borderClass,
+                  isMissing && !disabled && "border-destructive/60 bg-destructive/5",
+                  disabled && "opacity-80 cursor-not-allowed"
+                )}
+              >
+                <SelectValue placeholder="Selecione um técnico" />
+              </SelectTrigger>
+              <SelectContent className="max-h-64">
+                {technicians.length === 0 ? (
+                  <SelectItem value="__none__" disabled>
+                    Nenhum técnico cadastrado
+                  </SelectItem>
+                ) : (
+                  technicians.map((t) => (
+                    <SelectItem key={t.id} value={t.name}>
+                      {t.name}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+        </TooltipTrigger>
+        {disabled ? (
+          <TooltipContent className="text-xs">
+            🔒 Apenas administradores podem alterar o técnico
+          </TooltipContent>
+        ) : isMissing ? (
+          <TooltipContent className="text-xs">
+            ⚠️ Selecione um técnico antes de salvar
+          </TooltipContent>
+        ) : conf !== "high" ? (
+          <TooltipContent className="text-xs">
+            {conf === "low" ? "⚠️ Low confidence — please verify" : "⚡ Medium confidence — review recommended"}
+          </TooltipContent>
+        ) : null}
       </Tooltip>
     </TableCell>
   );
