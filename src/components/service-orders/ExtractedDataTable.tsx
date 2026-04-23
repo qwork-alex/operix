@@ -72,6 +72,8 @@ export function ExtractedDataTable({
   const [stage, setStage] = useState<Stage>("review");
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [errorRows, setErrorRows] = useState<Set<number>>(new Set());
+  // Map of `${rowIdx}:${field}` -> inline error message
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [showOverrideDialog, setShowOverrideDialog] = useState(false);
   const [pendingBulk, setPendingBulk] = useState<PendingBulkEdit | null>(null);
   const [lastEditIdx, setLastEditIdx] = useState<number>(-1);
