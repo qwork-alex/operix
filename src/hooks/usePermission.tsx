@@ -150,7 +150,7 @@ export function useCan(): {
   can: (module: string, action: string) => PermissionResult;
   isLoading: boolean;
 } {
-  const { isAdmin } = useRole();
+  const { isAdmin, isLoading: roleLoading } = useRole();
   const { data, isLoading } = useMyPermissionsMap();
 
   const can = (module: string, action: string): PermissionResult => {
@@ -162,5 +162,7 @@ export function useCan(): {
     return { allowed: true, scope: entry.scope ?? "all" };
   };
 
-  return { can, isLoading: isLoading && !isAdmin };
+  // Loading while role is still resolving OR perms map is fetching (unless admin shortcut)
+  const loading = roleLoading || (isLoading && !isAdmin);
+  return { can, isLoading: loading };
 }
