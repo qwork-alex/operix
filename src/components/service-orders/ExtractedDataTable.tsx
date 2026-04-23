@@ -237,6 +237,14 @@ export function ExtractedDataTable({
             <Pencil className="h-3 w-3 mr-1" />
             {t("edit.modeActive")}
           </Badge>
+          {/* Responsável indicator for non-admin users (locked to their identity) */}
+          {!isAdmin && myTechnicianName && (
+            <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-400 border-blue-500/30">
+              <UserCheck className="h-3 w-3 mr-1" />
+              Responsável: {myTechnicianName}
+              <Lock className="h-3 w-3 ml-1.5 opacity-70" />
+            </Badge>
+          )}
         </div>
         <div className="flex gap-2">
           <Button variant="ghost" size="sm" onClick={onDiscard} disabled={isSaving}>
