@@ -335,3 +335,27 @@ export function useTechnicians() {
     },
   });
 }
+
+/**
+ * Resolves the technicians.id row for the current authenticated user.
+ * Returns null if the user has no technician record (e.g. admin without one).
+ */
+export function useMyTechnicianId() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["my-technician-id", user?.id],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("technicians")
+        .select("id")
+        .eq("user_id", user!.id)
+        .maybeSingle();
+      if (error) {
+        console.error("[useMyTechnicianId] error:", error);
+        return null;
+      }
+      return (data?.id as string) ?? null;
+    },
+  });
+}
