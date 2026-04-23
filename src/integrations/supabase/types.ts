@@ -1240,7 +1240,7 @@ export type Database = {
           service_4_price: number | null
           status: string
           technician_earning: number | null
-          technician_id: string | null
+          technician_id: string
           technician_name: string
           technician_percentage: number | null
           total: number | null
@@ -1268,7 +1268,7 @@ export type Database = {
           service_4_price?: number | null
           status?: string
           technician_earning?: number | null
-          technician_id?: string | null
+          technician_id: string
           technician_name?: string
           technician_percentage?: number | null
           total?: number | null
@@ -1296,7 +1296,7 @@ export type Database = {
           service_4_price?: number | null
           status?: string
           technician_earning?: number | null
-          technician_id?: string | null
+          technician_id?: string
           technician_name?: string
           technician_percentage?: number | null
           total?: number | null
