@@ -23,6 +23,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+interface TechnicianOption {
+  id: string;
+  name: string;
+}
+
 interface ExtractedDataTableProps {
   orders: ExtractedOrder[];
   confidence: "high" | "medium" | "low";
@@ -30,6 +35,9 @@ interface ExtractedDataTableProps {
   onSave: (orders: ExtractedOrder[]) => void;
   onDiscard: () => void;
   isSaving: boolean;
+  technicians?: TechnicianOption[];
+  isAdmin?: boolean;
+  myTechnicianName?: string | null;
 }
 
 const confidenceColors = {
@@ -44,7 +52,17 @@ const fieldConfBorder: Record<FieldConfidence, string> = {
   low: "border-red-500/50 bg-red-500/5",
 };
 
-export function ExtractedDataTable({ orders: initial, confidence, notes, onSave, onDiscard, isSaving }: ExtractedDataTableProps) {
+export function ExtractedDataTable({
+  orders: initial,
+  confidence,
+  notes,
+  onSave,
+  onDiscard,
+  isSaving,
+  technicians = [],
+  isAdmin = false,
+  myTechnicianName = null,
+}: ExtractedDataTableProps) {
   const [rows, setRows] = useState<ExtractedOrder[]>(initial);
   const [stage, setStage] = useState<Stage>("review");
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
