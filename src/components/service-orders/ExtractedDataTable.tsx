@@ -145,16 +145,26 @@ export function ExtractedDataTable({
     setRows((prev) => prev.filter((_, i) => i !== idx));
     setValidationErrors([]);
     setErrorRows(new Set());
+    setFieldErrors({});
     if (stage !== "review") setStage("review");
   };
 
   const runValidation = (): boolean => {
     const errors: string[] = [];
     const badRows = new Set<number>();
+    const fErrors: Record<string, string> = {};
     rows.forEach((row, i) => {
       const n = String(i + 1);
-      if (!row.client?.trim()) { errors.push(t("validate.missingClient").replace("{n}", n)); badRows.add(i); }
-      if (!row.technician?.trim()) { errors.push(t("validate.missingTechnician").replace("{n}", n)); badRows.add(i); }
+      if (!row.client?.trim()) {
+        errors.push(t("validate.missingClient").replace("{n}", n));
+        badRows.add(i);
+        fErrors[`${i}:client`] = "Cliente obrigatório";
+      }
+      if (!row.technician?.trim()) {
+        errors.push(t("validate.missingTechnician").replace("{n}", n));
+        badRows.add(i);
+        fErrors[`${i}:technician`] = "Selecione um técnico";
+      }
       const hasService = row.service_1_name?.trim() || row.service_2_name?.trim() || row.service_3_name?.trim() || row.service_4_name?.trim();
       if (!hasService) { errors.push(t("validate.missingService").replace("{n}", n)); badRows.add(i); }
       const computed = (Number(row.service_1_price) || 0) + (Number(row.service_2_price) || 0) + (Number(row.service_3_price) || 0) + (Number(row.service_4_price) || 0);
