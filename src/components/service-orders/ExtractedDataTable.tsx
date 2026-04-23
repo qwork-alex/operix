@@ -72,6 +72,8 @@ export function ExtractedDataTable({
   const [stage, setStage] = useState<Stage>("review");
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [errorRows, setErrorRows] = useState<Set<number>>(new Set());
+  // Map of `${rowIdx}:${field}` -> inline error message
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [showOverrideDialog, setShowOverrideDialog] = useState(false);
   const [pendingBulk, setPendingBulk] = useState<PendingBulkEdit | null>(null);
   const [lastEditIdx, setLastEditIdx] = useState<number>(-1);
@@ -89,6 +91,13 @@ export function ExtractedDataTable({
     // Clear previous validation when user edits — fields always editable
     setValidationErrors([]);
     setErrorRows(new Set());
+    setFieldErrors((prev) => {
+      const key = `${idx}:${field as string}`;
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
     setRows((prev) =>
       prev.map((r, i) => {
         if (i !== idx) return r;
@@ -136,16 +145,26 @@ export function ExtractedDataTable({
     setRows((prev) => prev.filter((_, i) => i !== idx));
     setValidationErrors([]);
     setErrorRows(new Set());
+    setFieldErrors({});
     if (stage !== "review") setStage("review");
   };
 
   const runValidation = (): boolean => {
     const errors: string[] = [];
     const badRows = new Set<number>();
+    const fErrors: Record<string, string> = {};
     rows.forEach((row, i) => {
       const n = String(i + 1);
-      if (!row.client?.trim()) { errors.push(t("validate.missingClient").replace("{n}", n)); badRows.add(i); }
-      if (!row.technician?.trim()) { errors.push(t("validate.missingTechnician").replace("{n}", n)); badRows.add(i); }
+      if (!row.client?.trim()) {
+        errors.push(t("validate.missingClient").replace("{n}", n));
+        badRows.add(i);
+        fErrors[`${i}:client`] = "Cliente obrigatório";
+      }
+      if (!row.technician?.trim()) {
+        errors.push(t("validate.missingTechnician").replace("{n}", n));
+        badRows.add(i);
+        fErrors[`${i}:technician`] = "Selecione um técnico";
+      }
       const hasService = row.service_1_name?.trim() || row.service_2_name?.trim() || row.service_3_name?.trim() || row.service_4_name?.trim();
       if (!hasService) { errors.push(t("validate.missingService").replace("{n}", n)); badRows.add(i); }
       const computed = (Number(row.service_1_price) || 0) + (Number(row.service_2_price) || 0) + (Number(row.service_3_price) || 0) + (Number(row.service_4_price) || 0);
@@ -161,6 +180,7 @@ export function ExtractedDataTable({
     });
     setValidationErrors(errors);
     setErrorRows(badRows);
+    setFieldErrors(fErrors);
     const blocking = errors.filter(e => !e.includes(t("validate.lowConfidencePrefix")));
     if (blocking.length === 0) {
       setStage("save");
@@ -260,12 +280,19 @@ export function ExtractedDataTable({
       </div>
 
       {validationErrors.length > 0 && (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 space-y-1">
-          <div className="flex items-center gap-2 text-sm font-medium text-destructive">
-            <XCircle className="h-4 w-4" />
-            {t("validate.failed")}
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 space-y-2 shadow-sm"
+        >
+          <div className="flex items-center gap-2 text-sm font-semibold text-destructive">
+            <XCircle className="h-5 w-5" />
+            Corrija os erros antes de salvar
           </div>
-          <ul className="list-disc list-inside text-xs text-destructive/80 space-y-0.5">
+          <p className="text-xs text-destructive/80">
+            {validationErrors.length} {validationErrors.length === 1 ? "problema encontrado" : "problemas encontrados"}. Revise os campos destacados abaixo:
+          </p>
+          <ul className="list-disc list-inside text-xs text-destructive/90 space-y-0.5">
             {validationErrors.map((e, i) => <li key={i}>{e}</li>)}
           </ul>
         </div>
@@ -309,7 +336,7 @@ export function ExtractedDataTable({
                   <TableCell className={cn("text-muted-foreground text-xs", errorRows.has(idx) && "text-destructive font-bold")}>{idx + 1}</TableCell>
                   <ConfidenceCell value={row.client} confidence={fc.client} onChange={(v) => update(idx, "client", v)} />
                   <ConfidenceCell value={row.platform} confidence={fc.platform} onChange={(v) => update(idx, "platform", v)} />
-                  <TechnicianSelectCell value={row.technician} confidence={fc.technician} technicians={technicians} disabled={!isAdmin} onChange={(v) => update(idx, "technician", v)} />
+                  <TechnicianSelectCell value={row.technician} confidence={fc.technician} technicians={technicians} disabled={!isAdmin} error={fieldErrors[`${idx}:technician`]} onChange={(v) => update(idx, "technician", v)} />
                   <ConfidenceCell value={row.week} confidence={fc.week} onChange={(v) => update(idx, "week", v)} />
                   <ConfidenceCell value={row.car_name} confidence={fc.car_name} onChange={(v) => update(idx, "car_name", v)} />
                   <ConfidenceCell value={row.license_plate} confidence={fc.license_plate} onChange={(v) => update(idx, "license_plate", v)} />
@@ -423,34 +450,38 @@ function TechnicianSelectCell({
   confidence,
   technicians,
   disabled,
+  error,
   onChange,
 }: {
   value: string | null;
   confidence?: FieldConfidence;
   technicians: TechnicianOption[];
   disabled: boolean;
+  error?: string;
   onChange: (v: string) => void;
 }) {
   const conf = confidence || "high";
   const borderClass = fieldConfBorder[conf];
   const current = value || "";
   const isMissing = !current;
+  const showError = !!error || (isMissing && !disabled);
 
   return (
-    <TableCell className="p-1">
+    <TableCell className="p-1 align-top">
       <Tooltip>
         <TooltipTrigger asChild>
-          <div>
+          <div className="space-y-1">
             <Select
               value={current}
               onValueChange={onChange}
               disabled={disabled}
             >
               <SelectTrigger
+                aria-invalid={showError}
                 className={cn(
                   "h-8 text-xs bg-transparent hover:border-border",
                   borderClass,
-                  isMissing && !disabled && "border-destructive/60 bg-destructive/5",
+                  showError && "border-destructive bg-destructive/10 ring-1 ring-destructive/40",
                   disabled && "opacity-80 cursor-not-allowed"
                 )}
               >
@@ -470,6 +501,12 @@ function TechnicianSelectCell({
                 )}
               </SelectContent>
             </Select>
+            {error && (
+              <p className="text-[10px] font-medium text-destructive flex items-center gap-1 leading-tight">
+                <XCircle className="h-3 w-3 shrink-0" />
+                {error}
+              </p>
+            )}
           </div>
         </TooltipTrigger>
         {disabled ? (
