@@ -335,7 +335,10 @@ export function useTechnicians() {
   return useQuery({
     queryKey: ["technicians"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("technicians").select("id, name").order("name");
+      const { data, error } = await supabase
+        .from("technicians")
+        .select("id, name, display_code")
+        .order("display_code", { ascending: true, nullsFirst: false });
       if (error) throw error;
       return data;
     },

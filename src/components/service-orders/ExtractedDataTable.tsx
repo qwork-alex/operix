@@ -26,6 +26,7 @@ import {
 interface TechnicianOption {
   id: string;
   name: string;
+  display_code?: string | null;
 }
 
 interface ExtractedDataTableProps {
@@ -36,6 +37,15 @@ interface ExtractedDataTableProps {
   onDiscard: () => void;
   isSaving: boolean;
   technicians?: TechnicianOption[];
+  /**
+   * Only `technician` role users have the dropdown locked to their own profile.
+   * Admin / partner / client must select a technician explicitly.
+   */
+  isTechnicianRole?: boolean;
+  /**
+   * Kept for backward compatibility. Treated as "can edit technician".
+   * If isTechnicianRole is provided, it takes precedence.
+   */
   isAdmin?: boolean;
   myTechnicianName?: string | null;
 }
@@ -60,12 +70,18 @@ export function ExtractedDataTable({
   onDiscard,
   isSaving,
   technicians = [],
+  isTechnicianRole,
   isAdmin = false,
   myTechnicianName = null,
 }: ExtractedDataTableProps) {
-  // For non-admin users, lock technician name to their own profile
+  // Only lock the technician field for users with the `technician` role.
+  // Admin / partner / client must pick from the dropdown.
+  const lockTechnician =
+    typeof isTechnicianRole === "boolean" ? isTechnicianRole : !isAdmin;
+  const canEditTechnician = !lockTechnician;
+
   const [rows, setRows] = useState<ExtractedOrder[]>(() =>
-    !isAdmin && myTechnicianName
+    lockTechnician && myTechnicianName
       ? initial.map((r) => ({ ...r, technician: myTechnicianName }))
       : initial
   );
@@ -257,8 +273,8 @@ export function ExtractedDataTable({
             <Pencil className="h-3 w-3 mr-1" />
             {t("edit.modeActive")}
           </Badge>
-          {/* Responsável indicator for non-admin users (locked to their identity) */}
-          {!isAdmin && myTechnicianName && (
+          {/* Responsável indicator for technician users (locked to their identity) */}
+          {lockTechnician && myTechnicianName && (
             <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-400 border-blue-500/30">
               <UserCheck className="h-3 w-3 mr-1" />
               Responsável: {myTechnicianName}
@@ -336,7 +352,7 @@ export function ExtractedDataTable({
                   <TableCell className={cn("text-muted-foreground text-xs", errorRows.has(idx) && "text-destructive font-bold")}>{idx + 1}</TableCell>
                   <ConfidenceCell value={row.client} confidence={fc.client} onChange={(v) => update(idx, "client", v)} />
                   <ConfidenceCell value={row.platform} confidence={fc.platform} onChange={(v) => update(idx, "platform", v)} />
-                  <TechnicianSelectCell value={row.technician} confidence={fc.technician} technicians={technicians} disabled={!isAdmin} error={fieldErrors[`${idx}:technician`]} onChange={(v) => update(idx, "technician", v)} />
+                  <TechnicianSelectCell value={row.technician} confidence={fc.technician} technicians={technicians} disabled={!canEditTechnician} error={fieldErrors[`${idx}:technician`]} onChange={(v) => update(idx, "technician", v)} />
                   <ConfidenceCell value={row.week} confidence={fc.week} onChange={(v) => update(idx, "week", v)} />
                   <ConfidenceCell value={row.car_name} confidence={fc.car_name} onChange={(v) => update(idx, "car_name", v)} />
                   <ConfidenceCell value={row.license_plate} confidence={fc.license_plate} onChange={(v) => update(idx, "license_plate", v)} />
@@ -495,7 +511,7 @@ function TechnicianSelectCell({
                 ) : (
                   technicians.map((t) => (
                     <SelectItem key={t.id} value={t.name}>
-                      {t.name}
+                      {t.display_code ? `${t.display_code} · ${t.name}` : t.name}
                     </SelectItem>
                   ))
                 )}
@@ -511,7 +527,7 @@ function TechnicianSelectCell({
         </TooltipTrigger>
         {disabled ? (
           <TooltipContent className="text-xs">
-            🔒 Apenas administradores podem alterar o técnico
+            🔒 Sua conta de técnico já está vinculada — não pode alterar
           </TooltipContent>
         ) : isMissing ? (
           <TooltipContent className="text-xs">
