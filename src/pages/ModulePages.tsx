@@ -1155,12 +1155,14 @@ export function Documents() {
 
 // ─── USERS ───
 import { useRole, DISPLAY_TO_DB, type AppRole } from "@/hooks/useRole";
+import { useImpersonation } from "@/hooks/useImpersonation";
 
 export function UsersPage() {
   const { t, formatDate } = useLanguage();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { isAdmin } = useRole();
+  const { startImpersonation, isImpersonating, target: impersonationTarget } = useImpersonation();
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string; email: string } | null>(null);
   const [deleteStep, setDeleteStep] = useState<"checking" | "clean" | "blocked">("checking");
   const [deleteDeps, setDeleteDeps] = useState<any>(null);
