@@ -26,6 +26,7 @@ import {
 interface TechnicianOption {
   id: string;
   name: string;
+  display_code?: string | null;
 }
 
 interface ExtractedDataTableProps {
@@ -36,6 +37,15 @@ interface ExtractedDataTableProps {
   onDiscard: () => void;
   isSaving: boolean;
   technicians?: TechnicianOption[];
+  /**
+   * Only `technician` role users have the dropdown locked to their own profile.
+   * Admin / partner / client must select a technician explicitly.
+   */
+  isTechnicianRole?: boolean;
+  /**
+   * Kept for backward compatibility. Treated as "can edit technician".
+   * If isTechnicianRole is provided, it takes precedence.
+   */
   isAdmin?: boolean;
   myTechnicianName?: string | null;
 }
@@ -60,12 +70,18 @@ export function ExtractedDataTable({
   onDiscard,
   isSaving,
   technicians = [],
+  isTechnicianRole,
   isAdmin = false,
   myTechnicianName = null,
 }: ExtractedDataTableProps) {
-  // For non-admin users, lock technician name to their own profile
+  // Only lock the technician field for users with the `technician` role.
+  // Admin / partner / client must pick from the dropdown.
+  const lockTechnician =
+    typeof isTechnicianRole === "boolean" ? isTechnicianRole : !isAdmin;
+  const canEditTechnician = !lockTechnician;
+
   const [rows, setRows] = useState<ExtractedOrder[]>(() =>
-    !isAdmin && myTechnicianName
+    lockTechnician && myTechnicianName
       ? initial.map((r) => ({ ...r, technician: myTechnicianName }))
       : initial
   );
