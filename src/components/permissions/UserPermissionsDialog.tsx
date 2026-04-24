@@ -69,6 +69,41 @@ export function UserPermissionsDialog({
     enabled: open && !!userId,
   });
 
+  // Visibility flags (user_settings)
+  const { data: settings } = useQuery({
+    queryKey: ["user-settings", userId],
+    queryFn: async () => {
+      if (!userId) return null;
+      const { data, error } = await supabase
+        .from("user_settings")
+        .select("can_view_other_users, can_view_workspace_data")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (error) throw error;
+      return (data ?? { can_view_other_users: false, can_view_workspace_data: false }) as {
+        can_view_other_users: boolean;
+        can_view_workspace_data: boolean;
+      };
+    },
+    enabled: open && !!userId,
+  });
+
+  const updateSettingMutation = useMutation({
+    mutationFn: async (patch: Partial<{ can_view_other_users: boolean; can_view_workspace_data: boolean }>) => {
+      if (!userId) return;
+      const { error } = await supabase
+        .from("user_settings")
+        .upsert({ user_id: userId, ...patch }, { onConflict: "user_id" });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-settings", userId] });
+      invalidatePerms();
+      toast.success("Visibilidade atualizada");
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+
   const inherited = useMemo(() => {
     const map: Record<string, boolean> = {};
     for (const id of rolePerms) map[id] = true;
