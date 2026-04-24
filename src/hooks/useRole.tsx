@@ -2,6 +2,7 @@ import { createContext, useContext, ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { useImpersonation } from "./useImpersonation";
 
 // app_role enum: admin, partner, technician, client
 // We map to display keys used in the app
@@ -36,15 +37,19 @@ const RoleCtx = createContext<RoleContext | undefined>(undefined);
 
 export function RoleProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const { effectiveUserId, isImpersonating } = useImpersonation();
+  // When impersonating, resolve the role of the target user so the whole UI
+  // (sidebar, guards, dashboards) reflects what they see.
+  const lookupId = isImpersonating ? effectiveUserId : user?.id;
 
   const { data: dbRole = null, isLoading } = useQuery({
-    queryKey: ["my-role", user?.id],
-    enabled: !!user?.id,
+    queryKey: ["my-role", lookupId, isImpersonating],
+    enabled: !!lookupId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("user_roles")
         .select("role")
-        .eq("user_id", user!.id)
+        .eq("user_id", lookupId!)
         .maybeSingle();
       if (error) {
         console.error("[useRole] Error fetching role:", error);

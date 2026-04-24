@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useRole } from "./useRole";
+import { useImpersonation } from "./useImpersonation";
 
 /**
  * Permission key format: "module.action"
@@ -33,27 +34,31 @@ function normalizeScope(s: unknown): PermissionScope {
 function useMyPermissionsMap() {
   const { user } = useAuth();
   const { dbRole, isAdmin, isLoading: roleLoading } = useRole();
+  const { effectiveUserId, isImpersonating } = useImpersonation();
   const qc = useQueryClient();
+  // When impersonating, evaluate permissions for the target user so the UI
+  // matches what they would see. isAdmin already reflects the impersonated role.
+  const permUserId = isImpersonating ? effectiveUserId : user?.id;
 
   useEffect(() => {
-    if (!user?.id) return;
-    const channelName = `perms-${user.id}-${Math.random().toString(36).slice(2, 8)}`;
+    if (!permUserId) return;
+    const channelName = `perms-${permUserId}-${Math.random().toString(36).slice(2, 8)}`;
     const channel = supabase
       .channel(channelName)
-      .on("postgres_changes", { event: "*", schema: "public", table: "user_permissions", filter: `user_id=eq.${user.id}` },
+      .on("postgres_changes", { event: "*", schema: "public", table: "user_permissions", filter: `user_id=eq.${permUserId}` },
         () => qc.invalidateQueries({ queryKey: PERMS_QUERY_KEY }))
       .on("postgres_changes", { event: "*", schema: "public", table: "role_permissions" },
         () => qc.invalidateQueries({ queryKey: PERMS_QUERY_KEY }))
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [user?.id, qc]);
+  }, [permUserId, qc]);
 
   return useQuery({
-    queryKey: [...PERMS_QUERY_KEY, user?.id, dbRole],
-    enabled: !!user?.id && !roleLoading,
+    queryKey: [...PERMS_QUERY_KEY, permUserId, dbRole, isImpersonating],
+    enabled: !!permUserId && !roleLoading,
     staleTime: 30_000,
     queryFn: async (): Promise<{ admin: boolean; map: Record<string, Entry> }> => {
-      if (!user?.id) return { admin: false, map: {} };
+      if (!permUserId) return { admin: false, map: {} };
       if (isAdmin) return { admin: true, map: {} };
 
       const [permsRes, rolePermsRes, userPermsRes] = await Promise.all([
@@ -61,7 +66,7 @@ function useMyPermissionsMap() {
         dbRole
           ? supabase.from("role_permissions").select("permission_id, scope").eq("role", dbRole)
           : Promise.resolve({ data: [], error: null } as any),
-        supabase.from("user_permissions").select("permission_id, allow, scope").eq("user_id", user.id),
+        supabase.from("user_permissions").select("permission_id, allow, scope").eq("user_id", permUserId),
       ]);
 
       if (permsRes.error) {

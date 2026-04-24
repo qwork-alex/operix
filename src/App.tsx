@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
 import { LanguageProvider } from "@/hooks/useLanguage";
 import { RoleProvider } from "@/hooks/useRole";
+import { ImpersonationProvider } from "@/hooks/useImpersonation";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -56,6 +57,7 @@ const App = () => (
                   path="/*"
                   element={
                     <ProtectedRoute>
+                      <ImpersonationProvider>
                       <RoleProvider>
                       <AppLayout>
                         <ErrorBoundary>
@@ -75,6 +77,7 @@ const App = () => (
                         </ErrorBoundary>
                       </AppLayout>
                       </RoleProvider>
+                      </ImpersonationProvider>
                     </ProtectedRoute>
                   }
                 />

@@ -40,6 +40,7 @@ Owner account (qwork@qworkgroup.com) is protected, has exclusive reset access. N
 - [RBAC](mem://auth/single-tenant-rbac) — Admin, Sócio, Técnico, Cliente roles with strict RLS filtering
 - [Owner Protection](mem://auth/system-owner-protection) — qwork@qworkgroup.com protected from deletion, exclusive dev tools
 - [Auth Security](mem://logic/auth-security) — Admin-created users forced to change password on first login
+- [Impersonation](mem://features/auth/impersonation) — Admin "view as user" via frontend filter, banner + audit log, no RLS bypass
 - [Smart Alerts](mem://features/financeiro/alertas-inteligentes) — Aging alerts for delayed payments (L1 30+ days amber, L2 60+ days red)
 - [Bulk Deletion Protection](mem://ux/protecao-exclusao-massa) — SO/PO bulk delete requires explicit modal confirmation
 - [Batch Status Updates](mem://features/financeiro/batch-status-updates) — Update PO status per week/list, propagates to SO
