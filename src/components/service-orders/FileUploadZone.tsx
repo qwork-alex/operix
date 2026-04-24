@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { useLanguage } from "@/hooks/useLanguage";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Can } from "@/components/Can";
 
 interface FileUploadZoneProps {
   onFilesSelected: (files: File[]) => void;
@@ -225,30 +226,34 @@ export function FileUploadZone({ onFilesSelected, isProcessing }: FileUploadZone
 
             {/* Action buttons */}
             <div className="flex gap-2 mt-2 flex-wrap justify-center">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 text-xs gap-1.5"
-                onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
-              >
-                <FileText className="h-3.5 w-3.5" /> {t("upload.file") || "Upload"}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 text-xs gap-1.5"
-                onClick={(e) => { e.stopPropagation(); startCamera("photo"); }}
-              >
-                <Camera className="h-3.5 w-3.5" /> {t("upload.photo") || "Photo"}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 text-xs gap-1.5"
-                onClick={(e) => { e.stopPropagation(); startCamera("scan"); }}
-              >
-                <ScanLine className="h-3.5 w-3.5" /> {t("upload.scan") || "Scan"}
-              </Button>
+              <Can permission="service_orders.upload_document">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs gap-1.5"
+                  onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
+                >
+                  <FileText className="h-3.5 w-3.5" /> {t("upload.file") || "Upload"}
+                </Button>
+              </Can>
+              <Can permission="service_orders.scan_document">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs gap-1.5"
+                  onClick={(e) => { e.stopPropagation(); startCamera("photo"); }}
+                >
+                  <Camera className="h-3.5 w-3.5" /> {t("upload.photo") || "Photo"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs gap-1.5"
+                  onClick={(e) => { e.stopPropagation(); startCamera("scan"); }}
+                >
+                  <ScanLine className="h-3.5 w-3.5" /> {t("upload.scan") || "Scan"}
+                </Button>
+              </Can>
             </div>
 
             <div className="flex gap-2 mt-1">
