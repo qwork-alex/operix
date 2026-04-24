@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 export type PermissionRow = {
   id: string;
   module: string;
-  action: "view" | "create" | "edit" | "delete";
+  action: string;
   label: string | null;
 };
 
@@ -27,12 +27,26 @@ interface PermissionsMatrixProps {
   showInheritColumn?: boolean;
 }
 
-const ACTION_ORDER: PermissionRow["action"][] = ["view", "create", "edit", "delete"];
-const ACTION_LABEL: Record<PermissionRow["action"], string> = {
+/** Core CRUD actions render in fixed order; everything else appears after as granular actions. */
+const CORE_ACTIONS = ["view", "create", "edit", "delete"] as const;
+
+const ACTION_LABEL: Record<string, string> = {
   view: "Ver",
   create: "Criar",
   edit: "Editar",
   delete: "Apagar",
+  // granular labels (fallback to humanized action if unknown)
+  upload_document: "Carregar",
+  scan_document: "Digitalizar",
+  assign_technician: "Atribuir téc.",
+  validate_data: "Validar",
+  export_pdf: "Export PDF",
+  view_reports: "Ver relatórios",
+  export_reports: "Export relat.",
+  register_vehicle: "Registar veículo",
+  register_driver: "Registar condutor",
+  log_trip: "Reg. trajeto",
+  log_fuel: "Reg. combustível",
 };
 
 const MODULE_LABEL: Record<string, string> = {
@@ -48,6 +62,10 @@ const MODULE_LABEL: Record<string, string> = {
   settings: "Configurações",
 };
 
+function humanize(action: string) {
+  return ACTION_LABEL[action] ?? action.replace(/_/g, " ");
+}
+
 export function PermissionsMatrix({
   permissions,
   values,
@@ -56,11 +74,22 @@ export function PermissionsMatrix({
   isLoading,
   showInheritColumn,
 }: PermissionsMatrixProps) {
+  /** group by module, then sort actions: CORE first, granular after (alphabetical) */
   const grouped = useMemo(() => {
-    const map = new Map<string, Record<string, PermissionRow>>();
+    const map = new Map<string, PermissionRow[]>();
     for (const p of permissions) {
-      if (!map.has(p.module)) map.set(p.module, {});
-      map.get(p.module)![p.action] = p;
+      if (!map.has(p.module)) map.set(p.module, []);
+      map.get(p.module)!.push(p);
+    }
+    for (const [, rows] of map) {
+      rows.sort((a, b) => {
+        const ai = CORE_ACTIONS.indexOf(a.action as any);
+        const bi = CORE_ACTIONS.indexOf(b.action as any);
+        if (ai !== -1 && bi !== -1) return ai - bi;
+        if (ai !== -1) return -1;
+        if (bi !== -1) return 1;
+        return a.action.localeCompare(b.action);
+      });
     }
     return Array.from(map.entries());
   }, [permissions]);
@@ -80,48 +109,54 @@ export function PermissionsMatrix({
       <Table>
         <TableHeader>
           <TableRow className="text-[11px]">
-            <TableHead className="w-[200px]">Módulo</TableHead>
-            {ACTION_ORDER.map((a) => (
-              <TableHead key={a} className="text-center w-[90px]">{ACTION_LABEL[a]}</TableHead>
-            ))}
+            <TableHead className="w-[180px]">Módulo</TableHead>
+            <TableHead>Ações</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {grouped.map(([module, actions]) => (
-            <TableRow key={module} className="text-xs">
-              <TableCell className="font-medium">
+          {grouped.map(([module, perms]) => (
+            <TableRow key={module} className="text-xs align-top">
+              <TableCell className="font-medium pt-3">
                 {MODULE_LABEL[module] || module}
               </TableCell>
-              {ACTION_ORDER.map((action) => {
-                const perm = actions[action];
-                if (!perm) return <TableCell key={action} />;
-                const raw = values[perm.id];
-                const inheritedVal = inherited?.[perm.id] ?? false;
-                const isOverride = raw === true || raw === false;
-                const checked = isOverride ? raw : (showInheritColumn ? inheritedVal : false);
-                return (
-                  <TableCell key={action} className="text-center">
-                    <div className="flex flex-col items-center gap-1">
-                      <Checkbox
-                        checked={checked}
-                        onCheckedChange={(v) => {
-                          // Se em modo override e o novo estado coincide com o herdado, limpar override
-                          if (showInheritColumn && Boolean(v) === inheritedVal) {
-                            onToggle(perm.id, null);
-                          } else {
-                            onToggle(perm.id, Boolean(v));
-                          }
-                        }}
-                      />
-                      {showInheritColumn && (
-                        <span className="text-[9px] text-muted-foreground/60 leading-none">
-                          {isOverride ? "override" : "herda"}
+              <TableCell>
+                <div className="flex flex-wrap gap-x-4 gap-y-2 py-1">
+                  {perms.map((perm) => {
+                    const raw = values[perm.id];
+                    const inheritedVal = inherited?.[perm.id] ?? false;
+                    const isOverride = raw === true || raw === false;
+                    const checked = isOverride ? raw : (showInheritColumn ? inheritedVal : false);
+                    const isCore = (CORE_ACTIONS as readonly string[]).includes(perm.action);
+                    return (
+                      <label
+                        key={perm.id}
+                        className={`flex items-center gap-2 px-2 py-1 rounded-md border transition-colors cursor-pointer
+                          ${checked ? "border-primary/40 bg-primary/5" : "border-border/40 hover:bg-muted/40"}
+                          ${!isCore ? "border-dashed" : ""}`}
+                      >
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={(v) => {
+                            if (showInheritColumn && Boolean(v) === inheritedVal) {
+                              onToggle(perm.id, null);
+                            } else {
+                              onToggle(perm.id, Boolean(v));
+                            }
+                          }}
+                        />
+                        <span className="text-[11px] leading-tight">
+                          {humanize(perm.action)}
+                          {showInheritColumn && (
+                            <span className="block text-[9px] text-muted-foreground/60 leading-none mt-0.5">
+                              {isOverride ? "override" : "herda"}
+                            </span>
+                          )}
                         </span>
-                      )}
-                    </div>
-                  </TableCell>
-                );
-              })}
+                      </label>
+                    );
+                  })}
+                </div>
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
