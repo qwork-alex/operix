@@ -12,6 +12,7 @@ Resilience: Try/catch all async actions, localized toasts, diffing for mutations
 Owner account (qwork@qworkgroup.com) is protected, has exclusive reset access. No public signup.
 
 ## Memories
+- [Data Visibility Flags](mem://features/auth/data-visibility-flags) — user_settings table + has_global_view() controlling SO/PO/financial SELECT scope
 - [Theme Style](mem://style/theme) — Dark Luxury aesthetic rules, customizable admin branding and glow effects
 - [Internationalization](mem://features/i18n) — 12 languages, PT primary, locale-aware currencies/numbers
 - [Service Orders](mem://features/service-orders) — 4-stage OCR, inline editing, text fallbacks, strictly validated saving
