@@ -1605,6 +1605,28 @@ export function UsersPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
+                        {!u.isOwner && isAdmin && u.id !== user?.id && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-amber-500 hover:text-amber-400 hover:bg-amber-500/10"
+                            title={isImpersonating && impersonationTarget?.userId === u.id ? "A visualizar como este utilizador" : "Visualizar como este utilizador"}
+                            disabled={isImpersonating && impersonationTarget?.userId === u.id}
+                            onClick={async () => {
+                              await startImpersonation({
+                                userId: u.id,
+                                fullName: u.full_name || "",
+                                email: u.email || "",
+                                role: u.role || "",
+                              });
+                              // Force every cached query to refetch under the impersonated identity
+                              await queryClient.invalidateQueries();
+                              toast.success(`A ver como ${u.full_name || u.email}`);
+                            }}
+                          >
+                            <Eye className="h-3 w-3" />
+                          </Button>
+                        )}
                         {!u.isOwner && isAdmin && (
                           <>
                             <Button
