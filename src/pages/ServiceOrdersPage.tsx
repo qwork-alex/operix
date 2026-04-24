@@ -30,7 +30,8 @@ import { Can } from "@/components/Can";
 export default function ServiceOrdersPage() {
   const { t } = useLanguage();
   const { user } = useAuth();
-  const { isAdmin } = useRole();
+  const { isAdmin, dbRole } = useRole();
+  const isTechnicianRole = dbRole === "technician";
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState<{
     client_id?: string;
@@ -102,8 +103,8 @@ export default function ServiceOrdersPage() {
       let technicianName: string =
         r.technician?.trim() || techMatch?.name || "";
 
-      if (!isAdmin) {
-        // Technician (or any non-admin) always saves under their own identity
+      if (isTechnicianRole) {
+        // Technician users always save under their own identity
         if (myTechnicianId) {
           technicianId = myTechnicianId;
           if (!technicianName) {
@@ -151,9 +152,9 @@ export default function ServiceOrdersPage() {
 
     // Hard block: never let technician_id reach the DB as null
     if (missingTechRows.length > 0) {
-      const msg = isAdmin
-        ? `Selecione um técnico antes de salvar (linha(s): ${missingTechRows.join(", ")})`
-        : "Sua conta não está vinculada a um perfil de técnico. Peça ao administrador para vinculá-la antes de salvar.";
+      const msg = isTechnicianRole
+        ? "Sua conta não está vinculada a um perfil de técnico. Peça ao administrador para vinculá-la antes de salvar."
+        : `Selecione um técnico antes de salvar (linha(s): ${missingTechRows.join(", ")})`;
       toast.error(msg, { duration: 7000 });
       return;
     }
@@ -230,6 +231,7 @@ export default function ServiceOrdersPage() {
           onDiscard={() => handleDiscard(extraction._id)}
           isSaving={saveMutation.isPending}
           technicians={technicians}
+          isTechnicianRole={isTechnicianRole}
           isAdmin={isAdmin}
           myTechnicianName={
             myTechnicianId
