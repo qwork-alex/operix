@@ -1455,6 +1455,33 @@ export type Database = {
         }
         Relationships: []
       }
+      user_settings: {
+        Row: {
+          can_view_other_users: boolean
+          can_view_workspace_data: boolean
+          created_at: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          can_view_other_users?: boolean
+          can_view_workspace_data?: boolean
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          can_view_other_users?: boolean
+          can_view_workspace_data?: boolean
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_usage: {
         Row: {
           id: string
@@ -1742,6 +1769,7 @@ export type Database = {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
       }
+      has_global_view: { Args: { _user_id: string }; Returns: boolean }
       has_permission: {
         Args: { _action: string; _module: string; _user_id: string }
         Returns: boolean
