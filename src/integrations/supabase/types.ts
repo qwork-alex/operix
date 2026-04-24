@@ -78,6 +78,7 @@ export type Database = {
           contact_phone: string | null
           created_at: string
           created_by: string | null
+          display_code: string | null
           id: string
           name: string
           notes: string | null
@@ -89,6 +90,7 @@ export type Database = {
           contact_phone?: string | null
           created_at?: string
           created_by?: string | null
+          display_code?: string | null
           id?: string
           name: string
           notes?: string | null
@@ -100,6 +102,7 @@ export type Database = {
           contact_phone?: string | null
           created_at?: string
           created_by?: string | null
+          display_code?: string | null
           id?: string
           name?: string
           notes?: string | null
@@ -953,6 +956,7 @@ export type Database = {
         Row: {
           avatar_url: string | null
           created_at: string
+          display_code: string | null
           email: string | null
           full_name: string
           id: string
@@ -962,6 +966,7 @@ export type Database = {
         Insert: {
           avatar_url?: string | null
           created_at?: string
+          display_code?: string | null
           email?: string | null
           full_name?: string
           id: string
@@ -971,6 +976,7 @@ export type Database = {
         Update: {
           avatar_url?: string | null
           created_at?: string
+          display_code?: string | null
           email?: string | null
           full_name?: string
           id?: string
@@ -1366,6 +1372,7 @@ export type Database = {
       technicians: {
         Row: {
           created_at: string
+          display_code: string | null
           email: string | null
           id: string
           name: string
@@ -1374,6 +1381,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          display_code?: string | null
           email?: string | null
           id?: string
           name: string
@@ -1382,6 +1390,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          display_code?: string | null
           email?: string | null
           id?: string
           name?: string
