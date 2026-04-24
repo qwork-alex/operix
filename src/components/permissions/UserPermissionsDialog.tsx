@@ -200,16 +200,57 @@ export function UserPermissionsDialog({
             Administradores têm sempre acesso total — não é possível restringir.
           </div>
         ) : (
-          <PermissionsMatrix
-            permissions={permissions}
-            values={values}
-            inherited={inherited}
-            isLoading={loadingPerms || loadingOv}
-            showInheritColumn
-            onToggle={(permissionId, next) =>
-              toggleMutation.mutate({ permissionId, next })
-            }
-          />
+          <div className="space-y-4">
+            {/* Visibility flags */}
+            <div className="rounded-md border border-border bg-muted/30 p-3 space-y-3">
+              <div className="text-xs font-semibold text-foreground uppercase tracking-wide">
+                Visibilidade de dados
+              </div>
+
+              <label className="flex items-start gap-3 cursor-pointer">
+                <Switch
+                  checked={!!settings?.can_view_workspace_data}
+                  onCheckedChange={(v) => updateSettingMutation.mutate({ can_view_workspace_data: v })}
+                />
+                <div className="flex-1">
+                  <div className="text-sm flex items-center gap-1.5">
+                    <Globe2 className="h-3.5 w-3.5 text-primary" />
+                    Vista global do workspace
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    Vê todos os registos. Sem isto, só vê os seus próprios (técnico) ou os atribuídos (cliente).
+                  </div>
+                </div>
+              </label>
+
+              <label className="flex items-start gap-3 cursor-pointer">
+                <Switch
+                  checked={!!settings?.can_view_other_users}
+                  onCheckedChange={(v) => updateSettingMutation.mutate({ can_view_other_users: v })}
+                />
+                <div className="flex-1">
+                  <div className="text-sm flex items-center gap-1.5">
+                    <Eye className="h-3.5 w-3.5 text-primary" />
+                    Ver outros utilizadores
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    Permite listar outros utilizadores na página de gestão.
+                  </div>
+                </div>
+              </label>
+            </div>
+
+            <PermissionsMatrix
+              permissions={permissions}
+              values={values}
+              inherited={inherited}
+              isLoading={loadingPerms || loadingOv}
+              showInheritColumn
+              onToggle={(permissionId, next) =>
+                toggleMutation.mutate({ permissionId, next })
+              }
+            />
+          </div>
         )}
       </DialogContent>
     </Dialog>
