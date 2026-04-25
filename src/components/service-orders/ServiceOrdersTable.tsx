@@ -458,7 +458,12 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
                               <SelectItem value={EMPTY_RELATION_VALUE}>—</SelectItem>
                               {technicians.map((technician) => (
                                 <SelectItem key={technician.id} value={technician.id}>
-                                  {technician.name}
+                                  <span className="font-medium">{technician.name}</span>
+                                  {(technician as any).display_code ? (
+                                    <span className="ml-2 text-[10px] text-muted-foreground">
+                                      {(technician as any).display_code}
+                                    </span>
+                                  ) : null}
                                 </SelectItem>
                               ))}
                             </SelectContent>
