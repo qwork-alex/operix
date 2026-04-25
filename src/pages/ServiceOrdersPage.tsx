@@ -242,8 +242,8 @@ export default function ServiceOrdersPage() {
           isTechnicianRole={isTechnicianRole}
           isAdmin={isAdmin}
           myTechnicianName={
-            myTechnicianId
-              ? technicians.find((t) => t.id === myTechnicianId)?.name ?? null
+            myAssignableUserId
+              ? technicians.find((t) => t.user_id === myAssignableUserId)?.name ?? null
               : null
           }
         />
