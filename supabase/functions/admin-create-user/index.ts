@@ -40,29 +40,29 @@ async function collectDependencies(adminClient: any, authUserId: string) {
   };
 
   const [
-    serviceOrdersAsTech,
+    serviceOrdersAsAssignedUser,
     serviceOrdersCreated,
-    paymentOrdersAsTech,
+    paymentOrdersAsAssignedUser,
     paymentOrdersCreated,
     fleetTrips,
     financialRecords,
     documents,
   ] = await Promise.all([
-    countTable("service_orders", "technician_id", technicianId),
+    countTable("service_orders", "assigned_user_id", authUserId),
     countTable("service_orders", "created_by", authUserId),
-    countTable("payment_orders", "technician_id", technicianId),
+    countTable("payment_orders", "assigned_user_id", authUserId),
     countTable("payment_orders", "created_by", authUserId),
     countTable("fleet_trips", "created_by", authUserId),
     countTable("financial_records", "created_by", authUserId),
     countTable("documents", "uploaded_by", authUserId),
   ]);
 
-  // service_orders.technician_id is NOT NULL → blocking dependency
-  const blocking = serviceOrdersAsTech;
-  // Other refs are nullable / can be detached
+  // assigned_user_id is nullable on both tables → all dependencies are detachable
+  const blocking = 0;
   const detachable =
+    serviceOrdersAsAssignedUser +
     serviceOrdersCreated +
-    paymentOrdersAsTech +
+    paymentOrdersAsAssignedUser +
     paymentOrdersCreated +
     fleetTrips +
     financialRecords +
@@ -71,16 +71,16 @@ async function collectDependencies(adminClient: any, authUserId: string) {
   return {
     technician: tech ? { id: tech.id, name: tech.name } : null,
     counts: {
-      service_orders_as_technician: serviceOrdersAsTech,
+      service_orders_as_assigned_user: serviceOrdersAsAssignedUser,
       service_orders_created: serviceOrdersCreated,
-      payment_orders_as_technician: paymentOrdersAsTech,
+      payment_orders_as_assigned_user: paymentOrdersAsAssignedUser,
       payment_orders_created: paymentOrdersCreated,
       fleet_trips: fleetTrips,
       financial_records: financialRecords,
       documents: documents,
     },
-    blocking,        // count that prevents hard delete unless reassigned
-    detachable,      // count that can be safely set to null / kept as orphan history
+    blocking,
+    detachable,
     has_dependencies: blocking + detachable > 0,
   };
 }
@@ -188,34 +188,23 @@ Deno.serve(async (req) => {
           .eq("user_id", reassign_to_user_id)
           .maybeSingle();
 
-        // For service_orders.technician_id (NOT NULL), reassign requires a valid target technician
-        if (deps.counts.service_orders_as_technician > 0 && !targetTech?.id) {
-          return jsonResp({
-            error: "target_not_technician",
-            message: "O usuário destino não é um técnico válido. Selecione outro técnico para reatribuição.",
-          }, 400);
+        // Reassign service_orders / payment_orders by assigned_user_id
+        const targetName = targetTech?.name ?? "";
+        try {
+          await adminClient.from("service_orders").update({
+            assigned_user_id: reassign_to_user_id,
+            technician_name: targetName,
+          }).eq("assigned_user_id", user_id);
+        } catch (err) {
+          console.warn("[delete_user] reassign service_orders warning:", err);
         }
-
-        // Move technician-bound rows
-        if (deps.technician?.id && targetTech?.id) {
-          const techId = deps.technician.id;
-          const targetId = targetTech.id;
-          const targetName = targetTech.name ?? "";
-          const moves: Promise<unknown>[] = [
-            (async () => { await adminClient.from("service_orders").update({
-              technician_id: targetId,
-              technician_name: targetName,
-            }).eq("technician_id", techId); })(),
-            (async () => { await adminClient.from("payment_orders").update({
-              technician_id: targetId,
-              technician_name: targetName,
-            }).eq("technician_id", techId); })(),
-          ];
-          const moveResults = await Promise.allSettled(moves);
-          const moveFailures = moveResults
-            .map((r, i) => (r.status === "rejected" ? `[move ${i}] ${(r.reason as Error)?.message}` : null))
-            .filter(Boolean);
-          if (moveFailures.length) console.warn("[delete_user] reassign warnings:", moveFailures);
+        try {
+          await adminClient.from("payment_orders").update({
+            assigned_user_id: reassign_to_user_id,
+            technician_name: targetName,
+          }).eq("assigned_user_id", user_id);
+        } catch (err) {
+          console.warn("[delete_user] reassign payment_orders warning:", err);
         }
 
         // Move created_by-bound rows (auth uid based)
