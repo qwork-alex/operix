@@ -105,15 +105,13 @@ export default function ServiceOrdersPage() {
       const techMatch = techByUser ?? techByName;
 
       let assignedUserId: string | null = techMatch?.user_id ?? null;
-      let technicianId: string | null = techMatch?.id ?? null;
       let technicianName: string = techMatch?.name ?? rawTech;
 
       if (isTechnicianRole) {
         // Technician users always save under their own identity
         if (user?.id) assignedUserId = user.id;
-        if (myTechnicianId) {
-          technicianId = myTechnicianId;
-          const me = technicians.find((t) => t.id === myTechnicianId);
+        if (myAssignableUserId) {
+          const me = technicians.find((t) => t.user_id === myAssignableUserId);
           if (me) technicianName = me.name;
         }
       }
