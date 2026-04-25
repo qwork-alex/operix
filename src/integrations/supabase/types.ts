@@ -22,6 +22,7 @@ export type Database = {
           id: string
           name: string | null
           phone: string | null
+          workspace_id: string | null
         }
         Insert: {
           auth_user_id?: string | null
@@ -30,6 +31,7 @@ export type Database = {
           id?: string
           name?: string | null
           phone?: string | null
+          workspace_id?: string | null
         }
         Update: {
           auth_user_id?: string | null
@@ -38,6 +40,7 @@ export type Database = {
           id?: string
           name?: string | null
           phone?: string | null
+          workspace_id?: string | null
         }
         Relationships: []
       }
@@ -224,6 +227,7 @@ export type Database = {
           storage_path: string | null
           type: string
           uploaded_by: string | null
+          workspace_id: string | null
         }
         Insert: {
           created_at?: string
@@ -239,6 +243,7 @@ export type Database = {
           storage_path?: string | null
           type?: string
           uploaded_by?: string | null
+          workspace_id?: string | null
         }
         Update: {
           created_at?: string
@@ -254,6 +259,7 @@ export type Database = {
           storage_path?: string | null
           type?: string
           uploaded_by?: string | null
+          workspace_id?: string | null
         }
         Relationships: [
           {
@@ -1262,6 +1268,7 @@ export type Database = {
           total: number | null
           updated_at: string
           week: string | null
+          workspace_id: string | null
         }
         Insert: {
           car_name?: string | null
@@ -1290,6 +1297,7 @@ export type Database = {
           total?: number | null
           updated_at?: string
           week?: string | null
+          workspace_id?: string | null
         }
         Update: {
           car_name?: string | null
@@ -1318,6 +1326,7 @@ export type Database = {
           total?: number | null
           updated_at?: string
           week?: string | null
+          workspace_id?: string | null
         }
         Relationships: [
           {
@@ -1378,6 +1387,7 @@ export type Database = {
           name: string
           phone: string | null
           user_id: string | null
+          workspace_id: string | null
         }
         Insert: {
           created_at?: string
@@ -1387,6 +1397,7 @@ export type Database = {
           name: string
           phone?: string | null
           user_id?: string | null
+          workspace_id?: string | null
         }
         Update: {
           created_at?: string
@@ -1396,6 +1407,7 @@ export type Database = {
           name?: string
           phone?: string | null
           user_id?: string | null
+          workspace_id?: string | null
         }
         Relationships: []
       }
