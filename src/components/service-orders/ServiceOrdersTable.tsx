@@ -261,6 +261,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
         client_name: clientName,
         technician_id: resolvedTechId,
         technician_name: techName,
+        assigned_user_id: resolvedAssignedUserId ?? existing.assigned_user_id,
         platform: toNullableText(editForm.platform),
         week: toNullableText(editForm.week),
         car_name: toNullableText(editForm.car_name),
