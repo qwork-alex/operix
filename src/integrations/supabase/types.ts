@@ -1242,6 +1242,7 @@ export type Database = {
       }
       service_orders: {
         Row: {
+          assigned_user_id: string
           car_name: string | null
           client_id: string | null
           client_name: string
@@ -1271,6 +1272,7 @@ export type Database = {
           workspace_id: string | null
         }
         Insert: {
+          assigned_user_id: string
           car_name?: string | null
           client_id?: string | null
           client_name?: string
@@ -1300,6 +1302,7 @@ export type Database = {
           workspace_id?: string | null
         }
         Update: {
+          assigned_user_id?: string
           car_name?: string | null
           client_id?: string | null
           client_name?: string
