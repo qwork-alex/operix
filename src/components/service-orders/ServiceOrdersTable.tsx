@@ -107,7 +107,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
   const { t, formatCurrency } = useLanguage();
   const { user } = useAuth();
   const { data: clients = [] } = useClients();
-  const { data: technicians = [] } = useTechnicians();
+  const { data: technicians = [] } = useAssignableUsers();
   const { data: earningsMap } = useTechnicianEarnings();
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
