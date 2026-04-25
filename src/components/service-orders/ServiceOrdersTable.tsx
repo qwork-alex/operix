@@ -454,14 +454,14 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
                           <Input className="h-7 text-xs" value={editForm.platform} onChange={(e) => updateField("platform", e.target.value)} />
                         </TableCell>
                         <TableCell className="p-1 min-w-[170px]">
-                          <Select value={editForm.technician_id} onValueChange={(value) => updateField("technician_id", value)}>
+                          <Select value={editForm.assigned_user_id} onValueChange={(value) => updateField("assigned_user_id", value)}>
                             <SelectTrigger className="h-7 text-xs bg-background">
                               <SelectValue placeholder={t("label.technician")} />
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value={EMPTY_RELATION_VALUE}>—</SelectItem>
-                              {technicians.map((technician) => (
-                                <SelectItem key={technician.id} value={technician.id}>
+                              {technicians.filter((t_) => t_.user_id).map((technician) => (
+                                <SelectItem key={technician.id} value={technician.user_id as string}>
                                   <span className="font-medium">{technician.name}</span>
                                   {(technician as any).display_code ? (
                                     <span className="ml-2 text-[10px] text-muted-foreground">
