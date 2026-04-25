@@ -498,7 +498,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
                             <SelectTrigger className="h-7 text-xs bg-background"><SelectValue placeholder={t("label.technician")} /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value={EMPTY_RELATION_VALUE}>—</SelectItem>
-                              {technicians.filter(tech => tech.user_id).map(tech => <SelectItem key={tech.id} value={tech.user_id!}>{tech.name}</SelectItem>)}
+                              {technicians.map(tech => <SelectItem key={tech.user_id} value={tech.user_id}>{tech.name}</SelectItem>)}
                             </SelectContent>
                           </Select>
                         </TableCell>
