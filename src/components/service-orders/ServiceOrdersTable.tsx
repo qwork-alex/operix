@@ -242,13 +242,15 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
       if (existingError) throw existingError;
 
       const resolvedClientId = editForm.client_id === EMPTY_RELATION_VALUE ? null : editForm.client_id;
-      const resolvedTechId = editForm.technician_id === EMPTY_RELATION_VALUE ? null : editForm.technician_id;
+      const resolvedAssignedUserId = editForm.assigned_user_id === EMPTY_RELATION_VALUE ? null : editForm.assigned_user_id;
+      const techMatch = resolvedAssignedUserId
+        ? technicians.find((t) => t.user_id === resolvedAssignedUserId)
+        : null;
+      const resolvedTechId = techMatch?.id ?? existing.technician_id ?? null;
       const clientName = resolvedClientId
         ? (clients.find(c => c.id === resolvedClientId)?.name || existing.client_name || "")
         : (existing.client_name || "");
-      const techName = resolvedTechId
-        ? (technicians.find(t => t.id === resolvedTechId)?.name || existing.technician_name || "")
-        : (existing.technician_name || "");
+      const techName = techMatch?.name || existing.technician_name || "";
 
       // Calculate technician earnings from profit distribution rules
       const techEarn = getTechEarnings(techName, total, earningsMap);
