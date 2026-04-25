@@ -80,11 +80,32 @@ export function ExtractedDataTable({
     typeof isTechnicianRole === "boolean" ? isTechnicianRole : !isAdmin;
   const canEditTechnician = !lockTechnician;
 
-  const [rows, setRows] = useState<ExtractedOrder[]>(() =>
-    lockTechnician && myTechnicianName
-      ? initial.map((r) => ({ ...r, technician: myTechnicianName }))
-      : initial
-  );
+  // Pre-resolve technician id/name from OCR text by case-insensitive name match.
+  // After this, `row.technician` will hold the technicians.id whenever a match is found,
+  // ensuring the Select component (which stores t.id) shows the correct selection.
+  const resolveTechIdFromText = (text: string | null): string | null => {
+    if (!text) return null;
+    const norm = text.trim().toLowerCase();
+    if (!norm) return null;
+    const exact = technicians.find((t) => t.name.toLowerCase() === norm);
+    if (exact) return exact.id;
+    // Soft match: contains
+    const partial = technicians.find(
+      (t) => t.name.toLowerCase().includes(norm) || norm.includes(t.name.toLowerCase())
+    );
+    return partial?.id ?? null;
+  };
+
+  const [rows, setRows] = useState<ExtractedOrder[]>(() => {
+    if (lockTechnician && myTechnicianName) {
+      const myId = technicians.find((t) => t.name === myTechnicianName)?.id ?? null;
+      return initial.map((r) => ({ ...r, technician: myId ?? myTechnicianName }));
+    }
+    return initial.map((r) => {
+      const resolvedId = resolveTechIdFromText(r.technician);
+      return { ...r, technician: resolvedId ?? r.technician };
+    });
+  });
   const [stage, setStage] = useState<Stage>("review");
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [errorRows, setErrorRows] = useState<Set<number>>(new Set());
