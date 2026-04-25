@@ -494,11 +494,11 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
                           <Input className="h-7 text-xs" value={editForm.list_name} onChange={e => setEditForm(prev => prev ? { ...prev, list_name: e.target.value } : prev)} />
                         </TableCell>
                         <TableCell className="p-1 min-w-[140px]">
-                          <Select value={editForm.technician_id} onValueChange={v => setEditForm(prev => prev ? { ...prev, technician_id: v } : prev)}>
+                          <Select value={editForm.assigned_user_id} onValueChange={v => setEditForm(prev => prev ? { ...prev, assigned_user_id: v } : prev)}>
                             <SelectTrigger className="h-7 text-xs bg-background"><SelectValue placeholder={t("label.technician")} /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value={EMPTY_RELATION_VALUE}>—</SelectItem>
-                              {technicians.map(tech => <SelectItem key={tech.id} value={tech.id}>{tech.name}</SelectItem>)}
+                              {technicians.filter(tech => tech.user_id).map(tech => <SelectItem key={tech.id} value={tech.user_id!}>{tech.name}</SelectItem>)}
                             </SelectContent>
                           </Select>
                         </TableCell>
