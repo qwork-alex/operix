@@ -32,7 +32,7 @@ export default function PaymentOrdersPage() {
   const [filters, setFilters] = useState<{
     client_id?: string;
     platform?: string;
-    technician_id?: string;
+    assigned_user_id?: string;
     list_name?: string;
   }>({});
 
