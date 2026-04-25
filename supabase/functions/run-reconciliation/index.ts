@@ -120,8 +120,8 @@ serve(async (req) => {
     console.log("HARD_RESET: cleared all auto reconciliation results");
 
     const [soRes, poRes] = await Promise.all([
-      supabase.from("service_orders").select("id, license_plate, car_name, total, week, technician_id, technician_name, client_id, client_name, platform, created_at, status, service_1_name, service_1_price, service_2_name, service_2_price, service_3_name, service_3_price, service_4_name, service_4_price"),
-      supabase.from("payment_orders").select("id, license_plate, car_name, total, technician_id, technician_name, client_id, client_name, platform, service_order_id, created_at, status, services"),
+      supabase.from("service_orders").select("id, license_plate, car_name, total, week, assigned_user_id, technician_name, client_id, client_name, platform, created_at, status, service_1_name, service_1_price, service_2_name, service_2_price, service_3_name, service_3_price, service_4_name, service_4_price"),
+      supabase.from("payment_orders").select("id, license_plate, car_name, total, assigned_user_id, technician_name, client_id, client_name, platform, service_order_id, created_at, status, services"),
     ]);
 
     const serviceOrders = soRes.data ?? [];
