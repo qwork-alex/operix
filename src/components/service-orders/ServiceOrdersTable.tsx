@@ -243,10 +243,13 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
 
       const resolvedClientId = editForm.client_id === EMPTY_RELATION_VALUE ? null : editForm.client_id;
       const resolvedAssignedUserId = editForm.assigned_user_id === EMPTY_RELATION_VALUE ? null : editForm.assigned_user_id;
+      const finalAssignedUserId = resolvedAssignedUserId ?? existing.assigned_user_id;
+      if (!finalAssignedUserId) {
+        throw new Error("assigned_user_id is required. Please select a user.");
+      }
       const techMatch = resolvedAssignedUserId
         ? technicians.find((t) => t.user_id === resolvedAssignedUserId)
         : null;
-      const resolvedTechId = techMatch?.id ?? existing.technician_id ?? null;
       const clientName = resolvedClientId
         ? (clients.find(c => c.id === resolvedClientId)?.name || existing.client_name || "")
         : (existing.client_name || "");
@@ -259,9 +262,8 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
         ...existing,
         client_id: resolvedClientId,
         client_name: clientName,
-        technician_id: resolvedTechId,
         technician_name: techName,
-        assigned_user_id: resolvedAssignedUserId ?? existing.assigned_user_id,
+        assigned_user_id: finalAssignedUserId,
         platform: toNullableText(editForm.platform),
         week: toNullableText(editForm.week),
         car_name: toNullableText(editForm.car_name),
