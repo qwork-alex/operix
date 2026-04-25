@@ -266,7 +266,6 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
       const techMatch = resolvedAssignedUserId
         ? technicians.find((t) => t.user_id === resolvedAssignedUserId)
         : null;
-      const resolvedTechId = techMatch?.id ?? originalRow?.technician_id ?? null;
 
       const clientName = resolvedClientId
         ? (clients.find(c => c.id === resolvedClientId)?.name || originalRow?.client_name || null)
@@ -276,7 +275,6 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
       const payload: Partial<{
         client_id: string | null;
         client_name: string | null;
-        technician_id: string | null;
         technician_name: string | null;
         assigned_user_id: string | null;
         platform: string | null;
@@ -301,7 +299,6 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
       }
       if (resolvedAssignedUserId !== (originalRow?.assigned_user_id ?? null)) {
         payload.assigned_user_id = resolvedAssignedUserId;
-        payload.technician_id = resolvedTechId;
       }
       if (techName !== (originalRow?.technician_name ?? null)) {
         payload.technician_name = techName;
@@ -347,7 +344,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
       client_id: o.client_id || EMPTY_RELATION_VALUE,
       platform: o.platform || "",
       list_name: o.list_name || "",
-      technician_id: o.technician_id || EMPTY_RELATION_VALUE,
+      assigned_user_id: o.assigned_user_id || EMPTY_RELATION_VALUE,
       car_name: o.car_name || "",
       license_plate: o.license_plate || "",
       services: padServices(rawServices),
@@ -497,11 +494,11 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
                           <Input className="h-7 text-xs" value={editForm.list_name} onChange={e => setEditForm(prev => prev ? { ...prev, list_name: e.target.value } : prev)} />
                         </TableCell>
                         <TableCell className="p-1 min-w-[140px]">
-                          <Select value={editForm.technician_id} onValueChange={v => setEditForm(prev => prev ? { ...prev, technician_id: v } : prev)}>
+                          <Select value={editForm.assigned_user_id} onValueChange={v => setEditForm(prev => prev ? { ...prev, assigned_user_id: v } : prev)}>
                             <SelectTrigger className="h-7 text-xs bg-background"><SelectValue placeholder={t("label.technician")} /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value={EMPTY_RELATION_VALUE}>—</SelectItem>
-                              {technicians.map(tech => <SelectItem key={tech.id} value={tech.id}>{tech.name}</SelectItem>)}
+                              {technicians.filter(tech => tech.user_id).map(tech => <SelectItem key={tech.id} value={tech.user_id!}>{tech.name}</SelectItem>)}
                             </SelectContent>
                           </Select>
                         </TableCell>
