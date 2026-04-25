@@ -266,7 +266,6 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
       const techMatch = resolvedAssignedUserId
         ? technicians.find((t) => t.user_id === resolvedAssignedUserId)
         : null;
-      const resolvedTechId = techMatch?.id ?? originalRow?.technician_id ?? null;
 
       const clientName = resolvedClientId
         ? (clients.find(c => c.id === resolvedClientId)?.name || originalRow?.client_name || null)
@@ -276,7 +275,6 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
       const payload: Partial<{
         client_id: string | null;
         client_name: string | null;
-        technician_id: string | null;
         technician_name: string | null;
         assigned_user_id: string | null;
         platform: string | null;
