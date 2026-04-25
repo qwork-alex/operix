@@ -262,21 +262,23 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
       }
 
       const resolvedClientId = editForm.client_id === EMPTY_RELATION_VALUE ? null : editForm.client_id;
-      const resolvedTechId = editForm.technician_id === EMPTY_RELATION_VALUE ? null : editForm.technician_id;
+      const resolvedAssignedUserId = editForm.assigned_user_id === EMPTY_RELATION_VALUE ? null : editForm.assigned_user_id;
+      const techMatch = resolvedAssignedUserId
+        ? technicians.find((t) => t.user_id === resolvedAssignedUserId)
+        : null;
+      const resolvedTechId = techMatch?.id ?? originalRow?.technician_id ?? null;
 
-      // Resolve name from relation, or preserve existing name from DB
       const clientName = resolvedClientId
         ? (clients.find(c => c.id === resolvedClientId)?.name || originalRow?.client_name || null)
         : (originalRow?.client_name || null);
-      const techName = resolvedTechId
-        ? (technicians.find(t => t.id === resolvedTechId)?.name || originalRow?.technician_name || null)
-        : (originalRow?.technician_name || null);
+      const techName = techMatch?.name || originalRow?.technician_name || null;
 
       const payload: Partial<{
         client_id: string | null;
         client_name: string | null;
         technician_id: string | null;
         technician_name: string | null;
+        assigned_user_id: string | null;
         platform: string | null;
         list_name: string | null;
         car_name: string | null;
@@ -297,7 +299,8 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
       if (clientName !== (originalRow?.client_name ?? null)) {
         payload.client_name = clientName;
       }
-      if (resolvedTechId !== (originalRow?.technician_id ?? null)) {
+      if (resolvedAssignedUserId !== (originalRow?.assigned_user_id ?? null)) {
+        payload.assigned_user_id = resolvedAssignedUserId;
         payload.technician_id = resolvedTechId;
       }
       if (techName !== (originalRow?.technician_name ?? null)) {
