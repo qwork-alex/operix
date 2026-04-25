@@ -82,7 +82,7 @@ const paymentLabel: Record<PaymentStatus, string> = {
 interface EditState {
   client_id: string;
   platform: string;
-  technician_id: string;
+  assigned_user_id: string;
   week: string;
   car_name: string;
   license_plate: string;
