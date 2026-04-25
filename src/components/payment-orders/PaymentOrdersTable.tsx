@@ -108,7 +108,7 @@ interface EditState {
   client_id: string;
   platform: string;
   list_name: string;
-  technician_id: string;
+  assigned_user_id: string;
   car_name: string;
   license_plate: string;
   services: ServiceEntry[];
