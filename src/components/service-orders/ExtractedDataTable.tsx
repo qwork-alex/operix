@@ -24,8 +24,8 @@ import {
 } from "@/components/ui/alert-dialog";
 
 interface TechnicianOption {
-  id: string;
-  user_id?: string | null;
+  /** auth.users.id — used as the value of the dropdown / `assigned_user_id`. */
+  user_id: string;
   name: string;
   display_code?: string | null;
 }
