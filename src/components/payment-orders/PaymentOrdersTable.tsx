@@ -299,7 +299,6 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
       }
       if (resolvedAssignedUserId !== (originalRow?.assigned_user_id ?? null)) {
         payload.assigned_user_id = resolvedAssignedUserId;
-        payload.technician_id = resolvedTechId;
       }
       if (techName !== (originalRow?.technician_name ?? null)) {
         payload.technician_name = techName;
