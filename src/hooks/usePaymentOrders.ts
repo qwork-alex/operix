@@ -120,6 +120,13 @@ export function usePaymentOrders(filters?: {
       // Remove join fields that aren't columns
       delete (payload as any).clients;
       delete (payload as any).technicians;
+      // Hard rule: technician_id is never accepted on writes
+      delete (payload as any).technician_id;
+
+      // If assigned_user_id is being touched, it must not be cleared
+      if ('assigned_user_id' in payload && !(payload as any).assigned_user_id) {
+        throw new Error("assigned_user_id cannot be empty.");
+      }
 
       console.log("Updating payload:", payload);
 
