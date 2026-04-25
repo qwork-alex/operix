@@ -198,15 +198,18 @@ Deno.serve(async (req) => {
 
         // Move technician-bound rows
         if (deps.technician?.id && targetTech?.id) {
-          const moves: Promise<any>[] = [
-            adminClient.from("service_orders").update({
-              technician_id: targetTech.id,
-              technician_name: targetTech.name ?? "",
-            }).eq("technician_id", deps.technician.id),
-            adminClient.from("payment_orders").update({
-              technician_id: targetTech.id,
-              technician_name: targetTech.name ?? "",
-            }).eq("technician_id", deps.technician.id),
+          const techId = deps.technician.id;
+          const targetId = targetTech.id;
+          const targetName = targetTech.name ?? "";
+          const moves: Promise<unknown>[] = [
+            (async () => { await adminClient.from("service_orders").update({
+              technician_id: targetId,
+              technician_name: targetName,
+            }).eq("technician_id", techId); })(),
+            (async () => { await adminClient.from("payment_orders").update({
+              technician_id: targetId,
+              technician_name: targetName,
+            }).eq("technician_id", techId); })(),
           ];
           const moveResults = await Promise.allSettled(moves);
           const moveFailures = moveResults
@@ -216,12 +219,12 @@ Deno.serve(async (req) => {
         }
 
         // Move created_by-bound rows (auth uid based)
-        const createdByMoves: Promise<any>[] = [
-          adminClient.from("service_orders").update({ created_by: reassign_to_user_id }).eq("created_by", user_id),
-          adminClient.from("payment_orders").update({ created_by: reassign_to_user_id }).eq("created_by", user_id),
-          adminClient.from("financial_records").update({ created_by: reassign_to_user_id }).eq("created_by", user_id),
-          adminClient.from("fleet_trips").update({ created_by: reassign_to_user_id }).eq("created_by", user_id),
-          adminClient.from("documents").update({ uploaded_by: reassign_to_user_id }).eq("uploaded_by", user_id),
+        const createdByMoves: Promise<unknown>[] = [
+          (async () => { await adminClient.from("service_orders").update({ created_by: reassign_to_user_id }).eq("created_by", user_id); })(),
+          (async () => { await adminClient.from("payment_orders").update({ created_by: reassign_to_user_id }).eq("created_by", user_id); })(),
+          (async () => { await adminClient.from("financial_records").update({ created_by: reassign_to_user_id }).eq("created_by", user_id); })(),
+          (async () => { await adminClient.from("fleet_trips").update({ created_by: reassign_to_user_id }).eq("created_by", user_id); })(),
+          (async () => { await adminClient.from("documents").update({ uploaded_by: reassign_to_user_id }).eq("uploaded_by", user_id); })(),
         ];
         await Promise.allSettled(createdByMoves);
       }
@@ -248,26 +251,26 @@ Deno.serve(async (req) => {
 
       // 1. Wipe identity / preference rows. Operational data was either reassigned above,
       //    or is referenced by nullable columns we can null out for created_by/uploaded_by.
-      const cleanups: Promise<any>[] = [
-        adminClient.from("user_permissions").delete().eq("user_id", user_id),
-        adminClient.from("user_roles").delete().eq("user_id", user_id),
-        adminClient.from("notifications").delete().eq("user_id", user_id),
-        adminClient.from("partner_clients").delete().eq("partner_user_id", user_id),
-        adminClient.from("user_usage").delete().eq("user_id", user_id),
+      const cleanups: Promise<unknown>[] = [
+        (async () => { await adminClient.from("user_permissions").delete().eq("user_id", user_id); })(),
+        (async () => { await adminClient.from("user_roles").delete().eq("user_id", user_id); })(),
+        (async () => { await adminClient.from("notifications").delete().eq("user_id", user_id); })(),
+        (async () => { await adminClient.from("partner_clients").delete().eq("partner_user_id", user_id); })(),
+        (async () => { await adminClient.from("user_usage").delete().eq("user_id", user_id); })(),
         // Detach (don't delete) operational data so history is preserved
-        adminClient.from("service_orders").update({ created_by: null }).eq("created_by", user_id),
-        adminClient.from("payment_orders").update({ created_by: null }).eq("created_by", user_id),
-        adminClient.from("financial_records").update({ created_by: null }).eq("created_by", user_id),
-        adminClient.from("fleet_trips").update({ created_by: null }).eq("created_by", user_id),
-        adminClient.from("documents").update({ uploaded_by: null }).eq("uploaded_by", user_id),
+        (async () => { await adminClient.from("service_orders").update({ created_by: null }).eq("created_by", user_id); })(),
+        (async () => { await adminClient.from("payment_orders").update({ created_by: null }).eq("created_by", user_id); })(),
+        (async () => { await adminClient.from("financial_records").update({ created_by: null }).eq("created_by", user_id); })(),
+        (async () => { await adminClient.from("fleet_trips").update({ created_by: null }).eq("created_by", user_id); })(),
+        (async () => { await adminClient.from("documents").update({ uploaded_by: null }).eq("uploaded_by", user_id); })(),
         // Delete technician row LAST (after SO rows have been reassigned), only if no SO references remain
-        adminClient.from("technicians").delete().eq("user_id", user_id),
-        adminClient.from("profiles").delete().eq("id", user_id),
+        (async () => { await adminClient.from("technicians").delete().eq("user_id", user_id); })(),
+        (async () => { await adminClient.from("profiles").delete().eq("id", user_id); })(),
       ];
       if (appUserId) {
         cleanups.push(
-          adminClient.from("memberships").delete().eq("user_id", appUserId),
-          adminClient.from("app_users").delete().eq("id", appUserId),
+          (async () => { await adminClient.from("memberships").delete().eq("user_id", appUserId); })(),
+          (async () => { await adminClient.from("app_users").delete().eq("id", appUserId); })(),
         );
       }
       const results = await Promise.allSettled(cleanups);
