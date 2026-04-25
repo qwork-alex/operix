@@ -18,7 +18,7 @@ export interface SORecord {
   client_name: string;
   client_id: string | null;
   technician_name: string;
-  technician_id: string | null;
+  assigned_user_id: string | null;
   platform: string | null;
   total: number | null;
   service_1_name: string | null;
@@ -40,7 +40,7 @@ export interface PORecord {
   client_name: string | null;
   client_id: string | null;
   technician_name: string | null;
-  technician_id: string | null;
+  assigned_user_id: string | null;
   platform: string | null;
   total: number | null;
   services: any;
@@ -127,9 +127,9 @@ function computeScore(so: SORecord, po: PORecord): { score: number; reasons: str
   if (normStr(so.technician_name) && normStr(po.technician_name) && normStr(so.technician_name) === normStr(po.technician_name)) {
     score += 20;
     reasons.push("técnico");
-  } else if (so.technician_id && po.technician_id && so.technician_id === po.technician_id) {
+  } else if (so.assigned_user_id && po.assigned_user_id && so.assigned_user_id === po.assigned_user_id) {
     score += 20;
-    reasons.push("técnico_id");
+    reasons.push("assigned_user");
   }
 
   // Vehicle/plate match

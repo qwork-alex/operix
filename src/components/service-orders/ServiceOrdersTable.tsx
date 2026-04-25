@@ -27,7 +27,6 @@ interface ServiceOrderRow {
   client_id: string | null;
   client_name?: string | null;
   platform: string | null;
-  technician_id: string | null;
   technician_name?: string | null;
   assigned_user_id?: string | null;
   week: string | null;
