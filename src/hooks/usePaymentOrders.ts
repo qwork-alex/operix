@@ -73,11 +73,19 @@ export function usePaymentOrders(filters?: {
     mutationFn: async (orders: PaymentOrderInsert[]) => {
       if (!user?.id) throw new Error("You must be authenticated to save payment orders.");
 
-      const payload = orders.map(o => ({
-        ...o,
-        created_by: o.created_by ?? user.id,
-        status: o.status || "pending",
-      }));
+      const payload = orders.map(o => {
+        const { technician_id: _ignored, ...rest } = o as any;
+        return {
+          ...rest,
+          created_by: rest.created_by ?? user.id,
+          status: rest.status || "pending",
+        };
+      });
+
+      const missingUser = payload.find((p) => !(p as any).assigned_user_id);
+      if (missingUser) {
+        throw new Error("assigned_user_id is required. Please select a user before saving.");
+      }
 
       console.log("Saving payload:", payload);
 
