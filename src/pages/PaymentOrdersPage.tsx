@@ -178,11 +178,11 @@ export default function PaymentOrdersPage() {
           </SelectContent>
         </Select>
 
-        <Select value={filters.technician_id || "all"} onValueChange={v => setFilter("technician_id", v)}>
+        <Select value={filters.assigned_user_id || "all"} onValueChange={v => setFilter("assigned_user_id", v)}>
           <SelectTrigger className="w-[160px] h-9 text-xs bg-secondary/30"><SelectValue placeholder={t("label.allTechnicians")} /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t("label.allTechnicians")}</SelectItem>
-            {technicians.map(t_ => <SelectItem key={t_.id} value={t_.id}>{t_.name}</SelectItem>)}
+            {technicians.filter(t_ => t_.user_id).map(t_ => <SelectItem key={t_.id} value={t_.user_id as string}>{t_.name}</SelectItem>)}
           </SelectContent>
         </Select>
 
