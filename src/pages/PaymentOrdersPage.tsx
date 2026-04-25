@@ -16,7 +16,8 @@ import {
   type PaymentExtractionResult,
   type PaymentOrderInsert,
 } from "@/hooks/usePaymentOrders";
-import { useClients, useTechnicians } from "@/hooks/useServiceOrders";
+import { useClients } from "@/hooks/useServiceOrders";
+import { useAssignableUsers } from "@/hooks/useAssignableUsers";
 import { useFileQueue, type QueueItemStatus } from "@/hooks/useFileQueue";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useAuth } from "@/hooks/useAuth";
