@@ -42,7 +42,7 @@ export default function PaymentOrdersPage() {
   const { data: orders = [], isLoading, saveMutation } = usePaymentOrders(filters);
   const { extract } = useExtractPaymentOrder();
   const { data: clients = [] } = useClients();
-  const { data: technicians = [] } = useTechnicians();
+  const { data: technicians = [] } = useAssignableUsers();
   
   const { queue, isProcessing, addFiles, clearCompleted } = useFileQueue();
 
