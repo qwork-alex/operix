@@ -7,8 +7,9 @@ interface TechEarningsMap {
 
 /**
  * Fetches technician percentages from profit_rules + profit_rule_items.
- * Rules use group_ids[] and technician_id to link.
+ * Rules use group_ids[] and assigned_user_id (auth.users.id) to link.
  * Looks for the "technician" type item in the active rule.
+ * Names are resolved via the profiles table.
  */
 export function useTechnicianEarnings() {
   return useQuery({
@@ -17,28 +18,35 @@ export function useTechnicianEarnings() {
       // Get all active rules with their items
       const { data: rules, error } = await supabase
         .from("profit_rules")
-        .select("technician_id, group_ids, is_active, profit_rule_items(percentage, participant_type)")
+        .select("assigned_user_id, group_ids, is_active, profit_rule_items(percentage, participant_type)")
         .eq("is_active", true);
 
       if (error) throw error;
 
-      // Get technician names
-      const { data: technicians } = await supabase
-        .from("technicians")
-        .select("id, name");
+      // Resolve names from profiles for any assigned_user_id present
+      const userIds = Array.from(
+        new Set((rules || []).map((r: any) => r.assigned_user_id).filter(Boolean))
+      ) as string[];
 
-      const techMap = new Map((technicians || []).map(t => [t.id, t.name]));
+      let nameMap = new Map<string, string>();
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .in("id", userIds);
+        nameMap = new Map((profiles || []).map((p) => [p.id, p.full_name || ""]));
+      }
 
       const map: TechEarningsMap = {};
       for (const rule of rules || []) {
-        if ((rule as any).technician_id) {
-          const techName = techMap.get((rule as any).technician_id);
-          if (!techName) continue;
-          const items = (rule as any).profit_rule_items || [];
-          const techItem = items.find((i: any) => i.participant_type === "technician");
-          if (techItem) {
-            map[techName.toLowerCase()] = Number(techItem.percentage) || 0;
-          }
+        const userId = (rule as any).assigned_user_id;
+        if (!userId) continue;
+        const techName = nameMap.get(userId);
+        if (!techName) continue;
+        const items = (rule as any).profit_rule_items || [];
+        const techItem = items.find((i: any) => i.participant_type === "technician");
+        if (techItem) {
+          map[techName.toLowerCase()] = Number(techItem.percentage) || 0;
         }
       }
       return map;
