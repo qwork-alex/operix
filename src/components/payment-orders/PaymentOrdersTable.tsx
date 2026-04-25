@@ -125,7 +125,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
   const { t, formatCurrency } = useLanguage();
   const { user } = useAuth();
   const { data: clients = [] } = useClients();
-  const { data: technicians = [] } = useTechnicians();
+  const { data: technicians = [] } = useAssignableUsers();
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditState | null>(null);
