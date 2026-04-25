@@ -463,12 +463,12 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value={EMPTY_RELATION_VALUE}>—</SelectItem>
-                              {technicians.filter((t_) => t_.user_id).map((technician) => (
-                                <SelectItem key={technician.id} value={technician.user_id as string}>
+                              {technicians.map((technician) => (
+                                <SelectItem key={technician.user_id} value={technician.user_id}>
                                   <span className="font-medium">{technician.name}</span>
-                                  {(technician as any).display_code ? (
+                                  {technician.display_code ? (
                                     <span className="ml-2 text-[10px] text-muted-foreground">
-                                      {(technician as any).display_code}
+                                      {technician.display_code}
                                     </span>
                                   ) : null}
                                 </SelectItem>
