@@ -345,8 +345,8 @@ export function useReconciliationSummary() {
     queryKey: ["reconciliation-summary"],
     queryFn: async () => {
       const [soRes, poRes, recRes, frRes] = await Promise.all([
-        supabase.from("service_orders").select("total, status, client_id, client_name, technician_id, technician_name, platform, created_at"),
-        supabase.from("payment_orders").select("total, status, client_id, client_name, technician_id, technician_name, platform, created_at"),
+        supabase.from("service_orders").select("total, status, client_id, client_name, assigned_user_id, technician_name, platform, created_at"),
+        supabase.from("payment_orders").select("total, status, client_id, client_name, assigned_user_id, technician_name, platform, created_at"),
         (supabase as any).from("reconciliations").select("status, difference_amount, confidence_score, matched_by, notes"),
         supabase.from("financial_records").select("amount, type, category, created_at, source, service_order_id, payment_order_id"),
       ]);
