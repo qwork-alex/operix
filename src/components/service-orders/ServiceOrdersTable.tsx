@@ -11,7 +11,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Trash2, Pencil, Save, X, Loader2 } from "lucide-react";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useAuth } from "@/hooks/useAuth";
-import { useClients, useTechnicians } from "@/hooks/useServiceOrders";
+import { useClients } from "@/hooks/useServiceOrders";
+import { useAssignableUsers } from "@/hooks/useAssignableUsers";
 import { toast } from "sonner";
 import { formatLicensePlate } from "@/lib/formatPlate";
 import { cn } from "@/lib/utils";
@@ -106,7 +107,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
   const { t, formatCurrency } = useLanguage();
   const { user } = useAuth();
   const { data: clients = [] } = useClients();
-  const { data: technicians = [] } = useTechnicians();
+  const { data: technicians = [] } = useAssignableUsers();
   const { data: earningsMap } = useTechnicianEarnings();
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -462,12 +463,12 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value={EMPTY_RELATION_VALUE}>—</SelectItem>
-                              {technicians.filter((t_) => t_.user_id).map((technician) => (
-                                <SelectItem key={technician.id} value={technician.user_id as string}>
+                              {technicians.map((technician) => (
+                                <SelectItem key={technician.user_id} value={technician.user_id}>
                                   <span className="font-medium">{technician.name}</span>
-                                  {(technician as any).display_code ? (
+                                  {technician.display_code ? (
                                     <span className="ml-2 text-[10px] text-muted-foreground">
-                                      {(technician as any).display_code}
+                                      {technician.display_code}
                                     </span>
                                   ) : null}
                                 </SelectItem>

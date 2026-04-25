@@ -16,7 +16,8 @@ import {
   type PaymentExtractionResult,
   type PaymentOrderInsert,
 } from "@/hooks/usePaymentOrders";
-import { useClients, useTechnicians } from "@/hooks/useServiceOrders";
+import { useClients } from "@/hooks/useServiceOrders";
+import { useAssignableUsers } from "@/hooks/useAssignableUsers";
 import { useFileQueue, type QueueItemStatus } from "@/hooks/useFileQueue";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useAuth } from "@/hooks/useAuth";
@@ -41,7 +42,7 @@ export default function PaymentOrdersPage() {
   const { data: orders = [], isLoading, saveMutation } = usePaymentOrders(filters);
   const { extract } = useExtractPaymentOrder();
   const { data: clients = [] } = useClients();
-  const { data: technicians = [] } = useTechnicians();
+  const { data: technicians = [] } = useAssignableUsers();
   
   const { queue, isProcessing, addFiles, clearCompleted } = useFileQueue();
 
@@ -181,7 +182,7 @@ export default function PaymentOrdersPage() {
           <SelectTrigger className="w-[160px] h-9 text-xs bg-secondary/30"><SelectValue placeholder={t("label.allTechnicians")} /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t("label.allTechnicians")}</SelectItem>
-            {technicians.filter(t_ => t_.user_id).map(t_ => <SelectItem key={t_.id} value={t_.user_id as string}>{t_.name}</SelectItem>)}
+            {technicians.map(t_ => <SelectItem key={t_.user_id} value={t_.user_id}>{t_.name}</SelectItem>)}
           </SelectContent>
         </Select>
 

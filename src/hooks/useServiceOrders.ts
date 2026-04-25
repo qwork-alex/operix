@@ -67,7 +67,7 @@ export function useServiceOrders(filters?: {
 
       let q: any = supabase
         .from("service_orders")
-        .select("*, clients(name), technicians(name)")
+        .select("*, clients(name)")
         .order("created_at", { ascending: false });
 
       q = applyScope(q, scope, user);
@@ -340,40 +340,8 @@ export function useClients() {
   });
 }
 
-export function useTechnicians() {
-  return useQuery({
-    queryKey: ["technicians"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("technicians")
-        .select("id, name, display_code, user_id")
-        .order("display_code", { ascending: true, nullsFirst: false });
-      if (error) throw error;
-      return data;
-    },
-  });
-}
+// NOTE: legacy `useTechnicians` and `useMyTechnicianId` hooks were removed.
+// The system now uses `assigned_user_id` (auth.users.id) as the single source
+// of truth. Use `useAssignableUsers` and `useMyAssignableUserId` from
+// `@/hooks/useAssignableUsers` instead.
 
-/**
- * Resolves the technicians.id row for the current authenticated user.
- * Returns null if the user has no technician record (e.g. admin without one).
- */
-export function useMyTechnicianId() {
-  const { user } = useAuth();
-  return useQuery({
-    queryKey: ["my-technician-id", user?.id],
-    enabled: !!user?.id,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("technicians")
-        .select("id")
-        .eq("user_id", user!.id)
-        .maybeSingle();
-      if (error) {
-        console.error("[useMyTechnicianId] error:", error);
-        return null;
-      }
-      return (data?.id as string) ?? null;
-    },
-  });
-}

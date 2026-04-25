@@ -24,8 +24,8 @@ import {
 } from "@/components/ui/alert-dialog";
 
 interface TechnicianOption {
-  id: string;
-  user_id?: string | null;
+  /** auth.users.id — used as the value of the dropdown / `assigned_user_id`. */
+  user_id: string;
   name: string;
   display_code?: string | null;
 }
@@ -530,8 +530,8 @@ function TechnicianSelectCell({
                     Nenhum técnico cadastrado
                   </SelectItem>
                 ) : (
-                  technicians.filter((t) => t.user_id).map((t) => (
-                    <SelectItem key={t.id} value={t.user_id as string}>
+                  technicians.map((t) => (
+                    <SelectItem key={t.user_id} value={t.user_id}>
                       <span className="font-medium">{t.name}</span>
                       {t.display_code ? (
                         <span className="ml-2 text-[10px] text-muted-foreground">{t.display_code}</span>

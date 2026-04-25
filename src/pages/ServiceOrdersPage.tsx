@@ -12,12 +12,11 @@ import {
   useServiceOrders,
   useExtractServiceOrder,
   useClients,
-  useTechnicians,
-  useMyTechnicianId,
   type ExtractedOrder,
   type ExtractionResult,
   type ServiceOrderInsert,
 } from "@/hooks/useServiceOrders";
+import { useAssignableUsers, useMyAssignableUserId } from "@/hooks/useAssignableUsers";
 import { useFileQueue, type QueueItemStatus } from "@/hooks/useFileQueue";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useAuth } from "@/hooks/useAuth";
@@ -45,8 +44,8 @@ export default function ServiceOrdersPage() {
   const { data: orders = [], isLoading, saveMutation } = useServiceOrders(filters);
   const { extract } = useExtractServiceOrder();
   const { data: clients = [] } = useClients();
-  const { data: technicians = [] } = useTechnicians();
-  const { data: myTechnicianId } = useMyTechnicianId();
+  const { data: technicians = [] } = useAssignableUsers();
+  const { data: myAssignableUserId } = useMyAssignableUserId();
   const { data: earningsMap } = useTechnicianEarnings();
   const { queue, isProcessing, addFiles, clearCompleted } = useFileQueue();
 
@@ -106,15 +105,13 @@ export default function ServiceOrdersPage() {
       const techMatch = techByUser ?? techByName;
 
       let assignedUserId: string | null = techMatch?.user_id ?? null;
-      let technicianId: string | null = techMatch?.id ?? null;
       let technicianName: string = techMatch?.name ?? rawTech;
 
       if (isTechnicianRole) {
         // Technician users always save under their own identity
         if (user?.id) assignedUserId = user.id;
-        if (myTechnicianId) {
-          technicianId = myTechnicianId;
-          const me = technicians.find((t) => t.id === myTechnicianId);
+        if (myAssignableUserId) {
+          const me = technicians.find((t) => t.user_id === myAssignableUserId);
           if (me) technicianName = me.name;
         }
       }
@@ -122,7 +119,6 @@ export default function ServiceOrdersPage() {
       console.log(`[ServiceOrders] Row ${idx + 1} user resolution:`, {
         rawValue: rawTech,
         assignedUserId,
-        technicianId,
         technicianName,
         matchedBy: techByUser ? "user_id" : techByName ? "name" : "none",
       });
@@ -246,8 +242,8 @@ export default function ServiceOrdersPage() {
           isTechnicianRole={isTechnicianRole}
           isAdmin={isAdmin}
           myTechnicianName={
-            myTechnicianId
-              ? technicians.find((t) => t.id === myTechnicianId)?.name ?? null
+            myAssignableUserId
+              ? technicians.find((t) => t.user_id === myAssignableUserId)?.name ?? null
               : null
           }
         />
@@ -286,8 +282,8 @@ export default function ServiceOrdersPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t("label.allTechnicians")}</SelectItem>
-            {technicians.filter((t_) => t_.user_id).map((t_) => (
-              <SelectItem key={t_.id} value={t_.user_id as string}>{t_.name}</SelectItem>
+            {technicians.map((t_) => (
+              <SelectItem key={t_.user_id} value={t_.user_id}>{t_.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>

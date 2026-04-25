@@ -53,7 +53,7 @@ export function usePaymentOrders(filters?: {
 
       let q: any = supabase
         .from("payment_orders")
-        .select("*, clients(name), technicians(name)")
+        .select("*, clients(name)")
         .order("created_at", { ascending: false });
 
       q = applyScope(q, scope, user);

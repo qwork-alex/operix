@@ -11,7 +11,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Trash2, Pencil, Save, X, Loader2, CheckCircle2 } from "lucide-react";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useAuth } from "@/hooks/useAuth";
-import { useClients, useTechnicians } from "@/hooks/useServiceOrders";
+import { useClients } from "@/hooks/useServiceOrders";
+import { useAssignableUsers } from "@/hooks/useAssignableUsers";
 import { toast } from "sonner";
 import { formatLicensePlate } from "@/lib/formatPlate";
 import type { Json } from "@/integrations/supabase/types";
@@ -124,7 +125,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
   const { t, formatCurrency } = useLanguage();
   const { user } = useAuth();
   const { data: clients = [] } = useClients();
-  const { data: technicians = [] } = useTechnicians();
+  const { data: technicians = [] } = useAssignableUsers();
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditState | null>(null);
@@ -497,7 +498,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
                             <SelectTrigger className="h-7 text-xs bg-background"><SelectValue placeholder={t("label.technician")} /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value={EMPTY_RELATION_VALUE}>—</SelectItem>
-                              {technicians.filter(tech => tech.user_id).map(tech => <SelectItem key={tech.id} value={tech.user_id!}>{tech.name}</SelectItem>)}
+                              {technicians.map(tech => <SelectItem key={tech.user_id} value={tech.user_id}>{tech.name}</SelectItem>)}
                             </SelectContent>
                           </Select>
                         </TableCell>
