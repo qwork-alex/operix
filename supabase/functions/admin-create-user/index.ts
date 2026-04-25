@@ -198,15 +198,15 @@ Deno.serve(async (req) => {
 
         // Move technician-bound rows
         if (deps.technician?.id && targetTech?.id) {
-          const moves: Promise<any>[] = [
-            adminClient.from("service_orders").update({
+          const moves: Promise<unknown>[] = [
+            (async () => { await adminClient.from("service_orders").update({
               technician_id: targetTech.id,
               technician_name: targetTech.name ?? "",
-            }).eq("technician_id", deps.technician.id),
-            adminClient.from("payment_orders").update({
+            }).eq("technician_id", deps.technician.id); })(),
+            (async () => { await adminClient.from("payment_orders").update({
               technician_id: targetTech.id,
               technician_name: targetTech.name ?? "",
-            }).eq("technician_id", deps.technician.id),
+            }).eq("technician_id", deps.technician.id); })(),
           ];
           const moveResults = await Promise.allSettled(moves);
           const moveFailures = moveResults
@@ -216,12 +216,12 @@ Deno.serve(async (req) => {
         }
 
         // Move created_by-bound rows (auth uid based)
-        const createdByMoves: Promise<any>[] = [
-          adminClient.from("service_orders").update({ created_by: reassign_to_user_id }).eq("created_by", user_id),
-          adminClient.from("payment_orders").update({ created_by: reassign_to_user_id }).eq("created_by", user_id),
-          adminClient.from("financial_records").update({ created_by: reassign_to_user_id }).eq("created_by", user_id),
-          adminClient.from("fleet_trips").update({ created_by: reassign_to_user_id }).eq("created_by", user_id),
-          adminClient.from("documents").update({ uploaded_by: reassign_to_user_id }).eq("uploaded_by", user_id),
+        const createdByMoves: Promise<unknown>[] = [
+          (async () => { await adminClient.from("service_orders").update({ created_by: reassign_to_user_id }).eq("created_by", user_id); })(),
+          (async () => { await adminClient.from("payment_orders").update({ created_by: reassign_to_user_id }).eq("created_by", user_id); })(),
+          (async () => { await adminClient.from("financial_records").update({ created_by: reassign_to_user_id }).eq("created_by", user_id); })(),
+          (async () => { await adminClient.from("fleet_trips").update({ created_by: reassign_to_user_id }).eq("created_by", user_id); })(),
+          (async () => { await adminClient.from("documents").update({ uploaded_by: reassign_to_user_id }).eq("uploaded_by", user_id); })(),
         ];
         await Promise.allSettled(createdByMoves);
       }
