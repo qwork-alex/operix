@@ -128,11 +128,16 @@ export default function ServiceOrdersPage() {
         missingTechRows.push(idx + 1);
       }
 
+      // Resolve assigned_user_id from the selected technician's user_id (NOT NULL in DB)
+      const assignedUserId =
+        technicians.find((t) => t.id === technicianId)?.user_id ?? user?.id ?? null;
+
       const payload: Record<string, any> = {
         client_id: clientMatch?.id || null,
         client_name: r.client?.trim() || clientMatch?.name || "",
         technician_id: technicianId,
         technician_name: technicianName,
+        assigned_user_id: assignedUserId,
         platform: r.platform ?? null,
         week: r.week ?? null,
         car_name: r.car_name ?? null,
