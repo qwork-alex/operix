@@ -119,7 +119,6 @@ export default function ServiceOrdersPage() {
       console.log(`[ServiceOrders] Row ${idx + 1} user resolution:`, {
         rawValue: rawTech,
         assignedUserId,
-        technicianId,
         technicianName,
         matchedBy: techByUser ? "user_id" : techByName ? "name" : "none",
       });
