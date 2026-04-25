@@ -220,9 +220,15 @@ export function useServiceOrders(filters?: {
       // Remove joined relations that come from select("*, clients(...)")
       delete (payload as any).clients;
       delete (payload as any).technicians;
+      // Hard rule: technician_id is never accepted on writes
+      delete (payload as any).technician_id;
 
       if (!hasRequiredAuditFields(payload)) {
         throw new Error("Missing required audit fields (id, created_by, created_at, updated_at).");
+      }
+
+      if (!(payload as any).assigned_user_id) {
+        throw new Error("assigned_user_id is required for service order updates.");
       }
 
       console.log("Saving payload:", payload);
