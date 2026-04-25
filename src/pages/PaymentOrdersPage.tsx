@@ -90,7 +90,6 @@ export default function PaymentOrdersPage() {
       const payload: Record<string, any> = {
         client_id: clientMatch?.id || null,
         client_name: r.client?.trim() || clientMatch?.name || null,
-        technician_id: techMatch?.id || null,
         technician_name: techMatch?.name || rawTech || null,
         assigned_user_id: assignedUserId,
         platform: r.platform ?? null,

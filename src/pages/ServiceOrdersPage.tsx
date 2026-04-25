@@ -134,7 +134,6 @@ export default function ServiceOrdersPage() {
       const payload: Record<string, any> = {
         client_id: clientMatch?.id || null,
         client_name: r.client?.trim() || clientMatch?.name || "",
-        technician_id: technicianId,
         technician_name: technicianName,
         assigned_user_id: assignedUserId,
         platform: r.platform ?? null,

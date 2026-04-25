@@ -1,0 +1,1 @@
+ALTER TABLE public.service_orders ALTER COLUMN technician_id DROP NOT NULL;
