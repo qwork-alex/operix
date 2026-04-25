@@ -80,12 +80,19 @@ export default function PaymentOrdersPage() {
 
     const inserts: PaymentOrderInsert[] = rows.map(r => {
       const clientMatch = clients.find(c => c.name.toLowerCase() === r.client?.toLowerCase());
-      const techMatch = technicians.find(t => t.name.toLowerCase() === r.technician?.toLowerCase());
+      const rawTech = (r.technician ?? "").trim();
+      const techByUser = technicians.find(t => t.user_id === rawTech);
+      const techByName = !techByUser
+        ? technicians.find(t => t.name.toLowerCase() === rawTech.toLowerCase())
+        : undefined;
+      const techMatch = techByUser ?? techByName;
+      const assignedUserId = techMatch?.user_id ?? user?.id ?? null;
       const payload: Record<string, any> = {
         client_id: clientMatch?.id || null,
         client_name: r.client?.trim() || clientMatch?.name || null,
         technician_id: techMatch?.id || null,
-        technician_name: r.technician?.trim() || techMatch?.name || null,
+        technician_name: techMatch?.name || rawTech || null,
+        assigned_user_id: assignedUserId,
         platform: r.platform ?? null,
         list_name: r.list_name ?? null,
         car_name: r.car_name ?? null,
