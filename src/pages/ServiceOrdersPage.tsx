@@ -282,8 +282,8 @@ export default function ServiceOrdersPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t("label.allTechnicians")}</SelectItem>
-            {technicians.filter((t_) => t_.user_id).map((t_) => (
-              <SelectItem key={t_.id} value={t_.user_id as string}>{t_.name}</SelectItem>
+            {technicians.map((t_) => (
+              <SelectItem key={t_.user_id} value={t_.user_id}>{t_.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>
