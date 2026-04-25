@@ -12,12 +12,11 @@ import {
   useServiceOrders,
   useExtractServiceOrder,
   useClients,
-  useTechnicians,
-  useMyTechnicianId,
   type ExtractedOrder,
   type ExtractionResult,
   type ServiceOrderInsert,
 } from "@/hooks/useServiceOrders";
+import { useAssignableUsers, useMyAssignableUserId } from "@/hooks/useAssignableUsers";
 import { useFileQueue, type QueueItemStatus } from "@/hooks/useFileQueue";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useAuth } from "@/hooks/useAuth";
