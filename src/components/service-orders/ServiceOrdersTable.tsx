@@ -303,7 +303,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
     setEditForm({
       client_id: o.client_id || EMPTY_RELATION_VALUE,
       platform: o.platform || "",
-      technician_id: o.technician_id || EMPTY_RELATION_VALUE,
+      assigned_user_id: o.assigned_user_id || EMPTY_RELATION_VALUE,
       week: o.week || "",
       car_name: o.car_name || "",
       license_plate: o.license_plate || "",
