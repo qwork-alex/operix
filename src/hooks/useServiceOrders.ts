@@ -103,22 +103,25 @@ export function useServiceOrders(filters?: {
     mutationFn: async (orders: ServiceOrderInsert[]) => {
       if (!user?.id) throw new Error("You must be authenticated to save service orders.");
 
-      const payload = orders.map(o => ({
-        id: o.id ?? crypto.randomUUID(),
-        ...o,
-        created_by: o.created_by ?? user.id,
-        created_at: o.created_at ?? new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        status: o.status || "draft",
-      }));
+      const payload = orders.map(o => {
+        const { technician_id: _ignored, ...rest } = o as any;
+        return {
+          id: rest.id ?? crypto.randomUUID(),
+          ...rest,
+          created_by: rest.created_by ?? user.id,
+          created_at: rest.created_at ?? new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          status: rest.status || "draft",
+        };
+      });
 
       const invalid = payload.find((p) => !hasRequiredAuditFields(p));
       if (invalid) throw new Error("Missing required audit fields (id, created_by, created_at, updated_at).");
 
-      // Hard guard: assigned_user_id is mandatory
+      // Hard guard: assigned_user_id is mandatory and is the only user link
       const missingUser = payload.find((p) => !(p as any).assigned_user_id);
       if (missingUser) {
-        throw new Error("Assigned user is required. Please select a user before saving.");
+        throw new Error("assigned_user_id is required. Please select a user before saving.");
       }
 
       console.log("Saving payload:", payload);
@@ -217,9 +220,15 @@ export function useServiceOrders(filters?: {
       // Remove joined relations that come from select("*, clients(...)")
       delete (payload as any).clients;
       delete (payload as any).technicians;
+      // Hard rule: technician_id is never accepted on writes
+      delete (payload as any).technician_id;
 
       if (!hasRequiredAuditFields(payload)) {
         throw new Error("Missing required audit fields (id, created_by, created_at, updated_at).");
+      }
+
+      if (!(payload as any).assigned_user_id) {
+        throw new Error("assigned_user_id is required for service order updates.");
       }
 
       console.log("Saving payload:", payload);

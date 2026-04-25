@@ -73,11 +73,19 @@ export function usePaymentOrders(filters?: {
     mutationFn: async (orders: PaymentOrderInsert[]) => {
       if (!user?.id) throw new Error("You must be authenticated to save payment orders.");
 
-      const payload = orders.map(o => ({
-        ...o,
-        created_by: o.created_by ?? user.id,
-        status: o.status || "pending",
-      }));
+      const payload = orders.map(o => {
+        const { technician_id: _ignored, ...rest } = o as any;
+        return {
+          ...rest,
+          created_by: rest.created_by ?? user.id,
+          status: rest.status || "pending",
+        };
+      });
+
+      const missingUser = payload.find((p) => !(p as any).assigned_user_id);
+      if (missingUser) {
+        throw new Error("assigned_user_id is required. Please select a user before saving.");
+      }
 
       console.log("Saving payload:", payload);
 
@@ -112,6 +120,13 @@ export function usePaymentOrders(filters?: {
       // Remove join fields that aren't columns
       delete (payload as any).clients;
       delete (payload as any).technicians;
+      // Hard rule: technician_id is never accepted on writes
+      delete (payload as any).technician_id;
+
+      // If assigned_user_id is being touched, it must not be cleared
+      if ('assigned_user_id' in payload && !(payload as any).assigned_user_id) {
+        throw new Error("assigned_user_id cannot be empty.");
+      }
 
       console.log("Updating payload:", payload);
 
