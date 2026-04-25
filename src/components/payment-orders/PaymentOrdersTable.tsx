@@ -344,7 +344,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
       client_id: o.client_id || EMPTY_RELATION_VALUE,
       platform: o.platform || "",
       list_name: o.list_name || "",
-      technician_id: o.technician_id || EMPTY_RELATION_VALUE,
+      assigned_user_id: o.assigned_user_id || EMPTY_RELATION_VALUE,
       car_name: o.car_name || "",
       license_plate: o.license_plate || "",
       services: padServices(rawServices),
