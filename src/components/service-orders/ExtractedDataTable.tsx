@@ -25,6 +25,7 @@ import {
 
 interface TechnicianOption {
   id: string;
+  user_id?: string | null;
   name: string;
   display_code?: string | null;
 }
