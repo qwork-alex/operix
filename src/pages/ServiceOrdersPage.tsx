@@ -95,24 +95,34 @@ export default function ServiceOrdersPage() {
       const clientMatch = clients.find(
         (c) => c.name.toLowerCase() === r.client?.toLowerCase()
       );
-      const techMatch = technicians.find(
-        (t) => t.name.toLowerCase() === r.technician?.toLowerCase()
-      );
+
+      // Primary: r.technician now holds technicians.id from the dropdown.
+      // Fallback: legacy/OCR text — try case-insensitive name match.
+      const rawTech = (r.technician ?? "").trim();
+      let techById = technicians.find((t) => t.id === rawTech);
+      let techByName = !techById
+        ? technicians.find((t) => t.name.toLowerCase() === rawTech.toLowerCase())
+        : undefined;
+      const techMatch = techById ?? techByName;
 
       let technicianId: string | null = techMatch?.id ?? null;
-      let technicianName: string =
-        r.technician?.trim() || techMatch?.name || "";
+      let technicianName: string = techMatch?.name ?? rawTech;
 
       if (isTechnicianRole) {
         // Technician users always save under their own identity
         if (myTechnicianId) {
           technicianId = myTechnicianId;
-          if (!technicianName) {
-            const me = technicians.find((t) => t.id === myTechnicianId);
-            technicianName = me?.name || technicianName;
-          }
+          const me = technicians.find((t) => t.id === myTechnicianId);
+          if (me) technicianName = me.name;
         }
       }
+
+      console.log(`[ServiceOrders] Row ${idx + 1} technician resolution:`, {
+        rawValue: rawTech,
+        resolvedId: technicianId,
+        resolvedName: technicianName,
+        matchedBy: techById ? "id" : techByName ? "name" : "none",
+      });
 
       if (!technicianId) {
         missingTechRows.push(idx + 1);
