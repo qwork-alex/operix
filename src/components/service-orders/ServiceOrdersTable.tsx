@@ -29,6 +29,7 @@ interface ServiceOrderRow {
   platform: string | null;
   technician_id: string | null;
   technician_name?: string | null;
+  assigned_user_id?: string | null;
   week: string | null;
   car_name: string | null;
   license_plate: string | null;
