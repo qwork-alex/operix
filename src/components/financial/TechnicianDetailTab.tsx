@@ -28,9 +28,23 @@ function useTechnicians() {
   return useQuery({
     queryKey: ["tech-detail-list"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("technicians").select("id, name").order("name");
-      if (error) throw error;
-      return data ?? [];
+      // Source of truth: users with role 'technician'
+      const { data: roleRows, error: rErr } = await supabase
+        .from("user_roles")
+        .select("user_id")
+        .eq("role", "technician");
+      if (rErr) throw rErr;
+      const ids = (roleRows || []).map((r) => r.user_id).filter(Boolean) as string[];
+      if (ids.length === 0) return [] as { id: string; name: string }[];
+
+      const { data: profiles, error: pErr } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .in("id", ids);
+      if (pErr) throw pErr;
+      return (profiles || [])
+        .map((p) => ({ id: p.id, name: p.full_name || p.email || "—" }))
+        .sort((a, b) => a.name.localeCompare(b.name));
     },
   });
 }
@@ -41,7 +55,7 @@ function useTechFinancials() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("financial_records")
-        .select("id, label, amount, type, notes, category")
+        .select("id, label, amount, type, notes, category, assigned_user_id")
         .in("type", ["expense_spreadsheet", "manual_revenue_expected", "manual_revenue_received", "financial_movements"]);
       if (error) throw error;
       return data ?? [];
@@ -53,8 +67,10 @@ function useAddTechnician() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ name }: { name: string }) => {
-      const { error } = await supabase.from("technicians").insert({ name });
-      if (error) throw error;
+      // Adding a "technician" here means: create an empty profile placeholder is not possible without auth,
+      // so we surface a clear message guiding admins to create a user via the Users module.
+      void name;
+      throw new Error("Para adicionar um técnico, crie um utilizador com a função 'técnico' no módulo Utilizadores.");
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["tech-detail-list"] }); toast.success("Técnico adicionado"); },
     onError: (e) => toast.error("Erro: " + (e as Error).message),
@@ -65,17 +81,23 @@ function useDeleteTechFinancials() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ techId }: { techId: string }) => {
-      // Delete financial records
-      const { error: frError } = await supabase.from("financial_records").delete().like("notes", `%tech:${techId}%`);
-      if (frError) throw frError;
-      // Delete the technician itself
-      const { error: tError } = await supabase.from("technicians").delete().eq("id", techId);
-      if (tError) throw tError;
+      // Delete financial records belonging to this technician (by assigned_user_id),
+      // plus legacy rows tagged via the notes marker `tech:<id>`.
+      const { error: frError1 } = await supabase
+        .from("financial_records")
+        .delete()
+        .eq("assigned_user_id", techId);
+      if (frError1) throw frError1;
+      const { error: frError2 } = await supabase
+        .from("financial_records")
+        .delete()
+        .like("notes", `%tech:${techId}%`);
+      if (frError2) throw frError2;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tech-financials"] });
       qc.invalidateQueries({ queryKey: ["tech-detail-list"] });
-      toast.success("Técnico e análise financeira apagados");
+      toast.success("Análise financeira do técnico apagada");
     },
     onError: (e) => toast.error("Erro: " + (e as Error).message),
   });
@@ -91,7 +113,7 @@ function useUpsertRevenue() {
         label: type === "manual_revenue_expected" ? "Receita esperada" : "Receita recebida",
         amount, status: "confirmed",
         notes: `tech:${techId}:${techName}:year:${year}`,
-        technician_id: techId,
+        assigned_user_id: techId,
       });
       if (error) throw error;
     },
@@ -111,7 +133,7 @@ function useSaveSpreadsheet() {
         amount: grandTotal, status: "confirmed",
         notes: `tech:${techId}:${techName}`,
         category: JSON.stringify(spreadsheet),
-        technician_id: techId,
+        assigned_user_id: techId,
       });
       if (error) throw error;
     },
@@ -130,7 +152,7 @@ function useSaveMovements() {
         amount: totalLoans, status: "confirmed",
         notes: `tech:${techId}:${techName}`,
         category: JSON.stringify(movements),
-        technician_id: techId,
+        assigned_user_id: techId,
       });
       if (error) throw error;
     },
