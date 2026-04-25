@@ -405,7 +405,7 @@ export function Fleet() {
   const { data: vehicles = [], isLoading } = useQuery({
     queryKey: ["vehicles"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("vehicles").select("*, technicians(name)").order("created_at", { ascending: false });
+      const { data, error } = await supabase.from("vehicles").select("*").order("created_at", { ascending: false });
       if (error) throw error;
       return data;
     },
@@ -481,7 +481,7 @@ export function Fleet() {
       if (fuelCost > 0) {
         const vehicle = vehicles.find((v: any) => v.id === logVehicleId);
         const { resolveTechnicianIdForFinancialRecord } = await import("@/lib/getTechnicianForRecord");
-        const technicianId = await resolveTechnicianIdForFinancialRecord();
+        const assignedUserId = await resolveTechnicianIdForFinancialRecord();
         await supabase.from("financial_records").insert({
           type: "expense",
           source: "fleet",
@@ -490,7 +490,7 @@ export function Fleet() {
           label: `${t("fleet.fuel")} — ${vehicle?.name || vehicle?.license_plate || ""}`,
           notes: `${endKm - startKm} km, ${fuelLitres}L`,
           status: "confirmed",
-          technician_id: technicianId,
+          assigned_user_id: assignedUserId,
         });
       }
     },
