@@ -115,10 +115,10 @@ export function useServiceOrders(filters?: {
       const invalid = payload.find((p) => !hasRequiredAuditFields(p));
       if (invalid) throw new Error("Missing required audit fields (id, created_by, created_at, updated_at).");
 
-      // Hard guard: technician_id is mandatory
-      const missingTech = payload.find((p) => !p.technician_id);
-      if (missingTech) {
-        throw new Error("Technician is required. Please select a technician before saving.");
+      // Hard guard: assigned_user_id is mandatory
+      const missingUser = payload.find((p) => !(p as any).assigned_user_id);
+      if (missingUser) {
+        throw new Error("Assigned user is required. Please select a user before saving.");
       }
 
       console.log("Saving payload:", payload);
