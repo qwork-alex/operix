@@ -17,14 +17,6 @@ function jsonResp(body: Record<string, unknown>, status = 200) {
  * Returns a structured map so the UI can show "X linked records".
  */
 async function collectDependencies(adminClient: any, authUserId: string) {
-  // Resolve technician id (operational tables reference technicians.id, not auth uid)
-  const { data: tech } = await adminClient
-    .from("technicians")
-    .select("id, name")
-    .eq("user_id", authUserId)
-    .maybeSingle();
-  const technicianId: string | null = tech?.id ?? null;
-
   // Counts (use HEAD + count exact for efficiency)
   const countTable = async (table: string, column: string, value: string | null) => {
     if (!value) return 0;
@@ -69,7 +61,7 @@ async function collectDependencies(adminClient: any, authUserId: string) {
     documents;
 
   return {
-    technician: tech ? { id: tech.id, name: tech.name } : null,
+    technician: null,
     counts: {
       service_orders_as_assigned_user: serviceOrdersAsAssignedUser,
       service_orders_created: serviceOrdersCreated,
@@ -181,15 +173,15 @@ Deno.serve(async (req) => {
           return jsonResp({ error: "Cannot reassign to the same user" }, 400);
         }
 
-        // Resolve target technician
-        const { data: targetTech } = await adminClient
-          .from("technicians")
-          .select("id, name")
-          .eq("user_id", reassign_to_user_id)
+        // Resolve target user's display name from profiles
+        const { data: targetProfile } = await adminClient
+          .from("profiles")
+          .select("full_name, email")
+          .eq("id", reassign_to_user_id)
           .maybeSingle();
 
         // Reassign service_orders / payment_orders by assigned_user_id
-        const targetName = targetTech?.name ?? "";
+        const targetName = targetProfile?.full_name || targetProfile?.email || "";
         try {
           await adminClient.from("service_orders").update({
             assigned_user_id: reassign_to_user_id,

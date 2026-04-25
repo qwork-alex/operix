@@ -94,7 +94,7 @@ export function useAccountingModule(moduleKey: ModuleKey) {
     mutationFn: async (entry: { label: string; amount: number; notes: string }) => {
       if (isFuelMirror) throw new Error("Combustível é gerido na Frota");
       const { data: { user } } = await supabase.auth.getUser();
-      const technicianId = await resolveTechnicianIdForFinancialRecord();
+      const assignedUserId = await resolveTechnicianIdForFinancialRecord();
       const { error } = await supabase.from("financial_records").insert({
         type: config.type || "expense",
         source: "manual",
@@ -104,7 +104,7 @@ export function useAccountingModule(moduleKey: ModuleKey) {
         notes: entry.notes,
         status: "confirmed",
         created_by: user?.id,
-        technician_id: technicianId,
+        assigned_user_id: assignedUserId,
       });
       if (error) throw error;
     },

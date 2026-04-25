@@ -373,7 +373,7 @@ export type Database = {
           service_order_id: string | null
           source: string
           status: string
-          technician_id: string
+          technician_id: string | null
           type: string
         }
         Insert: {
@@ -390,7 +390,7 @@ export type Database = {
           service_order_id?: string | null
           source: string
           status?: string
-          technician_id: string
+          technician_id?: string | null
           type: string
         }
         Update: {
@@ -407,7 +407,7 @@ export type Database = {
           service_order_id?: string | null
           source?: string
           status?: string
-          technician_id?: string
+          technician_id?: string | null
           type?: string
         }
         Relationships: [
