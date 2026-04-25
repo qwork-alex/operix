@@ -1076,6 +1076,7 @@ export type Database = {
       }
       profit_rules: {
         Row: {
+          assigned_user_id: string | null
           created_at: string
           created_by: string | null
           group_ids: string[] | null
@@ -1086,6 +1087,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          assigned_user_id?: string | null
           created_at?: string
           created_by?: string | null
           group_ids?: string[] | null
@@ -1096,6 +1098,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          assigned_user_id?: string | null
           created_at?: string
           created_by?: string | null
           group_ids?: string[] | null
