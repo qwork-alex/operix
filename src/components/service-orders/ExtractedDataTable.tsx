@@ -531,8 +531,11 @@ function TechnicianSelectCell({
                   </SelectItem>
                 ) : (
                   technicians.map((t) => (
-                    <SelectItem key={t.id} value={t.name}>
-                      {t.display_code ? `${t.display_code} · ${t.name}` : t.name}
+                    <SelectItem key={t.id} value={t.id}>
+                      <span className="font-medium">{t.name}</span>
+                      {t.display_code ? (
+                        <span className="ml-2 text-[10px] text-muted-foreground">{t.display_code}</span>
+                      ) : null}
                     </SelectItem>
                   ))
                 )}
