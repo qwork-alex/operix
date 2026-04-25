@@ -44,8 +44,8 @@ export default function ServiceOrdersPage() {
   const { data: orders = [], isLoading, saveMutation } = useServiceOrders(filters);
   const { extract } = useExtractServiceOrder();
   const { data: clients = [] } = useClients();
-  const { data: technicians = [] } = useTechnicians();
-  const { data: myTechnicianId } = useMyTechnicianId();
+  const { data: technicians = [] } = useAssignableUsers();
+  const { data: myAssignableUserId } = useMyAssignableUserId();
   const { data: earningsMap } = useTechnicianEarnings();
   const { queue, isProcessing, addFiles, clearCompleted } = useFileQueue();
 
