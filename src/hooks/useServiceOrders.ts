@@ -337,7 +337,7 @@ export function useTechnicians() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("technicians")
-        .select("id, name, display_code")
+        .select("id, name, display_code, user_id")
         .order("display_code", { ascending: true, nullsFirst: false });
       if (error) throw error;
       return data;
