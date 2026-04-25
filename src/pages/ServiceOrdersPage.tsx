@@ -36,7 +36,7 @@ export default function ServiceOrdersPage() {
   const [filters, setFilters] = useState<{
     client_id?: string;
     platform?: string;
-    technician_id?: string;
+    assigned_user_id?: string;
     week?: string;
   }>({});
 
