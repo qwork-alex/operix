@@ -198,15 +198,18 @@ Deno.serve(async (req) => {
 
         // Move technician-bound rows
         if (deps.technician?.id && targetTech?.id) {
+          const techId = deps.technician.id;
+          const targetId = targetTech.id;
+          const targetName = targetTech.name ?? "";
           const moves: Promise<unknown>[] = [
             (async () => { await adminClient.from("service_orders").update({
-              technician_id: targetTech.id,
-              technician_name: targetTech.name ?? "",
-            }).eq("technician_id", deps.technician.id); })(),
+              technician_id: targetId,
+              technician_name: targetName,
+            }).eq("technician_id", techId); })(),
             (async () => { await adminClient.from("payment_orders").update({
-              technician_id: targetTech.id,
-              technician_name: targetTech.name ?? "",
-            }).eq("technician_id", deps.technician.id); })(),
+              technician_id: targetId,
+              technician_name: targetName,
+            }).eq("technician_id", techId); })(),
           ];
           const moveResults = await Promise.allSettled(moves);
           const moveFailures = moveResults
