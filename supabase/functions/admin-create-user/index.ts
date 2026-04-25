@@ -219,16 +219,8 @@ Deno.serve(async (req) => {
       }
 
       // ─── DETACH MODE / final cleanup ───
-      // Even after reassignment we still need to wipe identity refs (roles, perms, profile, app_user, technician row)
-      // If service_orders still reference this technician (detach mode + remaining rows), it would fail the NOT NULL constraint.
-      // In detach mode, only proceed if no SO rows reference the technician; otherwise refuse.
-      if (effectiveMode === "detach" && deps.counts.service_orders_as_technician > 0) {
-        return jsonResp({
-          error: "has_blocking_dependencies",
-          message: "Não é possível desanexar: existem ordens de serviço a referenciar este técnico. Reatribua a outro técnico.",
-          ...deps,
-        }, 409);
-      }
+      // assigned_user_id is nullable on service_orders and payment_orders, so detach is always safe.
+      // (Legacy SO/PO blocking checks against technician_id are no longer needed.)
 
       // Resolve app_user_id (memberships reference app_users.id, not auth uid)
       const { data: appUser } = await adminClient
