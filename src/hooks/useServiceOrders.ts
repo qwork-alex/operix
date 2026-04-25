@@ -42,7 +42,7 @@ export interface ExtractionResult {
 export function useServiceOrders(filters?: {
   client_id?: string;
   platform?: string;
-  technician_id?: string;
+  assigned_user_id?: string;
   week?: string;
 }) {
   const queryClient = useQueryClient();
@@ -74,7 +74,7 @@ export function useServiceOrders(filters?: {
 
       if (filters?.client_id) q = q.eq("client_id", filters.client_id);
       if (filters?.platform) q = q.eq("platform", filters.platform);
-      if (filters?.technician_id) q = q.eq("technician_id", filters.technician_id);
+      if (filters?.assigned_user_id) q = q.eq("assigned_user_id", filters.assigned_user_id);
       if (filters?.week) q = q.eq("week", filters.week);
 
       const { data, error } = await q;
@@ -115,10 +115,10 @@ export function useServiceOrders(filters?: {
       const invalid = payload.find((p) => !hasRequiredAuditFields(p));
       if (invalid) throw new Error("Missing required audit fields (id, created_by, created_at, updated_at).");
 
-      // Hard guard: technician_id is mandatory
-      const missingTech = payload.find((p) => !p.technician_id);
-      if (missingTech) {
-        throw new Error("Technician is required. Please select a technician before saving.");
+      // Hard guard: assigned_user_id is mandatory
+      const missingUser = payload.find((p) => !(p as any).assigned_user_id);
+      if (missingUser) {
+        throw new Error("Assigned user is required. Please select a user before saving.");
       }
 
       console.log("Saving payload:", payload);

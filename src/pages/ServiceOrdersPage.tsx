@@ -36,7 +36,7 @@ export default function ServiceOrdersPage() {
   const [filters, setFilters] = useState<{
     client_id?: string;
     platform?: string;
-    technician_id?: string;
+    assigned_user_id?: string;
     week?: string;
   }>({});
 
@@ -85,31 +85,33 @@ export default function ServiceOrdersPage() {
     // rows = EXACTLY what the user sees in the edited table (source of truth)
     console.log("SAVING DATA (raw edited rows):", JSON.stringify(rows, null, 2));
 
-    // Resolve technician_id per row according to role rules:
-    //  - admin  -> must come from the row's selected technician (UI dropdown)
-    //  - others -> auto-fill with the current user's technicians.id
+    // Resolve assigned_user_id per row according to role rules:
+    //  - admin  -> from the row's selected user (UI dropdown stores user_id)
+    //  - others -> auto-fill with the current user's id
     const inserts: ServiceOrderInsert[] = [];
-    const missingTechRows: number[] = [];
+    const missingUserRows: number[] = [];
 
     rows.forEach((r, idx) => {
       const clientMatch = clients.find(
         (c) => c.name.toLowerCase() === r.client?.toLowerCase()
       );
 
-      // Primary: r.technician now holds technicians.id from the dropdown.
+      // r.technician now holds technicians.user_id from the dropdown.
       // Fallback: legacy/OCR text — try case-insensitive name match.
       const rawTech = (r.technician ?? "").trim();
-      let techById = technicians.find((t) => t.id === rawTech);
-      let techByName = !techById
+      const techByUser = technicians.find((t) => t.user_id === rawTech);
+      const techByName = !techByUser
         ? technicians.find((t) => t.name.toLowerCase() === rawTech.toLowerCase())
         : undefined;
-      const techMatch = techById ?? techByName;
+      const techMatch = techByUser ?? techByName;
 
+      let assignedUserId: string | null = techMatch?.user_id ?? null;
       let technicianId: string | null = techMatch?.id ?? null;
       let technicianName: string = techMatch?.name ?? rawTech;
 
       if (isTechnicianRole) {
         // Technician users always save under their own identity
+        if (user?.id) assignedUserId = user.id;
         if (myTechnicianId) {
           technicianId = myTechnicianId;
           const me = technicians.find((t) => t.id === myTechnicianId);
@@ -117,20 +119,17 @@ export default function ServiceOrdersPage() {
         }
       }
 
-      console.log(`[ServiceOrders] Row ${idx + 1} technician resolution:`, {
+      console.log(`[ServiceOrders] Row ${idx + 1} user resolution:`, {
         rawValue: rawTech,
-        resolvedId: technicianId,
-        resolvedName: technicianName,
-        matchedBy: techById ? "id" : techByName ? "name" : "none",
+        assignedUserId,
+        technicianId,
+        technicianName,
+        matchedBy: techByUser ? "user_id" : techByName ? "name" : "none",
       });
 
-      if (!technicianId) {
-        missingTechRows.push(idx + 1);
+      if (!assignedUserId) {
+        missingUserRows.push(idx + 1);
       }
-
-      // Resolve assigned_user_id from the selected technician's user_id (NOT NULL in DB)
-      const assignedUserId =
-        technicians.find((t) => t.id === technicianId)?.user_id ?? user?.id ?? null;
 
       const payload: Record<string, any> = {
         client_id: clientMatch?.id || null,
@@ -165,11 +164,11 @@ export default function ServiceOrdersPage() {
       inserts.push(payload as ServiceOrderInsert);
     });
 
-    // Hard block: never let technician_id reach the DB as null
-    if (missingTechRows.length > 0) {
+    // Hard block: never let assigned_user_id reach the DB as null
+    if (missingUserRows.length > 0) {
       const msg = isTechnicianRole
-        ? "Sua conta não está vinculada a um perfil de técnico. Peça ao administrador para vinculá-la antes de salvar."
-        : `Selecione um técnico antes de salvar (linha(s): ${missingTechRows.join(", ")})`;
+        ? "Sua conta não está autenticada. Faça login novamente antes de salvar."
+        : `Selecione um usuário antes de salvar (linha(s): ${missingUserRows.join(", ")})`;
       toast.error(msg, { duration: 7000 });
       return;
     }
@@ -188,9 +187,8 @@ export default function ServiceOrdersPage() {
       },
       onError: (err) => {
         const raw = (err as Error).message || "";
-        // Surface DB-level technician_id rejection in plain language
-        if (/technician_id/i.test(raw)) {
-          toast.error("Falha ao salvar: o técnico é obrigatório. Selecione um técnico antes de salvar.", { duration: 8000 });
+        if (/assigned_user_id|technician_id/i.test(raw)) {
+          toast.error("Falha ao salvar: o usuário responsável é obrigatório.", { duration: 8000 });
         } else {
           toast.error(`Erro ao salvar. Verifique os dados e tente novamente.\n${raw}`, { duration: 8000 });
         }
@@ -283,14 +281,14 @@ export default function ServiceOrdersPage() {
           </SelectContent>
         </Select>
 
-        <Select value={filters.technician_id || "all"} onValueChange={(v) => setFilter("technician_id", v)}>
+        <Select value={filters.assigned_user_id || "all"} onValueChange={(v) => setFilter("assigned_user_id", v)}>
           <SelectTrigger className="w-[160px] h-9 text-xs bg-secondary/30">
             <SelectValue placeholder={t("label.allTechnicians")} />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t("label.allTechnicians")}</SelectItem>
-            {technicians.map((t_) => (
-              <SelectItem key={t_.id} value={t_.id}>{t_.name}</SelectItem>
+            {technicians.filter((t_) => t_.user_id).map((t_) => (
+              <SelectItem key={t_.id} value={t_.user_id as string}>{t_.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>

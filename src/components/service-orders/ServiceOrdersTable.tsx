@@ -29,6 +29,7 @@ interface ServiceOrderRow {
   platform: string | null;
   technician_id: string | null;
   technician_name?: string | null;
+  assigned_user_id?: string | null;
   week: string | null;
   car_name: string | null;
   license_plate: string | null;
@@ -81,7 +82,7 @@ const paymentLabel: Record<PaymentStatus, string> = {
 interface EditState {
   client_id: string;
   platform: string;
-  technician_id: string;
+  assigned_user_id: string;
   week: string;
   car_name: string;
   license_plate: string;
@@ -241,13 +242,15 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
       if (existingError) throw existingError;
 
       const resolvedClientId = editForm.client_id === EMPTY_RELATION_VALUE ? null : editForm.client_id;
-      const resolvedTechId = editForm.technician_id === EMPTY_RELATION_VALUE ? null : editForm.technician_id;
+      const resolvedAssignedUserId = editForm.assigned_user_id === EMPTY_RELATION_VALUE ? null : editForm.assigned_user_id;
+      const techMatch = resolvedAssignedUserId
+        ? technicians.find((t) => t.user_id === resolvedAssignedUserId)
+        : null;
+      const resolvedTechId = techMatch?.id ?? existing.technician_id ?? null;
       const clientName = resolvedClientId
         ? (clients.find(c => c.id === resolvedClientId)?.name || existing.client_name || "")
         : (existing.client_name || "");
-      const techName = resolvedTechId
-        ? (technicians.find(t => t.id === resolvedTechId)?.name || existing.technician_name || "")
-        : (existing.technician_name || "");
+      const techName = techMatch?.name || existing.technician_name || "";
 
       // Calculate technician earnings from profit distribution rules
       const techEarn = getTechEarnings(techName, total, earningsMap);
@@ -258,6 +261,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
         client_name: clientName,
         technician_id: resolvedTechId,
         technician_name: techName,
+        assigned_user_id: resolvedAssignedUserId ?? existing.assigned_user_id,
         platform: toNullableText(editForm.platform),
         week: toNullableText(editForm.week),
         car_name: toNullableText(editForm.car_name),
@@ -299,7 +303,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
     setEditForm({
       client_id: o.client_id || EMPTY_RELATION_VALUE,
       platform: o.platform || "",
-      technician_id: o.technician_id || EMPTY_RELATION_VALUE,
+      assigned_user_id: o.assigned_user_id || EMPTY_RELATION_VALUE,
       week: o.week || "",
       car_name: o.car_name || "",
       license_plate: o.license_plate || "",
@@ -450,14 +454,14 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
                           <Input className="h-7 text-xs" value={editForm.platform} onChange={(e) => updateField("platform", e.target.value)} />
                         </TableCell>
                         <TableCell className="p-1 min-w-[170px]">
-                          <Select value={editForm.technician_id} onValueChange={(value) => updateField("technician_id", value)}>
+                          <Select value={editForm.assigned_user_id} onValueChange={(value) => updateField("assigned_user_id", value)}>
                             <SelectTrigger className="h-7 text-xs bg-background">
                               <SelectValue placeholder={t("label.technician")} />
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value={EMPTY_RELATION_VALUE}>—</SelectItem>
-                              {technicians.map((technician) => (
-                                <SelectItem key={technician.id} value={technician.id}>
+                              {technicians.filter((t_) => t_.user_id).map((technician) => (
+                                <SelectItem key={technician.id} value={technician.user_id as string}>
                                   <span className="font-medium">{technician.name}</span>
                                   {(technician as any).display_code ? (
                                     <span className="ml-2 text-[10px] text-muted-foreground">
