@@ -361,6 +361,7 @@ export type Database = {
       financial_records: {
         Row: {
           amount: number
+          assigned_user_id: string | null
           category: string | null
           created_at: string
           created_by: string | null
@@ -377,6 +378,7 @@ export type Database = {
         }
         Insert: {
           amount?: number
+          assigned_user_id?: string | null
           category?: string | null
           created_at?: string
           created_by?: string | null
@@ -393,6 +395,7 @@ export type Database = {
         }
         Update: {
           amount?: number
+          assigned_user_id?: string | null
           category?: string | null
           created_at?: string
           created_by?: string | null
