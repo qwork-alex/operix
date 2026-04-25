@@ -78,6 +78,7 @@ interface PaymentOrderRow {
   list_name: string | null;
   technician_id: string | null;
   technician_name?: string | null;
+  assigned_user_id?: string | null;
   technicians?: { name: string } | null;
   car_name: string | null;
   license_plate: string | null;
