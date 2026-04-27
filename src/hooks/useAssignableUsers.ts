@@ -3,6 +3,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useWorkspace } from "./useWorkspace";
 
+/** Safe wrapper: returns null workspaceId when no WorkspaceProvider is mounted. */
+function useOptionalWorkspaceId(): string | null {
+  try {
+    return useWorkspace().workspaceId;
+  } catch {
+    return null;
+  }
+}
+
 export interface AssignableUser {
   /** auth.users.id — the canonical user id used by `assigned_user_id`. */
   user_id: string;
@@ -24,7 +33,7 @@ export interface AssignableUser {
  */
 export function useAssignableUsers() {
   const { user } = useAuth();
-  const { workspaceId } = useWorkspace();
+  const workspaceId = useOptionalWorkspaceId();
 
   return useQuery({
     queryKey: ["assignable-users", workspaceId, user?.id],
