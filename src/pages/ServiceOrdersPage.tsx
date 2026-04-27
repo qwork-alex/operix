@@ -203,6 +203,8 @@ export default function ServiceOrdersPage() {
       console.log("ASSIGNED USER:", finalAssignedUserId);
       console.log("FINAL INSERT PAYLOAD:", payload);
 
+      console.log("FINAL technician_id:", payload.technician_id);
+
       inserts.push(payload as ServiceOrderInsert);
     });
 
