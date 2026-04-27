@@ -80,13 +80,25 @@ export default function ServiceOrdersPage() {
     });
   }, [addFiles, extract, user?.id, queryClient]);
 
-  const handleSave = (extractionId: string, rows: ExtractedOrder[]) => {
+  const handleSave = async (extractionId: string, rows: ExtractedOrder[]) => {
     // rows = EXACTLY what the user sees in the edited table (source of truth)
     console.log("SAVING DATA (raw edited rows):", JSON.stringify(rows, null, 2));
 
-    // Resolve assigned_user_id per row according to role rules:
-    //  - admin  -> from the row's selected user (UI dropdown stores user_id)
-    //  - others -> auto-fill with the current user's id
+    // ALWAYS resolve the authenticated user fresh from supabase.auth.
+    // RLS requires assigned_user_id === auth.uid() for non-admins.
+    const { data: authData } = await supabase.auth.getUser();
+    const authUser = authData?.user ?? null;
+    console.log("AUTH USER:", authUser?.id);
+
+    if (!authUser?.id) {
+      toast.error("Sessão expirada. Faça login novamente antes de salvar.", { duration: 7000 });
+      return;
+    }
+
+    // Rules:
+    //   - non-admin  -> assigned_user_id is FORCED to authUser.id (no override)
+    //   - admin      -> may override via dropdown ONLY if it explicitly resolves
+    //                   to a known user_id; otherwise defaults to authUser.id
     const inserts: ServiceOrderInsert[] = [];
     const missingUserRows: number[] = [];
 
