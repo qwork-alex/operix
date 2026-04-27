@@ -22,6 +22,7 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { useAuth } from "@/hooks/useAuth";
 import { useRole } from "@/hooks/useRole";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTechnicianEarnings, getTechEarnings } from "@/hooks/useTechnicianEarnings";
 import { Can } from "@/components/Can";
@@ -80,13 +81,25 @@ export default function ServiceOrdersPage() {
     });
   }, [addFiles, extract, user?.id, queryClient]);
 
-  const handleSave = (extractionId: string, rows: ExtractedOrder[]) => {
+  const handleSave = async (extractionId: string, rows: ExtractedOrder[]) => {
     // rows = EXACTLY what the user sees in the edited table (source of truth)
     console.log("SAVING DATA (raw edited rows):", JSON.stringify(rows, null, 2));
 
-    // Resolve assigned_user_id per row according to role rules:
-    //  - admin  -> from the row's selected user (UI dropdown stores user_id)
-    //  - others -> auto-fill with the current user's id
+    // ALWAYS resolve the authenticated user fresh from supabase.auth.
+    // RLS requires assigned_user_id === auth.uid() for non-admins.
+    const { data: authData } = await supabase.auth.getUser();
+    const authUser = authData?.user ?? null;
+    console.log("AUTH USER:", authUser?.id);
+
+    if (!authUser?.id) {
+      toast.error("Sessão expirada. Faça login novamente antes de salvar.", { duration: 7000 });
+      return;
+    }
+
+    // Rules:
+    //   - non-admin  -> assigned_user_id is FORCED to authUser.id (no override)
+    //   - admin      -> may override via dropdown ONLY if it explicitly resolves
+    //                   to a known user_id; otherwise defaults to authUser.id
     const inserts: ServiceOrderInsert[] = [];
     const missingUserRows: number[] = [];
 
@@ -95,8 +108,7 @@ export default function ServiceOrdersPage() {
         (c) => c.name.toLowerCase() === r.client?.toLowerCase()
       );
 
-      // r.technician now holds technicians.user_id from the dropdown.
-      // Fallback: legacy/OCR text — try case-insensitive name match.
+      // Dropdown stores the selected user_id (or empty / OCR text fallback).
       const rawTech = (r.technician ?? "").trim();
       const techByUser = technicians.find((t) => t.user_id === rawTech);
       const techByName = !techByUser
@@ -104,24 +116,28 @@ export default function ServiceOrdersPage() {
         : undefined;
       const techMatch = techByUser ?? techByName;
 
-      let assignedUserId: string | null = techMatch?.user_id ?? null;
+      // Default: ALWAYS the authenticated user. Admin may override
+      // ONLY if the dropdown explicitly resolves to a known user.
+      let assignedUserId: string = authUser.id;
       let technicianName: string = techMatch?.name ?? rawTech;
 
-      if (isTechnicianRole) {
-        // Technician users always save under their own identity
-        if (user?.id) assignedUserId = user.id;
-        if (myAssignableUserId) {
-          const me = technicians.find((t) => t.user_id === myAssignableUserId);
-          if (me) technicianName = me.name;
-        }
+      if (isAdmin && techByUser) {
+        assignedUserId = techByUser.user_id;
+        technicianName = techByUser.name;
+      } else if (!isAdmin) {
+        // Non-admins: force their own identity, ignore any dropdown override.
+        const me = technicians.find((t) => t.user_id === authUser.id);
+        if (me) technicianName = me.name;
       }
 
       console.log(`[ServiceOrders] Row ${idx + 1} user resolution:`, {
         rawValue: rawTech,
         assignedUserId,
         technicianName,
-        matchedBy: techByUser ? "user_id" : techByName ? "name" : "none",
+        isAdmin,
+        matchedBy: techByUser ? "user_id" : techByName ? "name" : "auth",
       });
+      console.log("ASSIGNED USER:", assignedUserId);
 
       if (!assignedUserId) {
         missingUserRows.push(idx + 1);

@@ -1,11 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { useWorkspace } from "./useWorkspace";
 
 export interface AssignableUser {
   /** auth.users.id — the canonical user id used by `assigned_user_id`. */
   user_id: string;
-  /** Display name from profiles.full_name (fallback to email). */
+  /** Display name from app_users.name (fallback to email). */
   name: string;
   email: string | null;
   display_code: string | null;
@@ -14,43 +15,61 @@ export interface AssignableUser {
 /**
  * Returns the list of users assignable to a service / payment order.
  *
- * Source of truth:
- *   - `user_roles` filtered by role = 'technician' (server-side)
- *   - joined client-side with `profiles` for display data
+ * Source of truth: `app_users`, scoped to the current workspace.
+ * Always includes the current user (so technicians can self-assign).
  *
- * Admins see every technician (RLS on user_roles allows it).
- * Non-admins typically only see themselves — which is fine because the
- * UI auto-locks the field for technician users.
- *
- * NOTE: Replaces the legacy `useTechnicians()` hook. The system has fully
- * moved to `assigned_user_id` and the `technicians` table is no longer
- * referenced in any business logic.
+ * NOTE: replaces the legacy `useTechnicians()` hook. The system has fully
+ * moved to `assigned_user_id` (auth.users.id) and the `technicians` table
+ * is no longer referenced in any business logic.
  */
 export function useAssignableUsers() {
+  const { user } = useAuth();
+  const { workspaceId } = useWorkspace();
+
   return useQuery({
-    queryKey: ["assignable-users"],
+    queryKey: ["assignable-users", workspaceId, user?.id],
+    enabled: !!user?.id,
     queryFn: async (): Promise<AssignableUser[]> => {
-      const { data: roleRows, error: roleErr } = await supabase
-        .from("user_roles")
-        .select("user_id")
-        .eq("role", "technician");
-      if (roleErr) throw roleErr;
+      // Pull every app_user in the current workspace. RLS allows admins to
+      // see all and non-admins to see themselves — that's enough to make
+      // the dropdown render the current user reliably.
+      let q = supabase
+        .from("app_users")
+        .select("auth_user_id, name, email, workspace_id");
+      if (workspaceId) q = q.eq("workspace_id", workspaceId);
 
-      const ids = [...new Set((roleRows ?? []).map((r) => r.user_id).filter(Boolean))] as string[];
-      if (ids.length === 0) return [];
+      const { data, error } = await q;
+      if (error) throw error;
 
-      const { data: profiles, error: profErr } = await supabase
-        .from("profiles")
-        .select("id, full_name, email, display_code")
-        .in("id", ids);
-      if (profErr) throw profErr;
+      // Optional display_code from profiles
+      const ids = [...new Set((data ?? []).map((r) => r.auth_user_id).filter(Boolean))] as string[];
+      let codeMap = new Map<string, string | null>();
+      if (ids.length > 0) {
+        const { data: profs } = await supabase
+          .from("profiles")
+          .select("id, display_code")
+          .in("id", ids);
+        codeMap = new Map((profs ?? []).map((p: any) => [p.id, p.display_code ?? null]));
+      }
 
-      const list: AssignableUser[] = (profiles ?? []).map((p) => ({
-        user_id: p.id,
-        name: (p.full_name || p.email || "—").trim(),
-        email: p.email ?? null,
-        display_code: (p as any).display_code ?? null,
-      }));
+      const list: AssignableUser[] = (data ?? [])
+        .filter((r) => !!r.auth_user_id)
+        .map((r) => ({
+          user_id: r.auth_user_id as string,
+          name: ((r.name || r.email || "—") as string).trim(),
+          email: r.email ?? null,
+          display_code: codeMap.get(r.auth_user_id as string) ?? null,
+        }));
+
+      // Guarantee the current user is always present in the dropdown.
+      if (user?.id && !list.some((u) => u.user_id === user.id)) {
+        list.unshift({
+          user_id: user.id,
+          name: user.email || "Eu",
+          email: user.email ?? null,
+          display_code: codeMap.get(user.id) ?? null,
+        });
+      }
 
       list.sort((a, b) => {
         const ac = a.display_code ?? "";
@@ -67,8 +86,8 @@ export function useAssignableUsers() {
 }
 
 /**
- * Returns the current user's id IF they are a technician (i.e. assignable).
- * Replaces the legacy `useMyTechnicianId()` (which returned a technicians.id).
+ * Returns the current user's id (from supabase.auth) — used by the save
+ * flow to force `assigned_user_id = auth.uid()` for non-admin users.
  */
 export function useMyAssignableUserId() {
   const { user } = useAuth();
@@ -76,17 +95,8 @@ export function useMyAssignableUserId() {
     queryKey: ["my-assignable-user-id", user?.id],
     enabled: !!user?.id,
     queryFn: async (): Promise<string | null> => {
-      const { data, error } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user!.id)
-        .eq("role", "technician")
-        .maybeSingle();
-      if (error) {
-        console.error("[useMyAssignableUserId] error:", error);
-        return null;
-      }
-      return data ? user!.id : null;
+      const { data } = await supabase.auth.getUser();
+      return data.user?.id ?? user?.id ?? null;
     },
   });
 }
