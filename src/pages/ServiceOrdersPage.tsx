@@ -212,7 +212,9 @@ export default function ServiceOrdersPage() {
     console.log("SAVING DATA (mapped inserts):", JSON.stringify(inserts, null, 2));
 
     saveMutation.mutate(inserts, {
-      onSuccess: () => {
+      onSuccess: (response) => {
+        console.log("INSERT RESPONSE:", response);
+        console.log("INSERT ERROR:", null);
         setExtractions(prev => prev.filter((e) => e._id !== extractionId));
         toast.success(
           inserts.length === 1
@@ -222,6 +224,8 @@ export default function ServiceOrdersPage() {
         );
       },
       onError: (err) => {
+        console.log("INSERT RESPONSE:", null);
+        console.log("INSERT ERROR:", err);
         const raw = (err as Error).message || "";
         if (/assigned_user_id|technician_id/i.test(raw)) {
           toast.error("Falha ao salvar: o usuário responsável é obrigatório.", { duration: 8000 });
