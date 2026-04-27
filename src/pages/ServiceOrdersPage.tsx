@@ -134,7 +134,7 @@ export default function ServiceOrdersPage() {
         client_name: r.client?.trim() || clientMatch?.name || "",
         technician_name: technicianName,
         // technician_id MUST come from the selected user object (never from name)
-        technician_id: selectedUser?.id ?? null,
+        technician_id: selectedUser?.user_id ?? null,
         // assigned_user_id intentionally OMITTED here — set at the very end.
         platform: r.platform ?? null,
         week: r.week ?? null,
