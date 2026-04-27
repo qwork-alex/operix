@@ -116,38 +116,20 @@ export default function ServiceOrdersPage() {
         : undefined;
       const techMatch = techByUser ?? techByName;
 
-      // Default: ALWAYS the authenticated user. Admin may override
-      // ONLY if the dropdown explicitly resolves to a known user.
-      let assignedUserId: string = authUser.id;
+      // Resolve display name only — assigned_user_id will be set LAST.
       let technicianName: string = techMatch?.name ?? rawTech;
-
-      if (isAdmin && techByUser) {
-        assignedUserId = techByUser.user_id;
-        technicianName = techByUser.name;
-      } else if (!isAdmin) {
-        // Non-admins: force their own identity, ignore any dropdown override.
+      if (!isAdmin) {
         const me = technicians.find((t) => t.user_id === authUser.id);
         if (me) technicianName = me.name;
-      }
-
-      console.log(`[ServiceOrders] Row ${idx + 1} user resolution:`, {
-        rawValue: rawTech,
-        assignedUserId,
-        technicianName,
-        isAdmin,
-        matchedBy: techByUser ? "user_id" : techByName ? "name" : "auth",
-      });
-      console.log("ASSIGNED USER:", assignedUserId);
-
-      if (!assignedUserId) {
-        missingUserRows.push(idx + 1);
+      } else if (techByUser) {
+        technicianName = techByUser.name;
       }
 
       const payload: Record<string, any> = {
         client_id: clientMatch?.id || null,
         client_name: r.client?.trim() || clientMatch?.name || "",
         technician_name: technicianName,
-        assigned_user_id: assignedUserId,
+        // assigned_user_id intentionally OMITTED here — set at the very end.
         platform: r.platform ?? null,
         week: r.week ?? null,
         car_name: r.car_name ?? null,
@@ -171,6 +153,49 @@ export default function ServiceOrdersPage() {
       const techEarn = getTechEarnings(techName, payload.total, earningsMap);
       payload.technician_percentage = techEarn?.percentage ?? 0;
       payload.technician_earning = techEarn?.earnings ?? 0;
+
+      // ===== FINAL ASSIGNED_USER_ID RESOLUTION (last moment before insert) =====
+      // Rules:
+      //  - non-admin: ALWAYS authUser.id, dropdown ignored entirely
+      //  - admin:     dropdown value ONLY if explicitly resolves to a known
+      //               user_id; otherwise fallback to authUser.id
+      let finalAssignedUserId: string = authUser.id;
+      if (isAdmin && techByUser?.user_id) {
+        finalAssignedUserId = techByUser.user_id;
+      }
+
+      // Hard guard against RLS violations — non-admins MUST be themselves.
+      if (!isAdmin && finalAssignedUserId !== authUser.id) {
+        console.error("[ServiceOrders] RLS guard tripped:", {
+          finalAssignedUserId,
+          authUserId: authUser.id,
+          isAdmin,
+        });
+        throw new Error("RLS violation prevention: invalid assigned_user_id");
+      }
+
+      if (!finalAssignedUserId) {
+        missingUserRows.push(idx + 1);
+      }
+
+      // Set at the very last moment — no further mutation allowed.
+      payload.assigned_user_id = finalAssignedUserId;
+      Object.defineProperty(payload, "assigned_user_id", {
+        value: finalAssignedUserId,
+        writable: false,
+        configurable: false,
+        enumerable: true,
+      });
+
+      console.log(`[ServiceOrders] Row ${idx + 1} resolution:`, {
+        rawValue: rawTech,
+        finalAssignedUserId,
+        technicianName,
+        isAdmin,
+        matchedBy: isAdmin && techByUser ? "admin_dropdown" : "auth",
+      });
+      console.log("ASSIGNED USER:", finalAssignedUserId);
+      console.log("FINAL INSERT PAYLOAD:", payload);
 
       inserts.push(payload as ServiceOrderInsert);
     });
