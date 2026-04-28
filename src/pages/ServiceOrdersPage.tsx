@@ -125,10 +125,16 @@ export default function ServiceOrdersPage() {
         technicianName = techByUser.name;
       }
 
+      // Selected technician user object from dropdown (id + name) — id is the source of truth.
+      const selectedUser = techByUser ?? techByName ?? null;
+      console.log("SELECTED TECHNICIAN:", selectedUser);
+
       const payload: Record<string, any> = {
         client_id: clientMatch?.id || null,
         client_name: r.client?.trim() || clientMatch?.name || "",
         technician_name: technicianName,
+        // technician_id MUST come from the selected user object (never from name)
+        technician_id: selectedUser?.user_id ?? null,
         // assigned_user_id intentionally OMITTED here — set at the very end.
         platform: r.platform ?? null,
         week: r.week ?? null,
@@ -196,6 +202,8 @@ export default function ServiceOrdersPage() {
       });
       console.log("ASSIGNED USER:", finalAssignedUserId);
       console.log("FINAL INSERT PAYLOAD:", payload);
+
+      console.log("FINAL technician_id:", payload.technician_id);
 
       inserts.push(payload as ServiceOrderInsert);
     });
