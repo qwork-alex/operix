@@ -261,6 +261,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
   const updateMutation = useMutation({
     mutationFn: async (id: string) => {
       if (!editForm) return;
+      const currentUserId = await getCurrentUserId();
 
       // Find the original row to preserve existing data
       const originalRow = orders.find(o => o.id === id);
@@ -297,8 +298,10 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
         services: Json;
         total: number;
         updated_at: string;
+        user_id: string;
       }> = {
         updated_at: new Date().toISOString(),
+        user_id: currentUserId,
         services: filledServices as unknown as Json,
         total: computedTotal,
       };
@@ -334,10 +337,13 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
         payload.license_plate = plateVal;
       }
 
-      console.log("[PaymentOrders] Partial update payload:", JSON.stringify(payload));
+      logSavePayload("PaymentOrdersTable:update", currentUserId, payload);
 
-      const { error } = await supabase.from("payment_orders").update(payload).eq("id", id);
-      if (error) throw error;
+      const { error } = await (supabase as any).from("payment_orders").update(payload).eq("id", id);
+      if (error) {
+        logSaveError("PaymentOrdersTable:update", error);
+        throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payment_orders"] });
