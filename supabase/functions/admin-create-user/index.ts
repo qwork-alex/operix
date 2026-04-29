@@ -180,34 +180,59 @@ Deno.serve(async (req) => {
           .eq("id", reassign_to_user_id)
           .maybeSingle();
 
-        // Reassign service_orders / payment_orders by assigned_user_id
+        // Reassign service_orders / payment_orders — must update user_id, assigned_user_id AND created_by
+        // user_id is NOT NULL and used by RLS — failing to update it leaves orphan rows that block deletion.
         const targetName = targetProfile?.full_name || targetProfile?.email || "";
-        try {
-          await adminClient.from("service_orders").update({
+
+        const reassignTable = async (table: "service_orders" | "payment_orders") => {
+          // Update by user_id
+          const { error: e1 } = await adminClient.from(table).update({
+            user_id: reassign_to_user_id,
+            assigned_user_id: reassign_to_user_id,
+            technician_name: targetName,
+          }).eq("user_id", user_id);
+          if (e1) console.warn(`[delete_user] reassign ${table} by user_id error:`, e1.message);
+
+          // Update by assigned_user_id (in case they diverge)
+          const { error: e2 } = await adminClient.from(table).update({
+            user_id: reassign_to_user_id,
             assigned_user_id: reassign_to_user_id,
             technician_name: targetName,
           }).eq("assigned_user_id", user_id);
-        } catch (err) {
-          console.warn("[delete_user] reassign service_orders warning:", err);
-        }
+          if (e2) console.warn(`[delete_user] reassign ${table} by assigned_user_id error:`, e2.message);
+
+          // Update by created_by
+          const { error: e3 } = await adminClient.from(table).update({
+            created_by: reassign_to_user_id,
+          }).eq("created_by", user_id);
+          if (e3) console.warn(`[delete_user] reassign ${table} by created_by error:`, e3.message);
+
+          // VALIDATE: count must be 0 across all 3 columns
+          const [{ count: c1 }, { count: c2 }, { count: c3 }] = await Promise.all([
+            adminClient.from(table).select("id", { count: "exact", head: true }).eq("user_id", user_id),
+            adminClient.from(table).select("id", { count: "exact", head: true }).eq("assigned_user_id", user_id),
+            adminClient.from(table).select("id", { count: "exact", head: true }).eq("created_by", user_id),
+          ]);
+          const remaining = (c1 ?? 0) + (c2 ?? 0) + (c3 ?? 0);
+          if (remaining > 0) {
+            throw new Error(`Reassign falhou em ${table}: ${remaining} registros ainda vinculados ao usuário antigo (user_id=${c1}, assigned=${c2}, created_by=${c3}).`);
+          }
+          return { table, moved_user_id: c1, moved_assigned: c2, moved_created_by: c3 };
+        };
+
         try {
-          await adminClient.from("payment_orders").update({
-            assigned_user_id: reassign_to_user_id,
-            technician_name: targetName,
-          }).eq("assigned_user_id", user_id);
+          await reassignTable("service_orders");
+          await reassignTable("payment_orders");
         } catch (err) {
-          console.warn("[delete_user] reassign payment_orders warning:", err);
+          return jsonResp({ error: "reassign_failed", message: (err as Error).message }, 500);
         }
 
-        // Move created_by-bound rows (auth uid based)
-        const createdByMoves: Promise<unknown>[] = [
-          (async () => { await adminClient.from("service_orders").update({ created_by: reassign_to_user_id }).eq("created_by", user_id); })(),
-          (async () => { await adminClient.from("payment_orders").update({ created_by: reassign_to_user_id }).eq("created_by", user_id); })(),
+        // Move other created_by-bound rows
+        await Promise.allSettled([
           (async () => { await adminClient.from("financial_records").update({ created_by: reassign_to_user_id }).eq("created_by", user_id); })(),
           (async () => { await adminClient.from("fleet_trips").update({ created_by: reassign_to_user_id }).eq("created_by", user_id); })(),
           (async () => { await adminClient.from("documents").update({ uploaded_by: reassign_to_user_id }).eq("uploaded_by", user_id); })(),
-        ];
-        await Promise.allSettled(createdByMoves);
+        ]);
       }
 
       // ─── DETACH MODE / final cleanup ───
