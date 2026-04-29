@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { resolveTechnicianIdForFinancialRecord } from "@/lib/getTechnicianForRecord";
 import { getCurrentUserId, logSaveError, logSavePayload } from "@/lib/authUser";
 import type { ModuleEntry } from "./ModulePanel";
 
@@ -95,7 +94,6 @@ export function useAccountingModule(moduleKey: ModuleKey) {
     mutationFn: async (entry: { label: string; amount: number; notes: string }) => {
       if (isFuelMirror) throw new Error("Combustível é gerido na Frota");
       const currentUserId = await getCurrentUserId();
-      const assignedUserId = await resolveTechnicianIdForFinancialRecord();
       const payload = {
         type: config.type || "expense",
         source: "manual",
@@ -104,9 +102,6 @@ export function useAccountingModule(moduleKey: ModuleKey) {
         label: entry.label,
         notes: entry.notes,
         status: "confirmed",
-        user_id: currentUserId,
-        created_by: currentUserId,
-        assigned_user_id: assignedUserId,
       };
       logSavePayload("AccountingModule:insert", currentUserId, payload);
       const { error } = await (supabase as any).from("financial_records").insert(payload);
@@ -122,7 +117,7 @@ export function useAccountingModule(moduleKey: ModuleKey) {
     mutationFn: async ({ id, ...entry }: { id: string; label: string; amount: number; notes: string }) => {
       if (isFuelMirror) throw new Error("Combustível é gerido na Frota");
       const currentUserId = await getCurrentUserId();
-      const payload = { label: entry.label, amount: entry.amount, notes: entry.notes, user_id: currentUserId };
+      const payload = { label: entry.label, amount: entry.amount, notes: entry.notes };
       logSavePayload("AccountingModule:update", currentUserId, payload);
       const { error } = await (supabase as any)
         .from("financial_records")
