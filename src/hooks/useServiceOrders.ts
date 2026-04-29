@@ -222,6 +222,9 @@ export function useServiceOrders(filters?: {
       // Remove joined relations that come from select("*, clients(...)")
       delete (payload as any).clients;
       delete (payload as any).technicians;
+      delete (payload as any).user_id;
+      delete (payload as any).assigned_user_id;
+      delete (payload as any).created_by;
       // Hard rule: technician_id is never accepted on writes
       delete (payload as any).technician_id;
 
