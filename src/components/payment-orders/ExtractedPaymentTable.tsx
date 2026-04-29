@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Save, X, Trash2, AlertTriangle, CheckCircle2, XCircle, Pencil } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { ExtractedPaymentOrder, FieldConfidence } from "@/hooks/usePaymentOrders";
@@ -32,6 +33,10 @@ interface Props {
   onSave: (orders: ExtractedPaymentOrder[]) => void;
   onDiscard: () => void;
   isSaving?: boolean;
+  technicians?: { user_id: string; name: string; display_code?: string | null }[];
+  isTechnicianRole?: boolean;
+  isAdmin?: boolean;
+  myTechnicianName?: string | null;
 }
 
 const confidenceColors: Record<string, string> = {
@@ -60,10 +65,23 @@ function computeTotal(services: { name: string; price: number }[]): number {
   return services.reduce((sum, s) => sum + (s.price || 0), 0);
 }
 
-export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDiscard, isSaving }: Props) {
-  const [rows, setRows] = useState<ExtractedPaymentOrder[]>(() =>
-    orders.map(o => ({ ...o, services: padServices(o.services || []) }))
-  );
+export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDiscard, isSaving, technicians = [], isTechnicianRole, isAdmin = false, myTechnicianName = null }: Props) {
+  const lockTechnician = typeof isTechnicianRole === "boolean" ? isTechnicianRole : !isAdmin;
+  const resolveTechUserIdFromText = (text: string | null): string | null => {
+    if (!text) return null;
+    const norm = text.trim().toLowerCase();
+    const exact = technicians.find((t) => t.name.toLowerCase() === norm || t.user_id === text);
+    if (exact) return exact.user_id;
+    const partial = technicians.find((t) => t.name.toLowerCase().includes(norm) || norm.includes(t.name.toLowerCase()));
+    return partial?.user_id ?? null;
+  };
+  const [rows, setRows] = useState<ExtractedPaymentOrder[]>(() => {
+    if (lockTechnician && myTechnicianName) {
+      const myUserId = technicians.find((t) => t.name === myTechnicianName)?.user_id ?? null;
+      return orders.map(o => ({ ...o, technician: myUserId ?? myTechnicianName, services: padServices(o.services || []) }));
+    }
+    return orders.map(o => ({ ...o, technician: resolveTechUserIdFromText(o.technician) ?? o.technician, services: padServices(o.services || []) }));
+  });
   const [stage, setStage] = useState<Stage>("review");
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [errorRows, setErrorRows] = useState<Set<number>>(new Set());
