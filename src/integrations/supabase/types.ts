@@ -1784,6 +1784,22 @@ export type Database = {
         Args: { p_invite_token: string }
         Returns: Json
       }
+      apply_order_owner: {
+        Args: {
+          _created_by: string
+          _is_insert: boolean
+          _old_assigned_user_id: string
+          _old_created_by: string
+          _old_user_id: string
+          _requested_assigned_user_id: string
+          _requested_user_id: string
+        }
+        Returns: {
+          assigned_user_id: string
+          created_by: string
+          user_id: string
+        }[]
+      }
       can_access_client: {
         Args: { _client_id: string; _user_id: string }
         Returns: boolean
