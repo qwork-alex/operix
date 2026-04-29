@@ -22,10 +22,10 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { useAuth } from "@/hooks/useAuth";
 import { useRole } from "@/hooks/useRole";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTechnicianEarnings, getTechEarnings } from "@/hooks/useTechnicianEarnings";
 import { Can } from "@/components/Can";
+import { getCurrentUser } from "@/lib/authUser";
 
 export default function ServiceOrdersPage() {
   const { t } = useLanguage();
@@ -87,8 +87,7 @@ export default function ServiceOrdersPage() {
 
     // ALWAYS resolve the authenticated user fresh from supabase.auth.
     // RLS requires assigned_user_id === auth.uid() for non-admins.
-    const { data: authData } = await supabase.auth.getUser();
-    const authUser = authData?.user ?? null;
+    const authUser = await getCurrentUser();
     console.log("AUTH USER:", authUser?.id);
 
     if (!authUser?.id) {
@@ -151,7 +150,8 @@ export default function ServiceOrdersPage() {
         total: r.total ?? null,
         status: "draft",
         group_id: r.week ?? null,
-        created_by: user?.id ?? null,
+        user_id: authUser.id,
+        created_by: authUser.id,
       };
 
       // Calculate technician earnings from profit distribution rules

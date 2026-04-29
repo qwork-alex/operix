@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import type { Json } from "@/integrations/supabase/types";
 import { Can } from "@/components/Can";
+import { getCurrentUser } from "@/lib/authUser";
 
 export default function PaymentOrdersPage() {
   const { t } = useLanguage();
@@ -75,9 +76,15 @@ export default function PaymentOrdersPage() {
     });
   }, [addFiles, extract, user?.id, queryClient]);
 
-  const handleSave = (extractionId: string, rows: ExtractedPaymentOrder[]) => {
+  const handleSave = async (extractionId: string, rows: ExtractedPaymentOrder[]) => {
     // rows = EXACTLY what the user sees in the edited table (source of truth)
     console.log("SAVING DATA (raw edited rows):", JSON.stringify(rows, null, 2));
+    const authUser = await getCurrentUser();
+    console.log("AUTH USER:", authUser);
+    if (!authUser?.id) {
+      toast.error("Sessão expirada. Faça login novamente antes de salvar.", { duration: 7000 });
+      return;
+    }
 
     const inserts: PaymentOrderInsert[] = rows.map(r => {
       const clientMatch = clients.find(c => c.name.toLowerCase() === r.client?.toLowerCase());
@@ -87,7 +94,7 @@ export default function PaymentOrdersPage() {
         ? technicians.find(t => t.name.toLowerCase() === rawTech.toLowerCase())
         : undefined;
       const techMatch = techByUser ?? techByName;
-      const assignedUserId = techMatch?.user_id ?? user?.id ?? null;
+      const assignedUserId = techMatch?.user_id ?? authUser.id;
       const payload: Record<string, any> = {
         client_id: clientMatch?.id || null,
         client_name: r.client?.trim() || clientMatch?.name || null,
@@ -101,16 +108,25 @@ export default function PaymentOrdersPage() {
         total: r.total ?? null,
         status: "pending",
         group_id: r.list_name ?? null,
+        user_id: authUser.id,
+        created_by: authUser.id,
       };
+      console.log("FINAL INSERT PAYLOAD:", payload);
       return payload as PaymentOrderInsert;
     });
 
     console.log("SAVING DATA (mapped inserts):", JSON.stringify(inserts, null, 2));
 
     saveMutation.mutate(inserts, {
-      onSuccess: () => {
+      onSuccess: (response) => {
+        console.log("INSERT RESPONSE:", response);
+        console.log("INSERT ERROR:", null);
         setExtractions(prev => prev.filter((e) => e._id !== extractionId));
         
+      },
+      onError: (error) => {
+        console.log("INSERT RESPONSE:", null);
+        console.log("INSERT ERROR:", error);
       },
     });
   };

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveTechnicianIdForFinancialRecord } from "@/lib/getTechnicianForRecord";
+import { getCurrentUserId, logSaveError, logSavePayload } from "@/lib/authUser";
 import type { ModuleEntry } from "./ModulePanel";
 
 type ModuleKey = "rentals" | "expenses" | "fuel" | "purchases" | "government" | "withdrawals";
@@ -93,9 +94,9 @@ export function useAccountingModule(moduleKey: ModuleKey) {
   const addMutation = useMutation({
     mutationFn: async (entry: { label: string; amount: number; notes: string }) => {
       if (isFuelMirror) throw new Error("Combustível é gerido na Frota");
-      const { data: { user } } = await supabase.auth.getUser();
+      const currentUserId = await getCurrentUserId();
       const assignedUserId = await resolveTechnicianIdForFinancialRecord();
-      const { error } = await supabase.from("financial_records").insert({
+      const payload = {
         type: config.type || "expense",
         source: "manual",
         category: config.category || "other",
@@ -103,10 +104,16 @@ export function useAccountingModule(moduleKey: ModuleKey) {
         label: entry.label,
         notes: entry.notes,
         status: "confirmed",
-        created_by: user?.id,
+        user_id: currentUserId,
+        created_by: currentUserId,
         assigned_user_id: assignedUserId,
-      });
-      if (error) throw error;
+      };
+      logSavePayload("AccountingModule:insert", currentUserId, payload);
+      const { error } = await (supabase as any).from("financial_records").insert(payload);
+      if (error) {
+        logSaveError("AccountingModule:insert", error);
+        throw error;
+      }
     },
     onSuccess: invalidate,
   });
@@ -114,11 +121,17 @@ export function useAccountingModule(moduleKey: ModuleKey) {
   const updateMutation = useMutation({
     mutationFn: async ({ id, ...entry }: { id: string; label: string; amount: number; notes: string }) => {
       if (isFuelMirror) throw new Error("Combustível é gerido na Frota");
-      const { error } = await supabase
+      const currentUserId = await getCurrentUserId();
+      const payload = { label: entry.label, amount: entry.amount, notes: entry.notes, user_id: currentUserId };
+      logSavePayload("AccountingModule:update", currentUserId, payload);
+      const { error } = await (supabase as any)
         .from("financial_records")
-        .update({ label: entry.label, amount: entry.amount, notes: entry.notes })
+        .update(payload)
         .eq("id", id);
-      if (error) throw error;
+      if (error) {
+        logSaveError("AccountingModule:update", error);
+        throw error;
+      }
     },
     onSuccess: invalidate,
   });

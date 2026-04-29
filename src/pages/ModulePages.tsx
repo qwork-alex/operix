@@ -29,6 +29,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RolePermissionsManager } from "@/components/permissions/RolePermissionsManager";
 import { UserPermissionsDialog } from "@/components/permissions/UserPermissionsDialog";
 import { Can } from "@/components/Can";
+import { getCurrentUserId, logSaveError, logSavePayload } from "@/lib/authUser";
 
 // ─── PROFIT DISTRIBUTION ───
 // Moved to src/components/profit/ProfitDistribution.tsx
@@ -106,6 +107,7 @@ export function AccountingLegacy() {
 
   const addMutation = useMutation({
     mutationFn: async () => {
+      const currentUserId = await getCurrentUserId();
       const payload: any = {
         type: form.type,
         source: form.label ? "manual" : "manual",
@@ -114,13 +116,23 @@ export function AccountingLegacy() {
         amount: parseFloat(form.amount) || 0,
         notes: form.notes || null,
         status: form.status,
+        user_id: currentUserId,
+        created_by: currentUserId,
+        assigned_user_id: currentUserId,
       };
+      logSavePayload(editId ? "FinancialRecords:update" : "FinancialRecords:insert", currentUserId, payload);
       if (editId) {
-        const { error } = await supabase.from("financial_records").update(payload).eq("id", editId);
-        if (error) throw error;
+        const { error } = await (supabase as any).from("financial_records").update(payload).eq("id", editId);
+        if (error) {
+          logSaveError("FinancialRecords:update", error);
+          throw error;
+        }
       } else {
-        const { error } = await supabase.from("financial_records").insert(payload);
-        if (error) throw error;
+        const { error } = await (supabase as any).from("financial_records").insert(payload);
+        if (error) {
+          logSaveError("FinancialRecords:insert", error);
+          throw error;
+        }
       }
     },
     onSuccess: () => {
@@ -462,6 +474,7 @@ export function Fleet() {
   const logMutation = useMutation({
     mutationFn: async () => {
       if (!logVehicleId) throw new Error("No vehicle selected");
+      const currentUserId = await getCurrentUserId();
       const startKm = parseFloat(logForm.start_km) || 0;
       const endKm = parseFloat(logForm.end_km) || 0;
       const fuelCost = parseFloat(logForm.fuel_cost) || 0;
@@ -482,7 +495,7 @@ export function Fleet() {
         const vehicle = vehicles.find((v: any) => v.id === logVehicleId);
         const { resolveTechnicianIdForFinancialRecord } = await import("@/lib/getTechnicianForRecord");
         const assignedUserId = await resolveTechnicianIdForFinancialRecord();
-        await supabase.from("financial_records").insert({
+        const payload = {
           type: "expense",
           source: "fleet",
           category: "fuel",
@@ -490,8 +503,16 @@ export function Fleet() {
           label: `${t("fleet.fuel")} — ${vehicle?.name || vehicle?.license_plate || ""}`,
           notes: `${endKm - startKm} km, ${fuelLitres}L`,
           status: "confirmed",
+          user_id: currentUserId,
+          created_by: currentUserId,
           assigned_user_id: assignedUserId,
-        });
+        };
+        logSavePayload("FleetFinancialRecord:insert", currentUserId, payload);
+        const { error: financialError } = await (supabase as any).from("financial_records").insert(payload);
+        if (financialError) {
+          logSaveError("FleetFinancialRecord:insert", financialError);
+          throw financialError;
+        }
       }
     },
     onSuccess: () => {

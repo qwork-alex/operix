@@ -10,7 +10,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Trash2, Pencil, Save, X, Loader2, CheckCircle2 } from "lucide-react";
 import { useLanguage } from "@/hooks/useLanguage";
-import { useAuth } from "@/hooks/useAuth";
 import { useClients } from "@/hooks/useServiceOrders";
 import { useAssignableUsers } from "@/hooks/useAssignableUsers";
 import { toast } from "sonner";
@@ -22,6 +21,7 @@ import { AlertTriangle, Clock } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { BulkDeleteDialog } from "@/components/shared/BulkDeleteDialog";
 import { Can } from "@/components/Can";
+import { getCurrentUserId, logSaveError, logSavePayload } from "@/lib/authUser";
 
 const MAX_SERVICES = 4;
 
@@ -123,7 +123,6 @@ const toNullableText = (value: string) => {
 
 export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrderRow[]; isLoading: boolean }) {
   const { t, formatCurrency } = useLanguage();
-  const { user } = useAuth();
   const { data: clients = [] } = useClients();
   const { data: technicians = [] } = useAssignableUsers();
   const queryClient = useQueryClient();
@@ -179,12 +178,18 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
   /** Update amount_paid → derive status server-side write */
   const paymentMutation = useMutation({
     mutationFn: async ({ id, amount_paid, total }: { id: string; amount_paid: number; total: number }) => {
+      const currentUserId = await getCurrentUserId();
       const status = deriveStatus(total, amount_paid);
-      const { error } = await supabase
+      const payload = { amount_paid, status, user_id: currentUserId, updated_at: new Date().toISOString() } as any;
+      logSavePayload("PaymentOrdersTable:payment", currentUserId, payload);
+      const { error } = await (supabase as any)
         .from("payment_orders")
-        .update({ amount_paid, status, updated_at: new Date().toISOString() } as any)
+        .update(payload)
         .eq("id", id);
-      if (error) throw error;
+      if (error) {
+        logSaveError("PaymentOrdersTable:payment", error);
+        throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payment_orders"] });
@@ -197,16 +202,22 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
   /** Batch: mark whole list as fully paid / partial reset / pending reset (amount_paid driven) */
   const batchStatusMutation = useMutation({
     mutationFn: async ({ listName, mode }: { listName: string; mode: "paid" | "pending" }) => {
+      const currentUserId = await getCurrentUserId();
       const listOrders = orders.filter(o => o.list_name === listName);
       for (const o of listOrders) {
         const total = o.total || 0;
         const amount_paid = mode === "paid" ? total : 0;
         const status = deriveStatus(total, amount_paid);
-        const { error } = await supabase
+        const payload = { amount_paid, status, user_id: currentUserId, updated_at: new Date().toISOString() } as any;
+        logSavePayload("PaymentOrdersTable:batch", currentUserId, payload);
+        const { error } = await (supabase as any)
           .from("payment_orders")
-          .update({ amount_paid, status, updated_at: new Date().toISOString() } as any)
+          .update(payload)
           .eq("id", o.id);
-        if (error) throw error;
+        if (error) {
+          logSaveError("PaymentOrdersTable:batch", error);
+          throw error;
+        }
       }
     },
     onSuccess: () => {
@@ -248,6 +259,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
   const updateMutation = useMutation({
     mutationFn: async (id: string) => {
       if (!editForm) return;
+      const currentUserId = await getCurrentUserId();
 
       // Find the original row to preserve existing data
       const originalRow = orders.find(o => o.id === id);
@@ -284,8 +296,10 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
         services: Json;
         total: number;
         updated_at: string;
+        user_id: string;
       }> = {
         updated_at: new Date().toISOString(),
+        user_id: currentUserId,
         services: filledServices as unknown as Json,
         total: computedTotal,
       };
@@ -321,10 +335,13 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
         payload.license_plate = plateVal;
       }
 
-      console.log("[PaymentOrders] Partial update payload:", JSON.stringify(payload));
+      logSavePayload("PaymentOrdersTable:update", currentUserId, payload);
 
-      const { error } = await supabase.from("payment_orders").update(payload).eq("id", id);
-      if (error) throw error;
+      const { error } = await (supabase as any).from("payment_orders").update(payload).eq("id", id);
+      if (error) {
+        logSaveError("PaymentOrdersTable:update", error);
+        throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payment_orders"] });
