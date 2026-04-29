@@ -464,3 +464,49 @@ function ConfEditCell({ value, confidence, onChange }: { value: string; confiden
     </Tooltip>
   );
 }
+
+function TechnicianSelectCell({
+  value,
+  confidence,
+  technicians,
+  disabled,
+  onChange,
+}: {
+  value: string;
+  confidence?: FieldConfidence;
+  technicians: { user_id: string; name: string; display_code?: string | null }[];
+  disabled: boolean;
+  onChange: (v: string) => void;
+}) {
+  const conf = confidence || "high";
+  const borderClass = fieldConfBorder[conf];
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div>
+          <Select value={value} onValueChange={onChange} disabled={disabled}>
+            <SelectTrigger className={cn("h-6 text-[11px] px-1 bg-transparent hover:border-border", borderClass, disabled && "opacity-80 cursor-not-allowed")}>
+              <SelectValue placeholder="Técnico" />
+            </SelectTrigger>
+            <SelectContent className="max-h-64">
+              {technicians.map((t) => (
+                <SelectItem key={t.user_id} value={t.user_id}>
+                  <span className="font-medium">{t.name}</span>
+                  {t.display_code ? <span className="ml-2 text-[10px] text-muted-foreground">{t.display_code}</span> : null}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </TooltipTrigger>
+      {disabled ? (
+        <TooltipContent className="text-xs">🔒 Técnico vinculado à própria conta</TooltipContent>
+      ) : conf !== "high" ? (
+        <TooltipContent className="text-xs">
+          {conf === "low" ? "⚠️ Low confidence — please verify" : "⚡ Medium confidence — review recommended"}
+        </TooltipContent>
+      ) : null}
+    </Tooltip>
+  );
+}
