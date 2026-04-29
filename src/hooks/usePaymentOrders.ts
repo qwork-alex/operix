@@ -57,7 +57,7 @@ export function usePaymentOrders(filters?: {
         .select("*, clients(name)")
         .order("created_at", { ascending: false });
 
-      q = applyScope(q, scope, user);
+      q = applyScope(q, scope, user, "user_id");
 
       if (filters?.client_id) q = q.eq("client_id", filters.client_id);
       if (filters?.platform) q = q.eq("platform", filters.platform);
