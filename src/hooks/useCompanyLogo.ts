@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { BrandConfig } from "@/components/layout/BrandNameEditor";
+import { getCurrentUserId, logSaveError, logSavePayload } from "@/lib/authUser";
 
 export function useCompanyLogo() {
   const queryClient = useQueryClient();
@@ -24,6 +25,7 @@ export function useCompanyLogo() {
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
+      const currentUserId = await getCurrentUserId();
       const ext = file.name.split(".").pop() || "png";
       const path = `company-logo-${Date.now()}.${ext}`;
 
@@ -42,18 +44,26 @@ export function useCompanyLogo() {
         .maybeSingle();
 
       if (existing) {
-        const { error } = await supabase
+        const payload = { logo_url: publicUrl, user_id: currentUserId, updated_at: new Date().toISOString() };
+        logSavePayload("CompanyLogo:update", currentUserId, payload);
+        const { error } = await (supabase as any)
           .from("company_settings")
-          .update({ logo_url: publicUrl, updated_at: new Date().toISOString() })
+          .update(payload)
           .eq("id", existing.id);
-        if (error) throw error;
+        if (error) {
+          logSaveError("CompanyLogo:update", error);
+          throw error;
+        }
       } else {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error("Not authenticated");
-        const { error } = await supabase
+        const payload = { logo_url: publicUrl, user_id: currentUserId };
+        logSavePayload("CompanyLogo:insert", currentUserId, payload);
+        const { error } = await (supabase as any)
           .from("company_settings")
-          .insert({ logo_url: publicUrl, user_id: user.id });
-        if (error) throw error;
+          .insert(payload);
+        if (error) {
+          logSaveError("CompanyLogo:insert", error);
+          throw error;
+        }
       }
 
       return publicUrl;
@@ -66,6 +76,7 @@ export function useCompanyLogo() {
 
   const brandMutation = useMutation({
     mutationFn: async (brandConfig: BrandConfig) => {
+      const currentUserId = await getCurrentUserId();
       const { data: existing } = await supabase
         .from("company_settings")
         .select("id")
@@ -73,18 +84,26 @@ export function useCompanyLogo() {
         .maybeSingle();
 
       if (existing) {
-        const { error } = await supabase
+        const payload = { brand_config: brandConfig as any, user_id: currentUserId, updated_at: new Date().toISOString() };
+        logSavePayload("CompanyBrand:update", currentUserId, payload);
+        const { error } = await (supabase as any)
           .from("company_settings")
-          .update({ brand_config: brandConfig as any, updated_at: new Date().toISOString() })
+          .update(payload)
           .eq("id", existing.id);
-        if (error) throw error;
+        if (error) {
+          logSaveError("CompanyBrand:update", error);
+          throw error;
+        }
       } else {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error("Not authenticated");
-        const { error } = await supabase
+        const payload = { brand_config: brandConfig as any, user_id: currentUserId };
+        logSavePayload("CompanyBrand:insert", currentUserId, payload);
+        const { error } = await (supabase as any)
           .from("company_settings")
-          .insert({ brand_config: brandConfig as any, user_id: user.id });
-        if (error) throw error;
+          .insert(payload);
+        if (error) {
+          logSaveError("CompanyBrand:insert", error);
+          throw error;
+        }
       }
     },
     onSuccess: () => {
