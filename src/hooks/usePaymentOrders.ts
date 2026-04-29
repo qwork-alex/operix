@@ -57,7 +57,7 @@ export function usePaymentOrders(filters?: {
         .select("*, clients(name)")
         .order("created_at", { ascending: false });
 
-      q = applyScope(q, scope, user);
+      q = applyScope(q, scope, user, "user_id");
 
       if (filters?.client_id) q = q.eq("client_id", filters.client_id);
       if (filters?.platform) q = q.eq("platform", filters.platform);
@@ -77,8 +77,6 @@ export function usePaymentOrders(filters?: {
       const payload = orders.map(o => {
         const {
           technician_id: _ignored,
-          user_id: _ignoredUserId,
-          assigned_user_id: _ignoredAssignedUserId,
           created_by: _ignoredCreatedBy,
           ...rest
         } = o as any;
@@ -125,7 +123,6 @@ export function usePaymentOrders(filters?: {
       // Remove join fields that aren't columns
       delete (payload as any).clients;
       delete (payload as any).technicians;
-      delete (payload as any).user_id;
       delete (payload as any).created_by;
       // Hard rule: technician_id is never accepted on writes
       delete (payload as any).technician_id;

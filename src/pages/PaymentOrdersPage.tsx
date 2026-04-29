@@ -17,10 +17,11 @@ import {
   type PaymentOrderInsert,
 } from "@/hooks/usePaymentOrders";
 import { useClients } from "@/hooks/useServiceOrders";
-import { useAssignableUsers } from "@/hooks/useAssignableUsers";
+import { useAssignableUsers, useMyAssignableUserId } from "@/hooks/useAssignableUsers";
 import { useFileQueue, type QueueItemStatus } from "@/hooks/useFileQueue";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useAuth } from "@/hooks/useAuth";
+import { useRole } from "@/hooks/useRole";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import type { Json } from "@/integrations/supabase/types";
@@ -30,6 +31,8 @@ import { getCurrentUser } from "@/lib/authUser";
 export default function PaymentOrdersPage() {
   const { t } = useLanguage();
   const { user } = useAuth();
+  const { isAdmin, dbRole } = useRole();
+  const canAssignAnyTechnician = isAdmin || dbRole === "partner";
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState<{
     client_id?: string;
@@ -44,6 +47,7 @@ export default function PaymentOrdersPage() {
   const { extract } = useExtractPaymentOrder();
   const { data: clients = [] } = useClients();
   const { data: technicians = [] } = useAssignableUsers();
+  const { data: myAssignableUserId } = useMyAssignableUserId();
   
   const { queue, isProcessing, addFiles, clearCompleted } = useFileQueue();
 
@@ -94,10 +98,17 @@ export default function PaymentOrdersPage() {
         ? technicians.find(t => t.name.toLowerCase() === rawTech.toLowerCase())
         : undefined;
       const techMatch = techByUser ?? techByName;
+      const finalUserId = canAssignAnyTechnician
+        ? techMatch?.user_id ?? authUser.id
+        : authUser.id;
+      const selectedUser = technicians.find(t => t.user_id === finalUserId) ?? techMatch ?? null;
+      console.log("SELECTED TECHNICIAN:", selectedUser);
       const payload: Record<string, any> = {
+        user_id: finalUserId,
+        assigned_user_id: finalUserId,
         client_id: clientMatch?.id || null,
         client_name: r.client?.trim() || clientMatch?.name || null,
-        technician_name: techMatch?.name || rawTech || null,
+        technician_name: selectedUser?.name || techMatch?.name || rawTech || null,
         platform: r.platform ?? null,
         list_name: r.list_name ?? null,
         car_name: r.car_name ?? null,
@@ -107,6 +118,7 @@ export default function PaymentOrdersPage() {
         status: "pending",
         group_id: r.list_name ?? null,
       };
+      console.log("FINAL user_id:", payload.user_id);
       console.log("FINAL INSERT PAYLOAD:", payload);
       return payload as PaymentOrderInsert;
     });
@@ -169,6 +181,14 @@ export default function PaymentOrdersPage() {
           onSave={(rows) => handleSave(extraction._id, rows)}
           onDiscard={() => handleDiscard(extraction._id)}
           isSaving={saveMutation.isPending}
+          technicians={technicians}
+          isTechnicianRole={dbRole === "technician"}
+          isAdmin={canAssignAnyTechnician}
+          myTechnicianName={
+            myAssignableUserId
+              ? technicians.find((t) => t.user_id === myAssignableUserId)?.name ?? null
+              : null
+          }
         />
       ))}
 

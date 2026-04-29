@@ -78,6 +78,7 @@ interface PaymentOrderRow {
   platform: string | null;
   list_name: string | null;
   technician_name?: string | null;
+  user_id?: string | null;
   assigned_user_id?: string | null;
   technicians?: { name: string } | null;
   car_name: string | null;
@@ -288,6 +289,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
         client_id: string | null;
         client_name: string | null;
         technician_name: string | null;
+        user_id: string | null;
         assigned_user_id: string | null;
         platform: string | null;
         list_name: string | null;
@@ -310,6 +312,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
         payload.client_name = clientName;
       }
       if (resolvedAssignedUserId !== (originalRow?.assigned_user_id ?? null)) {
+        payload.user_id = resolvedAssignedUserId;
         payload.assigned_user_id = resolvedAssignedUserId;
       }
       if (techName !== (originalRow?.technician_name ?? null)) {

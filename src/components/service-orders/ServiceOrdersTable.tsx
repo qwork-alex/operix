@@ -29,6 +29,7 @@ interface ServiceOrderRow {
   client_name?: string | null;
   platform: string | null;
   technician_name?: string | null;
+  user_id?: string | null;
   assigned_user_id?: string | null;
   week: string | null;
   car_name: string | null;
@@ -263,6 +264,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
         client_id: resolvedClientId,
         client_name: clientName,
         technician_name: techName,
+        user_id: finalAssignedUserId,
         assigned_user_id: finalAssignedUserId,
         platform: toNullableText(editForm.platform),
         week: toNullableText(editForm.week),
@@ -286,8 +288,6 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
 
       delete (payload as any).clients;
       delete (payload as any).technicians;
-      delete (payload as any).user_id;
-      delete (payload as any).assigned_user_id;
       delete (payload as any).created_by;
       delete (payload as any).technician_id;
 
