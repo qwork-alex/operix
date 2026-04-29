@@ -22,6 +22,7 @@ import { AlertTriangle, Clock } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { BulkDeleteDialog } from "@/components/shared/BulkDeleteDialog";
 import { Can } from "@/components/Can";
+import { getCurrentUserId, logSaveError, logSavePayload } from "@/lib/authUser";
 
 const MAX_SERVICES = 4;
 
@@ -179,12 +180,18 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
   /** Update amount_paid → derive status server-side write */
   const paymentMutation = useMutation({
     mutationFn: async ({ id, amount_paid, total }: { id: string; amount_paid: number; total: number }) => {
+      const currentUserId = await getCurrentUserId();
       const status = deriveStatus(total, amount_paid);
-      const { error } = await supabase
+      const payload = { amount_paid, status, user_id: currentUserId, updated_at: new Date().toISOString() } as any;
+      logSavePayload("PaymentOrdersTable:payment", currentUserId, payload);
+      const { error } = await (supabase as any)
         .from("payment_orders")
-        .update({ amount_paid, status, updated_at: new Date().toISOString() } as any)
+        .update(payload)
         .eq("id", id);
-      if (error) throw error;
+      if (error) {
+        logSaveError("PaymentOrdersTable:payment", error);
+        throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payment_orders"] });
@@ -197,16 +204,22 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
   /** Batch: mark whole list as fully paid / partial reset / pending reset (amount_paid driven) */
   const batchStatusMutation = useMutation({
     mutationFn: async ({ listName, mode }: { listName: string; mode: "paid" | "pending" }) => {
+      const currentUserId = await getCurrentUserId();
       const listOrders = orders.filter(o => o.list_name === listName);
       for (const o of listOrders) {
         const total = o.total || 0;
         const amount_paid = mode === "paid" ? total : 0;
         const status = deriveStatus(total, amount_paid);
-        const { error } = await supabase
+        const payload = { amount_paid, status, user_id: currentUserId, updated_at: new Date().toISOString() } as any;
+        logSavePayload("PaymentOrdersTable:batch", currentUserId, payload);
+        const { error } = await (supabase as any)
           .from("payment_orders")
-          .update({ amount_paid, status, updated_at: new Date().toISOString() } as any)
+          .update(payload)
           .eq("id", o.id);
-        if (error) throw error;
+        if (error) {
+          logSaveError("PaymentOrdersTable:batch", error);
+          throw error;
+        }
       }
     },
     onSuccess: () => {
