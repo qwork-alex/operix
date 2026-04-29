@@ -192,6 +192,7 @@ export function useServiceOrders(filters?: {
   const updateMutation = useMutation({
     mutationFn: async ({ id, ...updates }: Partial<ServiceOrder> & { id: string }) => {
       if (!id) throw new Error("Service order id is required for update.");
+      const currentUserId = await getCurrentUserId();
 
       // Fetch FULL existing record to merge — prevents data loss
       const { data: existing, error: existingError } = await supabase
@@ -207,7 +208,9 @@ export function useServiceOrders(filters?: {
         ...existing,
         ...updates,
         id,
-        created_by: updates.created_by ?? existing.created_by ?? user?.id,
+        user_id: (updates as any).user_id ?? (existing as any).user_id ?? currentUserId,
+        assigned_user_id: (updates as any).assigned_user_id ?? (existing as any).assigned_user_id ?? currentUserId,
+        created_by: updates.created_by ?? existing.created_by ?? currentUserId,
         created_at: updates.created_at ?? existing.created_at ?? new Date().toISOString(),
         updated_at: new Date().toISOString(),
         client_name: (updates as any).client_name ?? (existing as any).client_name ?? "",
@@ -224,20 +227,16 @@ export function useServiceOrders(filters?: {
         throw new Error("Missing required audit fields (id, created_by, created_at, updated_at).");
       }
 
-      if (!(payload as any).assigned_user_id) {
-        throw new Error("assigned_user_id is required for service order updates.");
-      }
+      logSavePayload("ServiceOrders:update", currentUserId, payload);
 
-      console.log("Saving payload:", payload);
-
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("service_orders")
         .update(payload)
         .eq("id", id)
         .select()
         .single();
       if (error) {
-        console.error("[ServiceOrders] Update error:", error);
+        logSaveError("ServiceOrders:update", error);
         throw error;
       }
       return data;
