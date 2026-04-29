@@ -41,7 +41,7 @@ export function useCompanySettings() {
         .maybeSingle();
 
       if (existing) {
-        const payload = { ...settings, user_id: currentUserId, updated_at: new Date().toISOString() };
+        const payload = { ...settings, updated_at: new Date().toISOString() };
         logSavePayload("CompanySettings:update", currentUserId, payload);
         const { error } = await (supabase as any)
           .from("company_settings")
@@ -52,7 +52,7 @@ export function useCompanySettings() {
           throw error;
         }
       } else {
-        const payload = { ...settings, user_id: currentUserId };
+        const payload = { ...settings };
         logSavePayload("CompanySettings:insert", currentUserId, payload);
         const { error } = await (supabase as any)
           .from("company_settings")

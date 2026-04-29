@@ -52,10 +52,9 @@ export function useServiceOrders(filters?: {
 
   const hasRequiredAuditFields = (payload: {
     id?: string;
-    created_by?: string | null;
     created_at?: string;
     updated_at?: string;
-  }) => Boolean(payload.id && payload.created_by && payload.created_at && payload.updated_at);
+  }) => Boolean(payload.id && payload.created_at && payload.updated_at);
 
   const { allowed, scope } = can("service_orders", "view");
 
@@ -105,13 +104,16 @@ export function useServiceOrders(filters?: {
       const currentUserId = await getCurrentUserId();
 
       const payload = orders.map(o => {
-        const { technician_id: _ignored, ...rest } = o as any;
+        const {
+          technician_id: _ignored,
+          user_id: _ignoredUserId,
+          assigned_user_id: _ignoredAssignedUserId,
+          created_by: _ignoredCreatedBy,
+          ...rest
+        } = o as any;
         return {
           id: rest.id ?? crypto.randomUUID(),
           ...rest,
-          user_id: rest.user_id ?? currentUserId,
-          assigned_user_id: rest.assigned_user_id ?? currentUserId,
-          created_by: rest.created_by ?? currentUserId,
           created_at: rest.created_at ?? new Date().toISOString(),
           updated_at: new Date().toISOString(),
           status: rest.status || "draft",
@@ -119,7 +121,7 @@ export function useServiceOrders(filters?: {
       });
 
       const invalid = payload.find((p) => !hasRequiredAuditFields(p));
-      if (invalid) throw new Error("Missing required audit fields (id, created_by, created_at, updated_at).");
+      if (invalid) throw new Error("Missing required audit fields (id, created_at, updated_at).");
 
       logSavePayload("ServiceOrders:insert", currentUserId, payload);
 
@@ -208,9 +210,9 @@ export function useServiceOrders(filters?: {
         ...existing,
         ...updates,
         id,
-        user_id: (updates as any).user_id ?? (existing as any).user_id ?? currentUserId,
-        assigned_user_id: (updates as any).assigned_user_id ?? (existing as any).assigned_user_id ?? currentUserId,
-        created_by: updates.created_by ?? existing.created_by ?? currentUserId,
+        user_id: (existing as any).user_id ?? currentUserId,
+        assigned_user_id: (existing as any).assigned_user_id ?? currentUserId,
+        created_by: existing.created_by ?? currentUserId,
         created_at: updates.created_at ?? existing.created_at ?? new Date().toISOString(),
         updated_at: new Date().toISOString(),
         client_name: (updates as any).client_name ?? (existing as any).client_name ?? "",
@@ -220,11 +222,14 @@ export function useServiceOrders(filters?: {
       // Remove joined relations that come from select("*, clients(...)")
       delete (payload as any).clients;
       delete (payload as any).technicians;
+      delete (payload as any).user_id;
+      delete (payload as any).assigned_user_id;
+      delete (payload as any).created_by;
       // Hard rule: technician_id is never accepted on writes
       delete (payload as any).technician_id;
 
       if (!hasRequiredAuditFields(payload)) {
-        throw new Error("Missing required audit fields (id, created_by, created_at, updated_at).");
+        throw new Error("Missing required audit fields (id, created_at, updated_at).");
       }
 
       logSavePayload("ServiceOrders:update", currentUserId, payload);

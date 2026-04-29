@@ -150,8 +150,6 @@ export default function ServiceOrdersPage() {
         total: r.total ?? null,
         status: "draft",
         group_id: r.week ?? null,
-        user_id: authUser.id,
-        created_by: authUser.id,
       };
 
       // Calculate technician earnings from profit distribution rules
@@ -184,14 +182,9 @@ export default function ServiceOrdersPage() {
         missingUserRows.push(idx + 1);
       }
 
-      // Set at the very last moment — no further mutation allowed.
+      // Ownership is filled in the backend from auth.uid(); keep this value
+      // only for pre-insert validation/logging and strip it before mutation.
       payload.assigned_user_id = finalAssignedUserId;
-      Object.defineProperty(payload, "assigned_user_id", {
-        value: finalAssignedUserId,
-        writable: false,
-        configurable: false,
-        enumerable: true,
-      });
 
       console.log(`[ServiceOrders] Row ${idx + 1} resolution:`, {
         rawValue: rawTech,
@@ -205,7 +198,8 @@ export default function ServiceOrdersPage() {
 
       console.log("FINAL technician_id:", payload.technician_id);
 
-      inserts.push(payload as ServiceOrderInsert);
+      const { assigned_user_id: _debugAssignedUserId, ...insertPayload } = payload;
+      inserts.push(insertPayload as ServiceOrderInsert);
     });
 
     // Hard block: never let assigned_user_id reach the DB as null

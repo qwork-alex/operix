@@ -116,9 +116,6 @@ export function AccountingLegacy() {
         amount: parseFloat(form.amount) || 0,
         notes: form.notes || null,
         status: form.status,
-        user_id: currentUserId,
-        created_by: currentUserId,
-        assigned_user_id: currentUserId,
       };
       logSavePayload(editId ? "FinancialRecords:update" : "FinancialRecords:insert", currentUserId, payload);
       if (editId) {
@@ -493,8 +490,6 @@ export function Fleet() {
       // Auto-create fuel expense in accounting
       if (fuelCost > 0) {
         const vehicle = vehicles.find((v: any) => v.id === logVehicleId);
-        const { resolveTechnicianIdForFinancialRecord } = await import("@/lib/getTechnicianForRecord");
-        const assignedUserId = await resolveTechnicianIdForFinancialRecord();
         const payload = {
           type: "expense",
           source: "fleet",
@@ -503,9 +498,6 @@ export function Fleet() {
           label: `${t("fleet.fuel")} — ${vehicle?.name || vehicle?.license_plate || ""}`,
           notes: `${endKm - startKm} km, ${fuelLitres}L`,
           status: "confirmed",
-          user_id: currentUserId,
-          created_by: currentUserId,
-          assigned_user_id: assignedUserId,
         };
         logSavePayload("FleetFinancialRecord:insert", currentUserId, payload);
         const { error: financialError } = await (supabase as any).from("financial_records").insert(payload);

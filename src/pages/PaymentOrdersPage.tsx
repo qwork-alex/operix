@@ -94,12 +94,10 @@ export default function PaymentOrdersPage() {
         ? technicians.find(t => t.name.toLowerCase() === rawTech.toLowerCase())
         : undefined;
       const techMatch = techByUser ?? techByName;
-      const assignedUserId = techMatch?.user_id ?? authUser.id;
       const payload: Record<string, any> = {
         client_id: clientMatch?.id || null,
         client_name: r.client?.trim() || clientMatch?.name || null,
         technician_name: techMatch?.name || rawTech || null,
-        assigned_user_id: assignedUserId,
         platform: r.platform ?? null,
         list_name: r.list_name ?? null,
         car_name: r.car_name ?? null,
@@ -108,8 +106,6 @@ export default function PaymentOrdersPage() {
         total: r.total ?? null,
         status: "pending",
         group_id: r.list_name ?? null,
-        user_id: authUser.id,
-        created_by: authUser.id,
       };
       console.log("FINAL INSERT PAYLOAD:", payload);
       return payload as PaymentOrderInsert;

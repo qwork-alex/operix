@@ -286,6 +286,9 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
 
       delete (payload as any).clients;
       delete (payload as any).technicians;
+      delete (payload as any).user_id;
+      delete (payload as any).assigned_user_id;
+      delete (payload as any).created_by;
       delete (payload as any).technician_id;
 
       const { error } = await supabase.from("service_orders").update(payload).eq("id", id);

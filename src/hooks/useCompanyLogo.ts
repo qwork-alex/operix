@@ -44,7 +44,7 @@ export function useCompanyLogo() {
         .maybeSingle();
 
       if (existing) {
-        const payload = { logo_url: publicUrl, user_id: currentUserId, updated_at: new Date().toISOString() };
+        const payload = { logo_url: publicUrl, updated_at: new Date().toISOString() };
         logSavePayload("CompanyLogo:update", currentUserId, payload);
         const { error } = await (supabase as any)
           .from("company_settings")
@@ -55,7 +55,7 @@ export function useCompanyLogo() {
           throw error;
         }
       } else {
-        const payload = { logo_url: publicUrl, user_id: currentUserId };
+        const payload = { logo_url: publicUrl };
         logSavePayload("CompanyLogo:insert", currentUserId, payload);
         const { error } = await (supabase as any)
           .from("company_settings")
@@ -84,7 +84,7 @@ export function useCompanyLogo() {
         .maybeSingle();
 
       if (existing) {
-        const payload = { brand_config: brandConfig as any, user_id: currentUserId, updated_at: new Date().toISOString() };
+        const payload = { brand_config: brandConfig as any, updated_at: new Date().toISOString() };
         logSavePayload("CompanyBrand:update", currentUserId, payload);
         const { error } = await (supabase as any)
           .from("company_settings")
@@ -95,7 +95,7 @@ export function useCompanyLogo() {
           throw error;
         }
       } else {
-        const payload = { brand_config: brandConfig as any, user_id: currentUserId };
+        const payload = { brand_config: brandConfig as any };
         logSavePayload("CompanyBrand:insert", currentUserId, payload);
         const { error } = await (supabase as any)
           .from("company_settings")

@@ -1799,6 +1799,7 @@ export type Database = {
           scope: Database["public"]["Enums"]["permission_scope"]
         }[]
       }
+      current_user_workspace_ids: { Args: never; Returns: string[] }
       get_my_role: { Args: never; Returns: string }
       get_my_technician_id: { Args: never; Returns: string }
       get_user_role: {
