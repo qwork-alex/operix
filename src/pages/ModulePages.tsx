@@ -474,6 +474,7 @@ export function Fleet() {
   const logMutation = useMutation({
     mutationFn: async () => {
       if (!logVehicleId) throw new Error("No vehicle selected");
+      const currentUserId = await getCurrentUserId();
       const startKm = parseFloat(logForm.start_km) || 0;
       const endKm = parseFloat(logForm.end_km) || 0;
       const fuelCost = parseFloat(logForm.fuel_cost) || 0;
@@ -494,7 +495,7 @@ export function Fleet() {
         const vehicle = vehicles.find((v: any) => v.id === logVehicleId);
         const { resolveTechnicianIdForFinancialRecord } = await import("@/lib/getTechnicianForRecord");
         const assignedUserId = await resolveTechnicianIdForFinancialRecord();
-        await supabase.from("financial_records").insert({
+        const payload = {
           type: "expense",
           source: "fleet",
           category: "fuel",
@@ -502,8 +503,16 @@ export function Fleet() {
           label: `${t("fleet.fuel")} — ${vehicle?.name || vehicle?.license_plate || ""}`,
           notes: `${endKm - startKm} km, ${fuelLitres}L`,
           status: "confirmed",
+          user_id: currentUserId,
+          created_by: currentUserId,
           assigned_user_id: assignedUserId,
-        });
+        };
+        logSavePayload("FleetFinancialRecord:insert", currentUserId, payload);
+        const { error: financialError } = await (supabase as any).from("financial_records").insert(payload);
+        if (financialError) {
+          logSaveError("FleetFinancialRecord:insert", financialError);
+          throw financialError;
+        }
       }
     },
     onSuccess: () => {
