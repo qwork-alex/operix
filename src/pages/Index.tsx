@@ -1,4 +1,6 @@
 import { Euro, CreditCard, CheckCircle2, TrendingUp } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useEffect } from "react";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { ServicePieChart } from "@/components/dashboard/ServicePieChart";
