@@ -861,7 +861,7 @@ export type Database = {
       payment_orders: {
         Row: {
           amount_paid: number
-          assigned_user_id: string | null
+          assigned_user_id: string
           car_name: string | null
           client_id: string | null
           client_name: string | null
@@ -879,11 +879,11 @@ export type Database = {
           technician_name: string | null
           total: number | null
           updated_at: string
-          user_id: string | null
+          user_id: string
         }
         Insert: {
           amount_paid?: number
-          assigned_user_id?: string | null
+          assigned_user_id: string
           car_name?: string | null
           client_id?: string | null
           client_name?: string | null
@@ -901,11 +901,11 @@ export type Database = {
           technician_name?: string | null
           total?: number | null
           updated_at?: string
-          user_id?: string | null
+          user_id: string
         }
         Update: {
           amount_paid?: number
-          assigned_user_id?: string | null
+          assigned_user_id?: string
           car_name?: string | null
           client_id?: string | null
           client_name?: string | null
@@ -923,7 +923,7 @@ export type Database = {
           technician_name?: string | null
           total?: number | null
           updated_at?: string
-          user_id?: string | null
+          user_id?: string
         }
         Relationships: [
           {
@@ -1286,7 +1286,7 @@ export type Database = {
           technician_percentage: number | null
           total: number | null
           updated_at: string
-          user_id: string | null
+          user_id: string
           week: string | null
           workspace_id: string | null
         }
@@ -1317,7 +1317,7 @@ export type Database = {
           technician_percentage?: number | null
           total?: number | null
           updated_at?: string
-          user_id?: string | null
+          user_id: string
           week?: string | null
           workspace_id?: string | null
         }
@@ -1348,7 +1348,7 @@ export type Database = {
           technician_percentage?: number | null
           total?: number | null
           updated_at?: string
-          user_id?: string | null
+          user_id?: string
           week?: string | null
           workspace_id?: string | null
         }
@@ -1792,6 +1792,7 @@ export type Database = {
         Args: { _action: string; _module: string; _user_id: string }
         Returns: boolean
       }
+      can_manage_all_orders: { Args: { _user_id: string }; Returns: boolean }
       check_permission: {
         Args: { _action: string; _module: string; _user_id: string }
         Returns: {
