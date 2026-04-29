@@ -10,7 +10,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Trash2, Pencil, Save, X, Loader2, CheckCircle2 } from "lucide-react";
 import { useLanguage } from "@/hooks/useLanguage";
-import { useAuth } from "@/hooks/useAuth";
 import { useClients } from "@/hooks/useServiceOrders";
 import { useAssignableUsers } from "@/hooks/useAssignableUsers";
 import { toast } from "sonner";
@@ -124,7 +123,6 @@ const toNullableText = (value: string) => {
 
 export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrderRow[]; isLoading: boolean }) {
   const { t, formatCurrency } = useLanguage();
-  const { user } = useAuth();
   const { data: clients = [] } = useClients();
   const { data: technicians = [] } = useAssignableUsers();
   const queryClient = useQueryClient();
