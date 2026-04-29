@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { getCurrentUserId, logSaveError, logSavePayload } from "@/lib/authUser";
 import { toast } from "sonner";
 
 export interface CompanySettings {
@@ -31,25 +32,35 @@ export function useCompanySettings() {
 
   const saveMutation = useMutation({
     mutationFn: async (settings: CompanySettings) => {
-      if (!user) throw new Error("Not authenticated");
+      const currentUserId = await getCurrentUserId();
 
       const { data: existing } = await supabase
         .from("company_settings")
         .select("id")
-        .eq("user_id", user.id)
+        .eq("user_id", currentUserId)
         .maybeSingle();
 
       if (existing) {
-        const { error } = await supabase
+        const payload = { ...settings, user_id: currentUserId, updated_at: new Date().toISOString() };
+        logSavePayload("CompanySettings:update", currentUserId, payload);
+        const { error } = await (supabase as any)
           .from("company_settings")
-          .update({ ...settings, updated_at: new Date().toISOString() })
-          .eq("user_id", user.id);
-        if (error) throw error;
+          .update(payload)
+          .eq("user_id", currentUserId);
+        if (error) {
+          logSaveError("CompanySettings:update", error);
+          throw error;
+        }
       } else {
-        const { error } = await supabase
+        const payload = { ...settings, user_id: currentUserId };
+        logSavePayload("CompanySettings:insert", currentUserId, payload);
+        const { error } = await (supabase as any)
           .from("company_settings")
-          .insert({ ...settings, user_id: user.id });
-        if (error) throw error;
+          .insert(payload);
+        if (error) {
+          logSaveError("CompanySettings:insert", error);
+          throw error;
+        }
       }
     },
     onSuccess: () => {
