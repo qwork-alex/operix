@@ -29,6 +29,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RolePermissionsManager } from "@/components/permissions/RolePermissionsManager";
 import { UserPermissionsDialog } from "@/components/permissions/UserPermissionsDialog";
 import { Can } from "@/components/Can";
+import { getCurrentUserId, logSaveError, logSavePayload } from "@/lib/authUser";
 
 // ─── PROFIT DISTRIBUTION ───
 // Moved to src/components/profit/ProfitDistribution.tsx
@@ -106,6 +107,7 @@ export function AccountingLegacy() {
 
   const addMutation = useMutation({
     mutationFn: async () => {
+      const currentUserId = await getCurrentUserId();
       const payload: any = {
         type: form.type,
         source: form.label ? "manual" : "manual",
@@ -114,13 +116,23 @@ export function AccountingLegacy() {
         amount: parseFloat(form.amount) || 0,
         notes: form.notes || null,
         status: form.status,
+        user_id: currentUserId,
+        created_by: currentUserId,
+        assigned_user_id: currentUserId,
       };
+      logSavePayload(editId ? "FinancialRecords:update" : "FinancialRecords:insert", currentUserId, payload);
       if (editId) {
-        const { error } = await supabase.from("financial_records").update(payload).eq("id", editId);
-        if (error) throw error;
+        const { error } = await (supabase as any).from("financial_records").update(payload).eq("id", editId);
+        if (error) {
+          logSaveError("FinancialRecords:update", error);
+          throw error;
+        }
       } else {
-        const { error } = await supabase.from("financial_records").insert(payload);
-        if (error) throw error;
+        const { error } = await (supabase as any).from("financial_records").insert(payload);
+        if (error) {
+          logSaveError("FinancialRecords:insert", error);
+          throw error;
+        }
       }
     },
     onSuccess: () => {
