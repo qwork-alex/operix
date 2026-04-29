@@ -1,6 +1,4 @@
 import { Euro, CreditCard, CheckCircle2, TrendingUp } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { useEffect } from "react";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { ServicePieChart } from "@/components/dashboard/ServicePieChart";
@@ -11,17 +9,6 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { useGeolocation } from "@/hooks/useGeolocation";
 
 const Dashboard = () => {
-  useEffect(() => {
-    const testSupabase = async () => {
-      const { data, error } = await supabase.from("registros_financeiros").select("*");
-
-      console.log("🔥 DATA:", data);
-      console.log("🔥 ERROR:", error);
-    };
-
-    testSupabase();
-  }, []);
-
   const { data, isLoading } = useDashboardStats();
   const { t, formatCurrency } = useLanguage();
   useGeolocation(); // Track user location on dashboard visit
