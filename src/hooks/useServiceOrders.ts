@@ -106,8 +106,6 @@ export function useServiceOrders(filters?: {
       const payload = orders.map(o => {
         const {
           technician_id: _ignored,
-          user_id: _ignoredUserId,
-          assigned_user_id: _ignoredAssignedUserId,
           created_by: _ignoredCreatedBy,
           ...rest
         } = o as any;
@@ -222,8 +220,6 @@ export function useServiceOrders(filters?: {
       // Remove joined relations that come from select("*, clients(...)")
       delete (payload as any).clients;
       delete (payload as any).technicians;
-      delete (payload as any).user_id;
-      delete (payload as any).assigned_user_id;
       delete (payload as any).created_by;
       // Hard rule: technician_id is never accepted on writes
       delete (payload as any).technician_id;
