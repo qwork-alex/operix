@@ -86,6 +86,7 @@ export type Database = {
           name: string
           notes: string | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           address?: string | null
@@ -98,6 +99,7 @@ export type Database = {
           name: string
           notes?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           address?: string | null
@@ -110,6 +112,7 @@ export type Database = {
           name?: string
           notes?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -375,6 +378,7 @@ export type Database = {
           status: string
           technician_id: string | null
           type: string
+          user_id: string | null
         }
         Insert: {
           amount?: number
@@ -392,6 +396,7 @@ export type Database = {
           status?: string
           technician_id?: string | null
           type: string
+          user_id?: string | null
         }
         Update: {
           amount?: number
@@ -409,6 +414,7 @@ export type Database = {
           status?: string
           technician_id?: string | null
           type?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -873,6 +879,7 @@ export type Database = {
           technician_name: string | null
           total: number | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           amount_paid?: number
@@ -894,6 +901,7 @@ export type Database = {
           technician_name?: string | null
           total?: number | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           amount_paid?: number
@@ -915,6 +923,7 @@ export type Database = {
           technician_name?: string | null
           total?: number | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -1277,6 +1286,7 @@ export type Database = {
           technician_percentage: number | null
           total: number | null
           updated_at: string
+          user_id: string | null
           week: string | null
           workspace_id: string | null
         }
@@ -1307,6 +1317,7 @@ export type Database = {
           technician_percentage?: number | null
           total?: number | null
           updated_at?: string
+          user_id?: string | null
           week?: string | null
           workspace_id?: string | null
         }
@@ -1337,6 +1348,7 @@ export type Database = {
           technician_percentage?: number | null
           total?: number | null
           updated_at?: string
+          user_id?: string | null
           week?: string | null
           workspace_id?: string | null
         }
