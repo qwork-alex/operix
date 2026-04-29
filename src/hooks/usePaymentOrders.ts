@@ -111,9 +111,15 @@ export function usePaymentOrders(filters?: {
   const updateMutation = useMutation({
     mutationFn: async ({ id, ...updates }: Partial<PaymentOrder> & { id: string }) => {
       if (!id) throw new Error("Payment order id is required for update.");
+      const currentUserId = await getCurrentUserId();
 
       const updated_at = new Date().toISOString();
-      const payload = { ...updates, updated_at };
+      const payload = {
+        ...updates,
+        user_id: (updates as any).user_id ?? currentUserId,
+        assigned_user_id: (updates as any).assigned_user_id ?? currentUserId,
+        updated_at,
+      };
 
       // Remove join fields that aren't columns
       delete (payload as any).clients;
@@ -121,21 +127,16 @@ export function usePaymentOrders(filters?: {
       // Hard rule: technician_id is never accepted on writes
       delete (payload as any).technician_id;
 
-      // If assigned_user_id is being touched, it must not be cleared
-      if ('assigned_user_id' in payload && !(payload as any).assigned_user_id) {
-        throw new Error("assigned_user_id cannot be empty.");
-      }
+      logSavePayload("PaymentOrders:update", currentUserId, payload);
 
-      console.log("Updating payload:", payload);
-
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("payment_orders")
         .update(payload)
         .eq("id", id)
         .select()
         .single();
       if (error) {
-        console.error("[PaymentOrders] Update error:", error);
+        logSaveError("PaymentOrders:update", error);
         throw error;
       }
       return data;
