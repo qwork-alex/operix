@@ -11,6 +11,17 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { useGeolocation } from "@/hooks/useGeolocation";
 
 const Dashboard = () => {
+  useEffect(() => {
+    const testSupabase = async () => {
+      const { data, error } = await supabase.from("registros_financeiros").select("*");
+
+      console.log("🔥 DATA:", data);
+      console.log("🔥 ERROR:", error);
+    };
+
+    testSupabase();
+  }, []);
+
   const { data, isLoading } = useDashboardStats();
   const { t, formatCurrency } = useLanguage();
   useGeolocation(); // Track user location on dashboard visit
