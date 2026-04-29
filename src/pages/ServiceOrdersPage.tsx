@@ -31,6 +31,7 @@ export default function ServiceOrdersPage() {
   const { t } = useLanguage();
   const { user } = useAuth();
   const { isAdmin, dbRole } = useRole();
+  const canAssignAnyTechnician = isAdmin || dbRole === "partner";
   const isTechnicianRole = dbRole === "technician";
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState<{
@@ -96,9 +97,8 @@ export default function ServiceOrdersPage() {
     }
 
     // Rules:
-    //   - non-admin  -> assigned_user_id is FORCED to authUser.id (no override)
-    //   - admin      -> may override via dropdown ONLY if it explicitly resolves
-    //                   to a known user_id; otherwise defaults to authUser.id
+    //   - technician -> user_id is FORCED to authUser.id (no override)
+    //   - admin/partner -> may assign the selected technician user_id
     const inserts: ServiceOrderInsert[] = [];
     const missingUserRows: number[] = [];
 
@@ -115,9 +115,9 @@ export default function ServiceOrdersPage() {
         : undefined;
       const techMatch = techByUser ?? techByName;
 
-      // Resolve display name only — assigned_user_id will be set LAST.
+      // Resolve display name only — user_id/assigned_user_id are set LAST.
       let technicianName: string = techMatch?.name ?? rawTech;
-      if (!isAdmin) {
+      if (!canAssignAnyTechnician) {
         const me = technicians.find((t) => t.user_id === authUser.id);
         if (me) technicianName = me.name;
       } else if (techByUser) {
@@ -132,9 +132,8 @@ export default function ServiceOrdersPage() {
         client_id: clientMatch?.id || null,
         client_name: r.client?.trim() || clientMatch?.name || "",
         technician_name: technicianName,
-        // technician_id MUST come from the selected user object (never from name)
-        technician_id: selectedUser?.user_id ?? null,
-        // assigned_user_id intentionally OMITTED here — set at the very end.
+        // technician_id is legacy/display only; user_id is the authorization key.
+        technician_id: null,
         platform: r.platform ?? null,
         week: r.week ?? null,
         car_name: r.car_name ?? null,
@@ -158,48 +157,45 @@ export default function ServiceOrdersPage() {
       payload.technician_percentage = techEarn?.percentage ?? 0;
       payload.technician_earning = techEarn?.earnings ?? 0;
 
-      // ===== FINAL ASSIGNED_USER_ID RESOLUTION (last moment before insert) =====
+      // ===== FINAL USER_ID RESOLUTION (last moment before insert) =====
       // Rules:
-      //  - non-admin: ALWAYS authUser.id, dropdown ignored entirely
-      //  - admin:     dropdown value ONLY if explicitly resolves to a known
-      //               user_id; otherwise fallback to authUser.id
-      let finalAssignedUserId: string = authUser.id;
-      if (isAdmin && techByUser?.user_id) {
-        finalAssignedUserId = techByUser.user_id;
+      //  - technician: ALWAYS authUser.id, dropdown ignored entirely
+      //  - admin/partner: dropdown value ONLY if it resolves to a known user_id
+      let finalUserId: string = authUser.id;
+      if (canAssignAnyTechnician) {
+        finalUserId = selectedUser?.user_id ?? "";
       }
 
-      // Hard guard against RLS violations — non-admins MUST be themselves.
-      if (!isAdmin && finalAssignedUserId !== authUser.id) {
+      // Hard guard against RLS violations — technicians MUST be themselves.
+      if (!canAssignAnyTechnician && finalUserId !== authUser.id) {
         console.error("[ServiceOrders] RLS guard tripped:", {
-          finalAssignedUserId,
+          finalUserId,
           authUserId: authUser.id,
-          isAdmin,
+          dbRole,
         });
-        throw new Error("RLS violation prevention: invalid assigned_user_id");
+        throw new Error("RLS violation prevention: invalid user_id");
       }
 
-      if (!finalAssignedUserId) {
+      if (!finalUserId) {
         missingUserRows.push(idx + 1);
       }
 
-      // Ownership is filled in the backend from auth.uid(); keep this value
-      // only for pre-insert validation/logging and strip it before mutation.
-      payload.assigned_user_id = finalAssignedUserId;
+      payload.user_id = finalUserId;
+      payload.assigned_user_id = finalUserId;
 
       console.log(`[ServiceOrders] Row ${idx + 1} resolution:`, {
         rawValue: rawTech,
-        finalAssignedUserId,
+        finalUserId,
         technicianName,
-        isAdmin,
-        matchedBy: isAdmin && techByUser ? "admin_dropdown" : "auth",
+        dbRole,
+        matchedBy: canAssignAnyTechnician && selectedUser ? "selected_user_id" : "auth",
       });
-      console.log("ASSIGNED USER:", finalAssignedUserId);
+      console.log("ASSIGNED USER:", finalUserId);
       console.log("FINAL INSERT PAYLOAD:", payload);
 
-      console.log("FINAL technician_id:", payload.technician_id);
+      console.log("FINAL technician_id:", payload.user_id);
 
-      const { assigned_user_id: _debugAssignedUserId, ...insertPayload } = payload;
-      inserts.push(insertPayload as ServiceOrderInsert);
+      inserts.push(payload as ServiceOrderInsert);
     });
 
     // Hard block: never let assigned_user_id reach the DB as null
@@ -287,7 +283,7 @@ export default function ServiceOrdersPage() {
           isSaving={saveMutation.isPending}
           technicians={technicians}
           isTechnicianRole={isTechnicianRole}
-          isAdmin={isAdmin}
+          isAdmin={canAssignAnyTechnician}
           myTechnicianName={
             myAssignableUserId
               ? technicians.find((t) => t.user_id === myAssignableUserId)?.name ?? null
