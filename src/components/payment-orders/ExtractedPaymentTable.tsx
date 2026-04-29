@@ -347,7 +347,15 @@ export function ExtractedPaymentTable({ orders, confidence, notes, onSave, onDis
                   <TableCell><ConfEditCell value={row.client || ""} confidence={fc.client} onChange={v => updateField(i, "client", v)} /></TableCell>
                   <TableCell><ConfEditCell value={row.platform || ""} confidence={fc.platform} onChange={v => updateField(i, "platform", v)} /></TableCell>
                   <TableCell><ConfEditCell value={row.list_name || ""} confidence={fc.list_name} onChange={v => updateField(i, "list_name", v)} /></TableCell>
-                  <TableCell><ConfEditCell value={row.technician || ""} confidence={fc.technician} onChange={v => updateField(i, "technician", v)} /></TableCell>
+                  <TableCell>
+                    <TechnicianSelectCell
+                      value={row.technician || ""}
+                      confidence={fc.technician}
+                      technicians={technicians}
+                      disabled={lockTechnician}
+                      onChange={v => updateField(i, "technician", v)}
+                    />
+                  </TableCell>
                   <TableCell><ConfEditCell value={row.car_name || ""} confidence={fc.car_name} onChange={v => updateField(i, "car_name", v)} /></TableCell>
                   <TableCell><ConfEditCell value={row.license_plate || ""} confidence={fc.license_plate} onChange={v => updateField(i, "license_plate", v)} /></TableCell>
                   {services.map((s, si) => (
