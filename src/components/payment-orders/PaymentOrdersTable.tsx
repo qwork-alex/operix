@@ -180,7 +180,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
     mutationFn: async ({ id, amount_paid, total }: { id: string; amount_paid: number; total: number }) => {
       const currentUserId = await getCurrentUserId();
       const status = deriveStatus(total, amount_paid);
-      const payload = { amount_paid, status, user_id: currentUserId, updated_at: new Date().toISOString() } as any;
+      const payload = { amount_paid, status, updated_at: new Date().toISOString() } as any;
       logSavePayload("PaymentOrdersTable:payment", currentUserId, payload);
       const { error } = await (supabase as any)
         .from("payment_orders")
@@ -208,7 +208,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
         const total = o.total || 0;
         const amount_paid = mode === "paid" ? total : 0;
         const status = deriveStatus(total, amount_paid);
-        const payload = { amount_paid, status, user_id: currentUserId, updated_at: new Date().toISOString() } as any;
+        const payload = { amount_paid, status, updated_at: new Date().toISOString() } as any;
         logSavePayload("PaymentOrdersTable:batch", currentUserId, payload);
         const { error } = await (supabase as any)
           .from("payment_orders")
@@ -296,10 +296,8 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
         services: Json;
         total: number;
         updated_at: string;
-        user_id: string;
       }> = {
         updated_at: new Date().toISOString(),
-        user_id: currentUserId,
         services: filledServices as unknown as Json,
         total: computedTotal,
       };
