@@ -17,7 +17,7 @@ import {
   type PaymentOrderInsert,
 } from "@/hooks/usePaymentOrders";
 import { useClients } from "@/hooks/useServiceOrders";
-import { useAssignableUsers } from "@/hooks/useAssignableUsers";
+import { useAssignableUsers, useMyAssignableUserId } from "@/hooks/useAssignableUsers";
 import { useFileQueue, type QueueItemStatus } from "@/hooks/useFileQueue";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useAuth } from "@/hooks/useAuth";
@@ -47,6 +47,7 @@ export default function PaymentOrdersPage() {
   const { extract } = useExtractPaymentOrder();
   const { data: clients = [] } = useClients();
   const { data: technicians = [] } = useAssignableUsers();
+  const { data: myAssignableUserId } = useMyAssignableUserId();
   
   const { queue, isProcessing, addFiles, clearCompleted } = useFileQueue();
 
@@ -180,6 +181,14 @@ export default function PaymentOrdersPage() {
           onSave={(rows) => handleSave(extraction._id, rows)}
           onDiscard={() => handleDiscard(extraction._id)}
           isSaving={saveMutation.isPending}
+          technicians={technicians}
+          isTechnicianRole={dbRole === "technician"}
+          isAdmin={canAssignAnyTechnician}
+          myTechnicianName={
+            myAssignableUserId
+              ? technicians.find((t) => t.user_id === myAssignableUserId)?.name ?? null
+              : null
+          }
         />
       ))}
 
