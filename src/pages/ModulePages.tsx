@@ -1458,8 +1458,50 @@ export function UsersPage() {
            >
              🧹 Cleanup User (DEV)
            </Button>
-         )}
-         {isAdmin && (
+          )}
+          {import.meta.env.DEV && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={async () => {
+                const uuid = window.prompt("UUID do usuário para desativar (Safe Mode):");
+                if (!uuid) return;
+                try {
+                  const { data: { session } } = await supabase.auth.getSession();
+                  const accessToken = session?.access_token;
+                  console.log("🛡️ [DEACTIVATE SAFE] user_id:", uuid);
+                  const res = await fetch(
+                    "https://nwjiyfvaoogevqovnyon.supabase.co/functions/v1/admin-create-user",
+                    {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${accessToken}`,
+                        "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+                      },
+                      body: JSON.stringify({ action: "deactivate_user_safe", user_id: uuid }),
+                    }
+                  );
+                  const json = await res.json().catch(() => ({}));
+                  console.log("🛡️ [DEACTIVATE SAFE] status:", res.status);
+                  console.log("🛡️ [DEACTIVATE SAFE] resposta:", json);
+                  if (!res.ok) {
+                    console.error("🛡️ [DEACTIVATE SAFE] ❌ erro:", json);
+                    toast.error(`Desativação falhou: ${json?.error ?? res.status}`);
+                  } else {
+                    toast.success("Usuário desativado com segurança");
+                    queryClient.invalidateQueries({ queryKey: ["all-users"] });
+                  }
+                } catch (err) {
+                  console.error("🛡️ [DEACTIVATE SAFE] ❌ exceção:", err);
+                  toast.error("Desativação: exceção (ver console)");
+                }
+              }}
+            >
+              🛡️ Deactivate User (Safe Mode)
+            </Button>
+          )}
+          {isAdmin && (
            <Dialog open={showCreate} onOpenChange={(v) => { if (!v) closeCreateDialog(); else setShowCreate(true); }}>
              <DialogTrigger asChild>
                <Button size="sm"><Plus className="h-4 w-4 mr-1" />Adicionar usuário</Button>
