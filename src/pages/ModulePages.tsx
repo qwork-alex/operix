@@ -1211,10 +1211,23 @@ export function UsersPage() {
       const roleMap: Record<string, string> = {};
       (roles || []).forEach((r: any) => { roleMap[r.user_id] = r.role; });
 
+      // Hide deactivated (banned) users — invisible everywhere in the system.
+      let activeIds: Set<string> | null = null;
+      try {
+        const { data: actives, error: actErr } = await supabase.rpc("active_user_ids");
+        if (!actErr && Array.isArray(actives)) {
+          activeIds = new Set((actives as Array<{ user_id: string }>).map((r) => r.user_id));
+        }
+      } catch {
+        activeIds = null; // fail open
+      }
+
       // Only show users that have a role assigned (real users)
       // Hide admins from the listing — they exist in DB but stay invisible in the UI.
+      // Hide deactivated users entirely.
       return (profiles || [])
         .filter((p: any) => !!roleMap[p.id] && roleMap[p.id] !== "admin")
+        .filter((p: any) => activeIds === null || activeIds.has(p.id))
         .map((p: any) => ({
           ...p,
           role: roleMap[p.id],
