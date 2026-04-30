@@ -306,7 +306,13 @@ Deno.serve(async (req) => {
       }
 
       // 3. Delete the auth user
+      console.log("🔥 DELETE AUTH DISPARADO:", user_id);
       const { error } = await adminClient.auth.admin.deleteUser(user_id);
+      if (error) {
+        console.error("❌ ERRO AO DELETAR AUTH:", error);
+      } else {
+        console.log("✅ USER DELETADO DO AUTH");
+      }
       if (error && !error.message?.includes("not found") && !error.message?.includes("User not found")) {
         return jsonResp({ error: `auth.deleteUser: ${error.message}` }, 400);
       }
