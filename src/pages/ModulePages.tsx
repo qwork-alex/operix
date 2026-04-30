@@ -1212,8 +1212,9 @@ export function UsersPage() {
       (roles || []).forEach((r: any) => { roleMap[r.user_id] = r.role; });
 
       // Only show users that have a role assigned (real users)
+      // Hide admins from the listing — they exist in DB but stay invisible in the UI.
       return (profiles || [])
-        .filter((p: any) => !!roleMap[p.id])
+        .filter((p: any) => !!roleMap[p.id] && roleMap[p.id] !== "admin")
         .map((p: any) => ({
           ...p,
           role: roleMap[p.id],
