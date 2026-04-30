@@ -122,6 +122,111 @@ Deno.serve(async (req) => {
       return jsonResp({ success: true });
     }
 
+    // ── CLEANUP ORPHAN USER (remove all references for a user_id that no longer exists in auth) ──
+    if (action === "cleanup_orphan_user") {
+      const { user_id } = body;
+      if (!user_id) return jsonResp({ error: "user_id required" }, 400);
+
+      console.log("🧹 CLEANUP ORPHAN USER iniciado:", user_id);
+
+      // Safety: confirm user does NOT exist in auth (we only cleanup orphans)
+      const { data: stillExists } = await adminClient.auth.admin.getUserById(user_id);
+      if (stillExists?.user) {
+        console.warn("⚠️ Usuário ainda existe no auth — abortando cleanup:", user_id);
+        return jsonResp({
+          error: "user_still_exists_in_auth",
+          message: "O usuário ainda existe no Auth. Use 'delete_user' ou 'force_delete' para removê-lo primeiro.",
+        }, 409);
+      }
+
+      // Resolve app_user_id (memberships reference it, not auth uid)
+      const { data: appUser } = await adminClient
+        .from("app_users")
+        .select("id")
+        .eq("auth_user_id", user_id)
+        .maybeSingle();
+      const appUserId = appUser?.id ?? null;
+
+      type Op = { table: string; mode: "delete" | "null"; column: string; nullCols?: string[] };
+      const ops: Op[] = [
+        // Detach (preserve history)
+        { table: "service_orders",   mode: "null",   column: "user_id",          nullCols: ["created_by"] },
+        { table: "service_orders",   mode: "null",   column: "assigned_user_id", nullCols: ["assigned_user_id"] },
+        { table: "service_orders",   mode: "null",   column: "created_by",       nullCols: ["created_by"] },
+        { table: "payment_orders",   mode: "null",   column: "user_id",          nullCols: ["created_by"] },
+        { table: "payment_orders",   mode: "null",   column: "assigned_user_id", nullCols: ["assigned_user_id"] },
+        { table: "payment_orders",   mode: "null",   column: "created_by",       nullCols: ["created_by"] },
+        { table: "financial_records", mode: "null",  column: "created_by",       nullCols: ["created_by"] },
+        { table: "financial_records", mode: "null",  column: "user_id",          nullCols: ["user_id"] },
+        { table: "financial_records", mode: "null",  column: "assigned_user_id", nullCols: ["assigned_user_id"] },
+        { table: "fleet_trips",      mode: "null",   column: "created_by",       nullCols: ["created_by"] },
+        { table: "documents",        mode: "null",   column: "uploaded_by",      nullCols: ["uploaded_by"] },
+        // Hard delete (identity / preferences)
+        { table: "user_permissions", mode: "delete", column: "user_id" },
+        { table: "user_roles",       mode: "delete", column: "user_id" },
+        { table: "notifications",    mode: "delete", column: "user_id" },
+        { table: "partner_clients",  mode: "delete", column: "partner_user_id" },
+        { table: "user_usage",       mode: "delete", column: "user_id" },
+        { table: "user_settings",    mode: "delete", column: "user_id" },
+        { table: "technicians",      mode: "delete", column: "user_id" },
+        { table: "profiles",         mode: "delete", column: "id" },
+      ];
+
+      const log: Array<{ table: string; mode: string; column: string; affected: number; error?: string }> = [];
+
+      for (const op of ops) {
+        try {
+          // Count first
+          const { count } = await adminClient
+            .from(op.table)
+            .select("*", { count: "exact", head: true })
+            .eq(op.column, user_id);
+          const affected = count ?? 0;
+          if (affected === 0) {
+            log.push({ table: op.table, mode: op.mode, column: op.column, affected: 0 });
+            continue;
+          }
+          if (op.mode === "delete") {
+            const { error } = await adminClient.from(op.table).delete().eq(op.column, user_id);
+            log.push({ table: op.table, mode: "delete", column: op.column, affected, error: error?.message });
+          } else {
+            const patch: Record<string, null> = {};
+            for (const c of op.nullCols ?? [op.column]) patch[c] = null;
+            const { error } = await adminClient.from(op.table).update(patch).eq(op.column, user_id);
+            log.push({ table: op.table, mode: "null", column: op.column, affected, error: error?.message });
+          }
+        } catch (e) {
+          log.push({ table: op.table, mode: op.mode, column: op.column, affected: 0, error: (e as Error).message });
+        }
+      }
+
+      // app_users (and memberships) — handled separately via appUserId
+      if (appUserId) {
+        try {
+          const { count: mCount } = await adminClient
+            .from("memberships").select("*", { count: "exact", head: true }).eq("user_id", appUserId);
+          const { error: mErr } = await adminClient.from("memberships").delete().eq("user_id", appUserId);
+          log.push({ table: "memberships", mode: "delete", column: "user_id(app_user)", affected: mCount ?? 0, error: mErr?.message });
+        } catch (e) {
+          log.push({ table: "memberships", mode: "delete", column: "user_id(app_user)", affected: 0, error: (e as Error).message });
+        }
+      }
+      try {
+        const { count: aCount } = await adminClient
+          .from("app_users").select("*", { count: "exact", head: true }).eq("auth_user_id", user_id);
+        const { error: aErr } = await adminClient.from("app_users").delete().eq("auth_user_id", user_id);
+        log.push({ table: "app_users", mode: "delete", column: "auth_user_id", affected: aCount ?? 0, error: aErr?.message });
+      } catch (e) {
+        log.push({ table: "app_users", mode: "delete", column: "auth_user_id", affected: 0, error: (e as Error).message });
+      }
+
+      const totalRemoved = log.reduce((s, r) => s + (r.mode === "delete" ? r.affected : 0), 0);
+      const totalDetached = log.reduce((s, r) => s + (r.mode === "null" ? r.affected : 0), 0);
+
+      console.log("🧹 CLEANUP RESULTADO:", { user_id, totalRemoved, totalDetached, log });
+      return jsonResp({ success: true, user_id, total_removed: totalRemoved, total_detached: totalDetached, log });
+    }
+
     // ── FORCE DELETE (test endpoint — bypass dependency checks) ──
     if (action === "force_delete") {
       const { user_id } = body;

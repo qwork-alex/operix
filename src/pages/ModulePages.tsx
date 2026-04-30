@@ -1417,6 +1417,48 @@ export function UsersPage() {
              🧪 Force Delete (DEV)
            </Button>
          )}
+         {import.meta.env.DEV && (
+           <Button
+             size="sm"
+             variant="outline"
+             onClick={async () => {
+               const uuid = window.prompt("UUID do usuário órfão para limpar:");
+               if (!uuid) return;
+               try {
+                 const { data: { session } } = await supabase.auth.getSession();
+                 const accessToken = session?.access_token;
+                 console.log("🧹 [CLEANUP TEST] user_id:", uuid);
+                 const res = await fetch(
+                   "https://nwjiyfvaoogevqovnyon.supabase.co/functions/v1/admin-create-user",
+                   {
+                     method: "POST",
+                     headers: {
+                       "Content-Type": "application/json",
+                       "Authorization": `Bearer ${accessToken}`,
+                       "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+                     },
+                     body: JSON.stringify({ action: "cleanup_orphan_user", user_id: uuid }),
+                   }
+                 );
+                 const json = await res.json().catch(() => ({}));
+                 console.log("🧹 [CLEANUP TEST] status:", res.status);
+                 console.log("🧹 [CLEANUP TEST] resposta completa:", json);
+                 if (json?.log) console.table(json.log);
+                 if (!res.ok) {
+                   console.error("🧹 [CLEANUP TEST] ❌ erro:", json);
+                   toast.error(`Cleanup falhou: ${json?.error ?? res.status}`);
+                 } else {
+                   toast.success(`Cleanup OK — removidos: ${json.total_removed}, desanexados: ${json.total_detached}`);
+                 }
+               } catch (err) {
+                 console.error("🧹 [CLEANUP TEST] ❌ exceção:", err);
+                 toast.error("Cleanup: exceção (ver console)");
+               }
+             }}
+           >
+             🧹 Cleanup User (DEV)
+           </Button>
+         )}
          {isAdmin && (
            <Dialog open={showCreate} onOpenChange={(v) => { if (!v) closeCreateDialog(); else setShowCreate(true); }}>
              <DialogTrigger asChild>
