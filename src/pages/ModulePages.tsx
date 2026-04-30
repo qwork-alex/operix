@@ -1504,6 +1504,8 @@ export function UsersPage() {
                   } else {
                     toast.success("Usuário desativado com segurança");
                     queryClient.invalidateQueries({ queryKey: ["all-users"] });
+                    queryClient.invalidateQueries({ queryKey: ["all-users-with-roles"] });
+                    queryClient.invalidateQueries({ queryKey: ["assignable-users"] });
                   }
                 } catch (err) {
                   console.error("🛡️ [DEACTIVATE SAFE] ❌ exceção:", err);
