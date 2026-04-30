@@ -1780,6 +1780,12 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      active_user_ids: {
+        Args: never
+        Returns: {
+          user_id: string
+        }[]
+      }
       apply_invite_after_auth: {
         Args: { p_invite_token: string }
         Returns: Json
@@ -1835,6 +1841,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_user_active: { Args: { _user_id: string }; Returns: boolean }
       row_in_scope: {
         Args: {
           _action: string
