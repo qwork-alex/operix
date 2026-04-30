@@ -290,7 +290,22 @@ Deno.serve(async (req) => {
         console.warn("[delete_user] cleanup warnings:", failures);
       }
 
-      // 2. Delete the auth user
+      // 2. FINAL VALIDATION: confirm zero remaining links across critical tables before deleting auth user
+      const finalDeps = await collectDependencies(adminClient, user_id);
+      const totalRemaining =
+        finalDeps.counts.service_orders_as_assigned_user +
+        finalDeps.counts.service_orders_created +
+        finalDeps.counts.payment_orders_as_assigned_user +
+        finalDeps.counts.payment_orders_created;
+      if (totalRemaining > 0) {
+        return jsonResp({
+          error: "links_still_present",
+          message: `Não é possível excluir: ainda existem ${totalRemaining} vínculos em service_orders/payment_orders. Reatribua antes de excluir.`,
+          ...finalDeps,
+        }, 409);
+      }
+
+      // 3. Delete the auth user
       const { error } = await adminClient.auth.admin.deleteUser(user_id);
       if (error && !error.message?.includes("not found") && !error.message?.includes("User not found")) {
         return jsonResp({ error: `auth.deleteUser: ${error.message}` }, 400);
