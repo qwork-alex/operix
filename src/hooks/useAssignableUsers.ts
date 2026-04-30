@@ -61,8 +61,19 @@ export function useAssignableUsers() {
         codeMap = new Map((profs ?? []).map((p: any) => [p.id, p.display_code ?? null]));
       }
 
+      // Filter out deactivated (banned) users — invisible everywhere in the system.
+      let activeIds = new Set<string>(ids);
+      try {
+        const { data: actives, error: actErr } = await supabase.rpc("active_user_ids");
+        if (!actErr && Array.isArray(actives)) {
+          activeIds = new Set((actives as Array<{ user_id: string }>).map((r) => r.user_id));
+        }
+      } catch {
+        // If RPC fails, fall back to showing all (don't hide accidentally).
+      }
+
       const list: AssignableUser[] = (data ?? [])
-        .filter((r) => !!r.auth_user_id)
+        .filter((r) => !!r.auth_user_id && activeIds.has(r.auth_user_id as string))
         .map((r) => ({
           user_id: r.auth_user_id as string,
           name: ((r.name || r.email || "—") as string).trim(),
