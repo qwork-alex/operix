@@ -155,11 +155,22 @@ Deno.serve(async (req) => {
       // Always check dependencies first
       const deps = await collectDependencies(adminClient, user_id);
 
-      // ─── BLOCK MODE: refuse if any blocking (or any) dependencies exist ───
+      // ─── BLOCK MODE: refuse if any dependencies exist ───
       if (effectiveMode === "block" && deps.has_dependencies) {
         return jsonResp({
           error: "has_dependencies",
-          message: "Usuário possui dados vinculados e não pode ser removido. Reatribua os registos a outro técnico ou utilize o modo 'detach'.",
+          message: "Usuário possui dados vinculados e não pode ser removido. Reatribua os registos a outro usuário antes de excluir.",
+          ...deps,
+        }, 409);
+      }
+
+      // ─── DETACH MODE IS DISABLED: reassignment is mandatory when there are dependencies ───
+      // user_id on service_orders/payment_orders is NOT NULL — detach would fail anyway.
+      // We force the caller to use 'reassign' mode whenever vínculos existem.
+      if (effectiveMode === "detach" && deps.has_dependencies) {
+        return jsonResp({
+          error: "reassign_required",
+          message: "Não é possível desanexar: existem vínculos obrigatórios. Use o modo 'reassign' e informe um usuário substituto.",
           ...deps,
         }, 409);
       }
