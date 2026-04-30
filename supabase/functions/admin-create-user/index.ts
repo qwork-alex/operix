@@ -227,6 +227,55 @@ Deno.serve(async (req) => {
       return jsonResp({ success: true, user_id, total_removed: totalRemoved, total_detached: totalDetached, log });
     }
 
+    // ── DEACTIVATE USER (SAFE MODE) — ban + revoke access, preserve data ──
+    if (action === "deactivate_user_safe") {
+      const { user_id } = body;
+      if (!user_id) return jsonResp({ error: "user_id required" }, 400);
+
+      // Protect system owner
+      const { data: targetAuth } = await adminClient.auth.admin.getUserById(user_id);
+      if (targetAuth?.user?.email === "qwork@qworkgroup.com") {
+        return jsonResp({ error: "owner_protected", message: "O proprietário do sistema não pode ser desativado." }, 403);
+      }
+
+      const log: Record<string, unknown> = { user_id };
+
+      // 1. Ban user in auth (100 years)
+      const banDuration = "876000h"; // ~100 years
+      const { error: banErr } = await adminClient.auth.admin.updateUserById(user_id, {
+        ban_duration: banDuration,
+      });
+      if (banErr) {
+        console.error("❌ Ban failed:", banErr);
+        return jsonResp({ error: `ban_failed: ${banErr.message}` }, 400);
+      }
+      console.log("User deactivated successfully");
+      log.banned = true;
+
+      // 2. Remove access bindings (idempotent — safe to run multiple times)
+      const { error: rolesErr } = await adminClient.from("user_roles").delete().eq("user_id", user_id);
+      const { error: permsErr } = await adminClient.from("user_permissions").delete().eq("user_id", user_id);
+      const { error: techErr }  = await adminClient.from("technicians").delete().eq("user_id", user_id);
+
+      // memberships uses app_users.id, not auth uid
+      const { data: appUser } = await adminClient
+        .from("app_users").select("id").eq("auth_user_id", user_id).maybeSingle();
+      let membErr: any = null;
+      if (appUser?.id) {
+        const r = await adminClient.from("memberships").delete().eq("user_id", appUser.id);
+        membErr = r.error;
+      }
+
+      console.log("Permissions removed");
+      log.user_roles_error = rolesErr?.message ?? null;
+      log.user_permissions_error = permsErr?.message ?? null;
+      log.technicians_error = techErr?.message ?? null;
+      log.memberships_error = membErr?.message ?? null;
+
+      console.log("User hidden from system");
+      return jsonResp({ success: true, ...log });
+    }
+
     // ── FORCE DELETE (test endpoint — bypass dependency checks) ──
     if (action === "force_delete") {
       const { user_id } = body;
