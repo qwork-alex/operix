@@ -155,8 +155,10 @@ Deno.serve(async (req) => {
       // Always check dependencies first
       const deps = await collectDependencies(adminClient, user_id);
 
+      console.log("🧠 DEPENDÊNCIAS:", deps);
       // ─── BLOCK MODE: refuse if any dependencies exist ───
       if (effectiveMode === "block" && deps.has_dependencies) {
+        console.log("⛔ DELETE BLOQUEADO POR DEPENDÊNCIAS");
         return jsonResp({
           error: "has_dependencies",
           message: "Usuário possui dados vinculados e não pode ser removido. Reatribua os registos a outro usuário antes de excluir.",
