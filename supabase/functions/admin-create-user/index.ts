@@ -122,6 +122,20 @@ Deno.serve(async (req) => {
       return jsonResp({ success: true });
     }
 
+    // ── FORCE DELETE (test endpoint — bypass dependency checks) ──
+    if (action === "force_delete") {
+      const { user_id } = body;
+      if (!user_id) return jsonResp({ error: "user_id required" }, 400);
+
+      console.log("🚨 FORCE DELETE EXECUTADO", user_id);
+      const { error } = await adminClient.auth.admin.deleteUser(user_id);
+      if (error) {
+        console.error("❌ ERRO FORCE DELETE:", error);
+        return jsonResp({ error: error.message }, 400);
+      }
+      return jsonResp({ success: true });
+    }
+
     // ── CHECK DEPENDENCIES (preflight before delete) ──
     if (action === "check_user_dependencies") {
       const { user_id } = body;
