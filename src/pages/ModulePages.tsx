@@ -1374,11 +1374,54 @@ export function UsersPage() {
             <p className="text-xs text-muted-foreground">{t("users.subtitle")}</p>
           </div>
         </div>
-        {isAdmin && (
-          <Dialog open={showCreate} onOpenChange={(v) => { if (!v) closeCreateDialog(); else setShowCreate(true); }}>
-            <DialogTrigger asChild>
-              <Button size="sm"><Plus className="h-4 w-4 mr-1" />Adicionar usuário</Button>
-            </DialogTrigger>
+         {import.meta.env.DEV && (
+           <Button
+             size="sm"
+             variant="destructive"
+             onClick={async () => {
+               const TEST_USER_ID = "SUBSTITUIR_PELO_UUID_DO_USUARIO_TESTE";
+               try {
+                 const { data: { session } } = await supabase.auth.getSession();
+                 const accessToken = session?.access_token;
+                 console.log("🧪 [FORCE DELETE TEST] access_token presente?", !!accessToken);
+                 console.log("🧪 [FORCE DELETE TEST] user_id alvo:", TEST_USER_ID);
+
+                 const res = await fetch(
+                   "https://nwjiyfvaoogevqovnyon.supabase.co/functions/v1/admin-create-user",
+                   {
+                     method: "POST",
+                     headers: {
+                       "Content-Type": "application/json",
+                       "Authorization": `Bearer ${accessToken}`,
+                       "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+                     },
+                     body: JSON.stringify({
+                       action: "force_delete",
+                       user_id: TEST_USER_ID,
+                     }),
+                   }
+                 );
+                 const json = await res.json().catch(() => ({}));
+                 console.log("🧪 [FORCE DELETE TEST] status:", res.status);
+                 console.log("🧪 [FORCE DELETE TEST] resposta completa:", json);
+                 if (!res.ok) {
+                   console.error("🧪 [FORCE DELETE TEST] ❌ erro:", json);
+                 } else {
+                   console.log("🧪 [FORCE DELETE TEST] ✅ sucesso");
+                 }
+               } catch (err) {
+                 console.error("🧪 [FORCE DELETE TEST] ❌ exceção:", err);
+               }
+             }}
+           >
+             🧪 Force Delete (DEV)
+           </Button>
+         )}
+         {isAdmin && (
+           <Dialog open={showCreate} onOpenChange={(v) => { if (!v) closeCreateDialog(); else setShowCreate(true); }}>
+             <DialogTrigger asChild>
+               <Button size="sm"><Plus className="h-4 w-4 mr-1" />Adicionar usuário</Button>
+             </DialogTrigger>
             <DialogContent className="bg-card border-border">
               <DialogHeader><DialogTitle>Criar novo usuário</DialogTitle></DialogHeader>
               {tempPassword ? (
