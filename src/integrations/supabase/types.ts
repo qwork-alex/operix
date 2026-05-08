@@ -981,6 +981,7 @@ export type Database = {
           email: string | null
           full_name: string
           id: string
+          is_system_owner: boolean
           phone: string | null
           updated_at: string
         }
@@ -991,6 +992,7 @@ export type Database = {
           email?: string | null
           full_name?: string
           id: string
+          is_system_owner?: boolean
           phone?: string | null
           updated_at?: string
         }
@@ -1001,6 +1003,7 @@ export type Database = {
           email?: string | null
           full_name?: string
           id?: string
+          is_system_owner?: boolean
           phone?: string | null
           updated_at?: string
         }
@@ -1180,6 +1183,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      rls_validation_logs: {
+        Row: {
+          after_count: number | null
+          before_count: number | null
+          check_name: string
+          created_at: string
+          id: string
+          phase: string
+          sample: Json | null
+        }
+        Insert: {
+          after_count?: number | null
+          before_count?: number | null
+          check_name: string
+          created_at?: string
+          id?: string
+          phase: string
+          sample?: Json | null
+        }
+        Update: {
+          after_count?: number | null
+          before_count?: number | null
+          check_name?: string
+          created_at?: string
+          id?: string
+          phase?: string
+          sample?: Json | null
+        }
+        Relationships: []
       }
       role_permissions: {
         Row: {
