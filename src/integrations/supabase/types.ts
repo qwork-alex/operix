@@ -1844,6 +1844,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      assert_active: { Args: { _uid: string }; Returns: undefined }
       can_access_client: {
         Args: { _client_id: string; _user_id: string }
         Returns: boolean
@@ -1885,7 +1886,21 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_order_visible: {
+        Args: {
+          _assigned: string
+          _created_by: string
+          _uid: string
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_order_writable: {
+        Args: { _uid: string; _user_id: string }
+        Returns: boolean
+      }
       is_user_active: { Args: { _user_id: string }; Returns: boolean }
+      owner_filter_uids: { Args: { _uid: string }; Returns: string[] }
       row_in_scope: {
         Args: {
           _action: string

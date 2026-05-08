@@ -1,189 +1,109 @@
 
-# Camada Central de Contexto de Identidade — Plano Cirúrgico
+# Estabilização RBAC — Plano Cirúrgico (Fase B)
 
-Princípios fixos (mantidos da Fase A):
-- **Camada paralela**: `get_user_context()` é criada **ao lado** do que existe. Nada é substituído nesta fase.
-- **Zero downtime**: nenhum trigger, RLS ou função existente é alterado.
-- **Reversível em 1 migration**: basta `DROP FUNCTION` + `DROP VIEW`.
-- **Módulos protegidos não tocados**: login, sessão, admin, SO, PO, atribuição, sync SO↔PO, upload, OCR, validação, bulk actions.
+Continuação direta da Fase A1 (RLS hardening) e Fase 1 (User Context Layer). Mantém o método: zero downtime, mudanças reversíveis, validação por fase, sem workspace ainda.
 
----
+## Diagnóstico real (do estado atual)
 
-## 1. O problema real (auditoria objetiva)
+Revisei policies, funções e hooks. Os sintomas relatados têm **causas concretas**:
 
-Hoje a identidade do usuário é resolvida em **5+ lugares diferentes**, cada um com regra própria:
-
-| Local | O que resolve | Risco |
-|---|---|---|
-| `useAuth` (FE) | `auth.uid` + `profile` básico | Não sabe role, não sabe membership |
-| `useRole` (FE) | role via `user_roles` | Ignora memberships, ignora banido |
-| `useImpersonation` | troca `effectiveUserId` | Cada hook tem que lembrar de usar |
-| `usePermission/useCan` | chama `check_permission` linha-a-linha | N+1 silencioso |
-| `useWorkspace` | workspace via `app_users.workspace_id` | Não cruza com `memberships` |
-| RLS (`has_role`, `can_manage_all_orders`, `effective_role`, `is_user_active`, `current_user_workspace_ids`) | cada uma faz seu próprio JOIN | Divergem entre si |
-
-**Consequência:** uma query em `useServiceOrders` pode dizer "sou técnico" enquanto o RLS diz "sou admin via owner-flag", e o trigger `apply_order_owner` ainda decide outra coisa. É exatamente daí que vêm os bugs de atribuição/visibilidade.
-
----
-
-## 2. O que vai ser criado (FASE 1 — camada paralela)
-
-Tudo abaixo é **novo**. Nenhum objeto existente é alterado.
-
-### 2.1. Função `public.get_user_context(_workspace_id uuid default null)`
-
-`SECURITY DEFINER`, `STABLE`, `search_path=public`. Retorna **uma linha JSONB** (não TABLE) para evitar joins perigosos e ser cacheável no FE em uma única chamada.
-
-Campos retornados (chaves estáveis, contrato congelado):
-```
-{
-  "auth_user_id":       uuid,            -- auth.uid()
-  "app_user_id":        uuid | null,     -- app_users.id
-  "email":              text,
-  "is_active":          boolean,         -- is_user_active(auth.uid())
-  "is_system_owner":    boolean,         -- profiles.is_system_owner OR email==owner
-  "primary_role":       text,            -- 'admin'|'socio'|'tecnico'|'cliente' (display)
-  "primary_db_role":    text,            -- 'admin'|'partner'|'technician'|'client'
-  "secondary_roles":    text[],          -- futuro: memberships extras
-  "current_workspace_id": uuid | null,   -- _workspace_id ou app_users.workspace_id
-  "workspace_ids":      uuid[],          -- todos workspaces do usuário (memberships ativos)
-  "membership_role":    text | null,     -- role no workspace atual via memberships
-  "effective_role":     text,            -- effective_role() — fonte de verdade RBAC
-  "can_manage_all":     boolean,         -- admin OU partner E ativo
-  "can_view_all_workspace": boolean,     -- has_global_view()
-  "ownership": {
-    "technician_id":    uuid | null,     -- get_my_technician_id()
-    "owns_filter_uids": uuid[]           -- [auth_user_id] (futuro: + delegados)
-  },
-  "flags": {
-    "is_admin":         boolean,
-    "is_partner":       boolean,
-    "is_technician":    boolean,
-    "is_client":        boolean,
-    "is_impersonating": false            -- FE preenche; backend sempre false
-  },
-  "computed_at":        timestamptz
-}
-```
-
-Implementação (resumo):
-- Reusa funções existentes (`is_user_active`, `has_role`, `effective_role`, `has_global_view`, `get_my_technician_id`, `current_user_workspace_ids`).
-- **Não cria nova tabela**, não muda enum, não muda nenhuma policy.
-- Sem JOIN entre `auth.users` e `public.*` no body — apenas chamadas de helpers já SECURITY DEFINER (sem risco de recursão RLS).
-
-### 2.2. View `public.v_user_context_self`
-
-`SELECT public.get_user_context() AS ctx;`
-RLS aberta para `authenticated` (o resultado já é só do próprio usuário, garantido pela função).
-Permite ao FE fazer `supabase.from('v_user_context_self').select('ctx').single()` em vez de RPC.
-
-### 2.3. Hook FE `useUserContext()` (apenas wrapper)
-
-- Tanstack Query com `queryKey=['user-context', auth_uid, impersonatedUid]`.
-- `staleTime: 5min`, `refetchOnWindowFocus: false`.
-- `useAuth` continua existindo. `useRole` continua existindo. **Nada é removido.**
-- `useUserContext` é exposto como **opcional** — quem quiser migrar, migra. Até a FASE 2 ninguém é forçado.
-
-### 2.4. Documentação `.lovable/memory/auth/user-context-layer.md`
-
-Contrato JSON, exemplos de uso, lista de hooks/queries a migrar (FASE 2/3).
-
----
-
-## 3. Queries / hooks atuais que dependem de identidade
-
-Mapeadas por categoria — base do plano de migração FASE 2.
-
-| # | Local | Hoje usa | Risco se RLS mudar |
-|---|---|---|---|
-| 1 | `useAuth` | `auth.getSession`, `profiles` | Baixo |
-| 2 | `useRole` | `user_roles` direto | Médio (ignora ban + membership) |
-| 3 | `useImpersonation` | localStorage + `effectiveUserId` | Médio |
-| 4 | `usePermission` / `useCan` / `<Can/>` | RPC `check_permission` por chamada | Alto (N+1) |
-| 5 | `useWorkspace` | `app_users.workspace_id` | Médio |
-| 6 | `useAssignableUsers` | `profiles` direto | Alto (já quebra para técnico) |
-| 7 | `useServiceOrders` | filtra por `assigned_user_id`/`user_id` no FE | Alto |
-| 8 | `usePaymentOrders` | idem | Alto |
-| 9 | `useTechnicianEarnings` | resolve `technician_id` via `technicians` | Médio |
-| 10 | `useReconciliation` / `useAgingAlerts` | `discrepancies` + assume admin | Médio |
-| 11 | `useNotifications` | `auth.uid()` direto | Baixo |
-| 12 | `useDashboardData` | mistura SO/PO/financial sem role-aware | Alto |
-| 13 | `getCurrentUser` em `lib/authUser.ts` | duplica `useAuth` | Baixo (consolidar depois) |
-| 14 | `applyScope` (`src/lib/applyScope.ts`) | recebe `teamIds` que ninguém preenche | Alto (silenciosamente vira `own`) |
-
-**Padrões anti-pattern detectados a serem migrados:**
-- `auth.uid()` direto no client → trocar por `ctx.auth_user_id`.
-- `useRole().isAdmin` para decisões de dado → trocar por `ctx.flags.is_admin && ctx.is_active`.
-- Filtro `created_by=auth.uid()` no FE → confiar no RLS já endurecido (Fase A) e usar `ctx.ownership.owns_filter_uids` quando precisar listar "meus".
-- `useAssignableUsers` lendo `profiles` → migrar para `profiles_public` (FASE A2).
-
----
-
-## 4. Plano de migração progressiva
-
-### FASE 1 — Camada paralela (esta migration)
-- Criar `get_user_context()` + view + hook + doc.
-- **Nada mais.** App continua 100% igual.
-- Validação: chamar como admin, sócio, técnico, banido, sem role, owner. Logar resultado em `rls_validation_logs` (`phase='user_context_v1'`).
-
-### FASE 2 — Migração de leitores (não-críticos primeiro)
-Ordem proposta, **um PR por item**:
-1. `useNotifications` (risco zero) → trocar `auth.uid()` por `ctx.auth_user_id`.
-2. `useDashboardData` → usar `ctx.flags` para decidir agregações.
-3. `useAssignableUsers` → usar `ctx.can_manage_all` + `profiles_public` (já planejado em A2).
-4. `useTechnicianEarnings` → usar `ctx.ownership.technician_id`.
-5. `usePermission/useCan` → pré-carregar permissões a partir de `ctx` (eliminar N+1).
-6. `useRole` permanece, mas internamente passa a ler `ctx.primary_db_role` (compat layer).
-
-### FASE 3 — Remoção de dependências antigas
-Só depois de FASE 2 estável ≥7 dias:
-- Remover `getCurrentUser` duplicado em `lib/authUser.ts`.
-- Marcar `useRole` como deprecated (ainda funciona, só re-exporta de `useUserContext`).
-- Remover `applyScope` se não tiver mais consumidores reais.
-
-**Nada disso entra agora.** Esta migration faz APENAS a Fase 1.
-
----
-
-## 5. Riscos e mitigação
-
-| Risco | Mitigação |
+| Sintoma | Causa real |
 |---|---|
-| Função pesada chamada em loop | Cache no Tanstack Query 5min + view `v_user_context_self` permite `select` único. |
-| Recursão RLS | Função é `SECURITY DEFINER` e só chama helpers já `SECURITY DEFINER`. Não consulta nada com RLS aberta. |
-| Drift entre `effective_role` e `primary_role` | `primary_role` deriva de `effective_role()` — fonte única. |
-| Quebrar login | Login não chama `get_user_context`. Só chamado **depois** de sessão estabelecida. |
-| Quebrar admin | Admin continua passando por `has_role` + `is_user_active`. Nada muda. |
-| Multiworkspace futuro | `_workspace_id` parâmetro já existe; quando `memberships` virarem fonte (Fase F do roadmap), basta trocar internals da função sem mudar contrato. |
+| Técnico vendo dados indevidos | `clients.SELECT` permite **qualquer authenticated**. `financial_records.SELECT` aceita `created_by=auth.uid()` (técnico vê o que ele criou em outros módulos). `tech_select_scoped` em `technicians` libera SELECT a quem tem qualquer permission de view (matriz frouxa). |
+| Admin funciona diferente | Admin tem shortcut em quase tudo (`has_role admin`); demais roles caem em `created_by=auth.uid()` OR `assigned_user_id=auth.uid()` OR `user_id=auth.uid()` — três colunas, três caminhos, comportamento diverge quando uma fica NULL. |
+| Queries só com visão global | `useServiceOrders`/`usePaymentOrders` usam `applyScope(scope, user, "user_id")` no FE. Se o `scope` resolvido = `'all'`, sem filtro; se `'own'`, força `user_id=uid` — mas a RLS aceita também `assigned_user_id`/`created_by`, criando descasamento FE↔DB. |
+| Status sincroniza parcial | `sync_so_status_from_po` depende de `group_id` OU `week+plate normalizada`. Quando OP não tem `group_id` e a placa difere por 1 char, a SO não atualiza. |
+| Atribuições somem | Triggers `force_*_auth_owner` + `normalize_order_owner` **sobrescrevem** `user_id` e `assigned_user_id` para o mesmo valor (`v_owner`). Se admin edita uma SO de um técnico sem reenviar `assigned_user_id`, o owner muda. |
+| Autofill quebra sob RLS | `set_*_user_from_auth` é **redundante** com `force_*_auth_owner` e `normalize_order_owner`; três triggers competem na mesma coluna em ordens diferentes por tabela. |
+| FE esconde, BE não bloqueia | `Can`/`PermissionGuard` esconde botões, mas várias tabelas (`profit_rules`, `profit_rule_items`, `reconciliations`) só checam `has_role admin`/`partner` no SELECT — sem `check_permission`. |
 
----
+## Princípios
 
-## 6. Validação obrigatória pós-aplicação
+1. **Backend é a verdade.** FE deixa de filtrar com `applyScope`; passa a confiar nas policies.
+2. **Uma única coluna de owner por tabela** para decisão (continuamos suportando as três por compat, mas a função canônica `is_row_visible_to(_uid, _row)` decide).
+3. **Triggers de owner consolidados** — uma só função por tabela, ordem determinística.
+4. **Tudo passa por `get_user_context()`** no FE; `useRole`/`useAuth` viram wrappers finos.
+5. **Nenhuma policy é alterada antes de validar com `rls_validation_logs`** (compara contagem antes/depois por role).
 
-Para cada perfil, gravar resultado em `rls_validation_logs`:
-- Admin (owner `qwork@qworkgroup.com`)
-- Admin não-owner
-- Sócio
-- Técnico com SOs atribuídas
-- Técnico sem nenhuma atribuição
-- Usuário banido (`banned_until > now()`)
-- Usuário sem `user_roles`
+## Fases
 
-Critério de sucesso: `ctx.is_active`, `ctx.primary_role`, `ctx.can_manage_all` e `ctx.flags.*` devem bater com o comportamento real do RLS hoje. Qualquer divergência **bloqueia** a Fase 2.
+### B1 — Helpers canônicos no DB (sem alterar policies)
 
----
+Criar funções `STABLE SECURITY DEFINER` que serão a base das próximas fases. **Nenhuma policy muda ainda.**
 
-## 7. O que **NÃO** entra nesta fase
+- `public.is_order_visible(_uid uuid, _user_id uuid, _assigned uuid, _created_by uuid) → bool` — encapsula a regra atual (admin/partner OR uid bate em qualquer das três).
+- `public.is_order_writable(_uid uuid, _user_id uuid) → bool` — admin/partner OR `_user_id=_uid`.
+- `public.owner_filter_uids(_uid uuid) → uuid[]` — array de uids que o user pode "ver como owner" (hoje = `[_uid]`; preparado para grupos futuros).
+- `public.assert_active(_uid uuid)` — RAISE se `is_user_active=false`. Usada em triggers.
 
-- Substituir `useAuth`, `useRole`, `useWorkspace`, `useImpersonation`.
-- Mudar qualquer policy RLS.
-- Mudar `apply_order_owner`, `normalize_order_owner` (Fase A3).
-- Mudar `provision_workspace_on_signup` (Fase F).
-- Tocar em queries de SO/PO/financial/upload.
-- Criar workspace real / multi-tenant.
+**Risco:** zero. Só adiciona funções.
+**Validação:** `SELECT public.is_order_visible(...)` em 10 SOs reais para admin, sócio, técnico — comparar com SELECT atual.
 
----
+### B2 — Consolidar triggers de owner (1 PR por tabela)
 
-## 8. Próximo passo
+Hoje convivem em `service_orders`, `payment_orders`, `financial_records`, `clients`, `company_settings`:
+- `set_*_user_from_auth` (BEFORE INSERT)
+- `force_*_auth_owner` (BEFORE INSERT/UPDATE)
+- `normalize_order_owner` (BEFORE INSERT/UPDATE em SO/PO)
 
-Aprovar **somente a Fase 1**: criar `get_user_context()` + view + hook + doc + validação em `rls_validation_logs`. Após 24h estáveis, abrir PR-1 da Fase 2 (`useNotifications`).
+Substituir por **um único trigger** `BEFORE INSERT OR UPDATE` por tabela chamando `apply_order_owner()` (que já existe e está correto). Remover os duplicados.
+
+**Correção do bug "atribuição some":** quando admin/partner faz UPDATE sem mexer em `assigned_user_id`, preservar `OLD.assigned_user_id` em vez de forçar = `user_id`. Ajustar `apply_order_owner` para tratar `assigned_user_id` independentemente de `user_id` quando o caller é admin/partner.
+
+**Risco:** médio. Cada tabela = 1 migration + smoke test (insert/update via UI por admin, sócio, técnico).
+**Validação:** `rls_validation_logs` registra `before/after_count` de cada tabela.
+
+### B3 — Hardening de SELECT em tabelas frouxas
+
+Por ordem de risco:
+
+1. **`clients.SELECT`** — hoje libera qualquer authenticated. Restringir a: admin/partner OR `created_by=auth.uid()` OR `EXISTS partner_clients/technician_clients`. Já temos `can_access_client()`.
+2. **`financial_records.SELECT`** — remover `created_by=auth.uid()` da regra (vazamento cross-módulo). Manter admin/partner OR `user_id=auth.uid()` OR `assigned_user_id=auth.uid()`.
+3. **`technicians.tech_select_scoped`** — remover o leque de permissions; manter admin/partner OR `user_id=auth.uid()` OR `EXISTS technician_clients` para parceiros.
+4. **`profit_rules`/`profit_rule_items`/`reconciliations`/`profit_distributions`** — adicionar bloqueio explícito por `is_user_active(auth.uid())`. Hoje só checam `has_role` que já checa active, mas tornar redundante e seguro.
+5. **`notifications`** — já está correto (`user_id=auth.uid()`). Sem mudança.
+
+Cada policy é trocada com `BEGIN; ... validação ... COMMIT;` e log em `rls_validation_logs` (phase='B3').
+
+**Risco:** alto se errar. Mitigação: **shadow mode primeiro** — criar policy paralela com nome `*_v2` em modo permissivo somando à existente, medir contagens via `rls_validation_logs`, só então DROP da antiga.
+
+### B4 — Migrar FE para `useUserContext` + remover `applyScope`
+
+Ordem (1 PR por item, com smoke test):
+
+1. `useNotifications` → `ctx.auth_user_id` (trivial).
+2. `useDashboardData` → `ctx.flags.is_admin/is_partner/is_technician`.
+3. `useTechnicianEarnings` → `ctx.ownership.technician_id`.
+4. `useServiceOrders`/`usePaymentOrders` → **remover `applyScope`**. RLS já filtra. FE só envia filtros de UI (`client_id`, `week`, etc.). Resolve o bug "queries só funcionam com visão global".
+5. `useAssignableUsers` → `ctx.can_manage_all`.
+6. `usePermission/useCan` → ler permissões pré-carregadas em `ctx` (evita 3 queries paralelas no boot).
+7. `useRole` → wrapper de `ctx.primary_db_role`. Mantém API para não quebrar consumidores.
+8. Deletar `src/lib/applyScope.ts` quando 0 imports.
+
+**Risco:** médio. Cada hook tem teste manual: admin vê tudo, sócio vê o permitido, técnico vê só atribuídos, banido vê nada.
+
+## Validação por fase
+
+Para cada fase, registro em `rls_validation_logs`:
+- contagem de linhas visíveis para 1 admin de teste, 1 sócio, 1 técnico, 1 banido — antes e depois.
+- amostra de 5 IDs por role.
+- divergência > 0 em qualquer combinação **bloqueia** a fase seguinte.
+
+## O que NÃO entra agora
+
+- Workspace / multi-tenant. (Fase C, futura.)
+- Mudança em `auth.uid()` espalhado dentro de funções DB (continuam usando — é seguro lá).
+- `useAuth` continua sendo a fonte do `session`/`user` do Supabase.
+- Edge functions não mudam.
+- Sem refactor visual / UI.
+
+## Ordem de execução proposta
+
+```
+B1 (helpers)   → 1 migration, ~10min, risco zero
+B2 (triggers)  → 5 migrations (1/tabela), risco médio
+B3 (RLS)       → 4 migrations com shadow mode, risco alto
+B4 (FE)        → 7 PRs sequenciais, risco médio
+```
+
+**Recomendo aprovar apenas B1 agora.** Depois de validar 24h, abrimos B2 tabela por tabela.
