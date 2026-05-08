@@ -1810,7 +1810,12 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      v_user_context_self: {
+        Row: {
+          ctx: Json | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       active_user_ids: {
@@ -1863,6 +1868,7 @@ export type Database = {
       }
       get_my_role: { Args: never; Returns: string }
       get_my_technician_id: { Args: never; Returns: string }
+      get_user_context: { Args: { _workspace_id?: string }; Returns: Json }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
