@@ -42,6 +42,7 @@ Owner account (qwork@qworkgroup.com) is protected, has exclusive reset access. N
 - [RBAC](mem://auth/single-tenant-rbac) — Admin, Sócio, Técnico, Cliente roles with strict RLS filtering
 - [Hardening A1](mem://auth/hardening-phase-a1) — RLS leaks fechadas: discrepancies/drivers restritas; sod ampliada ao dono; is_system_owner flag.
 - [Hardening B1](mem://auth/hardening-phase-b1) — Canonical helpers (is_order_visible/writable, owner_filter_uids, assert_active). Sem policy changes; base de B2/B3/B4.
+- [Hardening B3.1](mem://auth/hardening-phase-b3-1) — Sync triggers SECURITY DEFINER (fix save RLS error); clients & technicians SELECT scoped (fecha vazamento test4↔test5).
 - [Owner Protection](mem://auth/system-owner-protection) — qwork@qworkgroup.com protected from deletion, exclusive dev tools
 - [Auth Security](mem://logic/auth-security) — Admin-created users forced to change password on first login
 - [Impersonation](mem://features/auth/impersonation) — Admin "view as user" via frontend filter, banner + audit log, no RLS bypass
