@@ -6,6 +6,7 @@ import {
   loadHierarchyContext,
   type HierarchyContext,
 } from "@/components/shared/HierarchyExplorer";
+import { HierarchicalOrdersView } from "@/components/shared/HierarchicalOrdersView";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileUploadZone } from "@/components/service-orders/FileUploadZone";
 import { ExtractedDataTable } from "@/components/service-orders/ExtractedDataTable";
@@ -34,7 +35,7 @@ import { Can } from "@/components/Can";
 import { getCurrentUser } from "@/lib/authUser";
 
 export default function ServiceOrdersPage() {
-  const { t } = useLanguage();
+  const { t, formatCurrency } = useLanguage();
   const { user } = useAuth();
   const { isAdmin, dbRole } = useRole();
   const canAssignAnyTechnician = isAdmin || dbRole === "partner";
@@ -366,8 +367,20 @@ export default function ServiceOrdersPage() {
           </Select>
         </div>
 
-        {/* Saved orders table — filtered by hierarchy context */}
-        <ServiceOrdersTable orders={visibleOrders as any} isLoading={isLoading} />
+        {/* Saved orders — hierarchical grouped view (Phase 1B) */}
+        <HierarchicalOrdersView
+          records={visibleOrders as any}
+          storageKey="hierarchy.service_orders"
+          formatCurrency={formatCurrency}
+          activeContext={hCtx}
+          onView={setHCtx}
+          renderLeaf={(subset) => (
+            <ServiceOrdersTable orders={subset as any} isLoading={isLoading} />
+          )}
+        />
+        {visibleOrders.length === 0 && (
+          <ServiceOrdersTable orders={[] as any} isLoading={isLoading} />
+        )}
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import {
   loadHierarchyContext,
   type HierarchyContext,
 } from "@/components/shared/HierarchyExplorer";
+import { HierarchicalOrdersView } from "@/components/shared/HierarchicalOrdersView";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { FileUploadZone } from "@/components/service-orders/FileUploadZone";
@@ -35,7 +36,7 @@ import { Can } from "@/components/Can";
 import { getCurrentUser } from "@/lib/authUser";
 
 export default function PaymentOrdersPage() {
-  const { t } = useLanguage();
+  const { t, formatCurrency } = useLanguage();
   const { user } = useAuth();
   const { isAdmin, dbRole } = useRole();
   const canAssignAnyTechnician = isAdmin || dbRole === "partner";
@@ -252,7 +253,19 @@ export default function PaymentOrdersPage() {
           </Select>
         </div>
 
-        <PaymentOrdersTable orders={visibleOrders as any} isLoading={isLoading} />
+        <HierarchicalOrdersView
+          records={visibleOrders as any}
+          storageKey="hierarchy.payment_orders"
+          formatCurrency={formatCurrency}
+          activeContext={hCtx}
+          onView={setHCtx}
+          renderLeaf={(subset) => (
+            <PaymentOrdersTable orders={subset as any} isLoading={isLoading} />
+          )}
+        />
+        {visibleOrders.length === 0 && (
+          <PaymentOrdersTable orders={[] as any} isLoading={isLoading} />
+        )}
       </div>
     </div>
   );
