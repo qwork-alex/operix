@@ -224,7 +224,8 @@ interface RowProps {
 function Row({ node, depth, open, toggle, active, onView }: RowProps) {
   const isOpen = open.has(node.key);
   const hasChildren = !!node.children?.length;
-  const isActive =
+  const isDisabled = !!node.disabled;
+  const isActive = !isDisabled &&
     active.level === node.ctx.level &&
     active.year === node.ctx.year &&
     active.client === node.ctx.client &&
