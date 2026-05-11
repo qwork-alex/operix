@@ -164,7 +164,37 @@ function buildTree(records: HierarchyRecord[]): TreeNode[] {
             };
           }),
         };
-      }),
+      });
+    return {
+      key: `y:${year}`,
+      label: year,
+      count: yearRows.length,
+      ctx: { level: "year", year } as HierarchyContext,
+      children: [
+        {
+          key: `y:${year}|sec:operacional`,
+          label: "Operacional",
+          count: yearRows.length,
+          ctx: { level: "year", year } as HierarchyContext,
+          children: operationalChildren,
+        },
+        {
+          key: `y:${year}|sec:documentos`,
+          label: "Documentos",
+          count: 0,
+          ctx: { level: "year", year } as HierarchyContext,
+          disabled: true,
+          hint: "Em breve",
+        } as TreeNode,
+        {
+          key: `y:${year}|sec:relatorios`,
+          label: "Relatórios",
+          count: 0,
+          ctx: { level: "year", year } as HierarchyContext,
+          disabled: true,
+          hint: "Em breve",
+        } as TreeNode,
+      ],
     };
   });
 }
