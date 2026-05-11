@@ -17,63 +17,45 @@ function jsonResp(body: Record<string, unknown>, status = 200) {
  * Returns a structured map so the UI can show "X linked records".
  */
 async function collectDependencies(adminClient: any, authUserId: string) {
-  // Counts (use HEAD + count exact for efficiency)
-  const countTable = async (table: string, column: string, value: string | null) => {
-    if (!value) return 0;
-    const { count, error } = await adminClient
-      .from(table)
-      .select("id", { count: "exact", head: true })
-      .eq(column, value);
-    if (error) {
-      console.warn(`[deps] count ${table}.${column} failed:`, error.message);
-      return 0;
-    }
-    return count ?? 0;
+  // Phase B3.1b: use canonical ownership map RPC as single source of truth.
+  const { data: map, error } = await adminClient.rpc("get_user_ownership_map", { _uid: authUserId });
+  if (error) {
+    console.error("[deps] get_user_ownership_map failed:", error.message);
+    return {
+      technician: null,
+      counts: {},
+      blocking: 0,
+      detachable: 0,
+      identity: 0,
+      has_dependencies: false,
+      map: null,
+      error: error.message,
+    };
+  }
+  const totals = (map?.totals ?? {}) as { blocking?: number; detachable?: number; identity?: number };
+  // Backwards-compatible flat counts for the existing UI dialog.
+  const flat = {
+    service_orders_as_assigned_user: map?.blocking?.service_orders_assigned_user_id ?? 0,
+    service_orders_created: map?.detachable?.service_orders_created_by ?? 0,
+    payment_orders_as_assigned_user: map?.blocking?.payment_orders_assigned_user_id ?? 0,
+    payment_orders_created: map?.detachable?.payment_orders_created_by ?? 0,
+    fleet_trips: map?.detachable?.fleet_trips_created_by ?? 0,
+    financial_records:
+      (map?.detachable?.financial_records_user_id ?? 0) +
+      (map?.detachable?.financial_records_assigned_user_id ?? 0) +
+      (map?.detachable?.financial_records_created_by ?? 0),
+    documents: map?.detachable?.documents_uploaded_by ?? 0,
   };
-
-  const [
-    serviceOrdersAsAssignedUser,
-    serviceOrdersCreated,
-    paymentOrdersAsAssignedUser,
-    paymentOrdersCreated,
-    fleetTrips,
-    financialRecords,
-    documents,
-  ] = await Promise.all([
-    countTable("service_orders", "assigned_user_id", authUserId),
-    countTable("service_orders", "created_by", authUserId),
-    countTable("payment_orders", "assigned_user_id", authUserId),
-    countTable("payment_orders", "created_by", authUserId),
-    countTable("fleet_trips", "created_by", authUserId),
-    countTable("financial_records", "created_by", authUserId),
-    countTable("documents", "uploaded_by", authUserId),
-  ]);
-
-  // assigned_user_id is nullable on both tables → all dependencies are detachable
-  const blocking = 0;
-  const detachable =
-    serviceOrdersAsAssignedUser +
-    serviceOrdersCreated +
-    paymentOrdersAsAssignedUser +
-    paymentOrdersCreated +
-    fleetTrips +
-    financialRecords +
-    documents;
-
   return {
     technician: null,
-    counts: {
-      service_orders_as_assigned_user: serviceOrdersAsAssignedUser,
-      service_orders_created: serviceOrdersCreated,
-      payment_orders_as_assigned_user: paymentOrdersAsAssignedUser,
-      payment_orders_created: paymentOrdersCreated,
-      fleet_trips: fleetTrips,
-      financial_records: financialRecords,
-      documents: documents,
-    },
-    blocking,
-    detachable,
-    has_dependencies: blocking + detachable > 0,
+    counts: flat,
+    blocking: totals.blocking ?? 0,
+    detachable: totals.detachable ?? 0,
+    identity: totals.identity ?? 0,
+    // "has_dependencies" preserves old semantics (any ownership row),
+    // but `blocking` is what gates deletion now.
+    has_dependencies: (totals.blocking ?? 0) + (totals.detachable ?? 0) > 0,
+    map,
   };
 }
 
