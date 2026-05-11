@@ -156,6 +156,7 @@ export default function ServiceOrdersPage() {
       const selectedUser = techByUser ?? techByName ?? null;
       console.log("SELECTED TECHNICIAN:", selectedUser);
 
+      const ctxDefaults = hierarchyDefaults(hCtx);
       const payload: Record<string, any> = {
         client_id: clientMatch?.id || null,
         client_name: r.client?.trim() || clientMatch?.name || "",
@@ -163,7 +164,8 @@ export default function ServiceOrdersPage() {
         // technician_id is legacy/display only; user_id is the authorization key.
         technician_id: null,
         platform: r.platform ?? null,
-        week: r.week ?? null,
+        week: r.week ?? ctxDefaults.week ?? null,
+        operational_unit: ctxDefaults.operational_unit ?? null,
         car_name: r.car_name ?? null,
         license_plate: r.license_plate ? formatLicensePlate(r.license_plate) : null,
         service_1_name: r.service_1_name ?? null,
@@ -176,7 +178,7 @@ export default function ServiceOrdersPage() {
         service_4_price: r.service_4_price ?? null,
         total: r.total ?? null,
         status: "draft",
-        group_id: r.week ?? null,
+        group_id: r.week ?? ctxDefaults.week ?? null,
       };
 
       // Calculate technician earnings from profit distribution rules
@@ -298,6 +300,8 @@ export default function ServiceOrdersPage() {
             <p className="text-xs text-muted-foreground">{t("so.subtitle")}</p>
           </div>
         </div>
+
+        <HierarchyBreadcrumb context={hCtx} onClear={() => setHCtx({ level: "all" })} />
 
         {extractions.length === 0 && <ExtractionStages current="upload" />}
 
