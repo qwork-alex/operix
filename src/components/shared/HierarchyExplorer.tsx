@@ -332,6 +332,18 @@ export function HierarchyExplorer({
 
   const total = records.length;
 
+  // Smart, context-aware empty state.
+  const smartEmpty = (() => {
+    if (emptyMessage) return emptyMessage;
+    if (records.length === 0) return "Nenhum registro salvo ainda.";
+    if (context.level === "technician") return "Nenhum registro deste técnico.";
+    if (context.level === "week") return "Nenhum registro nesta semana.";
+    if (context.level === "unit") return "Nenhum registro nesta unidade operacional.";
+    if (context.level === "client") return "Nenhum registro deste cliente.";
+    if (context.level === "year") return "Nenhum registro neste período.";
+    return "Sem dados para organizar.";
+  })();
+
   return (
     <aside className="flex h-full w-full flex-col rounded-lg border border-border/50 bg-card/40 backdrop-blur">
       <header className="flex items-center justify-between gap-2 border-b border-border/50 px-3 py-2">
