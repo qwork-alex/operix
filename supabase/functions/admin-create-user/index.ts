@@ -422,7 +422,20 @@ Deno.serve(async (req) => {
         // Detach (don't delete) operational data so history is preserved
         (async () => { await adminClient.from("service_orders").update({ created_by: null }).eq("created_by", user_id); })(),
         (async () => { await adminClient.from("payment_orders").update({ created_by: null }).eq("created_by", user_id); })(),
+        // Phase B3.1b: financial_records has 3 nullable owner columns. Null them ALL,
+        // including orphan auto-synced revenue rows that no longer reference any SO/PO.
         (async () => { await adminClient.from("financial_records").update({ created_by: null }).eq("created_by", user_id); })(),
+        (async () => { await adminClient.from("financial_records").update({ user_id: null }).eq("user_id", user_id); })(),
+        (async () => { await adminClient.from("financial_records").update({ assigned_user_id: null }).eq("assigned_user_id", user_id); })(),
+        // Detach also other nullable owner columns surfaced by the ownership map
+        (async () => { await adminClient.from("clients").update({ user_id: null }).eq("user_id", user_id); })(),
+        (async () => { await adminClient.from("clients").update({ created_by: null }).eq("created_by", user_id); })(),
+        (async () => { await adminClient.from("profit_rules").update({ created_by: null }).eq("created_by", user_id); })(),
+        (async () => { await adminClient.from("profit_rules").update({ assigned_user_id: null }).eq("assigned_user_id", user_id); })(),
+        (async () => { await adminClient.from("profit_distributions").update({ created_by: null }).eq("created_by", user_id); })(),
+        (async () => { await adminClient.from("profit_distributions").update({ target_user_id: null }).eq("target_user_id", user_id); })(),
+        (async () => { await adminClient.from("drivers").update({ created_by: null }).eq("created_by", user_id); })(),
+        (async () => { await adminClient.from("fleet_fuel_logs").update({ created_by: null }).eq("created_by", user_id); })(),
         (async () => { await adminClient.from("fleet_trips").update({ created_by: null }).eq("created_by", user_id); })(),
         (async () => { await adminClient.from("documents").update({ uploaded_by: null }).eq("uploaded_by", user_id); })(),
         // Delete technician row LAST (after SO rows have been reassigned), only if no SO references remain
