@@ -493,8 +493,30 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
     setShowMoveDialog(true);
   };
 
+  if (collapsed) {
+    const fileCount = filteredDocs.filter((d: any) => d.type === "file").length;
+    return (
+      <button
+        type="button"
+        onClick={() => setCollapsed(false)}
+        className="flex w-full items-center justify-between rounded-md border border-border/50 bg-card/40 px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-card/70"
+      >
+        <span className="flex items-center gap-2">
+          <ChevronRight className="h-3.5 w-3.5" />
+          <FolderOpen className="h-3.5 w-3.5 text-primary" />
+          <span className="font-medium text-foreground">{t("fm.title")}</span>
+          <span className="text-[10px]">{fileCount} {t("common.file").toLowerCase()}(s)</span>
+        </span>
+        <span className="text-[10px] uppercase tracking-wide">Expandir</span>
+      </button>
+    );
+  }
+
   return (
     <div className="space-y-3 rounded-lg border border-border/50 bg-card/50 p-4">
+      <div className="flex justify-end">
+        <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => setCollapsed(true)}>Recolher</Button>
+      </div>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
