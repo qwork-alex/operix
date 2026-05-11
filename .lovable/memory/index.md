@@ -16,6 +16,7 @@ Owner account (qwork@qworkgroup.com) is protected, has exclusive reset access. N
 - [RBAC Hardening Phase B2](mem://auth/hardening-phase-b2) — Single owner trigger per table (SO/PO/financial). assigned_user_id independent of user_id. Fixes assignment-loss bug.
 - [RBAC Hardening Phase B3.1b](mem://auth/hardening-phase-b3-1b) — Safe user deletion: get_user_ownership_map() RPC + edge function gates by NOT-NULL "blocking" only; nulls all 3 financial_records owner cols.
 - [RBAC Hardening Phase B3.2](mem://auth/hardening-phase-b3-2) — Re-ENABLED + FORCED RLS on service_orders/payment_orders/profiles/app_users (was silently disabled → cross-user SELECT leak).
+- [RBAC Hardening Phase B3.3](mem://auth/hardening-phase-b3-3) — DELETE ACL: SO/PO/financial_records DELETE now permission+scope-driven; frontend `assertedDelete` helper validates rows affected to kill silent "Excluído com sucesso".
 - [Theme Style](mem://style/theme) — Dark Luxury aesthetic rules, customizable admin branding and glow effects
 - [Internationalization](mem://features/i18n) — 12 languages, PT primary, locale-aware currencies/numbers
 - [Service Orders](mem://features/service-orders) — 4-stage OCR, inline editing, text fallbacks, strictly validated saving
