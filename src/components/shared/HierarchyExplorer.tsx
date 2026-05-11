@@ -238,19 +238,22 @@ function Row({ node, depth, open, toggle, active, onView }: RowProps) {
       <div
         className={cn(
           "group flex items-center gap-1 rounded-sm pr-1 text-xs transition-colors",
-          "hover:bg-sidebar-accent/50",
+          isDisabled
+            ? "opacity-60"
+            : "hover:bg-sidebar-accent/50",
           isActive && "bg-sidebar-accent text-primary",
         )}
         style={{ paddingLeft: depth * 10 + 4 }}
       >
         <button
           type="button"
-          onClick={() => hasChildren && toggle(node.key)}
+          onClick={() => hasChildren && !isDisabled && toggle(node.key)}
           className={cn(
             "flex h-5 w-5 shrink-0 items-center justify-center rounded-sm",
-            hasChildren ? "hover:bg-sidebar-accent" : "opacity-30",
+            hasChildren && !isDisabled ? "hover:bg-sidebar-accent" : "opacity-30",
           )}
           aria-label={isOpen ? "Recolher" : "Expandir"}
+          disabled={isDisabled || !hasChildren}
         >
           <ChevronRight
             className={cn(
@@ -260,27 +263,35 @@ function Row({ node, depth, open, toggle, active, onView }: RowProps) {
           />
         </button>
 
-        <span className="flex-1 truncate py-1" title={node.label}>
+        <span className={cn("flex-1 truncate py-1", isDisabled && "italic text-muted-foreground")} title={node.label}>
           {node.label}
         </span>
 
-        <span className="text-[10px] tabular-nums text-muted-foreground">
-          {node.count}
-        </span>
+        {node.hint ? (
+          <span className="rounded-sm bg-muted/40 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
+            {node.hint}
+          </span>
+        ) : (
+          <span className="text-[10px] tabular-nums text-muted-foreground">
+            {node.count}
+          </span>
+        )}
 
-        <button
-          type="button"
-          onClick={() => onView(node.ctx)}
-          className={cn(
-            "ml-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-sm opacity-0 transition-opacity",
-            "hover:bg-primary/15 hover:text-primary group-hover:opacity-100",
-            isActive && "opacity-100 text-primary",
-          )}
-          title="Visualizar nas tabelas abaixo"
-          aria-label="Visualizar"
-        >
-          <Eye className="h-3 w-3" />
-        </button>
+        {!isDisabled && (
+          <button
+            type="button"
+            onClick={() => onView(node.ctx)}
+            className={cn(
+              "ml-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-sm opacity-0 transition-opacity",
+              "hover:bg-primary/15 hover:text-primary group-hover:opacity-100",
+              isActive && "opacity-100 text-primary",
+            )}
+            title="Visualizar nas tabelas abaixo"
+            aria-label="Visualizar"
+          >
+            <Eye className="h-3 w-3" />
+          </button>
+        )}
       </div>
 
       {isOpen && hasChildren && (
