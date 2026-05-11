@@ -31,7 +31,7 @@ function enhanceImageCanvas(canvas: HTMLCanvasElement) {
   ctx.putImageData(imageData, 0, 0);
 }
 
-export function FileUploadZone({ onFilesSelected, isProcessing }: FileUploadZoneProps) {
+export function FileUploadZone({ onFilesSelected, isProcessing, compact = false }: FileUploadZoneProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const { t } = useLanguage();
 
