@@ -106,8 +106,8 @@ function groupBy<T>(items: T[], keyFn: (i: T) => string): Map<string, T[]> {
 
 function sortKeys(keys: string[], opts?: { numericDesc?: boolean }) {
   return [...keys].sort((a, b) => {
-    if (a === UNASSIGNED) return 1;
-    if (b === UNASSIGNED) return -1;
+    if (FALLBACK_VALUES.has(a) && !FALLBACK_VALUES.has(b)) return 1;
+    if (FALLBACK_VALUES.has(b) && !FALLBACK_VALUES.has(a)) return -1;
     if (opts?.numericDesc) {
       const an = Number(a);
       const bn = Number(b);
