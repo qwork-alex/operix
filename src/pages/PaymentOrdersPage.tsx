@@ -118,6 +118,7 @@ export default function PaymentOrdersPage() {
       return;
     }
 
+    const ctxDefaults = hierarchyDefaults(hCtx);
     const inserts: PaymentOrderInsert[] = rows.map(r => {
       const clientMatch = clients.find(c => c.name.toLowerCase() === r.client?.toLowerCase());
       const rawTech = (r.technician ?? "").trim();
@@ -135,16 +136,17 @@ export default function PaymentOrdersPage() {
         user_id: finalUserId,
         assigned_user_id: finalUserId,
         client_id: clientMatch?.id || null,
-        client_name: r.client?.trim() || clientMatch?.name || null,
-        technician_name: selectedUser?.name || techMatch?.name || rawTech || null,
+        client_name: r.client?.trim() || clientMatch?.name || ctxDefaults.client || null,
+        technician_name: selectedUser?.name || techMatch?.name || rawTech || ctxDefaults.technician || null,
         platform: r.platform ?? null,
-        list_name: r.list_name ?? null,
+        list_name: r.list_name ?? ctxDefaults.week ?? null,
+        operational_unit: ctxDefaults.operational_unit ?? null,
         car_name: r.car_name ?? null,
         license_plate: r.license_plate ? formatLicensePlate(r.license_plate) : null,
         services: (r.services || []) as unknown as Json,
         total: r.total ?? null,
         status: "pending",
-        group_id: r.list_name ?? null,
+        group_id: r.list_name ?? ctxDefaults.week ?? null,
       };
       console.log("FINAL user_id:", payload.user_id);
       console.log("FINAL INSERT PAYLOAD:", payload);
@@ -200,6 +202,7 @@ export default function PaymentOrdersPage() {
           </div>
         </div>
 
+        <HierarchyBreadcrumb context={hCtx} onClear={() => setHCtx({ level: "all" })} />
         {extractions.length === 0 && <ExtractionStages current="upload" />}
 
         <Can permission="payment_orders.create">
