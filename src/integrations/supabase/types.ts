@@ -871,6 +871,7 @@ export type Database = {
           id: string
           license_plate: string | null
           list_name: string | null
+          operational_unit: string | null
           platform: string | null
           service_order_id: string | null
           services: Json | null
@@ -893,6 +894,7 @@ export type Database = {
           id?: string
           license_plate?: string | null
           list_name?: string | null
+          operational_unit?: string | null
           platform?: string | null
           service_order_id?: string | null
           services?: Json | null
@@ -915,6 +917,7 @@ export type Database = {
           id?: string
           license_plate?: string | null
           list_name?: string | null
+          operational_unit?: string | null
           platform?: string | null
           service_order_id?: string | null
           services?: Json | null
@@ -1303,6 +1306,7 @@ export type Database = {
           group_id: string | null
           id: string
           license_plate: string | null
+          operational_unit: string | null
           platform: string | null
           service_1_name: string | null
           service_1_price: number | null
@@ -1334,6 +1338,7 @@ export type Database = {
           group_id?: string | null
           id?: string
           license_plate?: string | null
+          operational_unit?: string | null
           platform?: string | null
           service_1_name?: string | null
           service_1_price?: number | null
@@ -1365,6 +1370,7 @@ export type Database = {
           group_id?: string | null
           id?: string
           license_plate?: string | null
+          operational_unit?: string | null
           platform?: string | null
           service_1_name?: string | null
           service_1_price?: number | null
