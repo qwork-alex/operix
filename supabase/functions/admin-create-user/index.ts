@@ -302,27 +302,28 @@ Deno.serve(async (req) => {
         return jsonResp({ error: "owner_protected", message: "O proprietário do sistema não pode ser removido." }, 403);
       }
 
-      // Always check dependencies first
+      // Always check dependencies first (canonical map)
       const deps = await collectDependencies(adminClient, user_id);
 
       console.log("🧠 DEPENDÊNCIAS:", deps);
-      // ─── BLOCK MODE: refuse if any dependencies exist ───
-      if (effectiveMode === "block" && deps.has_dependencies) {
-        console.log("⛔ DELETE BLOQUEADO POR DEPENDÊNCIAS");
+
+      // ─── BLOCK MODE: refuse only if BLOCKING refs exist (NOT NULL ownership in SO/PO).
+      // Detachable refs (financial_records, documents, created_by, …) are nullable and
+      // will be cleaned up safely below.
+      if (effectiveMode === "block" && (deps.blocking ?? 0) > 0) {
+        console.log("⛔ DELETE BLOQUEADO POR REFERÊNCIAS NÃO-NULAS");
         return jsonResp({
-          error: "has_dependencies",
-          message: "Usuário possui dados vinculados e não pode ser removido. Reatribua os registos a outro usuário antes de excluir.",
+          error: "has_blocking_dependencies",
+          message: "Usuário possui ordens de serviço/pagamento atribuídas. Reatribua a outro usuário antes de excluir.",
           ...deps,
         }, 409);
       }
 
-      // ─── DETACH MODE IS DISABLED: reassignment is mandatory when there are dependencies ───
-      // user_id on service_orders/payment_orders is NOT NULL — detach would fail anyway.
-      // We force the caller to use 'reassign' mode whenever vínculos existem.
-      if (effectiveMode === "detach" && deps.has_dependencies) {
+      // ─── DETACH is ALWAYS allowed when blocking==0. Cleanup nulls every nullable owner column.
+      if (effectiveMode === "detach" && (deps.blocking ?? 0) > 0) {
         return jsonResp({
           error: "reassign_required",
-          message: "Não é possível desanexar: existem vínculos obrigatórios. Use o modo 'reassign' e informe um usuário substituto.",
+          message: "Não é possível desanexar: existem ordens com ownership obrigatório. Use o modo 'reassign'.",
           ...deps,
         }, 409);
       }
