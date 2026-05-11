@@ -367,8 +367,20 @@ export default function ServiceOrdersPage() {
           </Select>
         </div>
 
-        {/* Saved orders table — filtered by hierarchy context */}
-        <ServiceOrdersTable orders={visibleOrders as any} isLoading={isLoading} />
+        {/* Saved orders — hierarchical grouped view (Phase 1B) */}
+        <HierarchicalOrdersView
+          records={visibleOrders as any}
+          storageKey="hierarchy.service_orders"
+          formatCurrency={formatCurrency}
+          activeContext={hCtx}
+          onView={setHCtx}
+          renderLeaf={(subset) => (
+            <ServiceOrdersTable orders={subset as any} isLoading={isLoading} />
+          )}
+        />
+        {visibleOrders.length === 0 && (
+          <ServiceOrdersTable orders={[] as any} isLoading={isLoading} />
+        )}
       </div>
     </div>
   );
