@@ -6,6 +6,7 @@ import {
   loadHierarchyContext,
   type HierarchyContext,
 } from "@/components/shared/HierarchyExplorer";
+import { HierarchyBreadcrumb, hierarchyDefaults } from "@/components/shared/HierarchyBreadcrumb";
 import { HierarchicalOrdersView } from "@/components/shared/HierarchicalOrdersView";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -72,6 +73,7 @@ export default function PaymentOrdersPage() {
 
   const handleFiles = useCallback((files: File[]) => {
     setSessionFiles(prev => [...prev, ...files.map(f => f.name)]);
+    const ctxDefaults = hierarchyDefaults(hCtx);
 
     addFiles(files, async (file, onStatus) => {
       storeFileInDocuments(file, "payment_order", user?.id).then(() => {
@@ -83,7 +85,17 @@ export default function PaymentOrdersPage() {
       onStatus("processing" as QueueItemStatus);
       try {
         const result = await extract(file);
-        setExtractions(prev => [...prev, { ...result, _id: crypto.randomUUID() }]);
+        // Phase 1C — pre-fill missing fields from active hierarchy context.
+        const prefilled = {
+          ...result,
+          orders: result.orders.map((o) => ({
+            ...o,
+            client: o.client ?? ctxDefaults.client,
+            list_name: o.list_name ?? ctxDefaults.week,
+            technician: o.technician ?? ctxDefaults.technician,
+          })),
+        };
+        setExtractions(prev => [...prev, { ...prefilled, _id: crypto.randomUUID() }]);
         if (result.confidence === "low") {
           toast.warning("Low confidence — please review carefully.");
         }
@@ -94,7 +106,7 @@ export default function PaymentOrdersPage() {
         throw err;
       }
     });
-  }, [addFiles, extract, user?.id, queryClient]);
+  }, [addFiles, extract, user?.id, queryClient, hCtx]);
 
   const handleSave = async (extractionId: string, rows: ExtractedPaymentOrder[]) => {
     // rows = EXACTLY what the user sees in the edited table (source of truth)
@@ -106,6 +118,7 @@ export default function PaymentOrdersPage() {
       return;
     }
 
+    const ctxDefaults = hierarchyDefaults(hCtx);
     const inserts: PaymentOrderInsert[] = rows.map(r => {
       const clientMatch = clients.find(c => c.name.toLowerCase() === r.client?.toLowerCase());
       const rawTech = (r.technician ?? "").trim();
@@ -123,16 +136,17 @@ export default function PaymentOrdersPage() {
         user_id: finalUserId,
         assigned_user_id: finalUserId,
         client_id: clientMatch?.id || null,
-        client_name: r.client?.trim() || clientMatch?.name || null,
-        technician_name: selectedUser?.name || techMatch?.name || rawTech || null,
+        client_name: r.client?.trim() || clientMatch?.name || ctxDefaults.client || null,
+        technician_name: selectedUser?.name || techMatch?.name || rawTech || ctxDefaults.technician || null,
         platform: r.platform ?? null,
-        list_name: r.list_name ?? null,
+        list_name: r.list_name ?? ctxDefaults.week ?? null,
+        operational_unit: ctxDefaults.operational_unit ?? null,
         car_name: r.car_name ?? null,
         license_plate: r.license_plate ? formatLicensePlate(r.license_plate) : null,
         services: (r.services || []) as unknown as Json,
         total: r.total ?? null,
         status: "pending",
-        group_id: r.list_name ?? null,
+        group_id: r.list_name ?? ctxDefaults.week ?? null,
       };
       console.log("FINAL user_id:", payload.user_id);
       console.log("FINAL INSERT PAYLOAD:", payload);
@@ -188,6 +202,7 @@ export default function PaymentOrdersPage() {
           </div>
         </div>
 
+        <HierarchyBreadcrumb context={hCtx} onClear={() => setHCtx({ level: "all" })} />
         {extractions.length === 0 && <ExtractionStages current="upload" />}
 
         <Can permission="payment_orders.create">

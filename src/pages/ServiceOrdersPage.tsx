@@ -6,6 +6,7 @@ import {
   loadHierarchyContext,
   type HierarchyContext,
 } from "@/components/shared/HierarchyExplorer";
+import { HierarchyBreadcrumb, hierarchyDefaults } from "@/components/shared/HierarchyBreadcrumb";
 import { HierarchicalOrdersView } from "@/components/shared/HierarchicalOrdersView";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileUploadZone } from "@/components/service-orders/FileUploadZone";
@@ -73,6 +74,7 @@ export default function ServiceOrdersPage() {
   const handleFiles = useCallback((files: File[]) => {
     // Track session files for filter
     setSessionFiles(prev => [...prev, ...files.map(f => f.name)]);
+    const ctxDefaults = hierarchyDefaults(hCtx);
 
     addFiles(files, async (file, onStatus) => {
       // Store file in document system (non-blocking)
@@ -85,7 +87,17 @@ export default function ServiceOrdersPage() {
       onStatus("processing" as QueueItemStatus);
       try {
         const result = await extract(file);
-        setExtractions(prev => [...prev, { ...result, _id: crypto.randomUUID() }]);
+        // Phase 1C — pre-fill missing fields from active hierarchy context.
+        const prefilled = {
+          ...result,
+          orders: result.orders.map((o) => ({
+            ...o,
+            client: o.client ?? ctxDefaults.client,
+            week: o.week ?? ctxDefaults.week,
+            technician: o.technician ?? ctxDefaults.technician,
+          })),
+        };
+        setExtractions(prev => [...prev, { ...prefilled, _id: crypto.randomUUID() }]);
         if (result.confidence === "low") {
           toast.warning("Low confidence extraction — please review carefully.");
         }
@@ -96,7 +108,7 @@ export default function ServiceOrdersPage() {
         throw err;
       }
     });
-  }, [addFiles, extract, user?.id, queryClient]);
+  }, [addFiles, extract, user?.id, queryClient, hCtx]);
 
   const handleSave = async (extractionId: string, rows: ExtractedOrder[]) => {
     // rows = EXACTLY what the user sees in the edited table (source of truth)
@@ -144,6 +156,7 @@ export default function ServiceOrdersPage() {
       const selectedUser = techByUser ?? techByName ?? null;
       console.log("SELECTED TECHNICIAN:", selectedUser);
 
+      const ctxDefaults = hierarchyDefaults(hCtx);
       const payload: Record<string, any> = {
         client_id: clientMatch?.id || null,
         client_name: r.client?.trim() || clientMatch?.name || "",
@@ -151,7 +164,8 @@ export default function ServiceOrdersPage() {
         // technician_id is legacy/display only; user_id is the authorization key.
         technician_id: null,
         platform: r.platform ?? null,
-        week: r.week ?? null,
+        week: r.week ?? ctxDefaults.week ?? null,
+        operational_unit: ctxDefaults.operational_unit ?? null,
         car_name: r.car_name ?? null,
         license_plate: r.license_plate ? formatLicensePlate(r.license_plate) : null,
         service_1_name: r.service_1_name ?? null,
@@ -164,7 +178,7 @@ export default function ServiceOrdersPage() {
         service_4_price: r.service_4_price ?? null,
         total: r.total ?? null,
         status: "draft",
-        group_id: r.week ?? null,
+        group_id: r.week ?? ctxDefaults.week ?? null,
       };
 
       // Calculate technician earnings from profit distribution rules
@@ -286,6 +300,8 @@ export default function ServiceOrdersPage() {
             <p className="text-xs text-muted-foreground">{t("so.subtitle")}</p>
           </div>
         </div>
+
+        <HierarchyBreadcrumb context={hCtx} onClear={() => setHCtx({ level: "all" })} />
 
         {extractions.length === 0 && <ExtractionStages current="upload" />}
 
