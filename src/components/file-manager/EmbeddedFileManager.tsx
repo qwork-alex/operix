@@ -136,10 +136,11 @@ async function fetchDocumentBlobUrl(
   return { blobUrl, mimeType, signedUrl };
 }
 
-export function EmbeddedFileManager({ entityType, module: moduleName = "orders", sessionFileNames = [] }: Props) {
+export function EmbeddedFileManager({ entityType, module: moduleName = "orders", sessionFileNames = [], defaultCollapsed = false }: Props) {
   const { t, formatDate } = useLanguage();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
   const [parentId, setParentId] = useState<string | null>(null);
   const [path, setPath] = useState<{ id: string | null; name: string }[]>([
