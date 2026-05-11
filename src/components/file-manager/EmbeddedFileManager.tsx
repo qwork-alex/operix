@@ -22,6 +22,8 @@ interface Props {
   entityType: "service_order" | "payment_order";
   module?: string;
   sessionFileNames?: string[];
+  /** Phase 1C.2 — start collapsed when there is no upload activity. */
+  defaultCollapsed?: boolean;
 }
 
 interface PreviewState {
