@@ -1,5 +1,11 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { CreditCard, Filter } from "lucide-react";
+import {
+  HierarchyExplorer,
+  applyHierarchyContext,
+  loadHierarchyContext,
+  type HierarchyContext,
+} from "@/components/shared/HierarchyExplorer";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { FileUploadZone } from "@/components/service-orders/FileUploadZone";
@@ -50,6 +56,15 @@ export default function PaymentOrdersPage() {
   const { data: myAssignableUserId } = useMyAssignableUserId();
   
   const { queue, isProcessing, addFiles, clearCompleted } = useFileQueue();
+
+  // Hierarchical view context (Phase 1A)
+  const [hCtx, setHCtx] = useState<HierarchyContext>(() =>
+    loadHierarchyContext("hierarchy.payment_orders"),
+  );
+  const visibleOrders = useMemo(
+    () => applyHierarchyContext(orders as any[], hCtx),
+    [orders, hCtx],
+  );
 
   const platforms = [...new Set((orders as any[]).map(o => o.platform).filter(Boolean))];
   const listNames = [...new Set((orders as any[]).map(o => o.list_name).filter(Boolean))];
@@ -148,86 +163,97 @@ export default function PaymentOrdersPage() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-            <CreditCard className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-lg font-semibold text-foreground">{t("po.title")}</h1>
-            <p className="text-xs text-muted-foreground">{t("po.subtitle")}</p>
+    <div className="animate-fade-in flex gap-4">
+      <div className="hidden md:block w-64 shrink-0 sticky top-4 self-start max-h-[calc(100vh-2rem)]">
+        <HierarchyExplorer
+          records={orders as any}
+          storageKey="hierarchy.payment_orders"
+          context={hCtx}
+          onContextChange={setHCtx}
+          title={t("po.title")}
+        />
+      </div>
+
+      <div className="flex-1 min-w-0 space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+              <CreditCard className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold text-foreground">{t("po.title")}</h1>
+              <p className="text-xs text-muted-foreground">{t("po.subtitle")}</p>
+            </div>
           </div>
         </div>
+
+        {extractions.length === 0 && <ExtractionStages current="upload" />}
+
+        <Can permission="payment_orders.create">
+          <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} />
+        </Can>
+
+        <UploadQueue queue={queue} onClearCompleted={clearCompleted} />
+
+        <EmbeddedFileManager entityType="payment_order" sessionFileNames={sessionFiles} />
+
+        {extractions.map((extraction) => (
+          <ExtractedPaymentTable
+            key={extraction._id}
+            orders={extraction.orders}
+            confidence={extraction.confidence}
+            notes={extraction.notes}
+            onSave={(rows) => handleSave(extraction._id, rows)}
+            onDiscard={() => handleDiscard(extraction._id)}
+            isSaving={saveMutation.isPending}
+            technicians={technicians}
+            isTechnicianRole={dbRole === "technician"}
+            isAdmin={canAssignAnyTechnician}
+            myTechnicianName={
+              myAssignableUserId
+                ? technicians.find((t) => t.user_id === myAssignableUserId)?.name ?? null
+                : null
+            }
+          />
+        ))}
+
+        <div className="flex items-center gap-3 flex-wrap">
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          <Select value={filters.client_id || "all"} onValueChange={v => setFilter("client_id", v)}>
+            <SelectTrigger className="w-[160px] h-9 text-xs bg-secondary/30"><SelectValue placeholder={t("label.allClients")} /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t("label.allClients")}</SelectItem>
+              {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+
+          <Select value={filters.platform || "all"} onValueChange={v => setFilter("platform", v)}>
+            <SelectTrigger className="w-[140px] h-9 text-xs bg-secondary/30"><SelectValue placeholder={t("label.allPlatforms")} /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t("label.allPlatforms")}</SelectItem>
+              {platforms.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+            </SelectContent>
+          </Select>
+
+          <Select value={filters.assigned_user_id || "all"} onValueChange={v => setFilter("assigned_user_id", v)}>
+            <SelectTrigger className="w-[160px] h-9 text-xs bg-secondary/30"><SelectValue placeholder={t("label.allTechnicians")} /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t("label.allTechnicians")}</SelectItem>
+              {technicians.map(t_ => <SelectItem key={t_.user_id} value={t_.user_id}>{t_.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+
+          <Select value={filters.list_name || "all"} onValueChange={v => setFilter("list_name", v)}>
+            <SelectTrigger className="w-[140px] h-9 text-xs bg-secondary/30"><SelectValue placeholder={t("label.allLists")} /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t("label.allLists")}</SelectItem>
+              {listNames.map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <PaymentOrdersTable orders={visibleOrders as any} isLoading={isLoading} />
       </div>
-
-      {extractions.length === 0 && <ExtractionStages current="upload" />}
-
-      <Can permission="payment_orders.create">
-        <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} />
-      </Can>
-
-      <UploadQueue queue={queue} onClearCompleted={clearCompleted} />
-
-      {/* Embedded file manager */}
-      <EmbeddedFileManager entityType="payment_order" sessionFileNames={sessionFiles} />
-
-      {extractions.map((extraction) => (
-        <ExtractedPaymentTable
-          key={extraction._id}
-          orders={extraction.orders}
-          confidence={extraction.confidence}
-          notes={extraction.notes}
-          onSave={(rows) => handleSave(extraction._id, rows)}
-          onDiscard={() => handleDiscard(extraction._id)}
-          isSaving={saveMutation.isPending}
-          technicians={technicians}
-          isTechnicianRole={dbRole === "technician"}
-          isAdmin={canAssignAnyTechnician}
-          myTechnicianName={
-            myAssignableUserId
-              ? technicians.find((t) => t.user_id === myAssignableUserId)?.name ?? null
-              : null
-          }
-        />
-      ))}
-
-      <div className="flex items-center gap-3 flex-wrap">
-        <Filter className="h-4 w-4 text-muted-foreground" />
-        <Select value={filters.client_id || "all"} onValueChange={v => setFilter("client_id", v)}>
-          <SelectTrigger className="w-[160px] h-9 text-xs bg-secondary/30"><SelectValue placeholder={t("label.allClients")} /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t("label.allClients")}</SelectItem>
-            {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-
-        <Select value={filters.platform || "all"} onValueChange={v => setFilter("platform", v)}>
-          <SelectTrigger className="w-[140px] h-9 text-xs bg-secondary/30"><SelectValue placeholder={t("label.allPlatforms")} /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t("label.allPlatforms")}</SelectItem>
-            {platforms.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-          </SelectContent>
-        </Select>
-
-        <Select value={filters.assigned_user_id || "all"} onValueChange={v => setFilter("assigned_user_id", v)}>
-          <SelectTrigger className="w-[160px] h-9 text-xs bg-secondary/30"><SelectValue placeholder={t("label.allTechnicians")} /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t("label.allTechnicians")}</SelectItem>
-            {technicians.map(t_ => <SelectItem key={t_.user_id} value={t_.user_id}>{t_.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-
-        <Select value={filters.list_name || "all"} onValueChange={v => setFilter("list_name", v)}>
-          <SelectTrigger className="w-[140px] h-9 text-xs bg-secondary/30"><SelectValue placeholder={t("label.allLists")} /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t("label.allLists")}</SelectItem>
-            {listNames.map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <PaymentOrdersTable orders={orders as any} isLoading={isLoading} />
     </div>
   );
 }

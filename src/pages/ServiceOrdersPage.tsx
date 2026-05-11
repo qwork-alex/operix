@@ -1,5 +1,11 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useMemo } from "react";
 import { FileText, Filter } from "lucide-react";
+import {
+  HierarchyExplorer,
+  applyHierarchyContext,
+  loadHierarchyContext,
+  type HierarchyContext,
+} from "@/components/shared/HierarchyExplorer";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileUploadZone } from "@/components/service-orders/FileUploadZone";
 import { ExtractedDataTable } from "@/components/service-orders/ExtractedDataTable";
@@ -50,6 +56,15 @@ export default function ServiceOrdersPage() {
   const { data: myAssignableUserId } = useMyAssignableUserId();
   const { data: earningsMap } = useTechnicianEarnings();
   const { queue, isProcessing, addFiles, clearCompleted } = useFileQueue();
+
+  // Hierarchical view context (Year → Client → Operational Unit → Week → Technician)
+  const [hCtx, setHCtx] = useState<HierarchyContext>(() =>
+    loadHierarchyContext("hierarchy.service_orders"),
+  );
+  const visibleOrders = useMemo(
+    () => applyHierarchyContext(orders as any[], hCtx),
+    [orders, hCtx],
+  );
 
   const platforms = [...new Set((orders as any[]).map((o) => o.platform).filter(Boolean))];
   const weeks = [...new Set((orders as any[]).map((o) => o.week).filter(Boolean))];
@@ -247,106 +262,113 @@ export default function ServiceOrdersPage() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-          <FileText className="h-5 w-5 text-primary" />
-        </div>
-        <div>
-          <h1 className="text-lg font-semibold text-foreground">{t("so.title")}</h1>
-          <p className="text-xs text-muted-foreground">
-            {t("so.subtitle")}
-          </p>
-        </div>
-      </div>
-
-      {/* Stage indicator */}
-      {extractions.length === 0 && <ExtractionStages current="upload" />}
-
-      {/* Upload — gated by create permission */}
-      <Can permission="service_orders.create">
-        <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} />
-      </Can>
-
-      {/* Embedded file manager */}
-      <EmbeddedFileManager entityType="service_order" sessionFileNames={sessionFiles} />
-
-      {/* Extraction previews — one per file */}
-      {extractions.map((extraction) => (
-        <ExtractedDataTable
-          key={extraction._id}
-          orders={extraction.orders}
-          confidence={extraction.confidence}
-          notes={extraction.notes}
-          onSave={(rows) => handleSave(extraction._id, rows)}
-          onDiscard={() => handleDiscard(extraction._id)}
-          isSaving={saveMutation.isPending}
-          technicians={technicians}
-          isTechnicianRole={isTechnicianRole}
-          isAdmin={canAssignAnyTechnician}
-          myTechnicianName={
-            myAssignableUserId
-              ? technicians.find((t) => t.user_id === myAssignableUserId)?.name ?? null
-              : null
-          }
+    <div className="animate-fade-in flex gap-4">
+      {/* Hierarchical operational explorer (Phase 1A) */}
+      <div className="hidden md:block w-64 shrink-0 sticky top-4 self-start max-h-[calc(100vh-2rem)]">
+        <HierarchyExplorer
+          records={orders as any}
+          storageKey="hierarchy.service_orders"
+          context={hCtx}
+          onContextChange={setHCtx}
+          title={t("so.title")}
         />
-      ))}
-
-      {/* Filters */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <Filter className="h-4 w-4 text-muted-foreground" />
-        <Select value={filters.client_id || "all"} onValueChange={(v) => setFilter("client_id", v)}>
-          <SelectTrigger className="w-[160px] h-9 text-xs bg-secondary/30">
-            <SelectValue placeholder={t("label.allClients")} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t("label.allClients")}</SelectItem>
-            {clients.map((c) => (
-              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={filters.platform || "all"} onValueChange={(v) => setFilter("platform", v)}>
-          <SelectTrigger className="w-[140px] h-9 text-xs bg-secondary/30">
-            <SelectValue placeholder={t("label.allPlatforms")} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t("label.allPlatforms")}</SelectItem>
-            {platforms.map((p) => (
-              <SelectItem key={p} value={p}>{p}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={filters.assigned_user_id || "all"} onValueChange={(v) => setFilter("assigned_user_id", v)}>
-          <SelectTrigger className="w-[160px] h-9 text-xs bg-secondary/30">
-            <SelectValue placeholder={t("label.allTechnicians")} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t("label.allTechnicians")}</SelectItem>
-            {technicians.map((t_) => (
-              <SelectItem key={t_.user_id} value={t_.user_id}>{t_.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={filters.week || "all"} onValueChange={(v) => setFilter("week", v)}>
-          <SelectTrigger className="w-[120px] h-9 text-xs bg-secondary/30">
-            <SelectValue placeholder={t("label.allWeeks")} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t("label.allWeeks")}</SelectItem>
-            {weeks.map((w) => (
-              <SelectItem key={w} value={w}>{w}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </div>
 
-      {/* Saved orders table */}
-      <ServiceOrdersTable orders={orders as any} isLoading={isLoading} />
+      <div className="flex-1 min-w-0 space-y-6">
+        {/* Header */}
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+            <FileText className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-lg font-semibold text-foreground">{t("so.title")}</h1>
+            <p className="text-xs text-muted-foreground">{t("so.subtitle")}</p>
+          </div>
+        </div>
+
+        {extractions.length === 0 && <ExtractionStages current="upload" />}
+
+        <Can permission="service_orders.create">
+          <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} />
+        </Can>
+
+        <EmbeddedFileManager entityType="service_order" sessionFileNames={sessionFiles} />
+
+        {extractions.map((extraction) => (
+          <ExtractedDataTable
+            key={extraction._id}
+            orders={extraction.orders}
+            confidence={extraction.confidence}
+            notes={extraction.notes}
+            onSave={(rows) => handleSave(extraction._id, rows)}
+            onDiscard={() => handleDiscard(extraction._id)}
+            isSaving={saveMutation.isPending}
+            technicians={technicians}
+            isTechnicianRole={isTechnicianRole}
+            isAdmin={canAssignAnyTechnician}
+            myTechnicianName={
+              myAssignableUserId
+                ? technicians.find((t) => t.user_id === myAssignableUserId)?.name ?? null
+                : null
+            }
+          />
+        ))}
+
+        {/* Filters */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          <Select value={filters.client_id || "all"} onValueChange={(v) => setFilter("client_id", v)}>
+            <SelectTrigger className="w-[160px] h-9 text-xs bg-secondary/30">
+              <SelectValue placeholder={t("label.allClients")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t("label.allClients")}</SelectItem>
+              {clients.map((c) => (
+                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={filters.platform || "all"} onValueChange={(v) => setFilter("platform", v)}>
+            <SelectTrigger className="w-[140px] h-9 text-xs bg-secondary/30">
+              <SelectValue placeholder={t("label.allPlatforms")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t("label.allPlatforms")}</SelectItem>
+              {platforms.map((p) => (
+                <SelectItem key={p} value={p}>{p}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={filters.assigned_user_id || "all"} onValueChange={(v) => setFilter("assigned_user_id", v)}>
+            <SelectTrigger className="w-[160px] h-9 text-xs bg-secondary/30">
+              <SelectValue placeholder={t("label.allTechnicians")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t("label.allTechnicians")}</SelectItem>
+              {technicians.map((t_) => (
+                <SelectItem key={t_.user_id} value={t_.user_id}>{t_.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={filters.week || "all"} onValueChange={(v) => setFilter("week", v)}>
+            <SelectTrigger className="w-[120px] h-9 text-xs bg-secondary/30">
+              <SelectValue placeholder={t("label.allWeeks")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t("label.allWeeks")}</SelectItem>
+              {weeks.map((w) => (
+                <SelectItem key={w} value={w}>{w}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Saved orders table — filtered by hierarchy context */}
+        <ServiceOrdersTable orders={visibleOrders as any} isLoading={isLoading} />
+      </div>
     </div>
   );
 }

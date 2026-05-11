@@ -71,3 +71,4 @@ Owner account (qwork@qworkgroup.com) is protected, has exclusive reset access. N
 - [Technical Analysis](mem://features/financeiro/analise-tecnica-detalhada) — Granular tech view comparing Expected vs Received, Net result status
 - [Read-only Revenue Engine](mem://features/financeiro/motor-receita-readonly) — Distribution × payment-ratio aggregation feeds Overview KPIs and Detalhamento; never writes
 - [Reconciliation Engine](mem://logic/financeiro/motor-de-reconciliacao) — Edge function, groups by placa|plataforma|cliente, 80% string match rule
+- [Operational Hierarchy](mem://features/operational-hierarchy) — Phase 1A: SO/PO left-side tree (Year→Client→Unit→Week→Tech) with view/expand, persisted state, new operational_unit DB column
