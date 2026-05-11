@@ -376,7 +376,7 @@ export function HierarchyExplorer({
       <div className="flex-1 overflow-auto py-1">
         {tree.length === 0 ? (
           <p className="px-3 py-4 text-xs text-muted-foreground">
-            Sem registros para organizar.
+            {smartEmpty}
           </p>
         ) : (
           tree.map((node) => (
