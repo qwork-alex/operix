@@ -57,6 +57,15 @@ export default function ServiceOrdersPage() {
   const { data: earningsMap } = useTechnicianEarnings();
   const { queue, isProcessing, addFiles, clearCompleted } = useFileQueue();
 
+  // Hierarchical view context (Year → Client → Operational Unit → Week → Technician)
+  const [hCtx, setHCtx] = useState<HierarchyContext>(() =>
+    loadHierarchyContext("hierarchy.service_orders"),
+  );
+  const visibleOrders = useMemo(
+    () => applyHierarchyContext(orders as any[], hCtx),
+    [orders, hCtx],
+  );
+
   const platforms = [...new Set((orders as any[]).map((o) => o.platform).filter(Boolean))];
   const weeks = [...new Set((orders as any[]).map((o) => o.week).filter(Boolean))];
 
