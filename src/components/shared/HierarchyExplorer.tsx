@@ -122,12 +122,7 @@ function buildTree(records: HierarchyRecord[]): TreeNode[] {
   return sortKeys([...byYear.keys()], { numericDesc: true }).map((year) => {
     const yearRows = byYear.get(year)!;
     const byClient = groupBy(yearRows, getClient);
-    return {
-      key: `y:${year}`,
-      label: year,
-      count: yearRows.length,
-      ctx: { level: "year", year } as HierarchyContext,
-      children: sortKeys([...byClient.keys()]).map((client) => {
+    const operationalChildren: TreeNode[] = sortKeys([...byClient.keys()]).map((client) => {
         const clientRows = byClient.get(client)!;
         const byUnit = groupBy(clientRows, getUnit);
         return {
