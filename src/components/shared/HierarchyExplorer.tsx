@@ -280,6 +280,8 @@ interface Props {
   context: HierarchyContext;
   onContextChange: (ctx: HierarchyContext) => void;
   title?: string;
+  /** Optional override for the empty state. Falls back to a smart contextual message. */
+  emptyMessage?: string;
 }
 
 export function HierarchyExplorer({
@@ -288,6 +290,7 @@ export function HierarchyExplorer({
   context,
   onContextChange,
   title = "Navegação",
+  emptyMessage,
 }: Props) {
   const [open, setOpen] = useState<Set<string>>(() => {
     try {
