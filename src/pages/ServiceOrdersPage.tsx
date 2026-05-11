@@ -35,7 +35,7 @@ import { Can } from "@/components/Can";
 import { getCurrentUser } from "@/lib/authUser";
 
 export default function ServiceOrdersPage() {
-  const { t } = useLanguage();
+  const { t, formatCurrency } = useLanguage();
   const { user } = useAuth();
   const { isAdmin, dbRole } = useRole();
   const canAssignAnyTechnician = isAdmin || dbRole === "partner";
@@ -51,7 +51,6 @@ export default function ServiceOrdersPage() {
   const [extractions, setExtractions] = useState<(ExtractionResult & { _id: string })[]>([]);
   const [sessionFiles, setSessionFiles] = useState<string[]>([]);
   const { data: orders = [], isLoading, saveMutation } = useServiceOrders(filters);
-  const { formatCurrency } = useLanguage();
   const { extract } = useExtractServiceOrder();
   const { data: clients = [] } = useClients();
   const { data: technicians = [] } = useAssignableUsers();
