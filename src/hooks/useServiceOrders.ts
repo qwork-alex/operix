@@ -254,8 +254,8 @@ export function useServiceOrders(filters?: {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("service_orders").delete().eq("id", id);
-      if (error) throw error;
+      const { assertedDelete } = await import("@/lib/assertDelete");
+      await assertedDelete("service_orders", (q) => q.eq("id", id));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["service_orders"] });
