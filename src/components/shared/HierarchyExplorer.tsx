@@ -91,6 +91,8 @@ type TreeNode = {
   count: number;
   ctx: HierarchyContext;
   children?: TreeNode[];
+  disabled?: boolean;
+  hint?: string;
 };
 
 function groupBy<T>(items: T[], keyFn: (i: T) => string): Map<string, T[]> {
