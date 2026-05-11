@@ -1,5 +1,11 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useMemo } from "react";
 import { FileText, Filter } from "lucide-react";
+import {
+  HierarchyExplorer,
+  applyHierarchyContext,
+  loadHierarchyContext,
+  type HierarchyContext,
+} from "@/components/shared/HierarchyExplorer";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileUploadZone } from "@/components/service-orders/FileUploadZone";
 import { ExtractedDataTable } from "@/components/service-orders/ExtractedDataTable";
