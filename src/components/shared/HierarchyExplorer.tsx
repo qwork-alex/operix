@@ -38,25 +38,36 @@ export type HierarchyContext = {
 };
 
 const EMPTY_CTX: HierarchyContext = { level: "all" };
-const UNASSIGNED = "—";
+
+// Per-level fallback labels — never collapse a row into a generic "—".
+// These are what the user sees in the tree AND what is matched in filters.
+export const HIERARCHY_FALLBACK = {
+  year: "Sem Data",
+  client: "Sem Cliente",
+  unit: "Sem Unidade Operacional",
+  week: "Sem Semana",
+  technician: "Sem Técnico",
+} as const;
 
 function getYear(r: HierarchyRecord): string {
-  if (!r.created_at) return UNASSIGNED;
+  if (!r.created_at) return HIERARCHY_FALLBACK.year;
   const d = new Date(r.created_at);
-  return Number.isNaN(d.getTime()) ? UNASSIGNED : String(d.getFullYear());
+  return Number.isNaN(d.getTime()) ? HIERARCHY_FALLBACK.year : String(d.getFullYear());
 }
 function getWeek(r: HierarchyRecord): string {
-  return (r.week || r.list_name || UNASSIGNED).trim() || UNASSIGNED;
+  return (r.week || r.list_name || "").trim() || HIERARCHY_FALLBACK.week;
 }
 function getClient(r: HierarchyRecord): string {
-  return (r.client_name || UNASSIGNED).trim() || UNASSIGNED;
+  return (r.client_name || "").trim() || HIERARCHY_FALLBACK.client;
 }
 function getUnit(r: HierarchyRecord): string {
-  return (r.operational_unit || UNASSIGNED).trim() || UNASSIGNED;
+  return (r.operational_unit || "").trim() || HIERARCHY_FALLBACK.unit;
 }
 function getTech(r: HierarchyRecord): string {
-  return (r.technician_name || UNASSIGNED).trim() || UNASSIGNED;
+  return (r.technician_name || "").trim() || HIERARCHY_FALLBACK.technician;
 }
+
+const FALLBACK_VALUES = new Set<string>(Object.values(HIERARCHY_FALLBACK));
 
 /** Apply a HierarchyContext to a list of records. */
 export function applyHierarchyContext<T extends HierarchyRecord>(
