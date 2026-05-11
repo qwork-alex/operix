@@ -155,8 +155,8 @@ export function usePaymentOrders(filters?: {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("payment_orders").delete().eq("id", id);
-      if (error) throw error;
+      const { assertedDelete } = await import("@/lib/assertDelete");
+      await assertedDelete("payment_orders", (q) => q.eq("id", id));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payment_orders"] });

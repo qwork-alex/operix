@@ -232,11 +232,13 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("payment_orders").delete().eq("id", id);
-      if (error) throw error;
+      const { assertedDelete } = await import("@/lib/assertDelete");
+      await assertedDelete("payment_orders", (q) => q.eq("id", id));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payment_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["service_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["financial-summary"] });
       toast.success(t("toast.deleted"));
     },
     onError: (err) => toast.error((err as Error).message),
@@ -244,8 +246,8 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
 
   const bulkDeleteMutation = useMutation({
     mutationFn: async (ids: string[]) => {
-      const { error } = await supabase.from("payment_orders").delete().in("id", ids);
-      if (error) throw error;
+      const { assertedDelete } = await import("@/lib/assertDelete");
+      await assertedDelete("payment_orders", (q) => q.in("id", ids), ids.length);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payment_orders"] });
