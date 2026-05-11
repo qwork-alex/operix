@@ -9,6 +9,8 @@ import { Can } from "@/components/Can";
 interface FileUploadZoneProps {
   onFilesSelected: (files: File[]) => void;
   isProcessing: boolean;
+  /** Compact horizontal variant for ERP-style toolbars (Phase 1C.2). */
+  compact?: boolean;
 }
 
 const ACCEPTED = ".pdf,.jpg,.jpeg,.png,.webp,.heic";
