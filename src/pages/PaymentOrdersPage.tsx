@@ -1,5 +1,11 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { CreditCard, Filter } from "lucide-react";
+import {
+  HierarchyExplorer,
+  applyHierarchyContext,
+  loadHierarchyContext,
+  type HierarchyContext,
+} from "@/components/shared/HierarchyExplorer";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { FileUploadZone } from "@/components/service-orders/FileUploadZone";
