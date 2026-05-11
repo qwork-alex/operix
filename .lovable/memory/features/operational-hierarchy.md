@@ -24,3 +24,25 @@ Do not break: backend (RLS, save, realtime), OCR/extract, validation, document u
 - Save payloads now persist `operational_unit` from the active context (column already exists on both `service_orders` and `payment_orders`). `week` / `list_name` / `group_id` also fall back to the context week when OCR did not return one.
 - Global upload still works untouched: when context is "all", no defaults are injected.
 - Persistence remains via `loadHierarchyContext(storageKey)` (localStorage) so refresh / save / navigation keeps the active node.
+
+## Phase 1C.2 — ERP visual refinement
+- Sidebar title renamed to **"Contexto Operacional"** (SO + PO). Width reduced from `w-64` → `w-52`.
+- Year nodes in `HierarchyExplorer` now expose 3 sub-sections:
+  - **Operacional** → wraps the existing Client/Unit/Week/Tech subtree (active).
+  - **Documentos** → placeholder, `disabled: true`, "Em breve" pill.
+  - **Relatórios** → placeholder, `disabled: true`, "Em breve" pill.
+  - `TreeNode` extended with `disabled?: boolean` and `hint?: string`.
+- Compact toolbar (single row, `card/40` background) replaces the stacked
+  Breadcrumb + Stages + Upload blocks. `FileUploadZone` accepts `compact: true`
+  to render a horizontal mini-bar (Upload / Photo / Scan buttons + camera dialog).
+- `EmbeddedFileManager` accepts `defaultCollapsed?: boolean`. Pages set it to
+  `sessionFileNames.length === 0 && queue.length === 0` so the file panel auto-
+  collapses when there is no upload activity. A "Recolher" button collapses it
+  back; the slim collapsed bar shows file count and toggles open.
+- Filters (`client_id` / `platform` / `assigned_user_id` / `week|list_name`)
+  are hidden when `hCtx.level !== "all"` — hierarchical context already narrows
+  the view, removing redundancy.
+- **Deferred to a later sub-phase**: hiding redundant columns (client / unit /
+  week / technician) inside leaf tables — requires invasive refactor of
+  `ServiceOrdersTable` and `PaymentOrdersTable`. Not implemented here so save /
+  edit / delete / OCR / realtime stay 100% intact.

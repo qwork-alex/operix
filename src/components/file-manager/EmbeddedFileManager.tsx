@@ -22,6 +22,8 @@ interface Props {
   entityType: "service_order" | "payment_order";
   module?: string;
   sessionFileNames?: string[];
+  /** Phase 1C.2 — start collapsed when there is no upload activity. */
+  defaultCollapsed?: boolean;
 }
 
 interface PreviewState {
@@ -134,10 +136,11 @@ async function fetchDocumentBlobUrl(
   return { blobUrl, mimeType, signedUrl };
 }
 
-export function EmbeddedFileManager({ entityType, module: moduleName = "orders", sessionFileNames = [] }: Props) {
+export function EmbeddedFileManager({ entityType, module: moduleName = "orders", sessionFileNames = [], defaultCollapsed = false }: Props) {
   const { t, formatDate } = useLanguage();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
   const [parentId, setParentId] = useState<string | null>(null);
   const [path, setPath] = useState<{ id: string | null; name: string }[]>([
@@ -490,8 +493,30 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
     setShowMoveDialog(true);
   };
 
+  if (collapsed) {
+    const fileCount = filteredDocs.filter((d: any) => d.type === "file").length;
+    return (
+      <button
+        type="button"
+        onClick={() => setCollapsed(false)}
+        className="flex w-full items-center justify-between rounded-md border border-border/50 bg-card/40 px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-card/70"
+      >
+        <span className="flex items-center gap-2">
+          <ChevronRight className="h-3.5 w-3.5" />
+          <FolderOpen className="h-3.5 w-3.5 text-primary" />
+          <span className="font-medium text-foreground">{t("fm.title")}</span>
+          <span className="text-[10px]">{fileCount} {t("common.file").toLowerCase()}(s)</span>
+        </span>
+        <span className="text-[10px] uppercase tracking-wide">Expandir</span>
+      </button>
+    );
+  }
+
   return (
     <div className="space-y-3 rounded-lg border border-border/50 bg-card/50 p-4">
+      <div className="flex justify-end">
+        <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => setCollapsed(true)}>Recolher</Button>
+      </div>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
