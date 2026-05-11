@@ -192,6 +192,110 @@ export function FileUploadZone({ onFilesSelected, isProcessing, compact = false 
     }
   }, [cameraOpen, preview]);
 
+  if (compact) {
+    return (
+      <>
+        <div className="flex items-center gap-1.5">
+          <Can permission="service_orders.upload_document">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs gap-1.5"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isProcessing}
+            >
+              {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+              {isProcessing ? (t("upload.extracting") || "...") : (t("upload.file") || "Upload")}
+            </Button>
+          </Can>
+          <Can permission="service_orders.scan_document">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs gap-1.5"
+              onClick={() => startCamera("photo")}
+              disabled={isProcessing}
+            >
+              <Camera className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">{t("upload.photo") || "Photo"}</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs gap-1.5"
+              onClick={() => startCamera("scan")}
+              disabled={isProcessing}
+            >
+              <ScanLine className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">{t("upload.scan") || "Scan"}</span>
+            </Button>
+          </Can>
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={ACCEPTED}
+          multiple
+          onChange={handleInput}
+          className="hidden"
+          disabled={isProcessing}
+        />
+        <Dialog open={cameraOpen} onOpenChange={(o) => { if (!o) stopCamera(); }}>
+          <DialogContent className="max-w-lg p-0 overflow-hidden">
+            <DialogHeader className="p-4 pb-2">
+              <DialogTitle>{cameraMode === "scan" ? (t("upload.scanMode") || "Scan Document") : (t("upload.photoMode") || "Take Photo")}</DialogTitle>
+              <DialogDescription>
+                {cameraMode === "scan"
+                  ? (t("upload.scanHint") || "Position the document within the frame and capture.")
+                  : (t("upload.photoHint") || "Position the document and take a photo.")}
+              </DialogDescription>
+            </DialogHeader>
+            {cameraError ? (
+              <div className="p-6 text-center space-y-3">
+                <p className="text-sm text-destructive">{cameraError}</p>
+                <Button variant="outline" onClick={stopCamera}>{t("label.close") || "Close"}</Button>
+              </div>
+            ) : preview ? (
+              <>
+                <div className="relative bg-black">
+                  <img src={preview.url} alt="Captured" className="w-full max-h-[60vh] object-contain" />
+                </div>
+                <div className="flex items-center justify-between p-4">
+                  <Button variant="ghost" size="sm" onClick={retakeCapture}>
+                    <RotateCcw className="h-4 w-4 mr-1" /> {t("upload.retake") || "Retake"}
+                  </Button>
+                  <Button onClick={confirmCapture}>
+                    <Check className="h-4 w-4 mr-1" /> {t("upload.confirm") || "Confirm & Process"}
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="relative bg-black aspect-video">
+                  <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+                </div>
+                <div className="flex items-center justify-between p-4">
+                  <Button variant="ghost" size="sm" onClick={stopCamera}>
+                    <X className="h-4 w-4 mr-1" /> {t("label.close") || "Close"}
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={toggleCamera}>
+                    <SwitchCamera className="h-4 w-4 mr-1" />
+                    {facingMode === "environment" ? (t("upload.frontCam") || "Front") : (t("upload.rearCam") || "Rear")}
+                  </Button>
+                  <Button onClick={captureFrame}>
+                    <Camera className="h-4 w-4 mr-1" />
+                    {cameraMode === "scan" ? (t("upload.capture") || "Capture") : (t("upload.takePhoto") || "Take Photo")}
+                  </Button>
+                </div>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
+        <canvas ref={canvasRef} className="hidden" />
+      </>
+    );
+  }
+
   return (
     <>
       <div
