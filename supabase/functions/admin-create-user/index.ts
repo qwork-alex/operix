@@ -17,63 +17,45 @@ function jsonResp(body: Record<string, unknown>, status = 200) {
  * Returns a structured map so the UI can show "X linked records".
  */
 async function collectDependencies(adminClient: any, authUserId: string) {
-  // Counts (use HEAD + count exact for efficiency)
-  const countTable = async (table: string, column: string, value: string | null) => {
-    if (!value) return 0;
-    const { count, error } = await adminClient
-      .from(table)
-      .select("id", { count: "exact", head: true })
-      .eq(column, value);
-    if (error) {
-      console.warn(`[deps] count ${table}.${column} failed:`, error.message);
-      return 0;
-    }
-    return count ?? 0;
+  // Phase B3.1b: use canonical ownership map RPC as single source of truth.
+  const { data: map, error } = await adminClient.rpc("get_user_ownership_map", { _uid: authUserId });
+  if (error) {
+    console.error("[deps] get_user_ownership_map failed:", error.message);
+    return {
+      technician: null,
+      counts: {},
+      blocking: 0,
+      detachable: 0,
+      identity: 0,
+      has_dependencies: false,
+      map: null,
+      error: error.message,
+    };
+  }
+  const totals = (map?.totals ?? {}) as { blocking?: number; detachable?: number; identity?: number };
+  // Backwards-compatible flat counts for the existing UI dialog.
+  const flat = {
+    service_orders_as_assigned_user: map?.blocking?.service_orders_assigned_user_id ?? 0,
+    service_orders_created: map?.detachable?.service_orders_created_by ?? 0,
+    payment_orders_as_assigned_user: map?.blocking?.payment_orders_assigned_user_id ?? 0,
+    payment_orders_created: map?.detachable?.payment_orders_created_by ?? 0,
+    fleet_trips: map?.detachable?.fleet_trips_created_by ?? 0,
+    financial_records:
+      (map?.detachable?.financial_records_user_id ?? 0) +
+      (map?.detachable?.financial_records_assigned_user_id ?? 0) +
+      (map?.detachable?.financial_records_created_by ?? 0),
+    documents: map?.detachable?.documents_uploaded_by ?? 0,
   };
-
-  const [
-    serviceOrdersAsAssignedUser,
-    serviceOrdersCreated,
-    paymentOrdersAsAssignedUser,
-    paymentOrdersCreated,
-    fleetTrips,
-    financialRecords,
-    documents,
-  ] = await Promise.all([
-    countTable("service_orders", "assigned_user_id", authUserId),
-    countTable("service_orders", "created_by", authUserId),
-    countTable("payment_orders", "assigned_user_id", authUserId),
-    countTable("payment_orders", "created_by", authUserId),
-    countTable("fleet_trips", "created_by", authUserId),
-    countTable("financial_records", "created_by", authUserId),
-    countTable("documents", "uploaded_by", authUserId),
-  ]);
-
-  // assigned_user_id is nullable on both tables → all dependencies are detachable
-  const blocking = 0;
-  const detachable =
-    serviceOrdersAsAssignedUser +
-    serviceOrdersCreated +
-    paymentOrdersAsAssignedUser +
-    paymentOrdersCreated +
-    fleetTrips +
-    financialRecords +
-    documents;
-
   return {
     technician: null,
-    counts: {
-      service_orders_as_assigned_user: serviceOrdersAsAssignedUser,
-      service_orders_created: serviceOrdersCreated,
-      payment_orders_as_assigned_user: paymentOrdersAsAssignedUser,
-      payment_orders_created: paymentOrdersCreated,
-      fleet_trips: fleetTrips,
-      financial_records: financialRecords,
-      documents: documents,
-    },
-    blocking,
-    detachable,
-    has_dependencies: blocking + detachable > 0,
+    counts: flat,
+    blocking: totals.blocking ?? 0,
+    detachable: totals.detachable ?? 0,
+    identity: totals.identity ?? 0,
+    // "has_dependencies" preserves old semantics (any ownership row),
+    // but `blocking` is what gates deletion now.
+    has_dependencies: (totals.blocking ?? 0) + (totals.detachable ?? 0) > 0,
+    map,
   };
 }
 
@@ -320,27 +302,28 @@ Deno.serve(async (req) => {
         return jsonResp({ error: "owner_protected", message: "O proprietário do sistema não pode ser removido." }, 403);
       }
 
-      // Always check dependencies first
+      // Always check dependencies first (canonical map)
       const deps = await collectDependencies(adminClient, user_id);
 
       console.log("🧠 DEPENDÊNCIAS:", deps);
-      // ─── BLOCK MODE: refuse if any dependencies exist ───
-      if (effectiveMode === "block" && deps.has_dependencies) {
-        console.log("⛔ DELETE BLOQUEADO POR DEPENDÊNCIAS");
+
+      // ─── BLOCK MODE: refuse only if BLOCKING refs exist (NOT NULL ownership in SO/PO).
+      // Detachable refs (financial_records, documents, created_by, …) are nullable and
+      // will be cleaned up safely below.
+      if (effectiveMode === "block" && (deps.blocking ?? 0) > 0) {
+        console.log("⛔ DELETE BLOQUEADO POR REFERÊNCIAS NÃO-NULAS");
         return jsonResp({
-          error: "has_dependencies",
-          message: "Usuário possui dados vinculados e não pode ser removido. Reatribua os registos a outro usuário antes de excluir.",
+          error: "has_blocking_dependencies",
+          message: "Usuário possui ordens de serviço/pagamento atribuídas. Reatribua a outro usuário antes de excluir.",
           ...deps,
         }, 409);
       }
 
-      // ─── DETACH MODE IS DISABLED: reassignment is mandatory when there are dependencies ───
-      // user_id on service_orders/payment_orders is NOT NULL — detach would fail anyway.
-      // We force the caller to use 'reassign' mode whenever vínculos existem.
-      if (effectiveMode === "detach" && deps.has_dependencies) {
+      // ─── DETACH is ALWAYS allowed when blocking==0. Cleanup nulls every nullable owner column.
+      if (effectiveMode === "detach" && (deps.blocking ?? 0) > 0) {
         return jsonResp({
           error: "reassign_required",
-          message: "Não é possível desanexar: existem vínculos obrigatórios. Use o modo 'reassign' e informe um usuário substituto.",
+          message: "Não é possível desanexar: existem ordens com ownership obrigatório. Use o modo 'reassign'.",
           ...deps,
         }, 409);
       }
@@ -439,7 +422,20 @@ Deno.serve(async (req) => {
         // Detach (don't delete) operational data so history is preserved
         (async () => { await adminClient.from("service_orders").update({ created_by: null }).eq("created_by", user_id); })(),
         (async () => { await adminClient.from("payment_orders").update({ created_by: null }).eq("created_by", user_id); })(),
+        // Phase B3.1b: financial_records has 3 nullable owner columns. Null them ALL,
+        // including orphan auto-synced revenue rows that no longer reference any SO/PO.
         (async () => { await adminClient.from("financial_records").update({ created_by: null }).eq("created_by", user_id); })(),
+        (async () => { await adminClient.from("financial_records").update({ user_id: null }).eq("user_id", user_id); })(),
+        (async () => { await adminClient.from("financial_records").update({ assigned_user_id: null }).eq("assigned_user_id", user_id); })(),
+        // Detach also other nullable owner columns surfaced by the ownership map
+        (async () => { await adminClient.from("clients").update({ user_id: null }).eq("user_id", user_id); })(),
+        (async () => { await adminClient.from("clients").update({ created_by: null }).eq("created_by", user_id); })(),
+        (async () => { await adminClient.from("profit_rules").update({ created_by: null }).eq("created_by", user_id); })(),
+        (async () => { await adminClient.from("profit_rules").update({ assigned_user_id: null }).eq("assigned_user_id", user_id); })(),
+        (async () => { await adminClient.from("profit_distributions").update({ created_by: null }).eq("created_by", user_id); })(),
+        (async () => { await adminClient.from("profit_distributions").update({ target_user_id: null }).eq("target_user_id", user_id); })(),
+        (async () => { await adminClient.from("drivers").update({ created_by: null }).eq("created_by", user_id); })(),
+        (async () => { await adminClient.from("fleet_fuel_logs").update({ created_by: null }).eq("created_by", user_id); })(),
         (async () => { await adminClient.from("fleet_trips").update({ created_by: null }).eq("created_by", user_id); })(),
         (async () => { await adminClient.from("documents").update({ uploaded_by: null }).eq("uploaded_by", user_id); })(),
         // Delete technician row LAST (after SO rows have been reassigned), only if no SO references remain
