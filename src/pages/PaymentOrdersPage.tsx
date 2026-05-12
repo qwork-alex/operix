@@ -1,4 +1,5 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import {
   HierarchyExplorer,
   applyHierarchyContext,
@@ -242,10 +243,10 @@ export default function PaymentOrdersPage() {
           </ActiveDocumentBand>
         ))}
 
-        <div className={`flex-1 min-h-0 overflow-auto ${hasExtractions ? "border-t border-border/40" : ""}`}>
+        <BottomCanvas hasExtractions={hasExtractions}>
           {hCtx.section === "documentos" ? (
             <div className="p-4">
-              <EmbeddedFileManager entityType="payment_order" module="orders" />
+              <EmbeddedFileManager entityType="payment_order" module="orders" defaultCollapsed={hasExtractions} />
             </div>
           ) : hCtx.section === "relatorios" ? (
             <SectionPlaceholder
@@ -257,8 +258,45 @@ export default function PaymentOrdersPage() {
           ) : (
             <PaymentOrdersTable orders={visibleOrders as any} isLoading={isLoading} />
           )}
-        </div>
+        </BottomCanvas>
       </div>
+    </div>
+  );
+}
+
+function BottomCanvas({ hasExtractions, children }: { hasExtractions: boolean; children: React.ReactNode }) {
+  const [peek, setPeek] = useState(false);
+  useEffect(() => { if (!hasExtractions) setPeek(false); }, [hasExtractions]);
+  if (!hasExtractions) {
+    return <div className="flex-1 min-h-0 overflow-auto">{children}</div>;
+  }
+  if (!peek) {
+    return (
+      <button
+        type="button"
+        onClick={() => setPeek(true)}
+        className="flex w-full items-center gap-2 border-t border-border/40 bg-card/30 px-4 py-1.5 text-[11px] text-muted-foreground hover:bg-card/50 transition-colors"
+        title="Mostrar tabela"
+      >
+        <ChevronRight className="h-3 w-3" />
+        <span className="uppercase tracking-wide">Tabela operacional</span>
+        <span className="ml-auto opacity-60">expandir</span>
+      </button>
+    );
+  }
+  return (
+    <div className="flex flex-col min-h-0 border-t border-border/40">
+      <button
+        type="button"
+        onClick={() => setPeek(false)}
+        className="flex w-full items-center gap-2 bg-card/30 px-4 py-1.5 text-[11px] text-muted-foreground hover:bg-card/50 transition-colors shrink-0"
+        title="Recolher tabela"
+      >
+        <ChevronDown className="h-3 w-3" />
+        <span className="uppercase tracking-wide">Tabela operacional</span>
+        <span className="ml-auto opacity-60">recolher</span>
+      </button>
+      <div className="flex-1 min-h-0 overflow-auto max-h-[40vh]">{children}</div>
     </div>
   );
 }
