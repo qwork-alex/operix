@@ -10,6 +10,7 @@ import { FileUploadZone } from "@/components/service-orders/FileUploadZone";
 import { ExtractedDataTable } from "@/components/service-orders/ExtractedDataTable";
 import { ServiceOrdersTable } from "@/components/service-orders/ServiceOrdersTable";
 import { storeFileInDocuments } from "@/components/file-manager/EmbeddedFileManager";
+import { SectionPlaceholder } from "@/components/shared/SectionPlaceholder";
 import { formatLicensePlate } from "@/lib/formatPlate";
 import {
   useServiceOrders,
