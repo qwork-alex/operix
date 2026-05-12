@@ -1,5 +1,4 @@
 import { useState, useCallback, useMemo } from "react";
-import { FileText, Filter } from "lucide-react";
 import {
   HierarchyExplorer,
   applyHierarchyContext,
@@ -7,11 +6,8 @@ import {
   type HierarchyContext,
 } from "@/components/shared/HierarchyExplorer";
 import { hierarchyDefaults } from "@/components/shared/HierarchyBreadcrumb";
-import { HierarchicalOrdersView } from "@/components/shared/HierarchicalOrdersView";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileUploadZone } from "@/components/service-orders/FileUploadZone";
 import { ExtractedDataTable } from "@/components/service-orders/ExtractedDataTable";
-import { ExtractionStages } from "@/components/service-orders/ExtractionStages";
 import { ServiceOrdersTable } from "@/components/service-orders/ServiceOrdersTable";
 import { storeFileInDocuments } from "@/components/file-manager/EmbeddedFileManager";
 import { formatLicensePlate } from "@/lib/formatPlate";
@@ -41,24 +37,16 @@ export default function ServiceOrdersPage() {
   const canAssignAnyTechnician = isAdmin || dbRole === "partner";
   const isTechnicianRole = dbRole === "technician";
   const queryClient = useQueryClient();
-  const [filters, setFilters] = useState<{
-    client_id?: string;
-    platform?: string;
-    assigned_user_id?: string;
-    week?: string;
-  }>({});
 
   const [extractions, setExtractions] = useState<(ExtractionResult & { _id: string })[]>([]);
-  const [sessionFiles, setSessionFiles] = useState<string[]>([]);
-  const { data: orders = [], isLoading, saveMutation } = useServiceOrders(filters);
+  const { data: orders = [], isLoading, saveMutation } = useServiceOrders({});
   const { extract } = useExtractServiceOrder();
   const { data: clients = [] } = useClients();
   const { data: technicians = [] } = useAssignableUsers();
   const { data: myAssignableUserId } = useMyAssignableUserId();
   const { data: earningsMap } = useTechnicianEarnings();
-  const { queue, isProcessing, addFiles, clearCompleted } = useFileQueue();
+  const { isProcessing, addFiles } = useFileQueue();
 
-  // Hierarchical view context (Year → Client → Operational Unit → Week → Technician)
   const [hCtx, setHCtx] = useState<HierarchyContext>(() =>
     loadHierarchyContext("hierarchy.service_orders"),
   );
@@ -67,26 +55,17 @@ export default function ServiceOrdersPage() {
     [orders, hCtx],
   );
 
-  const platforms = [...new Set((orders as any[]).map((o) => o.platform).filter(Boolean))];
-  const weeks = [...new Set((orders as any[]).map((o) => o.week).filter(Boolean))];
-
   const handleFiles = useCallback((files: File[]) => {
-    // Track session files for filter
-    setSessionFiles(prev => [...prev, ...files.map(f => f.name)]);
     const ctxDefaults = hierarchyDefaults(hCtx);
-
     addFiles(files, async (file, onStatus) => {
-      // Store file in document system (non-blocking)
       storeFileInDocuments(file, "service_order", user?.id).then(() => {
         queryClient.invalidateQueries({ queryKey: ["embedded-docs", "service_order"] });
       });
-
       onStatus("uploading" as QueueItemStatus);
       await new Promise(r => setTimeout(r, 200));
       onStatus("processing" as QueueItemStatus);
       try {
         const result = await extract(file);
-        // Phase 1C — pre-fill missing fields from active hierarchy context.
         const prefilled = {
           ...result,
           orders: result.orders.map((o) => ({
@@ -102,7 +81,6 @@ export default function ServiceOrdersPage() {
         }
       } catch (err) {
         const msg = (err as Error).message || "Unknown extraction error";
-        console.error("[ServiceOrders] File processing failed:", msg);
         toast.error(msg, { duration: 8000 });
         throw err;
       }
@@ -110,39 +88,21 @@ export default function ServiceOrdersPage() {
   }, [addFiles, extract, user?.id, queryClient, hCtx]);
 
   const handleSave = async (extractionId: string, rows: ExtractedOrder[]) => {
-    // rows = EXACTLY what the user sees in the edited table (source of truth)
-    console.log("SAVING DATA (raw edited rows):", JSON.stringify(rows, null, 2));
-
-    // ALWAYS resolve the authenticated user fresh from supabase.auth.
-    // RLS requires assigned_user_id === auth.uid() for non-admins.
     const authUser = await getCurrentUser();
-    console.log("AUTH USER:", authUser?.id);
-
     if (!authUser?.id) {
       toast.error("Sessão expirada. Faça login novamente antes de salvar.", { duration: 7000 });
       return;
     }
-
-    // Rules:
-    //   - technician -> user_id is FORCED to authUser.id (no override)
-    //   - admin/partner -> may assign the selected technician user_id
     const inserts: ServiceOrderInsert[] = [];
     const missingUserRows: number[] = [];
-
     rows.forEach((r, idx) => {
-      const clientMatch = clients.find(
-        (c) => c.name.toLowerCase() === r.client?.toLowerCase()
-      );
-
-      // Dropdown stores the selected user_id (or empty / OCR text fallback).
+      const clientMatch = clients.find((c) => c.name.toLowerCase() === r.client?.toLowerCase());
       const rawTech = (r.technician ?? "").trim();
       const techByUser = technicians.find((t) => t.user_id === rawTech);
       const techByName = !techByUser
         ? technicians.find((t) => t.name.toLowerCase() === rawTech.toLowerCase())
         : undefined;
       const techMatch = techByUser ?? techByName;
-
-      // Resolve display name only — user_id/assigned_user_id are set LAST.
       let technicianName: string = techMatch?.name ?? rawTech;
       if (!canAssignAnyTechnician) {
         const me = technicians.find((t) => t.user_id === authUser.id);
@@ -150,17 +110,12 @@ export default function ServiceOrdersPage() {
       } else if (techByUser) {
         technicianName = techByUser.name;
       }
-
-      // Selected technician user object from dropdown (id + name) — id is the source of truth.
       const selectedUser = techByUser ?? techByName ?? null;
-      console.log("SELECTED TECHNICIAN:", selectedUser);
-
       const ctxDefaults = hierarchyDefaults(hCtx);
       const payload: Record<string, any> = {
         client_id: clientMatch?.id || null,
         client_name: r.client?.trim() || clientMatch?.name || "",
         technician_name: technicianName,
-        // technician_id is legacy/display only; user_id is the authorization key.
         technician_id: null,
         platform: r.platform ?? null,
         week: r.week ?? ctxDefaults.week ?? null,
@@ -179,56 +134,20 @@ export default function ServiceOrdersPage() {
         status: "draft",
         group_id: r.week ?? ctxDefaults.week ?? null,
       };
-
-      // Calculate technician earnings from profit distribution rules
       const techName = payload.technician_name || r.technician;
       const techEarn = getTechEarnings(techName, payload.total, earningsMap);
       payload.technician_percentage = techEarn?.percentage ?? 0;
       payload.technician_earning = techEarn?.earnings ?? 0;
-
-      // ===== FINAL USER_ID RESOLUTION (last moment before insert) =====
-      // Rules:
-      //  - technician: ALWAYS authUser.id, dropdown ignored entirely
-      //  - admin/partner: dropdown value ONLY if it resolves to a known user_id
       let finalUserId: string = authUser.id;
-      if (canAssignAnyTechnician) {
-        finalUserId = selectedUser?.user_id ?? "";
-      }
-
-      // Hard guard against RLS violations — technicians MUST be themselves.
+      if (canAssignAnyTechnician) finalUserId = selectedUser?.user_id ?? "";
       if (!canAssignAnyTechnician && finalUserId !== authUser.id) {
-        console.error("[ServiceOrders] RLS guard tripped:", {
-          finalUserId,
-          authUserId: authUser.id,
-          dbRole,
-        });
         throw new Error("RLS violation prevention: invalid user_id");
       }
-
-      if (!finalUserId) {
-        missingUserRows.push(idx + 1);
-      }
-
+      if (!finalUserId) missingUserRows.push(idx + 1);
       payload.user_id = finalUserId;
       payload.assigned_user_id = finalUserId;
-
-      console.log(`[ServiceOrders] Row ${idx + 1} resolution:`, {
-        rawValue: rawTech,
-        finalUserId,
-        technicianName,
-        dbRole,
-        matchedBy: canAssignAnyTechnician && selectedUser ? "selected_user_id" : "auth",
-      });
-      console.log("ASSIGNED USER:", finalUserId);
-      console.log("FINAL INSERT PAYLOAD:", payload);
-
-      console.log("FINAL user_id:", payload.user_id);
-      console.log("FINAL technician_id:", payload.technician_id);
-
       inserts.push(payload as ServiceOrderInsert);
     });
-
-    // Hard block: never let assigned_user_id reach the DB as null
     if (missingUserRows.length > 0) {
       const msg = isTechnicianRole
         ? "Sua conta não está autenticada. Faça login novamente antes de salvar."
@@ -236,30 +155,17 @@ export default function ServiceOrdersPage() {
       toast.error(msg, { duration: 7000 });
       return;
     }
-
-    console.log("SAVING DATA (mapped inserts):", JSON.stringify(inserts, null, 2));
-
     saveMutation.mutate(inserts, {
-      onSuccess: (response) => {
-        console.log("INSERT RESPONSE:", response);
-        console.log("INSERT ERROR:", null);
+      onSuccess: () => {
         setExtractions(prev => prev.filter((e) => e._id !== extractionId));
         toast.success(
-          inserts.length === 1
-            ? "Ordem salva com sucesso"
-            : `${inserts.length} ordens salvas com sucesso`,
+          inserts.length === 1 ? "Ordem salva com sucesso" : `${inserts.length} ordens salvas com sucesso`,
           { duration: 4000 }
         );
       },
       onError: (err) => {
-        console.log("INSERT RESPONSE:", null);
-        console.log("INSERT ERROR:", err);
         const raw = (err as Error).message || "";
-        if (/assigned_user_id|technician_id/i.test(raw)) {
-          toast.error("Falha ao salvar: o usuário responsável é obrigatório.", { duration: 8000 });
-        } else {
-          toast.error(`Erro ao salvar. Verifique os dados e tente novamente.\n${raw}`, { duration: 8000 });
-        }
+        toast.error(`Erro ao salvar.\n${raw}`, { duration: 8000 });
       },
     });
   };
@@ -268,21 +174,12 @@ export default function ServiceOrdersPage() {
     setExtractions(prev => prev.filter((e) => e._id !== extractionId));
   };
 
-  const setFilter = (key: string, value: string) => {
-    setFilters((prev) => ({
-      ...prev,
-      [key]: value === "all" ? undefined : value,
-    }));
-  };
-
-  const isHierarchyActive = hCtx.level !== "all";
-
   const hasExtractions = extractions.length > 0;
 
   return (
-    <div className="animate-fade-in flex gap-3 h-[calc(100vh-5rem)]">
-      {/* OPERACIONAL — narrow icon-tree sidebar */}
-      <aside className="hidden md:block w-56 shrink-0 h-full">
+    <div className="animate-fade-in flex h-[calc(100vh-3.5rem)] w-full">
+      {/* SIDEBAR OPERACIONAL */}
+      <aside className="hidden md:flex w-56 shrink-0 border-r border-border/40 bg-card/20">
         <HierarchyExplorer
           records={orders as any}
           storageKey="hierarchy.service_orders"
@@ -291,28 +188,19 @@ export default function ServiceOrdersPage() {
         />
       </aside>
 
-      {/* Main workspace — single continuous canvas */}
-      <div className="flex-1 min-w-0 flex flex-col h-full overflow-hidden">
-        {/* Page title row — title only + discreet upload icon at top-right */}
-        <div className="flex items-center justify-between gap-2 py-1.5 px-1">
-          <div className="flex items-center gap-2">
-            <FileText className="h-4 w-4 text-primary" />
-            <h1 className="text-sm font-semibold text-foreground">{t("so.title")}</h1>
-          </div>
+      {/* CANVAS PRINCIPAL — continuous, no cards */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        {/* HEADER SUPERIOR */}
+        <header className="flex items-center justify-between gap-2 border-b border-border/40 px-4 py-2">
+          <h1 className="text-sm font-semibold text-foreground">{t("so.title") || "Ordens de serviço"}</h1>
           <Can permission="service_orders.create">
             <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} compact />
           </Can>
-        </div>
+        </header>
 
-        {/* Temporary upload/extraction panel — visible only while a document is being processed */}
+        {/* Optional review panel — kept inline, no card chrome (visual base only) */}
         {hasExtractions && (
-          <div className="flex flex-col gap-2 mb-2 rounded-md border border-primary/30 bg-primary/5 p-2">
-            <div className="flex items-center justify-between">
-              <ExtractionStages current="upload" />
-              <span className="text-[11px] text-muted-foreground">
-                {extractions.length} documento{extractions.length > 1 ? "s" : ""} em revisão
-              </span>
-            </div>
+          <div className="border-b border-border/40 px-2 py-2">
             {extractions.map((extraction) => (
               <ExtractedDataTable
                 key={extraction._id}
@@ -335,72 +223,9 @@ export default function ServiceOrdersPage() {
           </div>
         )}
 
-        {/* Filters — hidden when hierarchy context narrows the view */}
-        {!isHierarchyActive && !hasExtractions && (
-          <div className="flex items-center gap-2 flex-wrap py-1">
-            <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-            <Select value={filters.client_id || "all"} onValueChange={(v) => setFilter("client_id", v)}>
-              <SelectTrigger className="w-[150px] h-8 text-xs bg-secondary/30">
-                <SelectValue placeholder={t("label.allClients")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t("label.allClients")}</SelectItem>
-                {clients.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={filters.platform || "all"} onValueChange={(v) => setFilter("platform", v)}>
-              <SelectTrigger className="w-[130px] h-8 text-xs bg-secondary/30">
-                <SelectValue placeholder={t("label.allPlatforms")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t("label.allPlatforms")}</SelectItem>
-                {platforms.map((p) => (
-                  <SelectItem key={p} value={p}>{p}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={filters.assigned_user_id || "all"} onValueChange={(v) => setFilter("assigned_user_id", v)}>
-              <SelectTrigger className="w-[150px] h-8 text-xs bg-secondary/30">
-                <SelectValue placeholder={t("label.allTechnicians")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t("label.allTechnicians")}</SelectItem>
-                {technicians.map((t_) => (
-                  <SelectItem key={t_.user_id} value={t_.user_id}>{t_.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={filters.week || "all"} onValueChange={(v) => setFilter("week", v)}>
-              <SelectTrigger className="w-[110px] h-8 text-xs bg-secondary/30">
-                <SelectValue placeholder={t("label.allWeeks")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t("label.allWeeks")}</SelectItem>
-                {weeks.map((w) => (
-                  <SelectItem key={w} value={w}>{w}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
-        {/* Tables fill the entire remaining canvas */}
-        <div className="flex-1 min-h-0 overflow-auto pr-1">
-          <HierarchicalOrdersView
-            records={visibleOrders as any}
-            storageKey="hierarchy.service_orders"
-            formatCurrency={formatCurrency}
-            activeContext={hCtx}
-            onView={setHCtx}
-            renderLeaf={(subset) => (
-              <ServiceOrdersTable orders={subset as any} isLoading={isLoading} />
-            )}
-          />
-          {visibleOrders.length === 0 && (
-            <ServiceOrdersTable orders={[] as any} isLoading={isLoading} />
-          )}
+        {/* CANVAS — full width, single flat table */}
+        <div className="flex-1 min-h-0 overflow-auto">
+          <ServiceOrdersTable orders={visibleOrders as any} isLoading={isLoading} />
         </div>
       </div>
     </div>
