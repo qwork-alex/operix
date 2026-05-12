@@ -101,7 +101,10 @@ export function ActiveDocumentBand({ file, onClose, onRename, children, classNam
                 <ZoomIn className="h-3.5 w-3.5" />
               </Button>
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setZoom(1)} title="Reset zoom">
-                <RotateCcw className="h-3.5 w-3.5" />
+                <Undo2 className="h-3.5 w-3.5" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setRotation(r => (r + 90) % 360)} title="Girar documento">
+                <RotateCw className="h-3.5 w-3.5" />
               </Button>
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handlePrint} title="Imprimir">
                 <Printer className="h-3.5 w-3.5" />
