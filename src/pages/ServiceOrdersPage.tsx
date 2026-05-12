@@ -257,9 +257,15 @@ export default function ServiceOrdersPage() {
             key={extraction._id}
             file={extraction._file}
             stage="review"
+            initialState={extraction._docState}
+            onStateChange={(state) => setExtractions(prev => prev.map((e) => e._id === extraction._id ? { ...e, _docState: state } : e))}
+            onPersistState={(state) => updateDocumentState(extraction._id, state)}
+            onReprocessOcr={(state) => handleReprocessOcr(extraction._id, state)}
+            isReprocessing={reprocessingId === extraction._id}
             onClose={() => handleDiscard(extraction._id)}
           >
             <ExtractedDataTable
+              key={`${extraction._id}:${extraction._ocrVersion}`}
               orders={extraction.orders}
               confidence={extraction.confidence}
               notes={extraction.notes}
