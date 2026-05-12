@@ -1,5 +1,4 @@
 import { useState, useCallback, useMemo } from "react";
-import { CreditCard, Filter } from "lucide-react";
 import {
   HierarchyExplorer,
   applyHierarchyContext,
@@ -7,11 +6,8 @@ import {
   type HierarchyContext,
 } from "@/components/shared/HierarchyExplorer";
 import { hierarchyDefaults } from "@/components/shared/HierarchyBreadcrumb";
-import { HierarchicalOrdersView } from "@/components/shared/HierarchicalOrdersView";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileUploadZone } from "@/components/service-orders/FileUploadZone";
 import { ExtractedPaymentTable } from "@/components/payment-orders/ExtractedPaymentTable";
-import { ExtractionStages } from "@/components/service-orders/ExtractionStages";
 import { PaymentOrdersTable } from "@/components/payment-orders/PaymentOrdersTable";
 import { storeFileInDocuments } from "@/components/file-manager/EmbeddedFileManager";
 import { formatLicensePlate } from "@/lib/formatPlate";
@@ -40,24 +36,15 @@ export default function PaymentOrdersPage() {
   const { isAdmin, dbRole } = useRole();
   const canAssignAnyTechnician = isAdmin || dbRole === "partner";
   const queryClient = useQueryClient();
-  const [filters, setFilters] = useState<{
-    client_id?: string;
-    platform?: string;
-    assigned_user_id?: string;
-    list_name?: string;
-  }>({});
 
   const [extractions, setExtractions] = useState<(PaymentExtractionResult & { _id: string })[]>([]);
-  const [sessionFiles, setSessionFiles] = useState<string[]>([]);
-  const { data: orders = [], isLoading, saveMutation } = usePaymentOrders(filters);
+  const { data: orders = [], isLoading, saveMutation } = usePaymentOrders({});
   const { extract } = useExtractPaymentOrder();
   const { data: clients = [] } = useClients();
   const { data: technicians = [] } = useAssignableUsers();
   const { data: myAssignableUserId } = useMyAssignableUserId();
-  
-  const { queue, isProcessing, addFiles, clearCompleted } = useFileQueue();
+  const { isProcessing, addFiles } = useFileQueue();
 
-  // Hierarchical view context (Phase 1A)
   const [hCtx, setHCtx] = useState<HierarchyContext>(() =>
     loadHierarchyContext("hierarchy.payment_orders"),
   );
@@ -66,24 +53,17 @@ export default function PaymentOrdersPage() {
     [orders, hCtx],
   );
 
-  const platforms = [...new Set((orders as any[]).map(o => o.platform).filter(Boolean))];
-  const listNames = [...new Set((orders as any[]).map(o => o.list_name).filter(Boolean))];
-
   const handleFiles = useCallback((files: File[]) => {
-    setSessionFiles(prev => [...prev, ...files.map(f => f.name)]);
     const ctxDefaults = hierarchyDefaults(hCtx);
-
     addFiles(files, async (file, onStatus) => {
       storeFileInDocuments(file, "payment_order", user?.id).then(() => {
         queryClient.invalidateQueries({ queryKey: ["embedded-docs", "payment_order"] });
       });
-
       onStatus("uploading" as QueueItemStatus);
       await new Promise(r => setTimeout(r, 200));
       onStatus("processing" as QueueItemStatus);
       try {
         const result = await extract(file);
-        // Phase 1C — pre-fill missing fields from active hierarchy context.
         const prefilled = {
           ...result,
           orders: result.orders.map((o) => ({
@@ -99,7 +79,6 @@ export default function PaymentOrdersPage() {
         }
       } catch (err) {
         const msg = (err as Error).message || "Unknown extraction error";
-        console.error("[PaymentOrders] File processing failed:", msg);
         toast.error(msg, { duration: 8000 });
         throw err;
       }
@@ -107,15 +86,11 @@ export default function PaymentOrdersPage() {
   }, [addFiles, extract, user?.id, queryClient, hCtx]);
 
   const handleSave = async (extractionId: string, rows: ExtractedPaymentOrder[]) => {
-    // rows = EXACTLY what the user sees in the edited table (source of truth)
-    console.log("SAVING DATA (raw edited rows):", JSON.stringify(rows, null, 2));
     const authUser = await getCurrentUser();
-    console.log("AUTH USER:", authUser);
     if (!authUser?.id) {
       toast.error("Sessão expirada. Faça login novamente antes de salvar.", { duration: 7000 });
       return;
     }
-
     const ctxDefaults = hierarchyDefaults(hCtx);
     const inserts: PaymentOrderInsert[] = rows.map(r => {
       const clientMatch = clients.find(c => c.name.toLowerCase() === r.client?.toLowerCase());
@@ -129,7 +104,6 @@ export default function PaymentOrdersPage() {
         ? techMatch?.user_id ?? authUser.id
         : authUser.id;
       const selectedUser = technicians.find(t => t.user_id === finalUserId) ?? techMatch ?? null;
-      console.log("SELECTED TECHNICIAN:", selectedUser);
       const payload: Record<string, any> = {
         user_id: finalUserId,
         assigned_user_id: finalUserId,
@@ -146,23 +120,12 @@ export default function PaymentOrdersPage() {
         status: "pending",
         group_id: r.list_name ?? ctxDefaults.week ?? null,
       };
-      console.log("FINAL user_id:", payload.user_id);
-      console.log("FINAL INSERT PAYLOAD:", payload);
       return payload as PaymentOrderInsert;
     });
 
-    console.log("SAVING DATA (mapped inserts):", JSON.stringify(inserts, null, 2));
-
     saveMutation.mutate(inserts, {
-      onSuccess: (response) => {
-        console.log("INSERT RESPONSE:", response);
-        console.log("INSERT ERROR:", null);
+      onSuccess: () => {
         setExtractions(prev => prev.filter((e) => e._id !== extractionId));
-        
-      },
-      onError: (error) => {
-        console.log("INSERT RESPONSE:", null);
-        console.log("INSERT ERROR:", error);
       },
     });
   };
@@ -171,16 +134,12 @@ export default function PaymentOrdersPage() {
     setExtractions(prev => prev.filter((e) => e._id !== extractionId));
   };
 
-  const setFilter = (key: string, value: string) => {
-    setFilters(prev => ({ ...prev, [key]: value === "all" ? undefined : value }));
-  };
-
-  const isHierarchyActive = hCtx.level !== "all";
   const hasExtractions = extractions.length > 0;
 
   return (
-    <div className="animate-fade-in flex gap-3 h-[calc(100vh-5rem)]">
-      <aside className="hidden md:block w-56 shrink-0 h-full">
+    <div className="animate-fade-in flex h-[calc(100vh-3.5rem)] w-full">
+      {/* SIDEBAR OPERACIONAL */}
+      <aside className="hidden md:flex w-56 shrink-0 border-r border-border/40 bg-card/20">
         <HierarchyExplorer
           records={orders as any}
           storageKey="hierarchy.payment_orders"
@@ -189,25 +148,17 @@ export default function PaymentOrdersPage() {
         />
       </aside>
 
-      <div className="flex-1 min-w-0 flex flex-col h-full overflow-hidden">
-        <div className="flex items-center justify-between gap-2 py-1.5 px-1">
-          <div className="flex items-center gap-2">
-            <CreditCard className="h-4 w-4 text-primary" />
-            <h1 className="text-sm font-semibold text-foreground">{t("po.title")}</h1>
-          </div>
+      {/* CANVAS PRINCIPAL */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        <header className="flex items-center justify-between gap-2 border-b border-border/40 px-4 py-2">
+          <h1 className="text-sm font-semibold text-foreground">{t("po.title") || "Ordens de pagamento"}</h1>
           <Can permission="payment_orders.create">
             <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} compact />
           </Can>
-        </div>
+        </header>
 
         {hasExtractions && (
-          <div className="flex flex-col gap-2 mb-2 rounded-md border border-primary/30 bg-primary/5 p-2">
-            <div className="flex items-center justify-between">
-              <ExtractionStages current="upload" />
-              <span className="text-[11px] text-muted-foreground">
-                {extractions.length} documento{extractions.length > 1 ? "s" : ""} em revisão
-              </span>
-            </div>
+          <div className="border-b border-border/40 px-2 py-2">
             {extractions.map((extraction) => (
               <ExtractedPaymentTable
                 key={extraction._id}
@@ -230,54 +181,8 @@ export default function PaymentOrdersPage() {
           </div>
         )}
 
-        {!isHierarchyActive && !hasExtractions && (
-          <div className="flex items-center gap-2 flex-wrap py-1">
-            <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-            <Select value={filters.client_id || "all"} onValueChange={v => setFilter("client_id", v)}>
-              <SelectTrigger className="w-[150px] h-8 text-xs bg-secondary/30"><SelectValue placeholder={t("label.allClients")} /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t("label.allClients")}</SelectItem>
-                {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={filters.platform || "all"} onValueChange={v => setFilter("platform", v)}>
-              <SelectTrigger className="w-[130px] h-8 text-xs bg-secondary/30"><SelectValue placeholder={t("label.allPlatforms")} /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t("label.allPlatforms")}</SelectItem>
-                {platforms.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={filters.assigned_user_id || "all"} onValueChange={v => setFilter("assigned_user_id", v)}>
-              <SelectTrigger className="w-[150px] h-8 text-xs bg-secondary/30"><SelectValue placeholder={t("label.allTechnicians")} /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t("label.allTechnicians")}</SelectItem>
-                {technicians.map(t_ => <SelectItem key={t_.user_id} value={t_.user_id}>{t_.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={filters.list_name || "all"} onValueChange={v => setFilter("list_name", v)}>
-              <SelectTrigger className="w-[130px] h-8 text-xs bg-secondary/30"><SelectValue placeholder={t("label.allLists")} /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t("label.allLists")}</SelectItem>
-                {listNames.map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
-        <div className="flex-1 min-h-0 overflow-auto pr-1">
-          <HierarchicalOrdersView
-            records={visibleOrders as any}
-            storageKey="hierarchy.payment_orders"
-            formatCurrency={formatCurrency}
-            activeContext={hCtx}
-            onView={setHCtx}
-            renderLeaf={(subset) => (
-              <PaymentOrdersTable orders={subset as any} isLoading={isLoading} />
-            )}
-          />
-          {visibleOrders.length === 0 && (
-            <PaymentOrdersTable orders={[] as any} isLoading={isLoading} />
-          )}
+        <div className="flex-1 min-h-0 overflow-auto">
+          <PaymentOrdersTable orders={visibleOrders as any} isLoading={isLoading} />
         </div>
       </div>
     </div>
