@@ -124,12 +124,17 @@ export function ActiveDocumentBand({ file, onClose, initialState, onStateChange,
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setZoom(z => Math.min(3, z + 0.2))} title="Zoom in">
                 <ZoomIn className="h-3.5 w-3.5" />
               </Button>
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setZoom(1)} title="Reset zoom">
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setZoom(1); persist({ ...currentState, zoom: 1 }); }} title="Reset zoom">
                 <Undo2 className="h-3.5 w-3.5" />
               </Button>
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setRotation(r => (r + 90) % 360)} title="Girar documento">
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setRotation(r => { const next = (r + 90) % 360; persist({ ...currentState, rotation: next }); return next; })} title="Girar documento">
                 <RotateCw className="h-3.5 w-3.5" />
               </Button>
+              {onReprocessOcr && (
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onReprocessOcr(currentState)} title="Reprocessar OCR" disabled={isReprocessing}>
+                  <RefreshCw className={cn("h-3.5 w-3.5", isReprocessing && "animate-spin")} />
+                </Button>
+              )}
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handlePrint} title="Imprimir">
                 <Printer className="h-3.5 w-3.5" />
               </Button>
