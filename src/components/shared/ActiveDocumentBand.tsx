@@ -127,8 +127,8 @@ export function ActiveDocumentBand({ file, onClose, onRename, children, classNam
           <img
             src={objectUrl}
             alt={name}
-            style={{ transform: `scale(${zoom})`, transformOrigin: "top center" }}
-            className="max-w-full transition-transform"
+            style={{ transform: `scale(${zoom}) rotate(${rotation}deg)`, transformOrigin: "center center" }}
+            className="max-w-full max-h-full transition-transform object-contain"
           />
         )}
         {objectUrl && isPdf && (
@@ -136,7 +136,7 @@ export function ActiveDocumentBand({ file, onClose, onRename, children, classNam
             src={objectUrl}
             title={name}
             className="w-full h-full border-0 min-h-[40vh]"
-            style={{ transform: `scale(${zoom})`, transformOrigin: "top left" }}
+            style={{ transform: `scale(${zoom}) rotate(${rotation}deg)`, transformOrigin: "center center" }}
           />
         )}
         {!objectUrl && (
