@@ -139,7 +139,7 @@ async function fetchDocumentBlobUrl(
     size: typedBlob.size,
   });
 
-  return { blobUrl, mimeType, signedUrl };
+  return { blobUrl, mimeType, signedUrl, blob: typedBlob };
 }
 
 export function EmbeddedFileManager({ entityType, module: moduleName = "orders", sessionFileNames = [], defaultCollapsed = false }: Props) {
@@ -299,7 +299,11 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
 
   const renameMutation = useMutation({
     mutationFn: async ({ id, name }: { id: string; name: string }) => {
-      const { error } = await supabase.from("documents").update({ name }).eq("id", id);
+      const { error } = await (supabase as any).from("documents").update({
+        name,
+        display_name: name,
+        visual_state: { displayName: name, updatedAt: new Date().toISOString() },
+      }).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
