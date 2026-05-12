@@ -6,16 +6,14 @@ import {
   loadHierarchyContext,
   type HierarchyContext,
 } from "@/components/shared/HierarchyExplorer";
-import { HierarchyBreadcrumb, hierarchyDefaults } from "@/components/shared/HierarchyBreadcrumb";
+import { hierarchyDefaults } from "@/components/shared/HierarchyBreadcrumb";
 import { HierarchicalOrdersView } from "@/components/shared/HierarchicalOrdersView";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
 import { FileUploadZone } from "@/components/service-orders/FileUploadZone";
 import { ExtractedPaymentTable } from "@/components/payment-orders/ExtractedPaymentTable";
 import { ExtractionStages } from "@/components/service-orders/ExtractionStages";
-import { UploadQueue } from "@/components/service-orders/UploadQueue";
 import { PaymentOrdersTable } from "@/components/payment-orders/PaymentOrdersTable";
-import { EmbeddedFileManager, storeFileInDocuments } from "@/components/file-manager/EmbeddedFileManager";
+import { storeFileInDocuments } from "@/components/file-manager/EmbeddedFileManager";
 import { formatLicensePlate } from "@/lib/formatPlate";
 import {
   usePaymentOrders,
