@@ -253,6 +253,13 @@ function Row({ node, depth, open, toggle, active, onView }: RowProps) {
     active.week === node.ctx.week &&
     active.technician === node.ctx.technician;
 
+  const Icon = node.icon;
+  const handleActivate = () => {
+    if (isDisabled) return;
+    onView(node.ctx);
+    if (hasChildren && !isOpen) toggle(node.key);
+  };
+
   return (
     <>
       <div
@@ -260,14 +267,17 @@ function Row({ node, depth, open, toggle, active, onView }: RowProps) {
           "group flex items-center gap-1 rounded-sm pr-1 text-xs transition-colors",
           isDisabled
             ? "opacity-60"
-            : "hover:bg-sidebar-accent/50",
+            : "hover:bg-sidebar-accent/50 cursor-pointer",
           isActive && "bg-sidebar-accent text-primary",
         )}
         style={{ paddingLeft: depth * 10 + 4 }}
       >
         <button
           type="button"
-          onClick={() => hasChildren && !isDisabled && toggle(node.key)}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (hasChildren && !isDisabled) toggle(node.key);
+          }}
           className={cn(
             "flex h-5 w-5 shrink-0 items-center justify-center rounded-sm",
             hasChildren && !isDisabled ? "hover:bg-sidebar-accent" : "opacity-30",
@@ -283,7 +293,20 @@ function Row({ node, depth, open, toggle, active, onView }: RowProps) {
           />
         </button>
 
-        <span className={cn("flex-1 truncate py-1", isDisabled && "italic text-muted-foreground")} title={node.label}>
+        {Icon && (
+          <Icon
+            className={cn(
+              "h-3 w-3 shrink-0",
+              isActive ? "text-primary" : "text-muted-foreground",
+            )}
+          />
+        )}
+
+        <span
+          className={cn("flex-1 truncate py-1", isDisabled && "italic text-muted-foreground")}
+          title={node.label}
+          onClick={handleActivate}
+        >
           {node.label}
         </span>
 
@@ -295,22 +318,6 @@ function Row({ node, depth, open, toggle, active, onView }: RowProps) {
           <span className="text-[10px] tabular-nums text-muted-foreground">
             {node.count}
           </span>
-        )}
-
-        {!isDisabled && (
-          <button
-            type="button"
-            onClick={() => onView(node.ctx)}
-            className={cn(
-              "ml-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-sm opacity-0 transition-opacity",
-              "hover:bg-primary/15 hover:text-primary group-hover:opacity-100",
-              isActive && "opacity-100 text-primary",
-            )}
-            title="Visualizar nas tabelas abaixo"
-            aria-label="Visualizar"
-          >
-            <Eye className="h-3 w-3" />
-          </button>
         )}
       </div>
 
