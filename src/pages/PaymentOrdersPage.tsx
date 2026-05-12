@@ -9,7 +9,7 @@ import { hierarchyDefaults } from "@/components/shared/HierarchyBreadcrumb";
 import { FileUploadZone } from "@/components/service-orders/FileUploadZone";
 import { ExtractedPaymentTable } from "@/components/payment-orders/ExtractedPaymentTable";
 import { PaymentOrdersTable } from "@/components/payment-orders/PaymentOrdersTable";
-import { storeFileInDocuments } from "@/components/file-manager/EmbeddedFileManager";
+import { EmbeddedFileManager, storeFileInDocuments } from "@/components/file-manager/EmbeddedFileManager";
 import { SectionPlaceholder } from "@/components/shared/SectionPlaceholder";
 import { ActiveDocumentBand } from "@/components/shared/ActiveDocumentBand";
 import { formatLicensePlate } from "@/lib/formatPlate";
@@ -159,44 +159,37 @@ export default function PaymentOrdersPage() {
           </Can>
         </header>
 
-        {hasExtractions && (
-          <>
-            {extractions.map((extraction) => (
-              <ActiveDocumentBand
-                key={extraction._id}
-                file={extraction._file}
-                stage="review"
-                onClose={() => handleDiscard(extraction._id)}
-              >
-                <ExtractedPaymentTable
-                  orders={extraction.orders}
-                  confidence={extraction.confidence}
-                  notes={extraction.notes}
-                  onSave={(rows) => handleSave(extraction._id, rows)}
-                  onDiscard={() => handleDiscard(extraction._id)}
-                  isSaving={saveMutation.isPending}
-                  technicians={technicians}
-                  isTechnicianRole={dbRole === "technician"}
-                  isAdmin={canAssignAnyTechnician}
-                  myTechnicianName={
-                    myAssignableUserId
-                      ? technicians.find((t) => t.user_id === myAssignableUserId)?.name ?? null
-                      : null
-                  }
-                />
-              </ActiveDocumentBand>
-            ))}
-          </>
-        )}
-
-        <div className="flex-1 min-h-0 overflow-auto">
-          {hCtx.section === "documentos" ? (
-            <SectionPlaceholder
-              icon="folder"
-              title="Documentos"
-              subtitle={hCtx.year ? `Ano ${hCtx.year}` : undefined}
-              hint="Área de documentos será disponibilizada em breve."
+        {hasExtractions && extractions.map((extraction) => (
+          <ActiveDocumentBand
+            key={extraction._id}
+            file={extraction._file}
+            stage="review"
+            onClose={() => handleDiscard(extraction._id)}
+          >
+            <ExtractedPaymentTable
+              orders={extraction.orders}
+              confidence={extraction.confidence}
+              notes={extraction.notes}
+              onSave={(rows) => handleSave(extraction._id, rows)}
+              onDiscard={() => handleDiscard(extraction._id)}
+              isSaving={saveMutation.isPending}
+              technicians={technicians}
+              isTechnicianRole={dbRole === "technician"}
+              isAdmin={canAssignAnyTechnician}
+              myTechnicianName={
+                myAssignableUserId
+                  ? technicians.find((t) => t.user_id === myAssignableUserId)?.name ?? null
+                  : null
+              }
             />
+          </ActiveDocumentBand>
+        ))}
+
+        <div className={`flex-1 min-h-0 overflow-auto ${hasExtractions ? "border-t border-border/40" : ""}`}>
+          {hCtx.section === "documentos" ? (
+            <div className="p-4">
+              <EmbeddedFileManager entityType="payment_order" module="orders" />
+            </div>
           ) : hCtx.section === "relatorios" ? (
             <SectionPlaceholder
               icon="chart"
