@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { blobForCurrentVisualState, getDocumentDisplayName, getDocumentRotation, getDocumentZoom } from "@/lib/documentVisualState";
+import type { DocumentVisualState } from "@/lib/documentVisualState";
 
 interface Props {
   entityType: "service_order" | "payment_order";
@@ -1069,4 +1070,21 @@ export async function storeFileInDocuments(
   } catch (err) {
     console.error("[FileManager] storeFileInDocuments error:", err);
   }
+}
+
+export async function persistDocumentVisualState(documentId: string | undefined, state: DocumentVisualState, validated = false) {
+  if (!documentId) return;
+  const visualState = { ...state, validated, updatedAt: new Date().toISOString() };
+  const { error } = await (supabase as any)
+    .from("documents")
+    .update({
+      name: state.displayName,
+      display_name: state.displayName,
+      rotation: state.rotation,
+      zoom: state.zoom,
+      validated,
+      visual_state: visualState,
+    })
+    .eq("id", documentId);
+  if (error) throw error;
 }
