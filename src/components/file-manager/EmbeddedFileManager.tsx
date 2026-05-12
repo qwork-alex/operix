@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -147,7 +147,16 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
   const { t, formatDate } = useLanguage();
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [collapsed, setCollapsed] = useState(defaultCollapsed);
+  const collapseKey = `fm.collapsed.${entityType}.${moduleName}`;
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return defaultCollapsed;
+    const stored = window.localStorage.getItem(collapseKey);
+    return stored === null ? defaultCollapsed : stored === "1";
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(collapseKey, collapsed ? "1" : "0");
+  }, [collapsed, collapseKey]);
 
   const [parentId, setParentId] = useState<string | null>(null);
   const [path, setPath] = useState<{ id: string | null; name: string }[]>([
