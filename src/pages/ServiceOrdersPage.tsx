@@ -200,29 +200,35 @@ export default function ServiceOrdersPage() {
           </Can>
         </header>
 
-        {/* Optional review panel — kept inline, no card chrome (visual base only) */}
+        {/* DOCUMENTO ATIVO — faixa temporária inline */}
         {hasExtractions && (
-          <div className="border-b border-border/40 px-2 py-2">
+          <>
             {extractions.map((extraction) => (
-              <ExtractedDataTable
+              <ActiveDocumentBand
                 key={extraction._id}
-                orders={extraction.orders}
-                confidence={extraction.confidence}
-                notes={extraction.notes}
-                onSave={(rows) => handleSave(extraction._id, rows)}
-                onDiscard={() => handleDiscard(extraction._id)}
-                isSaving={saveMutation.isPending}
-                technicians={technicians}
-                isTechnicianRole={isTechnicianRole}
-                isAdmin={canAssignAnyTechnician}
-                myTechnicianName={
-                  myAssignableUserId
-                    ? technicians.find((t) => t.user_id === myAssignableUserId)?.name ?? null
-                    : null
-                }
-              />
+                file={extraction._file}
+                stage="review"
+                onClose={() => handleDiscard(extraction._id)}
+              >
+                <ExtractedDataTable
+                  orders={extraction.orders}
+                  confidence={extraction.confidence}
+                  notes={extraction.notes}
+                  onSave={(rows) => handleSave(extraction._id, rows)}
+                  onDiscard={() => handleDiscard(extraction._id)}
+                  isSaving={saveMutation.isPending}
+                  technicians={technicians}
+                  isTechnicianRole={isTechnicianRole}
+                  isAdmin={canAssignAnyTechnician}
+                  myTechnicianName={
+                    myAssignableUserId
+                      ? technicians.find((t) => t.user_id === myAssignableUserId)?.name ?? null
+                      : null
+                  }
+                />
+              </ActiveDocumentBand>
             ))}
-          </div>
+          </>
         )}
 
         {/* CANVAS — driven by tree section */}
