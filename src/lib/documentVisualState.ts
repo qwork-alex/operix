@@ -76,9 +76,32 @@ export async function rotateImageBlob(blob: Blob, rotationInput: number, mimeTyp
   });
 }
 
+export async function rotatePdfBlob(blob: Blob, rotationInput: number): Promise<Blob> {
+  const rotation = normalizeRotation(rotationInput);
+  if (rotation === 0 || blob.type !== "application/pdf") return blob;
+
+  const { PDFDocument, degrees } = await import("pdf-lib");
+  const pdf = await PDFDocument.load(await blob.arrayBuffer());
+  pdf.getPages().forEach((page) => {
+    const current = page.getRotation().angle || 0;
+    page.setRotation(degrees(normalizeRotation(current + rotation)));
+  });
+  const bytes = await pdf.save();
+  return new Blob([bytes], { type: "application/pdf" });
+}
+
+export async function blobForCurrentVisualState(blob: Blob, state: DocumentVisualState): Promise<Blob> {
+  const rotation = normalizeRotation(state.rotation);
+  if (rotation === 0) return blob;
+  if (blob.type.startsWith("image/")) return rotateImageBlob(blob, rotation, blob.type);
+  if (blob.type === "application/pdf") return rotatePdfBlob(blob, rotation);
+  return blob;
+}
+
 export async function fileForCurrentVisualState(file: File, state: DocumentVisualState): Promise<File> {
   const rotation = normalizeRotation(state.rotation);
-  if (!file.type.startsWith("image/") || rotation === 0) return file;
-  const rotated = await rotateImageBlob(file, rotation, file.type);
+  if (rotation === 0) return file;
+  const rotated = await blobForCurrentVisualState(file, state);
+  if (rotated === file) return file;
   return new File([rotated], state.displayName || file.name, { type: rotated.type || file.type, lastModified: Date.now() });
 }
