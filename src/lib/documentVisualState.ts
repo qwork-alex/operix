@@ -87,7 +87,7 @@ export async function rotatePdfBlob(blob: Blob, rotationInput: number): Promise<
     page.setRotation(degrees(normalizeRotation(current + rotation)));
   });
   const bytes = await pdf.save();
-  return new Blob([bytes], { type: "application/pdf" });
+  return new Blob([new Uint8Array(bytes).buffer], { type: "application/pdf" });
 }
 
 export async function blobForCurrentVisualState(blob: Blob, state: DocumentVisualState): Promise<Blob> {
