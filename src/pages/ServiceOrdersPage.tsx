@@ -10,6 +10,7 @@ import { FileUploadZone } from "@/components/service-orders/FileUploadZone";
 import { ExtractedDataTable } from "@/components/service-orders/ExtractedDataTable";
 import { ServiceOrdersTable } from "@/components/service-orders/ServiceOrdersTable";
 import { storeFileInDocuments } from "@/components/file-manager/EmbeddedFileManager";
+import { SectionPlaceholder } from "@/components/shared/SectionPlaceholder";
 import { formatLicensePlate } from "@/lib/formatPlate";
 import {
   useServiceOrders,
@@ -223,9 +224,25 @@ export default function ServiceOrdersPage() {
           </div>
         )}
 
-        {/* CANVAS — full width, single flat table */}
+        {/* CANVAS — driven by tree section */}
         <div className="flex-1 min-h-0 overflow-auto">
-          <ServiceOrdersTable orders={visibleOrders as any} isLoading={isLoading} />
+          {hCtx.section === "documentos" ? (
+            <SectionPlaceholder
+              icon="folder"
+              title="Documentos"
+              subtitle={hCtx.year ? `Ano ${hCtx.year}` : undefined}
+              hint="Área de documentos será disponibilizada em breve."
+            />
+          ) : hCtx.section === "relatorios" ? (
+            <SectionPlaceholder
+              icon="chart"
+              title="Relatórios"
+              subtitle={hCtx.year ? `Ano ${hCtx.year}` : undefined}
+              hint="Relatórios automáticos serão disponibilizados em breve."
+            />
+          ) : (
+            <ServiceOrdersTable orders={visibleOrders as any} isLoading={isLoading} />
+          )}
         </div>
       </div>
     </div>

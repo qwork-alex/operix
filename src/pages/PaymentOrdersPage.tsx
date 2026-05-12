@@ -10,6 +10,7 @@ import { FileUploadZone } from "@/components/service-orders/FileUploadZone";
 import { ExtractedPaymentTable } from "@/components/payment-orders/ExtractedPaymentTable";
 import { PaymentOrdersTable } from "@/components/payment-orders/PaymentOrdersTable";
 import { storeFileInDocuments } from "@/components/file-manager/EmbeddedFileManager";
+import { SectionPlaceholder } from "@/components/shared/SectionPlaceholder";
 import { formatLicensePlate } from "@/lib/formatPlate";
 import {
   usePaymentOrders,
@@ -182,7 +183,23 @@ export default function PaymentOrdersPage() {
         )}
 
         <div className="flex-1 min-h-0 overflow-auto">
-          <PaymentOrdersTable orders={visibleOrders as any} isLoading={isLoading} />
+          {hCtx.section === "documentos" ? (
+            <SectionPlaceholder
+              icon="folder"
+              title="Documentos"
+              subtitle={hCtx.year ? `Ano ${hCtx.year}` : undefined}
+              hint="Área de documentos será disponibilizada em breve."
+            />
+          ) : hCtx.section === "relatorios" ? (
+            <SectionPlaceholder
+              icon="chart"
+              title="Relatórios"
+              subtitle={hCtx.year ? `Ano ${hCtx.year}` : undefined}
+              hint="Relatórios automáticos serão disponibilizados em breve."
+            />
+          ) : (
+            <PaymentOrdersTable orders={visibleOrders as any} isLoading={isLoading} />
+          )}
         </div>
       </div>
     </div>
