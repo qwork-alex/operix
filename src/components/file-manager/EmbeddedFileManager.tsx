@@ -703,7 +703,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
                         </Button>
                       </form>
                     ) : (
-                      <span className="truncate max-w-[200px]">{d.name}</span>
+                      <span className="truncate max-w-[200px]">{getDocumentDisplayName(d)}</span>
                     )}
                   </TableCell>
                   <TableCell>
@@ -730,6 +730,9 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
                           <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handlePrint(d)} title={t("fm.print")}>
                             <Printer className="h-3 w-3" />
                           </Button>
+                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleShare(d)} title="Compartilhar">
+                            <Share2 className="h-3 w-3" />
+                          </Button>
                           <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleOpenInNewTab(d)} title={t("fm.openInNewTab")}>
                             <ExternalLink className="h-3 w-3" />
                           </Button>
@@ -739,7 +742,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
                         variant="ghost"
                         size="icon"
                         className="h-6 w-6"
-                        onClick={() => { setRenamingId(d.id); setRenameValue(d.name); }}
+                        onClick={() => { setRenamingId(d.id); setRenameValue(getDocumentDisplayName(d)); }}
                         title={t("fm.rename")}
                       >
                         <Pencil className="h-3 w-3" />
