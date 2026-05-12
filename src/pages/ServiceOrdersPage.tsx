@@ -279,9 +279,9 @@ export default function ServiceOrdersPage() {
   const isHierarchyActive = hCtx.level !== "all";
 
   return (
-    <div className="animate-fade-in flex gap-4">
-      {/* Hierarchical operational explorer (Phase 1A → renamed in 1C.2) */}
-      <div className="hidden md:block w-52 shrink-0 sticky top-4 self-start max-h-[calc(100vh-2rem)]">
+    <div className="animate-fade-in flex gap-3 h-[calc(100vh-5rem)]">
+      {/* Contextual sidebar — fixed, narrow, full-height (ERP shell) */}
+      <aside className="hidden md:block w-60 shrink-0 h-full">
         <HierarchyExplorer
           records={orders as any}
           storageKey="hierarchy.service_orders"
@@ -289,27 +289,24 @@ export default function ServiceOrdersPage() {
           onContextChange={setHCtx}
           title="Contexto Operacional"
         />
-      </div>
+      </aside>
 
-      <div className="flex-1 min-w-0 space-y-4">
-        {/* Header */}
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
-            <FileText className="h-4 w-4 text-primary" />
+      {/* Main workspace — table-dominant column */}
+      <div className="flex-1 min-w-0 flex flex-col gap-2 overflow-auto pr-1">
+        {/* Single horizontal ERP toolbar: title + breadcrumb + stages + upload */}
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-border/50 bg-card/40 px-2 py-1.5 backdrop-blur">
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10">
+              <FileText className="h-3.5 w-3.5 text-primary" />
+            </div>
+            <h1 className="text-sm font-semibold text-foreground">{t("so.title")}</h1>
           </div>
-          <div>
-            <h1 className="text-base font-semibold text-foreground">{t("so.title")}</h1>
-            <p className="text-[11px] text-muted-foreground">{t("so.subtitle")}</p>
-          </div>
-        </div>
-
-        {/* Compact operational toolbar (1C.2 §2-3): breadcrumb + stages + upload on a single row */}
-        <div className="flex flex-col lg:flex-row lg:items-center gap-2 rounded-lg border border-border/50 bg-card/40 p-2 backdrop-blur">
+          <div className="h-5 w-px bg-border/60 hidden md:block" />
           <div className="flex-1 min-w-0">
             <HierarchyBreadcrumb context={hCtx} onClear={() => setHCtx({ level: "all" })} className="border-0 bg-transparent p-0" />
           </div>
           {extractions.length === 0 && (
-            <div className="hidden md:flex shrink-0">
+            <div className="hidden lg:flex shrink-0">
               <ExtractionStages current="upload" />
             </div>
           )}
