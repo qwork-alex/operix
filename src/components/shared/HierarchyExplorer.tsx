@@ -39,8 +39,11 @@ export type HierarchyRecord = {
   user_id?: string | null;
 };
 
+export type HierarchySection = "operacional" | "documentos" | "relatorios";
+
 export type HierarchyContext = {
   level: "all" | "year" | "client" | "unit" | "week" | "technician";
+  section?: HierarchySection;
   year?: string;
   client?: string;
   unit?: string;
