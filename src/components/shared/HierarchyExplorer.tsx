@@ -186,28 +186,34 @@ function buildTree(records: HierarchyRecord[]): TreeNode[] {
           }),
         };
       });
+    // Tag operational subtree with section so canvas knows it's the data view
+    const tagOperational = (nodes: TreeNode[]): TreeNode[] =>
+      nodes.map((n) => ({
+        ...n,
+        ctx: { ...n.ctx, section: "operacional" as HierarchySection },
+        children: n.children ? tagOperational(n.children) : undefined,
+      }));
     return {
       key: `y:${year}`,
       label: year,
       count: yearRows.length,
       icon: Calendar,
-      ctx: { level: "year", year } as HierarchyContext,
+      ctx: { level: "year", year, section: "operacional" } as HierarchyContext,
       children: [
         {
           key: `y:${year}|sec:operacional`,
           label: "Operacional",
           count: yearRows.length,
           icon: Settings,
-          ctx: { level: "year", year } as HierarchyContext,
-          children: operationalChildren,
+          ctx: { level: "year", year, section: "operacional" } as HierarchyContext,
+          children: tagOperational(operationalChildren),
         },
         {
           key: `y:${year}|sec:documentos`,
           label: "Documentos",
           count: 0,
           icon: Folder,
-          ctx: { level: "year", year } as HierarchyContext,
-          disabled: true,
+          ctx: { level: "year", year, section: "documentos" } as HierarchyContext,
           hint: "Em breve",
         } as TreeNode,
         {
@@ -215,8 +221,7 @@ function buildTree(records: HierarchyRecord[]): TreeNode[] {
           label: "Relatórios",
           count: 0,
           icon: BarChart3,
-          ctx: { level: "year", year } as HierarchyContext,
-          disabled: true,
+          ctx: { level: "year", year, section: "relatorios" } as HierarchyContext,
           hint: "Em breve",
         } as TreeNode,
       ],
