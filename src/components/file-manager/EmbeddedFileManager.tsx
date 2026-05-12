@@ -368,12 +368,12 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
       const { blobUrl } = await fetchDocumentBlobUrl(doc, 3600);
       const a = document.createElement("a");
       a.href = blobUrl;
-      a.download = doc.name;
+      a.download = getDocumentDisplayName(doc);
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       setTimeout(() => revokeBlobUrl(blobUrl), 1000);
-      console.log("[FileManager] Download complete:", doc.name);
+      console.log("[FileManager] Download complete:", getDocumentDisplayName(doc));
     } catch (err) {
       console.error("[FileManager] Download error:", err);
       toast.error(err instanceof Error ? err.message : "Download failed.");
@@ -387,18 +387,18 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
     }
 
     setPreviewLoading(true);
-    const resolvedMime = getMimeType(doc.name, doc.mime_type);
-    setPreviewDoc({ ...doc, mime_type: resolvedMime, status: "loading" });
+    const resolvedMime = getMimeType(getDocumentDisplayName(doc), doc.mime_type);
+    setPreviewDoc({ ...doc, name: getDocumentDisplayName(doc), mime_type: resolvedMime, status: "loading" });
 
     try {
       const { blobUrl, mimeType } = await fetchDocumentBlobUrl(doc, 3600);
       console.log("[FileManager] Preview: blob URL created", blobUrl.substring(0, 60));
 
-      setPreviewDoc({ ...doc, url: blobUrl, mime_type: mimeType, status: "ready", _blobUrl: true });
+      setPreviewDoc({ ...doc, name: getDocumentDisplayName(doc), url: blobUrl, mime_type: mimeType, status: "ready", _blobUrl: true });
     } catch (err) {
       console.error("[FileManager] Preview error:", err);
       const message = err instanceof Error ? err.message : "Preview failed.";
-      setPreviewDoc({ ...doc, mime_type: resolvedMime, status: "error", error: message });
+      setPreviewDoc({ ...doc, name: getDocumentDisplayName(doc), mime_type: resolvedMime, status: "error", error: message });
       toast.error(message);
     } finally {
       setPreviewLoading(false);
