@@ -493,6 +493,32 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
     }
   };
 
+  const handleShare = async (doc: any) => {
+    if (!ensureStoragePath(doc, "Share")) return;
+    try {
+      const { blob, blobUrl } = await fetchDocumentBlobUrl(doc, 3600);
+      const fileName = getDocumentDisplayName(doc);
+      const file = new File([blob], fileName, { type: blob.type || getMimeType(fileName, doc.mime_type) });
+      if (navigator.share && navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ title: fileName, files: [file] });
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(blobUrl);
+        toast.success("Link temporário copiado para partilha.");
+        window.setTimeout(() => revokeBlobUrl(blobUrl), 300000);
+        return;
+      } else {
+        window.open(blobUrl, "_blank", "noopener,noreferrer");
+        toast.message("Documento aberto para partilha manual.");
+        window.setTimeout(() => revokeBlobUrl(blobUrl), 300000);
+        return;
+      }
+      revokeBlobUrl(blobUrl);
+    } catch (err) {
+      console.error("[FileManager] Share error:", err);
+      toast.error(err instanceof Error ? err.message : "Share failed.");
+    }
+  };
+
   const selectedArray = Array.from(selectedIds);
   const isBulkMode = selectedArray.length > 0;
 
