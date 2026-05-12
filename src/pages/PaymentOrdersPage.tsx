@@ -10,6 +10,7 @@ import { FileUploadZone } from "@/components/service-orders/FileUploadZone";
 import { ExtractedPaymentTable } from "@/components/payment-orders/ExtractedPaymentTable";
 import { PaymentOrdersTable } from "@/components/payment-orders/PaymentOrdersTable";
 import { storeFileInDocuments } from "@/components/file-manager/EmbeddedFileManager";
+import { SectionPlaceholder } from "@/components/shared/SectionPlaceholder";
 import { formatLicensePlate } from "@/lib/formatPlate";
 import {
   usePaymentOrders,
