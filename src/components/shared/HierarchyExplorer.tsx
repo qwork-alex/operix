@@ -104,6 +104,7 @@ type TreeNode = {
   children?: TreeNode[];
   disabled?: boolean;
   hint?: string;
+  icon?: React.ComponentType<{ className?: string }>;
 };
 
 function groupBy<T>(items: T[], keyFn: (i: T) => string): Map<string, T[]> {
