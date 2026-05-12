@@ -9,10 +9,11 @@ import { hierarchyDefaults } from "@/components/shared/HierarchyBreadcrumb";
 import { FileUploadZone } from "@/components/service-orders/FileUploadZone";
 import { ExtractedPaymentTable } from "@/components/payment-orders/ExtractedPaymentTable";
 import { PaymentOrdersTable } from "@/components/payment-orders/PaymentOrdersTable";
-import { EmbeddedFileManager, storeFileInDocuments } from "@/components/file-manager/EmbeddedFileManager";
+import { EmbeddedFileManager, persistDocumentVisualState, storeFileInDocuments } from "@/components/file-manager/EmbeddedFileManager";
 import { SectionPlaceholder } from "@/components/shared/SectionPlaceholder";
 import { ActiveDocumentBand } from "@/components/shared/ActiveDocumentBand";
 import { formatLicensePlate } from "@/lib/formatPlate";
+import { fileForCurrentVisualState, type DocumentVisualState } from "@/lib/documentVisualState";
 import {
   usePaymentOrders,
   useExtractPaymentOrder,
@@ -39,7 +40,8 @@ export default function PaymentOrdersPage() {
   const canAssignAnyTechnician = isAdmin || dbRole === "partner";
   const queryClient = useQueryClient();
 
-  const [extractions, setExtractions] = useState<(PaymentExtractionResult & { _id: string; _file?: File })[]>([]);
+  const [extractions, setExtractions] = useState<(PaymentExtractionResult & { _id: string; _file?: File; _documentId?: string; _docState: DocumentVisualState; _ocrVersion: number })[]>([]);
+  const [reprocessingId, setReprocessingId] = useState<string | null>(null);
   const { data: orders = [], isLoading, saveMutation } = usePaymentOrders({});
   const { extract } = useExtractPaymentOrder();
   const { data: clients = [] } = useClients();
@@ -58,8 +60,9 @@ export default function PaymentOrdersPage() {
   const handleFiles = useCallback((files: File[]) => {
     const ctxDefaults = hierarchyDefaults(hCtx);
     addFiles(files, async (file, onStatus) => {
-      storeFileInDocuments(file, "payment_order", user?.id).then(() => {
+      const storedDocument = await storeFileInDocuments(file, "payment_order", user?.id).then((doc) => {
         queryClient.invalidateQueries({ queryKey: ["embedded-docs", "payment_order"] });
+        return doc;
       });
       onStatus("uploading" as QueueItemStatus);
       await new Promise(r => setTimeout(r, 200));
@@ -75,7 +78,14 @@ export default function PaymentOrdersPage() {
             technician: o.technician ?? ctxDefaults.technician,
           })),
         };
-        setExtractions(prev => [...prev, { ...prefilled, _id: crypto.randomUUID(), _file: file }]);
+        setExtractions(prev => [...prev, {
+          ...prefilled,
+          _id: crypto.randomUUID(),
+          _file: file,
+          _documentId: storedDocument?.id,
+          _docState: { displayName: file.name, rotation: 0, zoom: 1, validated: false, updatedAt: new Date().toISOString() },
+          _ocrVersion: 0,
+        }]);
         if (result.confidence === "low") {
           toast.warning("Low confidence — please review carefully.");
         }
