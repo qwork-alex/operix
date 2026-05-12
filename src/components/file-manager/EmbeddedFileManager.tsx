@@ -92,7 +92,7 @@ function revokeBlobUrl(url?: string | null) {
 }
 
 async function fetchDocumentBlobUrl(
-  doc: { name: string; storage_path?: string | null; mime_type?: string | null },
+  doc: { name: string; storage_path?: string | null; mime_type?: string | null; [key: string]: any },
   expiresIn = 120,
 ) {
   if (!doc.storage_path) {
@@ -125,7 +125,12 @@ async function fetchDocumentBlobUrl(
   }
 
   const blob = await response.blob();
-  const typedBlob = blob.type === mimeType ? blob : new Blob([blob], { type: mimeType });
+  const rawBlob = blob.type === mimeType ? blob : new Blob([blob], { type: mimeType });
+  const typedBlob = await blobForCurrentVisualState(rawBlob, {
+    displayName: getDocumentDisplayName(doc),
+    rotation: getDocumentRotation(doc),
+    zoom: getDocumentZoom(doc),
+  });
   const blobUrl = URL.createObjectURL(typedBlob);
 
   console.log("[FileManager] Blob created:", {
