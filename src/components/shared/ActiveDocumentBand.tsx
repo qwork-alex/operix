@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type KeyboardEvent } from "react";
 import {
-  ZoomIn, ZoomOut, RotateCw, Undo2, Printer, X, FileText,
+  ZoomIn, ZoomOut, RotateCw, Undo2, Printer, X, FileText, RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { normalizeRotation, type DocumentVisualState } from "@/lib/documentVisualState";
 
 export type DocStage = "review" | "validate" | "save";
 
@@ -11,7 +12,11 @@ interface Props {
   file?: File | null;
   stage?: DocStage;
   onClose: () => void;
-  onRename?: (newName: string) => void;
+  initialState?: Partial<DocumentVisualState>;
+  onStateChange?: (state: DocumentVisualState) => void;
+  onPersistState?: (state: DocumentVisualState) => Promise<void> | void;
+  onReprocessOcr?: (state: DocumentVisualState) => Promise<void> | void;
+  isReprocessing?: boolean;
   children: ReactNode;
   className?: string;
 }
@@ -20,14 +25,27 @@ interface Props {
  * Phase C.4 — Minimal top bar, inline-editable name, smart zoom-out.
  * Zoom-out shrinks the preview area, redistributing height to OCR below.
  */
-export function ActiveDocumentBand({ file, onClose, onRename, children, className }: Props) {
-  const [zoom, setZoom] = useState(1);
-  const [rotation, setRotation] = useState(0);
-  const [name, setName] = useState(file?.name ?? "Documento ativo");
+export function ActiveDocumentBand({ file, onClose, initialState, onStateChange, onPersistState, onReprocessOcr, isReprocessing, children, className }: Props) {
+  const [zoom, setZoom] = useState(initialState?.zoom ?? 1);
+  const [rotation, setRotation] = useState(normalizeRotation(initialState?.rotation));
+  const [name, setName] = useState(initialState?.displayName ?? file?.name ?? "Documento ativo");
   const [editing, setEditing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { setName(file?.name ?? "Documento ativo"); }, [file?.name]);
+  useEffect(() => {
+    setName(initialState?.displayName ?? file?.name ?? "Documento ativo");
+    setRotation(normalizeRotation(initialState?.rotation));
+    setZoom(initialState?.zoom ?? 1);
+  }, [file?.name, initialState?.displayName, initialState?.rotation, initialState?.zoom]);
+
+  const currentState = useMemo<DocumentVisualState>(() => ({
+    displayName: name.trim() || file?.name || "Documento ativo",
+    rotation: normalizeRotation(rotation),
+    zoom,
+    updatedAt: new Date().toISOString(),
+  }), [file?.name, name, rotation, zoom]);
+
+  useEffect(() => { onStateChange?.(currentState); }, [currentState, onStateChange]);
 
   const objectUrl = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
   useEffect(() => () => { if (objectUrl) URL.revokeObjectURL(objectUrl); }, [objectUrl]);
@@ -39,6 +57,11 @@ export function ActiveDocumentBand({ file, onClose, onRename, children, classNam
     if (!objectUrl) return;
     const w = window.open(objectUrl, "_blank");
     if (w) w.addEventListener("load", () => w.print());
+  };
+
+  const persist = (state: DocumentVisualState) => {
+    onStateChange?.(state);
+    onPersistState?.(state);
   };
 
   // SMART ZOOM-OUT: preview height collapses with zoom < 1; zoom-in keeps full height.
@@ -54,7 +77,7 @@ export function ActiveDocumentBand({ file, onClose, onRename, children, classNam
     const trimmed = name.trim() || (file?.name ?? "Documento ativo");
     setName(trimmed);
     setEditing(false);
-    onRename?.(trimmed);
+    persist({ ...currentState, displayName: trimmed, updatedAt: new Date().toISOString() });
   };
   const cancel = () => {
     setName(file?.name ?? "Documento ativo");
