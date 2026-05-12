@@ -355,7 +355,7 @@ export function HierarchyExplorer({
   storageKey,
   context,
   onContextChange,
-  title = "Navegação",
+  title = "OPERACIONAL",
   emptyMessage,
 }: Props) {
   const [open, setOpen] = useState<Set<string>>(() => {
