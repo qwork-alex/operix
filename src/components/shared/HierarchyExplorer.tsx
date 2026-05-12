@@ -142,34 +142,38 @@ function buildTree(records: HierarchyRecord[]): TreeNode[] {
           key: `y:${year}|c:${client}`,
           label: client,
           count: clientRows.length,
+          icon: Building2,
           ctx: { level: "client", year, client } as HierarchyContext,
           children: sortKeys([...byUnit.keys()]).map((unit) => {
             const unitRows = byUnit.get(unit)!;
-            const byWeek = groupBy(unitRows, getWeek);
+            const byTech = groupBy(unitRows, getTech);
             return {
               key: `y:${year}|c:${client}|u:${unit}`,
               label: unit,
               count: unitRows.length,
+              icon: Wrench,
               ctx: { level: "unit", year, client, unit } as HierarchyContext,
-              children: sortKeys([...byWeek.keys()]).map((week) => {
-                const weekRows = byWeek.get(week)!;
-                const byTech = groupBy(weekRows, getTech);
+              children: sortKeys([...byTech.keys()]).map((tech) => {
+                const techRows = byTech.get(tech)!;
+                const byWeek = groupBy(techRows, getWeek);
                 return {
-                  key: `y:${year}|c:${client}|u:${unit}|w:${week}`,
-                  label: week,
-                  count: weekRows.length,
-                  ctx: { level: "week", year, client, unit, week } as HierarchyContext,
-                  children: sortKeys([...byTech.keys()]).map((tech) => ({
-                    key: `y:${year}|c:${client}|u:${unit}|w:${week}|t:${tech}`,
-                    label: tech,
-                    count: byTech.get(tech)!.length,
+                  key: `y:${year}|c:${client}|u:${unit}|t:${tech}`,
+                  label: tech,
+                  count: techRows.length,
+                  icon: User,
+                  ctx: { level: "technician", year, client, unit, technician: tech } as HierarchyContext,
+                  children: sortKeys([...byWeek.keys()]).map((week) => ({
+                    key: `y:${year}|c:${client}|u:${unit}|t:${tech}|w:${week}`,
+                    label: week,
+                    count: byWeek.get(week)!.length,
+                    icon: CalendarDays,
                     ctx: {
-                      level: "technician",
+                      level: "week",
                       year,
                       client,
                       unit,
-                      week,
                       technician: tech,
+                      week,
                     } as HierarchyContext,
                   })),
                 };
@@ -182,12 +186,14 @@ function buildTree(records: HierarchyRecord[]): TreeNode[] {
       key: `y:${year}`,
       label: year,
       count: yearRows.length,
+      icon: Calendar,
       ctx: { level: "year", year } as HierarchyContext,
       children: [
         {
           key: `y:${year}|sec:operacional`,
           label: "Operacional",
           count: yearRows.length,
+          icon: Settings,
           ctx: { level: "year", year } as HierarchyContext,
           children: operationalChildren,
         },
@@ -195,6 +201,7 @@ function buildTree(records: HierarchyRecord[]): TreeNode[] {
           key: `y:${year}|sec:documentos`,
           label: "Documentos",
           count: 0,
+          icon: Folder,
           ctx: { level: "year", year } as HierarchyContext,
           disabled: true,
           hint: "Em breve",
@@ -203,6 +210,7 @@ function buildTree(records: HierarchyRecord[]): TreeNode[] {
           key: `y:${year}|sec:relatorios`,
           label: "Relatórios",
           count: 0,
+          icon: BarChart3,
           ctx: { level: "year", year } as HierarchyContext,
           disabled: true,
           hint: "Em breve",
