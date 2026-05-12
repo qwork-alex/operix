@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type KeyboardEvent } from "react";
 import {
-  ZoomIn, ZoomOut, RotateCcw, Printer, X, FileText,
+  ZoomIn, ZoomOut, RotateCw, Undo2, Printer, X, FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -22,6 +22,7 @@ interface Props {
  */
 export function ActiveDocumentBand({ file, onClose, onRename, children, className }: Props) {
   const [zoom, setZoom] = useState(1);
+  const [rotation, setRotation] = useState(0);
   const [name, setName] = useState(file?.name ?? "Documento ativo");
   const [editing, setEditing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -101,7 +102,10 @@ export function ActiveDocumentBand({ file, onClose, onRename, children, classNam
                 <ZoomIn className="h-3.5 w-3.5" />
               </Button>
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setZoom(1)} title="Reset zoom">
-                <RotateCcw className="h-3.5 w-3.5" />
+                <Undo2 className="h-3.5 w-3.5" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setRotation(r => (r + 90) % 360)} title="Girar documento">
+                <RotateCw className="h-3.5 w-3.5" />
               </Button>
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handlePrint} title="Imprimir">
                 <Printer className="h-3.5 w-3.5" />
@@ -123,8 +127,8 @@ export function ActiveDocumentBand({ file, onClose, onRename, children, classNam
           <img
             src={objectUrl}
             alt={name}
-            style={{ transform: `scale(${zoom})`, transformOrigin: "top center" }}
-            className="max-w-full transition-transform"
+            style={{ transform: `scale(${zoom}) rotate(${rotation}deg)`, transformOrigin: "center center" }}
+            className="max-w-full max-h-full transition-transform object-contain"
           />
         )}
         {objectUrl && isPdf && (
@@ -132,7 +136,7 @@ export function ActiveDocumentBand({ file, onClose, onRename, children, classNam
             src={objectUrl}
             title={name}
             className="w-full h-full border-0 min-h-[40vh]"
-            style={{ transform: `scale(${zoom})`, transformOrigin: "top left" }}
+            style={{ transform: `scale(${zoom}) rotate(${rotation}deg)`, transformOrigin: "center center" }}
           />
         )}
         {!objectUrl && (
