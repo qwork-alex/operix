@@ -98,6 +98,7 @@ export default function PaymentOrdersPage() {
   }, [addFiles, extract, user?.id, queryClient, hCtx]);
 
   const handleSave = async (extractionId: string, rows: ExtractedPaymentOrder[]) => {
+    const extraction = extractions.find((e) => e._id === extractionId);
     const authUser = await getCurrentUser();
     if (!authUser?.id) {
       toast.error("Sessão expirada. Faça login novamente antes de salvar.", { duration: 7000 });
@@ -136,7 +137,11 @@ export default function PaymentOrdersPage() {
     });
 
     saveMutation.mutate(inserts, {
-      onSuccess: () => {
+      onSuccess: async () => {
+        if (extraction?._documentId) {
+          await persistDocumentVisualState(extraction._documentId, extraction._docState, true);
+          queryClient.invalidateQueries({ queryKey: ["embedded-docs", "payment_order"] });
+        }
         setExtractions(prev => prev.filter((e) => e._id !== extractionId));
       },
     });
@@ -144,6 +149,42 @@ export default function PaymentOrdersPage() {
 
   const handleDiscard = (extractionId: string) => {
     setExtractions(prev => prev.filter((e) => e._id !== extractionId));
+  };
+
+  const updateDocumentState = async (extractionId: string, state: DocumentVisualState) => {
+    setExtractions(prev => prev.map((e) => e._id === extractionId ? { ...e, _docState: state } : e));
+    const extraction = extractions.find((e) => e._id === extractionId);
+    if (extraction?._documentId) {
+      await persistDocumentVisualState(extraction._documentId, state, false);
+      queryClient.invalidateQueries({ queryKey: ["embedded-docs", "payment_order"] });
+    }
+  };
+
+  const handleReprocessOcr = async (extractionId: string, state: DocumentVisualState) => {
+    const extraction = extractions.find((e) => e._id === extractionId);
+    if (!extraction?._file) return;
+    setReprocessingId(extractionId);
+    try {
+      await updateDocumentState(extractionId, state);
+      const visualFile = await fileForCurrentVisualState(extraction._file, state);
+      const result = await extract(visualFile);
+      const ctxDefaults = hierarchyDefaults(hCtx);
+      const prefilled = {
+        ...result,
+        orders: result.orders.map((o) => ({
+          ...o,
+          client: o.client ?? ctxDefaults.client,
+          list_name: o.list_name ?? ctxDefaults.week,
+          technician: o.technician ?? ctxDefaults.technician,
+        })),
+      };
+      setExtractions(prev => prev.map((e) => e._id === extractionId ? { ...e, ...prefilled, _docState: state, _ocrVersion: e._ocrVersion + 1 } : e));
+      toast.success("OCR reprocessado com a orientação atual.");
+    } catch (err) {
+      toast.error((err as Error).message || "Erro ao reprocessar OCR.", { duration: 8000 });
+    } finally {
+      setReprocessingId(null);
+    }
   };
 
   const hasExtractions = extractions.length > 0;
