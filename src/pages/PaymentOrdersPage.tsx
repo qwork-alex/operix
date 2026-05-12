@@ -11,6 +11,7 @@ import { ExtractedPaymentTable } from "@/components/payment-orders/ExtractedPaym
 import { PaymentOrdersTable } from "@/components/payment-orders/PaymentOrdersTable";
 import { storeFileInDocuments } from "@/components/file-manager/EmbeddedFileManager";
 import { SectionPlaceholder } from "@/components/shared/SectionPlaceholder";
+import { ActiveDocumentBand } from "@/components/shared/ActiveDocumentBand";
 import { formatLicensePlate } from "@/lib/formatPlate";
 import {
   usePaymentOrders,
@@ -38,7 +39,7 @@ export default function PaymentOrdersPage() {
   const canAssignAnyTechnician = isAdmin || dbRole === "partner";
   const queryClient = useQueryClient();
 
-  const [extractions, setExtractions] = useState<(PaymentExtractionResult & { _id: string })[]>([]);
+  const [extractions, setExtractions] = useState<(PaymentExtractionResult & { _id: string; _file?: File })[]>([]);
   const { data: orders = [], isLoading, saveMutation } = usePaymentOrders({});
   const { extract } = useExtractPaymentOrder();
   const { data: clients = [] } = useClients();
@@ -74,7 +75,7 @@ export default function PaymentOrdersPage() {
             technician: o.technician ?? ctxDefaults.technician,
           })),
         };
-        setExtractions(prev => [...prev, { ...prefilled, _id: crypto.randomUUID() }]);
+        setExtractions(prev => [...prev, { ...prefilled, _id: crypto.randomUUID(), _file: file }]);
         if (result.confidence === "low") {
           toast.warning("Low confidence — please review carefully.");
         }
@@ -159,27 +160,33 @@ export default function PaymentOrdersPage() {
         </header>
 
         {hasExtractions && (
-          <div className="border-b border-border/40 px-2 py-2">
+          <>
             {extractions.map((extraction) => (
-              <ExtractedPaymentTable
+              <ActiveDocumentBand
                 key={extraction._id}
-                orders={extraction.orders}
-                confidence={extraction.confidence}
-                notes={extraction.notes}
-                onSave={(rows) => handleSave(extraction._id, rows)}
-                onDiscard={() => handleDiscard(extraction._id)}
-                isSaving={saveMutation.isPending}
-                technicians={technicians}
-                isTechnicianRole={dbRole === "technician"}
-                isAdmin={canAssignAnyTechnician}
-                myTechnicianName={
-                  myAssignableUserId
-                    ? technicians.find((t) => t.user_id === myAssignableUserId)?.name ?? null
-                    : null
-                }
-              />
+                file={extraction._file}
+                stage="review"
+                onClose={() => handleDiscard(extraction._id)}
+              >
+                <ExtractedPaymentTable
+                  orders={extraction.orders}
+                  confidence={extraction.confidence}
+                  notes={extraction.notes}
+                  onSave={(rows) => handleSave(extraction._id, rows)}
+                  onDiscard={() => handleDiscard(extraction._id)}
+                  isSaving={saveMutation.isPending}
+                  technicians={technicians}
+                  isTechnicianRole={dbRole === "technician"}
+                  isAdmin={canAssignAnyTechnician}
+                  myTechnicianName={
+                    myAssignableUserId
+                      ? technicians.find((t) => t.user_id === myAssignableUserId)?.name ?? null
+                      : null
+                  }
+                />
+              </ActiveDocumentBand>
             ))}
-          </div>
+          </>
         )}
 
         <div className="flex-1 min-h-0 overflow-auto">
