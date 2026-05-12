@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type KeyboardEvent } from "react";
 import {
-  ZoomIn, ZoomOut, RotateCcw, Printer, X, FileText,
+  ZoomIn, ZoomOut, RotateCw, Undo2, Printer, X, FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
