@@ -412,32 +412,20 @@ export function HierarchyExplorer({
 
   return (
     <aside className="flex h-full w-full flex-col rounded-lg border border-border/50 bg-card/40 backdrop-blur">
-      <header className="flex items-center justify-between gap-2 border-b border-border/50 px-3 py-2">
+      <header
+        className={cn(
+          "flex items-center justify-between gap-2 border-b border-border/50 px-3 py-2 cursor-pointer hover:bg-sidebar-accent/40",
+          context.level === "all" && "text-primary",
+        )}
+        onClick={() => onContextChange(EMPTY_CTX)}
+        title="Limpar contexto"
+      >
         <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
           <FolderTree className="h-3.5 w-3.5" />
           <span>{title}</span>
         </div>
         <span className="text-[10px] tabular-nums text-muted-foreground">{total}</span>
       </header>
-
-      {/* Active context pill */}
-      <div className="flex items-center gap-1 border-b border-border/50 px-3 py-1.5">
-        <button
-          type="button"
-          onClick={() => onContextChange(EMPTY_CTX)}
-          className={cn(
-            "flex items-center gap-1 rounded-sm px-2 py-1 text-[11px] transition-colors",
-            context.level === "all"
-              ? "bg-primary/15 text-primary"
-              : "text-muted-foreground hover:bg-sidebar-accent",
-          )}
-          title="Limpar filtro hierárquico"
-        >
-          <Eye className="h-3 w-3" />
-          <span className="truncate">{ctxLabel(context)}</span>
-          {context.level !== "all" && <X className="h-3 w-3 opacity-60" />}
-        </button>
-      </div>
 
       <div className="flex-1 overflow-auto py-1">
         {tree.length === 0 ? (
