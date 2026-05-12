@@ -1,5 +1,16 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { ChevronRight, Eye, FolderTree, X } from "lucide-react";
+import {
+  ChevronRight,
+  FolderTree,
+  Calendar,
+  Settings,
+  Folder,
+  BarChart3,
+  Building2,
+  Wrench,
+  User,
+  CalendarDays,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
