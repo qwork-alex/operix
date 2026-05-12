@@ -11,6 +11,7 @@ import { ExtractedDataTable } from "@/components/service-orders/ExtractedDataTab
 import { ServiceOrdersTable } from "@/components/service-orders/ServiceOrdersTable";
 import { storeFileInDocuments } from "@/components/file-manager/EmbeddedFileManager";
 import { SectionPlaceholder } from "@/components/shared/SectionPlaceholder";
+import { ActiveDocumentBand } from "@/components/shared/ActiveDocumentBand";
 import { formatLicensePlate } from "@/lib/formatPlate";
 import {
   useServiceOrders,
@@ -39,7 +40,7 @@ export default function ServiceOrdersPage() {
   const isTechnicianRole = dbRole === "technician";
   const queryClient = useQueryClient();
 
-  const [extractions, setExtractions] = useState<(ExtractionResult & { _id: string })[]>([]);
+  const [extractions, setExtractions] = useState<(ExtractionResult & { _id: string; _file?: File })[]>([]);
   const { data: orders = [], isLoading, saveMutation } = useServiceOrders({});
   const { extract } = useExtractServiceOrder();
   const { data: clients = [] } = useClients();
@@ -76,7 +77,7 @@ export default function ServiceOrdersPage() {
             technician: o.technician ?? ctxDefaults.technician,
           })),
         };
-        setExtractions(prev => [...prev, { ...prefilled, _id: crypto.randomUUID() }]);
+        setExtractions(prev => [...prev, { ...prefilled, _id: crypto.randomUUID(), _file: file }]);
         if (result.confidence === "low") {
           toast.warning("Low confidence extraction — please review carefully.");
         }
