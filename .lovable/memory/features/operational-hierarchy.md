@@ -68,3 +68,9 @@ Do not break: backend (RLS, save, realtime), OCR/extract, validation, document u
   no horizontal divider cards between toolbar / panel / table.
 - Filters auto-hide when either a hierarchy context is active OR an extraction
   panel is open.
+
+## Phase B — Tree drives canvas
+- `HierarchyContext` extended with `section?: "operacional" | "documentos" | "relatorios"`.
+- `buildTree` tags every operational subtree node with `section: "operacional"`; the `Documentos` and `Relatórios` per-year nodes are now clickable (no longer `disabled`) and set their own section. Order under each year is enforced: Operacional → Documentos → Relatórios.
+- SO/PO pages inspect `hCtx.section`: when it is `documentos` or `relatorios` the canvas swaps the table for `<SectionPlaceholder>` (`src/components/shared/SectionPlaceholder.tsx`). No editor / preview / workflow yet — pure visual scaffolding.
+- Canvas remains free of breadcrumbs and duplicated context — lateral tree is the single source of navigation.
