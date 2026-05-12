@@ -1047,8 +1047,13 @@ export async function storeFileInDocuments(
       console.log("[FileManager] Upload verified, signed URL OK:", storagePath);
     }
 
-    const { error } = await supabase.from("documents").insert({
+    const { data, error } = await (supabase as any).from("documents").insert({
       name: file.name,
+      display_name: file.name,
+      rotation: 0,
+      zoom: 1,
+      validated: false,
+      visual_state: { displayName: file.name, rotation: 0, zoom: 1, validated: false, updatedAt: new Date().toISOString() },
       type: "file",
       parent_id: null,
       uploaded_by: userId || null,
@@ -1057,9 +1062,10 @@ export async function storeFileInDocuments(
       size_bytes: file.size,
       entity_type: entityType,
       module,
-    });
+    }).select("*").single();
     if (error) console.error("[FileManager] Document record insert failed:", error.message);
     else console.log("[FileManager] Document record saved:", file.name);
+    return data;
   } catch (err) {
     console.error("[FileManager] storeFileInDocuments error:", err);
   }
