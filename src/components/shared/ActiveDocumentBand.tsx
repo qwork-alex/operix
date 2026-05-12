@@ -4,7 +4,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { normalizeRotation, type DocumentVisualState } from "@/lib/documentVisualState";
+import { fileForCurrentVisualState, normalizeRotation, type DocumentVisualState } from "@/lib/documentVisualState";
 
 export type DocStage = "review" | "validate" | "save";
 
@@ -53,10 +53,13 @@ export function ActiveDocumentBand({ file, onClose, initialState, onStateChange,
   const isImage = file?.type.startsWith("image/");
   const isPdf = file?.type === "application/pdf";
 
-  const handlePrint = () => {
-    if (!objectUrl) return;
-    const w = window.open(objectUrl, "_blank");
+  const handlePrint = async () => {
+    if (!file) return;
+    const visualFile = await fileForCurrentVisualState(file, currentState);
+    const printUrl = URL.createObjectURL(visualFile);
+    const w = window.open(printUrl, "_blank");
     if (w) w.addEventListener("load", () => w.print());
+    window.setTimeout(() => URL.revokeObjectURL(printUrl), 300000);
   };
 
   const persist = (state: DocumentVisualState) => {
