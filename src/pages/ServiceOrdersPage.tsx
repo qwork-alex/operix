@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { FileText, Filter } from "lucide-react";
 import {
   HierarchyExplorer,
