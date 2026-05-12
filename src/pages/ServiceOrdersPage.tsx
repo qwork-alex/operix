@@ -9,10 +9,11 @@ import { hierarchyDefaults } from "@/components/shared/HierarchyBreadcrumb";
 import { FileUploadZone } from "@/components/service-orders/FileUploadZone";
 import { ExtractedDataTable } from "@/components/service-orders/ExtractedDataTable";
 import { ServiceOrdersTable } from "@/components/service-orders/ServiceOrdersTable";
-import { EmbeddedFileManager, storeFileInDocuments } from "@/components/file-manager/EmbeddedFileManager";
+import { EmbeddedFileManager, persistDocumentVisualState, storeFileInDocuments } from "@/components/file-manager/EmbeddedFileManager";
 import { SectionPlaceholder } from "@/components/shared/SectionPlaceholder";
 import { ActiveDocumentBand } from "@/components/shared/ActiveDocumentBand";
 import { formatLicensePlate } from "@/lib/formatPlate";
+import { fileForCurrentVisualState, type DocumentVisualState } from "@/lib/documentVisualState";
 import {
   useServiceOrders,
   useExtractServiceOrder,
@@ -40,7 +41,8 @@ export default function ServiceOrdersPage() {
   const isTechnicianRole = dbRole === "technician";
   const queryClient = useQueryClient();
 
-  const [extractions, setExtractions] = useState<(ExtractionResult & { _id: string; _file?: File })[]>([]);
+  const [extractions, setExtractions] = useState<(ExtractionResult & { _id: string; _file?: File; _documentId?: string; _docState: DocumentVisualState; _ocrVersion: number })[]>([]);
+  const [reprocessingId, setReprocessingId] = useState<string | null>(null);
   const { data: orders = [], isLoading, saveMutation } = useServiceOrders({});
   const { extract } = useExtractServiceOrder();
   const { data: clients = [] } = useClients();
@@ -60,8 +62,9 @@ export default function ServiceOrdersPage() {
   const handleFiles = useCallback((files: File[]) => {
     const ctxDefaults = hierarchyDefaults(hCtx);
     addFiles(files, async (file, onStatus) => {
-      storeFileInDocuments(file, "service_order", user?.id).then(() => {
+      const storedDocument = await storeFileInDocuments(file, "service_order", user?.id).then((doc) => {
         queryClient.invalidateQueries({ queryKey: ["embedded-docs", "service_order"] });
+        return doc;
       });
       onStatus("uploading" as QueueItemStatus);
       await new Promise(r => setTimeout(r, 200));
@@ -77,7 +80,14 @@ export default function ServiceOrdersPage() {
             technician: o.technician ?? ctxDefaults.technician,
           })),
         };
-        setExtractions(prev => [...prev, { ...prefilled, _id: crypto.randomUUID(), _file: file }]);
+        setExtractions(prev => [...prev, {
+          ...prefilled,
+          _id: crypto.randomUUID(),
+          _file: file,
+          _documentId: storedDocument?.id,
+          _docState: { displayName: file.name, rotation: 0, zoom: 1, validated: false, updatedAt: new Date().toISOString() },
+          _ocrVersion: 0,
+        }]);
         if (result.confidence === "low") {
           toast.warning("Low confidence extraction — please review carefully.");
         }
@@ -90,6 +100,7 @@ export default function ServiceOrdersPage() {
   }, [addFiles, extract, user?.id, queryClient, hCtx]);
 
   const handleSave = async (extractionId: string, rows: ExtractedOrder[]) => {
+    const extraction = extractions.find((e) => e._id === extractionId);
     const authUser = await getCurrentUser();
     if (!authUser?.id) {
       toast.error("Sessão expirada. Faça login novamente antes de salvar.", { duration: 7000 });
@@ -158,7 +169,11 @@ export default function ServiceOrdersPage() {
       return;
     }
     saveMutation.mutate(inserts, {
-      onSuccess: () => {
+      onSuccess: async () => {
+        if (extraction?._documentId) {
+          await persistDocumentVisualState(extraction._documentId, extraction._docState, true);
+          queryClient.invalidateQueries({ queryKey: ["embedded-docs", "service_order"] });
+        }
         setExtractions(prev => prev.filter((e) => e._id !== extractionId));
         toast.success(
           inserts.length === 1 ? "Ordem salva com sucesso" : `${inserts.length} ordens salvas com sucesso`,
@@ -174,6 +189,42 @@ export default function ServiceOrdersPage() {
 
   const handleDiscard = (extractionId: string) => {
     setExtractions(prev => prev.filter((e) => e._id !== extractionId));
+  };
+
+  const updateDocumentState = async (extractionId: string, state: DocumentVisualState) => {
+    setExtractions(prev => prev.map((e) => e._id === extractionId ? { ...e, _docState: state } : e));
+    const extraction = extractions.find((e) => e._id === extractionId);
+    if (extraction?._documentId) {
+      await persistDocumentVisualState(extraction._documentId, state, false);
+      queryClient.invalidateQueries({ queryKey: ["embedded-docs", "service_order"] });
+    }
+  };
+
+  const handleReprocessOcr = async (extractionId: string, state: DocumentVisualState) => {
+    const extraction = extractions.find((e) => e._id === extractionId);
+    if (!extraction?._file) return;
+    setReprocessingId(extractionId);
+    try {
+      await updateDocumentState(extractionId, state);
+      const visualFile = await fileForCurrentVisualState(extraction._file, state);
+      const result = await extract(visualFile);
+      const ctxDefaults = hierarchyDefaults(hCtx);
+      const prefilled = {
+        ...result,
+        orders: result.orders.map((o) => ({
+          ...o,
+          client: o.client ?? ctxDefaults.client,
+          week: o.week ?? ctxDefaults.week,
+          technician: o.technician ?? ctxDefaults.technician,
+        })),
+      };
+      setExtractions(prev => prev.map((e) => e._id === extractionId ? { ...e, ...prefilled, _docState: state, _ocrVersion: e._ocrVersion + 1 } : e));
+      toast.success("OCR reprocessado com a orientação atual.");
+    } catch (err) {
+      toast.error((err as Error).message || "Erro ao reprocessar OCR.", { duration: 8000 });
+    } finally {
+      setReprocessingId(null);
+    }
   };
 
   const hasExtractions = extractions.length > 0;
@@ -206,9 +257,15 @@ export default function ServiceOrdersPage() {
             key={extraction._id}
             file={extraction._file}
             stage="review"
+            initialState={extraction._docState}
+            onStateChange={(state) => setExtractions(prev => prev.map((e) => e._id === extraction._id ? { ...e, _docState: state } : e))}
+            onPersistState={(state) => updateDocumentState(extraction._id, state)}
+            onReprocessOcr={(state) => handleReprocessOcr(extraction._id, state)}
+            isReprocessing={reprocessingId === extraction._id}
             onClose={() => handleDiscard(extraction._id)}
           >
             <ExtractedDataTable
+              key={`${extraction._id}:${extraction._ocrVersion}`}
               orders={extraction.orders}
               confidence={extraction.confidence}
               notes={extraction.notes}

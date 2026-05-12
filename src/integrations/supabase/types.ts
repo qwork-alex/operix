@@ -218,6 +218,7 @@ export type Database = {
       documents: {
         Row: {
           created_at: string
+          display_name: string | null
           entity_id: string | null
           entity_type: string | null
           id: string
@@ -225,15 +226,21 @@ export type Database = {
           module: string
           name: string
           parent_id: string | null
+          rotation: number
           service_order_id: string | null
           size_bytes: number | null
           storage_path: string | null
           type: string
+          updated_at: string
           uploaded_by: string | null
+          validated: boolean
+          visual_state: Json
           workspace_id: string | null
+          zoom: number
         }
         Insert: {
           created_at?: string
+          display_name?: string | null
           entity_id?: string | null
           entity_type?: string | null
           id?: string
@@ -241,15 +248,21 @@ export type Database = {
           module?: string
           name: string
           parent_id?: string | null
+          rotation?: number
           service_order_id?: string | null
           size_bytes?: number | null
           storage_path?: string | null
           type?: string
+          updated_at?: string
           uploaded_by?: string | null
+          validated?: boolean
+          visual_state?: Json
           workspace_id?: string | null
+          zoom?: number
         }
         Update: {
           created_at?: string
+          display_name?: string | null
           entity_id?: string | null
           entity_type?: string | null
           id?: string
@@ -257,12 +270,17 @@ export type Database = {
           module?: string
           name?: string
           parent_id?: string | null
+          rotation?: number
           service_order_id?: string | null
           size_bytes?: number | null
           storage_path?: string | null
           type?: string
+          updated_at?: string
           uploaded_by?: string | null
+          validated?: boolean
+          visual_state?: Json
           workspace_id?: string | null
+          zoom?: number
         }
         Relationships: [
           {

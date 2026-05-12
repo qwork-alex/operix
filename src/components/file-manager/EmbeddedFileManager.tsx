@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
   FolderOpen, FolderPlus, ChevronRight, Trash2, Download,
   Eye, Printer, FileText, MoveRight, Filter, CheckSquare, Pencil, Check, X,
-  ExternalLink, Loader2,
+  ExternalLink, Loader2, Share2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { blobForCurrentVisualState, getDocumentDisplayName, getDocumentRotation, getDocumentZoom } from "@/lib/documentVisualState";
+import type { DocumentVisualState } from "@/lib/documentVisualState";
 
 interface Props {
   entityType: "service_order" | "payment_order";
@@ -91,7 +93,7 @@ function revokeBlobUrl(url?: string | null) {
 }
 
 async function fetchDocumentBlobUrl(
-  doc: { name: string; storage_path?: string | null; mime_type?: string | null },
+  doc: { name: string; storage_path?: string | null; mime_type?: string | null; [key: string]: any },
   expiresIn = 120,
 ) {
   if (!doc.storage_path) {
@@ -124,7 +126,12 @@ async function fetchDocumentBlobUrl(
   }
 
   const blob = await response.blob();
-  const typedBlob = blob.type === mimeType ? blob : new Blob([blob], { type: mimeType });
+  const rawBlob = blob.type === mimeType ? blob : new Blob([blob], { type: mimeType });
+  const typedBlob = await blobForCurrentVisualState(rawBlob, {
+    displayName: getDocumentDisplayName(doc),
+    rotation: getDocumentRotation(doc),
+    zoom: getDocumentZoom(doc),
+  });
   const blobUrl = URL.createObjectURL(typedBlob);
 
   console.log("[FileManager] Blob created:", {
@@ -133,7 +140,7 @@ async function fetchDocumentBlobUrl(
     size: typedBlob.size,
   });
 
-  return { blobUrl, mimeType, signedUrl };
+  return { blobUrl, mimeType, signedUrl, blob: typedBlob };
 }
 
 export function EmbeddedFileManager({ entityType, module: moduleName = "orders", sessionFileNames = [], defaultCollapsed = false }: Props) {
@@ -293,7 +300,11 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
 
   const renameMutation = useMutation({
     mutationFn: async ({ id, name }: { id: string; name: string }) => {
-      const { error } = await supabase.from("documents").update({ name }).eq("id", id);
+      const { error } = await (supabase as any).from("documents").update({
+        name,
+        display_name: name,
+        visual_state: { displayName: name, updatedAt: new Date().toISOString() },
+      }).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -362,12 +373,12 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
       const { blobUrl } = await fetchDocumentBlobUrl(doc, 3600);
       const a = document.createElement("a");
       a.href = blobUrl;
-      a.download = doc.name;
+      a.download = getDocumentDisplayName(doc);
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       setTimeout(() => revokeBlobUrl(blobUrl), 1000);
-      console.log("[FileManager] Download complete:", doc.name);
+      console.log("[FileManager] Download complete:", getDocumentDisplayName(doc));
     } catch (err) {
       console.error("[FileManager] Download error:", err);
       toast.error(err instanceof Error ? err.message : "Download failed.");
@@ -381,18 +392,18 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
     }
 
     setPreviewLoading(true);
-    const resolvedMime = getMimeType(doc.name, doc.mime_type);
-    setPreviewDoc({ ...doc, mime_type: resolvedMime, status: "loading" });
+    const resolvedMime = getMimeType(getDocumentDisplayName(doc), doc.mime_type);
+    setPreviewDoc({ ...doc, name: getDocumentDisplayName(doc), mime_type: resolvedMime, status: "loading" });
 
     try {
       const { blobUrl, mimeType } = await fetchDocumentBlobUrl(doc, 3600);
       console.log("[FileManager] Preview: blob URL created", blobUrl.substring(0, 60));
 
-      setPreviewDoc({ ...doc, url: blobUrl, mime_type: mimeType, status: "ready", _blobUrl: true });
+      setPreviewDoc({ ...doc, name: getDocumentDisplayName(doc), url: blobUrl, mime_type: mimeType, status: "ready", _blobUrl: true });
     } catch (err) {
       console.error("[FileManager] Preview error:", err);
       const message = err instanceof Error ? err.message : "Preview failed.";
-      setPreviewDoc({ ...doc, mime_type: resolvedMime, status: "error", error: message });
+      setPreviewDoc({ ...doc, name: getDocumentDisplayName(doc), mime_type: resolvedMime, status: "error", error: message });
       toast.error(message);
     } finally {
       setPreviewLoading(false);
@@ -480,6 +491,32 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
     } catch (err) {
       console.error("[FileManager] Open in new tab error:", err);
       toast.error("Could not open file.");
+    }
+  };
+
+  const handleShare = async (doc: any) => {
+    if (!ensureStoragePath(doc, "Share")) return;
+    try {
+      const { blob, blobUrl } = await fetchDocumentBlobUrl(doc, 3600);
+      const fileName = getDocumentDisplayName(doc);
+      const file = new File([blob], fileName, { type: blob.type || getMimeType(fileName, doc.mime_type) });
+      if (navigator.share && navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ title: fileName, files: [file] });
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(blobUrl);
+        toast.success("Link temporário copiado para partilha.");
+        window.setTimeout(() => revokeBlobUrl(blobUrl), 300000);
+        return;
+      } else {
+        window.open(blobUrl, "_blank", "noopener,noreferrer");
+        toast.message("Documento aberto para partilha manual.");
+        window.setTimeout(() => revokeBlobUrl(blobUrl), 300000);
+        return;
+      }
+      revokeBlobUrl(blobUrl);
+    } catch (err) {
+      console.error("[FileManager] Share error:", err);
+      toast.error(err instanceof Error ? err.message : "Share failed.");
     }
   };
 
@@ -667,7 +704,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
                         </Button>
                       </form>
                     ) : (
-                      <span className="truncate max-w-[200px]">{d.name}</span>
+                      <span className="truncate max-w-[200px]">{getDocumentDisplayName(d)}</span>
                     )}
                   </TableCell>
                   <TableCell>
@@ -694,6 +731,9 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
                           <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handlePrint(d)} title={t("fm.print")}>
                             <Printer className="h-3 w-3" />
                           </Button>
+                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleShare(d)} title="Compartilhar">
+                            <Share2 className="h-3 w-3" />
+                          </Button>
                           <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleOpenInNewTab(d)} title={t("fm.openInNewTab")}>
                             <ExternalLink className="h-3 w-3" />
                           </Button>
@@ -703,7 +743,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
                         variant="ghost"
                         size="icon"
                         className="h-6 w-6"
-                        onClick={() => { setRenamingId(d.id); setRenameValue(d.name); }}
+                        onClick={() => { setRenamingId(d.id); setRenameValue(getDocumentDisplayName(d)); }}
                         title={t("fm.rename")}
                       >
                         <Pencil className="h-3 w-3" />
@@ -1008,8 +1048,13 @@ export async function storeFileInDocuments(
       console.log("[FileManager] Upload verified, signed URL OK:", storagePath);
     }
 
-    const { error } = await supabase.from("documents").insert({
+    const { data, error } = await (supabase as any).from("documents").insert({
       name: file.name,
+      display_name: file.name,
+      rotation: 0,
+      zoom: 1,
+      validated: false,
+      visual_state: { displayName: file.name, rotation: 0, zoom: 1, validated: false, updatedAt: new Date().toISOString() },
       type: "file",
       parent_id: null,
       uploaded_by: userId || null,
@@ -1018,10 +1063,28 @@ export async function storeFileInDocuments(
       size_bytes: file.size,
       entity_type: entityType,
       module,
-    });
+    }).select("*").single();
     if (error) console.error("[FileManager] Document record insert failed:", error.message);
     else console.log("[FileManager] Document record saved:", file.name);
+    return data;
   } catch (err) {
     console.error("[FileManager] storeFileInDocuments error:", err);
   }
+}
+
+export async function persistDocumentVisualState(documentId: string | undefined, state: DocumentVisualState, validated = false) {
+  if (!documentId) return;
+  const visualState = { ...state, validated, updatedAt: new Date().toISOString() };
+  const { error } = await (supabase as any)
+    .from("documents")
+    .update({
+      name: state.displayName,
+      display_name: state.displayName,
+      rotation: state.rotation,
+      zoom: state.zoom,
+      validated,
+      visual_state: visualState,
+    })
+    .eq("id", documentId);
+  if (error) throw error;
 }
