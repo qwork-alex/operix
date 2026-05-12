@@ -6,16 +6,14 @@ import {
   loadHierarchyContext,
   type HierarchyContext,
 } from "@/components/shared/HierarchyExplorer";
-import { HierarchyBreadcrumb, hierarchyDefaults } from "@/components/shared/HierarchyBreadcrumb";
+import { hierarchyDefaults } from "@/components/shared/HierarchyBreadcrumb";
 import { HierarchicalOrdersView } from "@/components/shared/HierarchicalOrdersView";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
 import { FileUploadZone } from "@/components/service-orders/FileUploadZone";
 import { ExtractedPaymentTable } from "@/components/payment-orders/ExtractedPaymentTable";
 import { ExtractionStages } from "@/components/service-orders/ExtractionStages";
-import { UploadQueue } from "@/components/service-orders/UploadQueue";
 import { PaymentOrdersTable } from "@/components/payment-orders/PaymentOrdersTable";
-import { EmbeddedFileManager, storeFileInDocuments } from "@/components/file-manager/EmbeddedFileManager";
+import { storeFileInDocuments } from "@/components/file-manager/EmbeddedFileManager";
 import { formatLicensePlate } from "@/lib/formatPlate";
 import {
   usePaymentOrders,
@@ -178,101 +176,86 @@ export default function PaymentOrdersPage() {
   };
 
   const isHierarchyActive = hCtx.level !== "all";
+  const hasExtractions = extractions.length > 0;
 
   return (
     <div className="animate-fade-in flex gap-3 h-[calc(100vh-5rem)]">
-      <aside className="hidden md:block w-60 shrink-0 h-full">
+      <aside className="hidden md:block w-56 shrink-0 h-full">
         <HierarchyExplorer
           records={orders as any}
           storageKey="hierarchy.payment_orders"
           context={hCtx}
           onContextChange={setHCtx}
-          title="Contexto Operacional"
         />
       </aside>
 
-      <div className="flex-1 min-w-0 flex flex-col gap-2 overflow-auto pr-1">
-        {/* Single horizontal ERP toolbar */}
-        <div className="flex flex-wrap items-center gap-2 rounded-md border border-border/50 bg-card/40 px-2 py-1.5 backdrop-blur">
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10">
-              <CreditCard className="h-3.5 w-3.5 text-primary" />
-            </div>
+      <div className="flex-1 min-w-0 flex flex-col h-full overflow-hidden">
+        <div className="flex items-center justify-between gap-2 py-1.5 px-1">
+          <div className="flex items-center gap-2">
+            <CreditCard className="h-4 w-4 text-primary" />
             <h1 className="text-sm font-semibold text-foreground">{t("po.title")}</h1>
           </div>
-          <div className="h-5 w-px bg-border/60 hidden md:block" />
-          <div className="flex-1 min-w-0">
-            <HierarchyBreadcrumb context={hCtx} onClear={() => setHCtx({ level: "all" })} className="border-0 bg-transparent p-0" />
-          </div>
-          {extractions.length === 0 && (
-            <div className="hidden lg:flex shrink-0">
-              <ExtractionStages current="upload" />
-            </div>
-          )}
           <Can permission="payment_orders.create">
-            <div className="shrink-0">
-              <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} compact />
-            </div>
+            <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} compact />
           </Can>
         </div>
 
-        <UploadQueue queue={queue} onClearCompleted={clearCompleted} />
+        {hasExtractions && (
+          <div className="flex flex-col gap-2 mb-2 rounded-md border border-primary/30 bg-primary/5 p-2">
+            <div className="flex items-center justify-between">
+              <ExtractionStages current="upload" />
+              <span className="text-[11px] text-muted-foreground">
+                {extractions.length} documento{extractions.length > 1 ? "s" : ""} em revisão
+              </span>
+            </div>
+            {extractions.map((extraction) => (
+              <ExtractedPaymentTable
+                key={extraction._id}
+                orders={extraction.orders}
+                confidence={extraction.confidence}
+                notes={extraction.notes}
+                onSave={(rows) => handleSave(extraction._id, rows)}
+                onDiscard={() => handleDiscard(extraction._id)}
+                isSaving={saveMutation.isPending}
+                technicians={technicians}
+                isTechnicianRole={dbRole === "technician"}
+                isAdmin={canAssignAnyTechnician}
+                myTechnicianName={
+                  myAssignableUserId
+                    ? technicians.find((t) => t.user_id === myAssignableUserId)?.name ?? null
+                    : null
+                }
+              />
+            ))}
+          </div>
+        )}
 
-        <EmbeddedFileManager
-          entityType="payment_order"
-          sessionFileNames={sessionFiles}
-          defaultCollapsed={sessionFiles.length === 0 && queue.length === 0}
-        />
-
-        {extractions.map((extraction) => (
-          <ExtractedPaymentTable
-            key={extraction._id}
-            orders={extraction.orders}
-            confidence={extraction.confidence}
-            notes={extraction.notes}
-            onSave={(rows) => handleSave(extraction._id, rows)}
-            onDiscard={() => handleDiscard(extraction._id)}
-            isSaving={saveMutation.isPending}
-            technicians={technicians}
-            isTechnicianRole={dbRole === "technician"}
-            isAdmin={canAssignAnyTechnician}
-            myTechnicianName={
-              myAssignableUserId
-                ? technicians.find((t) => t.user_id === myAssignableUserId)?.name ?? null
-                : null
-            }
-          />
-        ))}
-
-        {!isHierarchyActive && (
-          <div className="flex items-center gap-3 flex-wrap">
-            <Filter className="h-4 w-4 text-muted-foreground" />
+        {!isHierarchyActive && !hasExtractions && (
+          <div className="flex items-center gap-2 flex-wrap py-1">
+            <Filter className="h-3.5 w-3.5 text-muted-foreground" />
             <Select value={filters.client_id || "all"} onValueChange={v => setFilter("client_id", v)}>
-              <SelectTrigger className="w-[160px] h-9 text-xs bg-secondary/30"><SelectValue placeholder={t("label.allClients")} /></SelectTrigger>
+              <SelectTrigger className="w-[150px] h-8 text-xs bg-secondary/30"><SelectValue placeholder={t("label.allClients")} /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{t("label.allClients")}</SelectItem>
                 {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
-
             <Select value={filters.platform || "all"} onValueChange={v => setFilter("platform", v)}>
-              <SelectTrigger className="w-[140px] h-9 text-xs bg-secondary/30"><SelectValue placeholder={t("label.allPlatforms")} /></SelectTrigger>
+              <SelectTrigger className="w-[130px] h-8 text-xs bg-secondary/30"><SelectValue placeholder={t("label.allPlatforms")} /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{t("label.allPlatforms")}</SelectItem>
                 {platforms.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
               </SelectContent>
             </Select>
-
             <Select value={filters.assigned_user_id || "all"} onValueChange={v => setFilter("assigned_user_id", v)}>
-              <SelectTrigger className="w-[160px] h-9 text-xs bg-secondary/30"><SelectValue placeholder={t("label.allTechnicians")} /></SelectTrigger>
+              <SelectTrigger className="w-[150px] h-8 text-xs bg-secondary/30"><SelectValue placeholder={t("label.allTechnicians")} /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{t("label.allTechnicians")}</SelectItem>
                 {technicians.map(t_ => <SelectItem key={t_.user_id} value={t_.user_id}>{t_.name}</SelectItem>)}
               </SelectContent>
             </Select>
-
             <Select value={filters.list_name || "all"} onValueChange={v => setFilter("list_name", v)}>
-              <SelectTrigger className="w-[140px] h-9 text-xs bg-secondary/30"><SelectValue placeholder={t("label.allLists")} /></SelectTrigger>
+              <SelectTrigger className="w-[130px] h-8 text-xs bg-secondary/30"><SelectValue placeholder={t("label.allLists")} /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{t("label.allLists")}</SelectItem>
                 {listNames.map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}
@@ -281,19 +264,21 @@ export default function PaymentOrdersPage() {
           </div>
         )}
 
-        <HierarchicalOrdersView
-          records={visibleOrders as any}
-          storageKey="hierarchy.payment_orders"
-          formatCurrency={formatCurrency}
-          activeContext={hCtx}
-          onView={setHCtx}
-          renderLeaf={(subset) => (
-            <PaymentOrdersTable orders={subset as any} isLoading={isLoading} />
+        <div className="flex-1 min-h-0 overflow-auto pr-1">
+          <HierarchicalOrdersView
+            records={visibleOrders as any}
+            storageKey="hierarchy.payment_orders"
+            formatCurrency={formatCurrency}
+            activeContext={hCtx}
+            onView={setHCtx}
+            renderLeaf={(subset) => (
+              <PaymentOrdersTable orders={subset as any} isLoading={isLoading} />
+            )}
+          />
+          {visibleOrders.length === 0 && (
+            <PaymentOrdersTable orders={[] as any} isLoading={isLoading} />
           )}
-        />
-        {visibleOrders.length === 0 && (
-          <PaymentOrdersTable orders={[] as any} isLoading={isLoading} />
-        )}
+        </div>
       </div>
     </div>
   );

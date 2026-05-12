@@ -1,5 +1,16 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { ChevronRight, Eye, FolderTree, X } from "lucide-react";
+import {
+  ChevronRight,
+  FolderTree,
+  Calendar,
+  Settings,
+  Folder,
+  BarChart3,
+  Building2,
+  Wrench,
+  User,
+  CalendarDays,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -93,6 +104,7 @@ type TreeNode = {
   children?: TreeNode[];
   disabled?: boolean;
   hint?: string;
+  icon?: React.ComponentType<{ className?: string }>;
 };
 
 function groupBy<T>(items: T[], keyFn: (i: T) => string): Map<string, T[]> {
@@ -131,34 +143,38 @@ function buildTree(records: HierarchyRecord[]): TreeNode[] {
           key: `y:${year}|c:${client}`,
           label: client,
           count: clientRows.length,
+          icon: Building2,
           ctx: { level: "client", year, client } as HierarchyContext,
           children: sortKeys([...byUnit.keys()]).map((unit) => {
             const unitRows = byUnit.get(unit)!;
-            const byWeek = groupBy(unitRows, getWeek);
+            const byTech = groupBy(unitRows, getTech);
             return {
               key: `y:${year}|c:${client}|u:${unit}`,
               label: unit,
               count: unitRows.length,
+              icon: Wrench,
               ctx: { level: "unit", year, client, unit } as HierarchyContext,
-              children: sortKeys([...byWeek.keys()]).map((week) => {
-                const weekRows = byWeek.get(week)!;
-                const byTech = groupBy(weekRows, getTech);
+              children: sortKeys([...byTech.keys()]).map((tech) => {
+                const techRows = byTech.get(tech)!;
+                const byWeek = groupBy(techRows, getWeek);
                 return {
-                  key: `y:${year}|c:${client}|u:${unit}|w:${week}`,
-                  label: week,
-                  count: weekRows.length,
-                  ctx: { level: "week", year, client, unit, week } as HierarchyContext,
-                  children: sortKeys([...byTech.keys()]).map((tech) => ({
-                    key: `y:${year}|c:${client}|u:${unit}|w:${week}|t:${tech}`,
-                    label: tech,
-                    count: byTech.get(tech)!.length,
+                  key: `y:${year}|c:${client}|u:${unit}|t:${tech}`,
+                  label: tech,
+                  count: techRows.length,
+                  icon: User,
+                  ctx: { level: "technician", year, client, unit, technician: tech } as HierarchyContext,
+                  children: sortKeys([...byWeek.keys()]).map((week) => ({
+                    key: `y:${year}|c:${client}|u:${unit}|t:${tech}|w:${week}`,
+                    label: week,
+                    count: byWeek.get(week)!.length,
+                    icon: CalendarDays,
                     ctx: {
-                      level: "technician",
+                      level: "week",
                       year,
                       client,
                       unit,
-                      week,
                       technician: tech,
+                      week,
                     } as HierarchyContext,
                   })),
                 };
@@ -171,12 +187,14 @@ function buildTree(records: HierarchyRecord[]): TreeNode[] {
       key: `y:${year}`,
       label: year,
       count: yearRows.length,
+      icon: Calendar,
       ctx: { level: "year", year } as HierarchyContext,
       children: [
         {
           key: `y:${year}|sec:operacional`,
           label: "Operacional",
           count: yearRows.length,
+          icon: Settings,
           ctx: { level: "year", year } as HierarchyContext,
           children: operationalChildren,
         },
@@ -184,6 +202,7 @@ function buildTree(records: HierarchyRecord[]): TreeNode[] {
           key: `y:${year}|sec:documentos`,
           label: "Documentos",
           count: 0,
+          icon: Folder,
           ctx: { level: "year", year } as HierarchyContext,
           disabled: true,
           hint: "Em breve",
@@ -192,6 +211,7 @@ function buildTree(records: HierarchyRecord[]): TreeNode[] {
           key: `y:${year}|sec:relatorios`,
           label: "Relatórios",
           count: 0,
+          icon: BarChart3,
           ctx: { level: "year", year } as HierarchyContext,
           disabled: true,
           hint: "Em breve",
@@ -233,6 +253,13 @@ function Row({ node, depth, open, toggle, active, onView }: RowProps) {
     active.week === node.ctx.week &&
     active.technician === node.ctx.technician;
 
+  const Icon = node.icon;
+  const handleActivate = () => {
+    if (isDisabled) return;
+    onView(node.ctx);
+    if (hasChildren && !isOpen) toggle(node.key);
+  };
+
   return (
     <>
       <div
@@ -240,14 +267,17 @@ function Row({ node, depth, open, toggle, active, onView }: RowProps) {
           "group flex items-center gap-1 rounded-sm pr-1 text-xs transition-colors",
           isDisabled
             ? "opacity-60"
-            : "hover:bg-sidebar-accent/50",
+            : "hover:bg-sidebar-accent/50 cursor-pointer",
           isActive && "bg-sidebar-accent text-primary",
         )}
         style={{ paddingLeft: depth * 10 + 4 }}
       >
         <button
           type="button"
-          onClick={() => hasChildren && !isDisabled && toggle(node.key)}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (hasChildren && !isDisabled) toggle(node.key);
+          }}
           className={cn(
             "flex h-5 w-5 shrink-0 items-center justify-center rounded-sm",
             hasChildren && !isDisabled ? "hover:bg-sidebar-accent" : "opacity-30",
@@ -263,7 +293,20 @@ function Row({ node, depth, open, toggle, active, onView }: RowProps) {
           />
         </button>
 
-        <span className={cn("flex-1 truncate py-1", isDisabled && "italic text-muted-foreground")} title={node.label}>
+        {Icon && (
+          <Icon
+            className={cn(
+              "h-3 w-3 shrink-0",
+              isActive ? "text-primary" : "text-muted-foreground",
+            )}
+          />
+        )}
+
+        <span
+          className={cn("flex-1 truncate py-1", isDisabled && "italic text-muted-foreground")}
+          title={node.label}
+          onClick={handleActivate}
+        >
           {node.label}
         </span>
 
@@ -275,22 +318,6 @@ function Row({ node, depth, open, toggle, active, onView }: RowProps) {
           <span className="text-[10px] tabular-nums text-muted-foreground">
             {node.count}
           </span>
-        )}
-
-        {!isDisabled && (
-          <button
-            type="button"
-            onClick={() => onView(node.ctx)}
-            className={cn(
-              "ml-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-sm opacity-0 transition-opacity",
-              "hover:bg-primary/15 hover:text-primary group-hover:opacity-100",
-              isActive && "opacity-100 text-primary",
-            )}
-            title="Visualizar nas tabelas abaixo"
-            aria-label="Visualizar"
-          >
-            <Eye className="h-3 w-3" />
-          </button>
         )}
       </div>
 
@@ -328,7 +355,7 @@ export function HierarchyExplorer({
   storageKey,
   context,
   onContextChange,
-  title = "Navegação",
+  title = "OPERACIONAL",
   emptyMessage,
 }: Props) {
   const [open, setOpen] = useState<Set<string>>(() => {
@@ -385,32 +412,20 @@ export function HierarchyExplorer({
 
   return (
     <aside className="flex h-full w-full flex-col rounded-lg border border-border/50 bg-card/40 backdrop-blur">
-      <header className="flex items-center justify-between gap-2 border-b border-border/50 px-3 py-2">
+      <header
+        className={cn(
+          "flex items-center justify-between gap-2 border-b border-border/50 px-3 py-2 cursor-pointer hover:bg-sidebar-accent/40",
+          context.level === "all" && "text-primary",
+        )}
+        onClick={() => onContextChange(EMPTY_CTX)}
+        title="Limpar contexto"
+      >
         <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
           <FolderTree className="h-3.5 w-3.5" />
           <span>{title}</span>
         </div>
         <span className="text-[10px] tabular-nums text-muted-foreground">{total}</span>
       </header>
-
-      {/* Active context pill */}
-      <div className="flex items-center gap-1 border-b border-border/50 px-3 py-1.5">
-        <button
-          type="button"
-          onClick={() => onContextChange(EMPTY_CTX)}
-          className={cn(
-            "flex items-center gap-1 rounded-sm px-2 py-1 text-[11px] transition-colors",
-            context.level === "all"
-              ? "bg-primary/15 text-primary"
-              : "text-muted-foreground hover:bg-sidebar-accent",
-          )}
-          title="Limpar filtro hierárquico"
-        >
-          <Eye className="h-3 w-3" />
-          <span className="truncate">{ctxLabel(context)}</span>
-          {context.level !== "all" && <X className="h-3 w-3 opacity-60" />}
-        </button>
-      </div>
 
       <div className="flex-1 overflow-auto py-1">
         {tree.length === 0 ? (

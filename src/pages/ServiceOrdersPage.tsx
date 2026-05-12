@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { FileText, Filter } from "lucide-react";
 import {
   HierarchyExplorer,
@@ -6,15 +6,14 @@ import {
   loadHierarchyContext,
   type HierarchyContext,
 } from "@/components/shared/HierarchyExplorer";
-import { HierarchyBreadcrumb, hierarchyDefaults } from "@/components/shared/HierarchyBreadcrumb";
+import { hierarchyDefaults } from "@/components/shared/HierarchyBreadcrumb";
 import { HierarchicalOrdersView } from "@/components/shared/HierarchicalOrdersView";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileUploadZone } from "@/components/service-orders/FileUploadZone";
 import { ExtractedDataTable } from "@/components/service-orders/ExtractedDataTable";
 import { ExtractionStages } from "@/components/service-orders/ExtractionStages";
-import { UploadQueue } from "@/components/service-orders/UploadQueue";
 import { ServiceOrdersTable } from "@/components/service-orders/ServiceOrdersTable";
-import { EmbeddedFileManager, storeFileInDocuments } from "@/components/file-manager/EmbeddedFileManager";
+import { storeFileInDocuments } from "@/components/file-manager/EmbeddedFileManager";
 import { formatLicensePlate } from "@/lib/formatPlate";
 import {
   useServiceOrders,
@@ -278,77 +277,70 @@ export default function ServiceOrdersPage() {
 
   const isHierarchyActive = hCtx.level !== "all";
 
+  const hasExtractions = extractions.length > 0;
+
   return (
     <div className="animate-fade-in flex gap-3 h-[calc(100vh-5rem)]">
-      {/* Contextual sidebar — fixed, narrow, full-height (ERP shell) */}
-      <aside className="hidden md:block w-60 shrink-0 h-full">
+      {/* OPERACIONAL — narrow icon-tree sidebar */}
+      <aside className="hidden md:block w-56 shrink-0 h-full">
         <HierarchyExplorer
           records={orders as any}
           storageKey="hierarchy.service_orders"
           context={hCtx}
           onContextChange={setHCtx}
-          title="Contexto Operacional"
         />
       </aside>
 
-      {/* Main workspace — table-dominant column */}
-      <div className="flex-1 min-w-0 flex flex-col gap-2 overflow-auto pr-1">
-        {/* Single horizontal ERP toolbar: title + breadcrumb + stages + upload */}
-        <div className="flex flex-wrap items-center gap-2 rounded-md border border-border/50 bg-card/40 px-2 py-1.5 backdrop-blur">
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10">
-              <FileText className="h-3.5 w-3.5 text-primary" />
-            </div>
+      {/* Main workspace — single continuous canvas */}
+      <div className="flex-1 min-w-0 flex flex-col h-full overflow-hidden">
+        {/* Page title row — title only + discreet upload icon at top-right */}
+        <div className="flex items-center justify-between gap-2 py-1.5 px-1">
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4 text-primary" />
             <h1 className="text-sm font-semibold text-foreground">{t("so.title")}</h1>
           </div>
-          <div className="h-5 w-px bg-border/60 hidden md:block" />
-          <div className="flex-1 min-w-0">
-            <HierarchyBreadcrumb context={hCtx} onClear={() => setHCtx({ level: "all" })} className="border-0 bg-transparent p-0" />
-          </div>
-          {extractions.length === 0 && (
-            <div className="hidden lg:flex shrink-0">
-              <ExtractionStages current="upload" />
-            </div>
-          )}
           <Can permission="service_orders.create">
-            <div className="shrink-0">
-              <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} compact />
-            </div>
+            <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} compact />
           </Can>
         </div>
 
-        <EmbeddedFileManager
-          entityType="service_order"
-          sessionFileNames={sessionFiles}
-          defaultCollapsed={sessionFiles.length === 0 && queue.length === 0}
-        />
+        {/* Temporary upload/extraction panel — visible only while a document is being processed */}
+        {hasExtractions && (
+          <div className="flex flex-col gap-2 mb-2 rounded-md border border-primary/30 bg-primary/5 p-2">
+            <div className="flex items-center justify-between">
+              <ExtractionStages current="upload" />
+              <span className="text-[11px] text-muted-foreground">
+                {extractions.length} documento{extractions.length > 1 ? "s" : ""} em revisão
+              </span>
+            </div>
+            {extractions.map((extraction) => (
+              <ExtractedDataTable
+                key={extraction._id}
+                orders={extraction.orders}
+                confidence={extraction.confidence}
+                notes={extraction.notes}
+                onSave={(rows) => handleSave(extraction._id, rows)}
+                onDiscard={() => handleDiscard(extraction._id)}
+                isSaving={saveMutation.isPending}
+                technicians={technicians}
+                isTechnicianRole={isTechnicianRole}
+                isAdmin={canAssignAnyTechnician}
+                myTechnicianName={
+                  myAssignableUserId
+                    ? technicians.find((t) => t.user_id === myAssignableUserId)?.name ?? null
+                    : null
+                }
+              />
+            ))}
+          </div>
+        )}
 
-        {extractions.map((extraction) => (
-          <ExtractedDataTable
-            key={extraction._id}
-            orders={extraction.orders}
-            confidence={extraction.confidence}
-            notes={extraction.notes}
-            onSave={(rows) => handleSave(extraction._id, rows)}
-            onDiscard={() => handleDiscard(extraction._id)}
-            isSaving={saveMutation.isPending}
-            technicians={technicians}
-            isTechnicianRole={isTechnicianRole}
-            isAdmin={canAssignAnyTechnician}
-            myTechnicianName={
-              myAssignableUserId
-                ? technicians.find((t) => t.user_id === myAssignableUserId)?.name ?? null
-                : null
-            }
-          />
-        ))}
-
-        {/* Filters — hidden when hierarchy context narrows the view (1C.2 §6) */}
-        {!isHierarchyActive && (
-          <div className="flex items-center gap-3 flex-wrap">
-            <Filter className="h-4 w-4 text-muted-foreground" />
+        {/* Filters — hidden when hierarchy context narrows the view */}
+        {!isHierarchyActive && !hasExtractions && (
+          <div className="flex items-center gap-2 flex-wrap py-1">
+            <Filter className="h-3.5 w-3.5 text-muted-foreground" />
             <Select value={filters.client_id || "all"} onValueChange={(v) => setFilter("client_id", v)}>
-              <SelectTrigger className="w-[160px] h-9 text-xs bg-secondary/30">
+              <SelectTrigger className="w-[150px] h-8 text-xs bg-secondary/30">
                 <SelectValue placeholder={t("label.allClients")} />
               </SelectTrigger>
               <SelectContent>
@@ -358,9 +350,8 @@ export default function ServiceOrdersPage() {
                 ))}
               </SelectContent>
             </Select>
-
             <Select value={filters.platform || "all"} onValueChange={(v) => setFilter("platform", v)}>
-              <SelectTrigger className="w-[140px] h-9 text-xs bg-secondary/30">
+              <SelectTrigger className="w-[130px] h-8 text-xs bg-secondary/30">
                 <SelectValue placeholder={t("label.allPlatforms")} />
               </SelectTrigger>
               <SelectContent>
@@ -370,9 +361,8 @@ export default function ServiceOrdersPage() {
                 ))}
               </SelectContent>
             </Select>
-
             <Select value={filters.assigned_user_id || "all"} onValueChange={(v) => setFilter("assigned_user_id", v)}>
-              <SelectTrigger className="w-[160px] h-9 text-xs bg-secondary/30">
+              <SelectTrigger className="w-[150px] h-8 text-xs bg-secondary/30">
                 <SelectValue placeholder={t("label.allTechnicians")} />
               </SelectTrigger>
               <SelectContent>
@@ -382,9 +372,8 @@ export default function ServiceOrdersPage() {
                 ))}
               </SelectContent>
             </Select>
-
             <Select value={filters.week || "all"} onValueChange={(v) => setFilter("week", v)}>
-              <SelectTrigger className="w-[120px] h-9 text-xs bg-secondary/30">
+              <SelectTrigger className="w-[110px] h-8 text-xs bg-secondary/30">
                 <SelectValue placeholder={t("label.allWeeks")} />
               </SelectTrigger>
               <SelectContent>
@@ -397,20 +386,22 @@ export default function ServiceOrdersPage() {
           </div>
         )}
 
-        {/* Saved orders — hierarchical grouped view (Phase 1B) */}
-        <HierarchicalOrdersView
-          records={visibleOrders as any}
-          storageKey="hierarchy.service_orders"
-          formatCurrency={formatCurrency}
-          activeContext={hCtx}
-          onView={setHCtx}
-          renderLeaf={(subset) => (
-            <ServiceOrdersTable orders={subset as any} isLoading={isLoading} />
+        {/* Tables fill the entire remaining canvas */}
+        <div className="flex-1 min-h-0 overflow-auto pr-1">
+          <HierarchicalOrdersView
+            records={visibleOrders as any}
+            storageKey="hierarchy.service_orders"
+            formatCurrency={formatCurrency}
+            activeContext={hCtx}
+            onView={setHCtx}
+            renderLeaf={(subset) => (
+              <ServiceOrdersTable orders={subset as any} isLoading={isLoading} />
+            )}
+          />
+          {visibleOrders.length === 0 && (
+            <ServiceOrdersTable orders={[] as any} isLoading={isLoading} />
           )}
-        />
-        {visibleOrders.length === 0 && (
-          <ServiceOrdersTable orders={[] as any} isLoading={isLoading} />
-        )}
+        </div>
       </div>
     </div>
   );

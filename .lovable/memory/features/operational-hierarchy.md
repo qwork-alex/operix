@@ -46,3 +46,25 @@ Do not break: backend (RLS, save, realtime), OCR/extract, validation, document u
   week / technician) inside leaf tables — requires invasive refactor of
   `ServiceOrdersTable` and `PaymentOrdersTable`. Not implemented here so save /
   edit / delete / OCR / realtime stay 100% intact.
+
+## Phase 2A — Real workspace restructure
+- Sidebar renamed to **"OPERACIONAL"** (default `title`). Header acts as the
+  "limpar contexto" button (entire row clickable). Removed the standalone
+  "modo global" pill / Eye-button row entirely.
+- Tree levels reordered: **Ano → ⚙ Operacional → Cliente → Plataforma/Oficina (unit)
+  → Usuário/Técnico → Semana** (week became leaf). `Documentos` and `Relatórios`
+  remain disabled placeholders under each year.
+- Each `TreeNode` now carries an `icon` (Calendar / Settings / Building2 /
+  Wrench / User / CalendarDays / Folder / BarChart3). Clicking a row label
+  activates context AND auto-expands the node (no more separate Eye button).
+- SO/PO pages: page title is alone in its own row (icon + title left, compact
+  upload icon button right). `HierarchyBreadcrumb`, `ExtractionStages` (header)
+  and `EmbeddedFileManager` removed from the page body.
+- `ExtractedDataTable` / `ExtractedPaymentTable` are now wrapped in a
+  temporary upload/extraction panel with `ExtractionStages` that renders ONLY
+  while `extractions.length > 0`. After save/discard the panel disappears and
+  the tables expand to fill the canvas.
+- Tables live inside `flex-1 min-h-0 overflow-auto` — single continuous canvas,
+  no horizontal divider cards between toolbar / panel / table.
+- Filters auto-hide when either a hierarchy context is active OR an extraction
+  panel is open.
