@@ -22,6 +22,7 @@ interface Props {
  */
 export function ActiveDocumentBand({ file, onClose, onRename, children, className }: Props) {
   const [zoom, setZoom] = useState(1);
+  const [rotation, setRotation] = useState(0);
   const [name, setName] = useState(file?.name ?? "Documento ativo");
   const [editing, setEditing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
