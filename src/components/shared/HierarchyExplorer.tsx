@@ -126,14 +126,16 @@ function groupBy<T>(items: T[], keyFn: (i: T) => string): Map<string, T[]> {
   return map;
 }
 
-function sortKeys(keys: string[], opts?: { numericDesc?: boolean }) {
+function sortKeys(keys: string[], opts?: { numericAsc?: boolean; numericDesc?: boolean }) {
   return [...keys].sort((a, b) => {
     if (FALLBACK_VALUES.has(a) && !FALLBACK_VALUES.has(b)) return 1;
     if (FALLBACK_VALUES.has(b) && !FALLBACK_VALUES.has(a)) return -1;
-    if (opts?.numericDesc) {
+    if (opts?.numericDesc || opts?.numericAsc) {
       const an = Number(a);
       const bn = Number(b);
-      if (!Number.isNaN(an) && !Number.isNaN(bn)) return bn - an;
+      if (!Number.isNaN(an) && !Number.isNaN(bn)) {
+        return opts.numericAsc ? an - bn : bn - an;
+      }
     }
     return a.localeCompare(b, undefined, { numeric: true });
   });
@@ -142,7 +144,7 @@ function sortKeys(keys: string[], opts?: { numericDesc?: boolean }) {
 function buildTree(records: HierarchyRecord[], weekIcon?: LucideIcon, extraYears: string[] = []): TreeNode[] {
   const byYear = groupBy(records, getYear);
   const allYears = new Set<string>([...byYear.keys(), ...extraYears]);
-  return sortKeys([...allYears], { numericDesc: true }).map((year) => {
+  return sortKeys([...allYears], { numericAsc: true }).map((year) => {
     const yearRows = byYear.get(year) ?? [];
     const byClient = groupBy(yearRows, getClient);
     const operationalChildren: TreeNode[] = sortKeys([...byClient.keys()]).map((client) => {
