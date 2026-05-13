@@ -465,8 +465,6 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
           </div>
 
           {!isCollapsed && (
-
-          {/* Table for this week */}
           <div className="rounded-lg border border-border/50 overflow-hidden">
             <Table className="table-cols-zebra">
               <TableHeader>
