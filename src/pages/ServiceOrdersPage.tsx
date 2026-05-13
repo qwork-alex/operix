@@ -261,17 +261,17 @@ export default function ServiceOrdersPage() {
         />
       </aside>
 
-      {/* CANVAS PRINCIPAL — premium card matching sidebar frame */}
-      <div className="flex-1 min-w-0 flex flex-col rounded-lg border border-border/50 bg-card/40 backdrop-blur overflow-hidden">
-        {/* HEADER PREMIUM — icon badge + title + subtitle */}
-        <header className="flex items-center justify-between gap-3 border-b border-border/50 px-4 py-3 shrink-0">
+      {/* CANVAS PRINCIPAL — fluid workspace, no extra card wrapper */}
+      <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
+        {/* HEADER — minimal operational header */}
+        <header className="flex items-center justify-between gap-3 border-b border-border/40 px-1 pb-2 mb-2 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-              <ClipboardList className="h-5 w-5 text-primary" />
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10">
+              <ClipboardList className="h-4 w-4 text-primary" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-lg font-semibold text-foreground truncate">{t("so.title") || "Ordens de serviço"}</h1>
-              <p className="text-xs text-muted-foreground truncate">{t("so.subtitle") || "Gestão e validação documental operacional"}</p>
+              <h1 className="text-sm font-semibold text-foreground truncate">{t("so.title") || "Ordens de serviço"}</h1>
+              <p className="text-[11px] text-muted-foreground truncate">{t("so.subtitle") || "Gestão e validação documental operacional"}</p>
             </div>
           </div>
           <Can permission="service_orders.create">
@@ -279,55 +279,55 @@ export default function ServiceOrdersPage() {
           </Can>
         </header>
 
-        {/* MESA DOCUMENTAL */}
-        {hasExtractions && extractions.map((extraction) => (
-          <ActiveDocumentBand
-            key={extraction._id}
-            file={extraction._file}
-            stage="review"
-            initialState={extraction._docState}
-            onStateChange={(state) => setExtractions(prev => prev.map((e) => e._id === extraction._id ? { ...e, _docState: state } : e))}
-            onPersistState={(state) => updateDocumentState(extraction._id, state)}
-            onReprocessOcr={(state) => handleReprocessOcr(extraction._id, state)}
-            isReprocessing={reprocessingId === extraction._id}
-            onClose={() => handleDiscard(extraction._id)}
-          >
-            <ExtractedDataTable
-              key={`${extraction._id}:${extraction._ocrVersion}`}
-              orders={extraction.orders}
-              confidence={extraction.confidence}
-              notes={extraction.notes}
-              onSave={(rows) => handleSave(extraction._id, rows)}
-              onDiscard={() => handleDiscard(extraction._id)}
-              isSaving={saveMutation.isPending}
-              technicians={technicians}
-              isTechnicianRole={isTechnicianRole}
-              isAdmin={canAssignAnyTechnician}
-              myTechnicianName={
-                myAssignableUserId
-                  ? technicians.find((t) => t.user_id === myAssignableUserId)?.name ?? null
-                  : null
-              }
-            />
-          </ActiveDocumentBand>
-        ))}
+        {/* SCROLL AREA — preview + table flow naturally */}
+        <div className="flex-1 min-h-0 flex flex-col overflow-auto">
+          {hasExtractions && extractions.map((extraction) => (
+            <ActiveDocumentBand
+              key={extraction._id}
+              file={extraction._file}
+              stage="review"
+              initialState={extraction._docState}
+              onStateChange={(state) => setExtractions(prev => prev.map((e) => e._id === extraction._id ? { ...e, _docState: state } : e))}
+              onPersistState={(state) => updateDocumentState(extraction._id, state)}
+              onReprocessOcr={(state) => handleReprocessOcr(extraction._id, state)}
+              isReprocessing={reprocessingId === extraction._id}
+              onClose={() => handleDiscard(extraction._id)}
+            >
+              <ExtractedDataTable
+                key={`${extraction._id}:${extraction._ocrVersion}`}
+                orders={extraction.orders}
+                confidence={extraction.confidence}
+                notes={extraction.notes}
+                onSave={(rows) => handleSave(extraction._id, rows)}
+                onDiscard={() => handleDiscard(extraction._id)}
+                isSaving={saveMutation.isPending}
+                technicians={technicians}
+                isTechnicianRole={isTechnicianRole}
+                isAdmin={canAssignAnyTechnician}
+                myTechnicianName={
+                  myAssignableUserId
+                    ? technicians.find((t) => t.user_id === myAssignableUserId)?.name ?? null
+                    : null
+                }
+              />
+            </ActiveDocumentBand>
+          ))}
 
-        <BottomCanvas hasExtractions={hasExtractions}>
-          {hCtx.section === "documentos" ? (
-            <div className="p-4">
+          <BottomCanvas hasExtractions={hasExtractions}>
+            {hCtx.section === "documentos" ? (
               <EmbeddedFileManager entityType="service_order" module="orders" defaultCollapsed={hasExtractions} />
-            </div>
-          ) : hCtx.section === "relatorios" ? (
-            <SectionPlaceholder
-              icon="chart"
-              title="Relatórios"
-              subtitle={hCtx.year ? `Ano ${hCtx.year}` : undefined}
-              hint="Relatórios automáticos serão disponibilizados em breve."
-            />
-          ) : (
-            <ServiceOrdersTable orders={visibleOrders as any} isLoading={isLoading} />
-          )}
-        </BottomCanvas>
+            ) : hCtx.section === "relatorios" ? (
+              <SectionPlaceholder
+                icon="chart"
+                title="Relatórios"
+                subtitle={hCtx.year ? `Ano ${hCtx.year}` : undefined}
+                hint="Relatórios automáticos serão disponibilizados em breve."
+              />
+            ) : (
+              <ServiceOrdersTable orders={visibleOrders as any} isLoading={isLoading} />
+            )}
+          </BottomCanvas>
+        </div>
       </div>
     </div>
   );
