@@ -327,7 +327,6 @@ function BottomCanvas({ hasExtractions, children }: { hasExtractions: boolean; c
       >
         <ChevronRight className="h-3 w-3" />
         <span className="uppercase tracking-wide">Tabela operacional</span>
-        <span className="ml-auto opacity-60">expandir</span>
       </button>
     );
   }
