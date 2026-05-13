@@ -17,6 +17,16 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 
 /**
  * Hierarchical operational explorer (Phase 1A).
@@ -255,14 +265,10 @@ interface RowProps {
   toggle: (k: string) => void;
   active: HierarchyContext;
   onView: (ctx: HierarchyContext) => void;
-  deletableYears?: Set<string>;
-  pendingDeleteKey?: string | null;
-  onRequestDelete?: (key: string) => void;
-  onConfirmDelete?: (year: string) => void;
-  onCancelDelete?: () => void;
+  onRequestDelete?: (year: string) => void;
 }
 
-function Row({ node, depth, open, toggle, active, onView, deletableYears, pendingDeleteKey, onRequestDelete, onConfirmDelete, onCancelDelete }: RowProps) {
+function Row({ node, depth, open, toggle, active, onView, onRequestDelete }: RowProps) {
   const isOpen = open.has(node.key);
   const hasChildren = !!node.children?.length;
   const isDisabled = !!node.disabled;
@@ -284,9 +290,8 @@ function Row({ node, depth, open, toggle, active, onView, deletableYears, pendin
   const isDeletable =
     node.ctx.level === "year" &&
     !node.ctx.section &&
-    !!node.ctx.year &&
-    !!deletableYears?.has(node.ctx.year);
-  const isPendingDelete = pendingDeleteKey === node.key;
+    !!node.ctx.year;
+  
 
   return (
     <>
@@ -338,12 +343,12 @@ function Row({ node, depth, open, toggle, active, onView, deletableYears, pendin
           {node.label}
         </span>
 
-        {isDeletable && !isPendingDelete && (
+        {isDeletable && (
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onRequestDelete?.(node.key);
+              onRequestDelete?.(node.ctx.year!);
             }}
             className="flex h-4 w-4 shrink-0 items-center justify-center rounded-sm opacity-0 group-hover:opacity-60 hover:!opacity-100 hover:text-destructive transition-opacity"
             title="Excluir ano operacional"
@@ -351,24 +356,6 @@ function Row({ node, depth, open, toggle, active, onView, deletableYears, pendin
           >
             <Trash2 className="h-3 w-3" />
           </button>
-        )}
-        {isDeletable && isPendingDelete && (
-          <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              onClick={() => onConfirmDelete?.(node.ctx.year!)}
-              className="rounded-sm px-1.5 py-0.5 text-[10px] font-medium text-destructive hover:bg-destructive/10"
-            >
-              Excluir
-            </button>
-            <button
-              type="button"
-              onClick={() => onCancelDelete?.()}
-              className="rounded-sm px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-sidebar-accent"
-            >
-              Cancelar
-            </button>
-          </div>
         )}
       </div>
 
@@ -383,11 +370,7 @@ function Row({ node, depth, open, toggle, active, onView, deletableYears, pendin
               toggle={toggle}
               active={active}
               onView={onView}
-              deletableYears={deletableYears}
-              pendingDeleteKey={pendingDeleteKey}
               onRequestDelete={onRequestDelete}
-              onConfirmDelete={onConfirmDelete}
-              onCancelDelete={onCancelDelete}
             />
           ))}
         </div>
@@ -411,6 +394,8 @@ interface Props {
   onCollapsedChange?: (collapsed: boolean) => void;
   /** Optional override for the week-level icon (default CalendarDays). */
   weekIcon?: LucideIcon;
+  /** Phase 1F-C — wipe all data attached to a year. Receives the year as string. */
+  onDeleteYear?: (year: string) => Promise<void> | void;
 }
 
 export function HierarchyExplorer({
@@ -424,6 +409,7 @@ export function HierarchyExplorer({
   collapsed: controlledCollapsed,
   onCollapsedChange,
   weekIcon,
+  onDeleteYear,
 }: Props) {
   const [internalCollapsed, setInternalCollapsed] = useState<boolean>(() => {
     try {
@@ -469,7 +455,8 @@ export function HierarchyExplorer({
   const [addingYear, setAddingYear] = useState(false);
   const [yearInput, setYearInput] = useState("");
   const [yearError, setYearError] = useState<string | null>(null);
-  const [pendingDeleteKey, setPendingDeleteKey] = useState<string | null>(null);
+  const [pendingDeleteYear, setPendingDeleteYear] = useState<string | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const yearInputRef = useRef<HTMLInputElement>(null);
 
   const dataYears = useMemo(() => {
@@ -503,14 +490,22 @@ export function HierarchyExplorer({
     setYearError(null);
   }, [yearInput]);
 
-  const confirmDeleteYear = useCallback((year: string) => {
-    setExtraYears((prev) => prev.filter((y) => y !== year));
-    setPendingDeleteKey(null);
-    // Clear active context if it referenced the removed year
-    if (context.year === year) {
-      onContextChange(EMPTY_CTX);
+  const confirmDeleteYear = useCallback(async (year: string) => {
+    setDeleteBusy(true);
+    try {
+      // If year has stored data, hand off to parent to wipe it.
+      if (dataYears.has(year)) {
+        await onDeleteYear?.(year);
+      }
+      setExtraYears((prev) => prev.filter((y) => y !== year));
+      if (context.year === year) {
+        onContextChange(EMPTY_CTX);
+      }
+    } finally {
+      setDeleteBusy(false);
+      setPendingDeleteYear(null);
     }
-  }, [context.year, onContextChange]);
+  }, [dataYears, onDeleteYear, context.year, onContextChange]);
 
   // Persist opened nodes
   useEffect(() => {
@@ -709,16 +704,46 @@ export function HierarchyExplorer({
                 toggle={toggle}
                 active={context}
                 onView={onContextChange}
-                deletableYears={new Set(extraYears.filter((y) => !dataYears.has(y)))}
-                pendingDeleteKey={pendingDeleteKey}
-                onRequestDelete={setPendingDeleteKey}
-                onConfirmDelete={confirmDeleteYear}
-                onCancelDelete={() => setPendingDeleteKey(null)}
+                onRequestDelete={(year) => setPendingDeleteYear(year)}
               />
             ))
           )}
         </div>
       )}
+
+      <AlertDialog
+        open={!!pendingDeleteYear}
+        onOpenChange={(v) => { if (!v && !deleteBusy) setPendingDeleteYear(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">
+              Excluir operacional de {pendingDeleteYear}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Deseja realmente apagar o operacional de <strong className="text-foreground">{pendingDeleteYear}</strong>?
+              {pendingDeleteYear && dataYears.has(pendingDeleteYear) ? (
+                <> Esta ação remove <strong className="text-destructive">todos os registros, documentos e relatórios</strong> deste ano. Não pode ser desfeita.</>
+              ) : (
+                <> Este ano foi adicionado manualmente e ainda não tem registros — será removido apenas da lista.</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteBusy}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteBusy}
+              onClick={(e) => {
+                e.preventDefault();
+                if (pendingDeleteYear) confirmDeleteYear(pendingDeleteYear);
+              }}
+            >
+              {deleteBusy ? "Excluindo..." : "Sim, excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </aside>
   );
 }

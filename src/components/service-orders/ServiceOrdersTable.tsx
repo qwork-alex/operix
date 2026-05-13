@@ -408,7 +408,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
 
           {/* Table for this week */}
           <div className="rounded-lg border border-border/50 overflow-hidden">
-            <Table>
+            <Table className="table-cols-zebra">
               <TableHeader>
                 <TableRow className="bg-secondary/30">
                   <TableHead className="w-10" />
