@@ -3,15 +3,17 @@ import {
   ChevronRight,
   FolderTree,
   Calendar,
-  Settings,
+  Sprout,
   Folder,
   BarChart3,
   Building2,
-  Wrench,
+  MapPin,
   User,
   CalendarDays,
+  ClipboardList,
   PanelLeftClose,
   PanelLeftOpen,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
