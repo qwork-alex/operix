@@ -351,7 +351,8 @@ export default function BillingPage() {
     <BillingLayout>
       <Routes>
         <Route index element={<Navigate to="faturas" replace />} />
-        {SUB_NAV.map((item) => (
+        <Route path="faturas" element={<InvoicesScreen />} />
+        {SUB_NAV.filter((i) => i.slug !== "faturas").map((item) => (
           <Route
             key={item.slug}
             path={item.slug}
