@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
-import { ChevronDown, ChevronRight, Wallet } from "lucide-react";
+import { ChevronDown, ChevronRight, Wallet, ClipboardList } from "lucide-react";
 import {
   HierarchyExplorer,
   applyHierarchyContext,
