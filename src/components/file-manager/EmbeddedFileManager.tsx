@@ -211,9 +211,17 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
     enabled: showMoveDialog,
   });
 
-  const filteredDocs = filterMode === "session" && sessionFileNames.length > 0
-    ? docs.filter((d: any) => d.type === "folder" || sessionFileNames.includes(d.name))
+  const yearFiltered = year && /^\d{4}$/.test(year)
+    ? docs.filter((d: any) => {
+        if (d.type === "folder") return true;
+        if (!d.created_at) return false;
+        const dy = new Date(d.created_at).getFullYear();
+        return String(dy) === year;
+      })
     : docs;
+  const filteredDocs = filterMode === "session" && sessionFileNames.length > 0
+    ? yearFiltered.filter((d: any) => d.type === "folder" || sessionFileNames.includes(d.name))
+    : yearFiltered;
 
   const allSelected = filteredDocs.length > 0 && filteredDocs.every((d: any) => selectedIds.has(d.id));
 
