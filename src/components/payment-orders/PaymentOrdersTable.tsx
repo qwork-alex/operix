@@ -141,25 +141,32 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
     });
   };
 
-  const toggleList = (listName: string | null) => {
-    const listOrders = orders.filter(o => o.list_name === listName);
-    const allSelected = listOrders.every(o => selected.has(o.id));
+  // Composite group identity: year|client|platform|unit|tech|listName
+  const groupKeyOf = (o: PaymentOrderRow): string => {
+    const year = o.created_at ? new Date(o.created_at).getFullYear().toString() : "—";
+    const client = (o.client_name || "Sem Cliente").trim();
+    const plat = (o.platform || "Sem Plataforma").trim();
+    const unit = (o.operational_unit || "Sem Work").trim();
+    const tech = (o.technician_name || "Sem Técnico").trim();
+    const list = (o.list_name || "Sem Semana").trim();
+    return `${year}||${client}||${plat}||${unit}||${tech}||${list}`;
+  };
+
+  const toggleGroupSelection = (groupOrders: PaymentOrderRow[]) => {
+    const allSelected = groupOrders.every(o => selected.has(o.id));
     setSelected(prev => {
       const next = new Set(prev);
-      listOrders.forEach(o => {
+      groupOrders.forEach(o => {
         if (allSelected) next.delete(o.id); else next.add(o.id);
       });
       return next;
     });
   };
 
-  const listNames = [...new Set(orders.map(o => o.list_name))];
-
-  const getListStatus = (listName: string | null): "paid" | "partial" | "pending" => {
-    const listOrders = orders.filter(o => o.list_name === listName);
-    if (!listOrders.length) return "pending";
-    const allPaid = listOrders.every(o => o.status === "paid");
-    const allPending = listOrders.every(o => o.status === "pending");
+  const getGroupStatus = (groupOrders: PaymentOrderRow[]): "paid" | "partial" | "pending" => {
+    if (!groupOrders.length) return "pending";
+    const allPaid = groupOrders.every(o => o.status === "paid");
+    const allPending = groupOrders.every(o => o.status === "pending");
     if (allPaid) return "paid";
     if (allPending) return "pending";
     return "partial";
@@ -176,6 +183,11 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
     partial: "◐ Parcial",
     pending: "● Pendente",
   };
+
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const toggleCollapse = (k: string) => setCollapsedGroups(prev => {
+    const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n;
+  });
 
   /** Update amount_paid → derive status server-side write */
   const paymentMutation = useMutation({
