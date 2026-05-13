@@ -3,15 +3,17 @@ import {
   ChevronRight,
   FolderTree,
   Calendar,
-  Settings,
+  Sprout,
   Folder,
   BarChart3,
   Building2,
-  Wrench,
+  MapPin,
   User,
   CalendarDays,
+  ClipboardList,
   PanelLeftClose,
   PanelLeftOpen,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -60,7 +62,7 @@ const EMPTY_CTX: HierarchyContext = { level: "all" };
 export const HIERARCHY_FALLBACK = {
   year: "Sem Data",
   client: "Sem Cliente",
-  unit: "Sem Unidade Operacional",
+  unit: "Sem Work",
   week: "Sem Semana",
   technician: "Sem Técnico",
 } as const;
@@ -136,7 +138,7 @@ function sortKeys(keys: string[], opts?: { numericDesc?: boolean }) {
   });
 }
 
-function buildTree(records: HierarchyRecord[]): TreeNode[] {
+function buildTree(records: HierarchyRecord[], weekIcon?: LucideIcon): TreeNode[] {
   const byYear = groupBy(records, getYear);
   return sortKeys([...byYear.keys()], { numericDesc: true }).map((year) => {
     const yearRows = byYear.get(year)!;
@@ -157,7 +159,7 @@ function buildTree(records: HierarchyRecord[]): TreeNode[] {
               key: `y:${year}|c:${client}|u:${unit}`,
               label: unit,
               count: unitRows.length,
-              icon: Wrench,
+              icon: MapPin,
               ctx: { level: "unit", year, client, unit } as HierarchyContext,
               children: sortKeys([...byTech.keys()]).map((tech) => {
                 const techRows = byTech.get(tech)!;
@@ -172,7 +174,7 @@ function buildTree(records: HierarchyRecord[]): TreeNode[] {
                     key: `y:${year}|c:${client}|u:${unit}|t:${tech}|w:${week}`,
                     label: week,
                     count: byWeek.get(week)!.length,
-                    icon: CalendarDays,
+                    icon: weekIcon ?? CalendarDays,
                     ctx: {
                       level: "week",
                       year,
@@ -206,7 +208,7 @@ function buildTree(records: HierarchyRecord[]): TreeNode[] {
           key: `y:${year}|sec:operacional`,
           label: "Operacional",
           count: yearRows.length,
-          icon: Settings,
+          icon: Sprout,
           ctx: { level: "year", year, section: "operacional" } as HierarchyContext,
           children: tagOperational(operationalChildren),
         },
@@ -355,6 +357,8 @@ interface Props {
   /** Optional controlled collapsed state. When provided, parent owns the value. */
   collapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
+  /** Optional override for the week-level icon (default CalendarDays). */
+  weekIcon?: LucideIcon;
 }
 
 export function HierarchyExplorer({
@@ -367,6 +371,7 @@ export function HierarchyExplorer({
   collapsible = false,
   collapsed: controlledCollapsed,
   onCollapsedChange,
+  weekIcon,
 }: Props) {
   const [internalCollapsed, setInternalCollapsed] = useState<boolean>(() => {
     try {
@@ -419,7 +424,7 @@ export function HierarchyExplorer({
     }
   }, [collapsed, storageKey]);
 
-  const tree = useMemo(() => buildTree(records), [records]);
+  const tree = useMemo(() => buildTree(records, weekIcon), [records, weekIcon]);
 
   const toggle = useCallback((k: string) => {
     setOpen((prev) => {
@@ -438,7 +443,7 @@ export function HierarchyExplorer({
     if (records.length === 0) return "Nenhum registro salvo ainda.";
     if (context.level === "technician") return "Nenhum registro deste técnico.";
     if (context.level === "week") return "Nenhum registro nesta semana.";
-    if (context.level === "unit") return "Nenhum registro nesta unidade operacional.";
+    if (context.level === "unit") return "Nenhum registro nesta Work.";
     if (context.level === "client") return "Nenhum registro deste cliente.";
     if (context.level === "year") return "Nenhum registro neste período.";
     return "Sem dados para organizar.";
