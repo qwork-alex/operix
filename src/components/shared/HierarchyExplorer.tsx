@@ -710,6 +710,40 @@ export function HierarchyExplorer({
           )}
         </div>
       )}
+
+      <AlertDialog
+        open={!!pendingDeleteYear}
+        onOpenChange={(v) => { if (!v && !deleteBusy) setPendingDeleteYear(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">
+              Excluir operacional de {pendingDeleteYear}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Deseja realmente apagar o operacional de <strong className="text-foreground">{pendingDeleteYear}</strong>?
+              {pendingDeleteYear && dataYears.has(pendingDeleteYear) ? (
+                <> Esta ação remove <strong className="text-destructive">todos os registros, documentos e relatórios</strong> deste ano. Não pode ser desfeita.</>
+              ) : (
+                <> Este ano foi adicionado manualmente e ainda não tem registros — será removido apenas da lista.</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteBusy}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteBusy}
+              onClick={(e) => {
+                e.preventDefault();
+                if (pendingDeleteYear) confirmDeleteYear(pendingDeleteYear);
+              }}
+            >
+              {deleteBusy ? "Excluindo..." : "Sim, excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </aside>
   );
 }
