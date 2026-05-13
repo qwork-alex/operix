@@ -47,6 +47,7 @@ export type HierarchyRecord = {
   id: string;
   created_at?: string | null;
   client_name?: string | null;
+  platform?: string | null;
   operational_unit?: string | null;
   week?: string | null;
   list_name?: string | null; // PO uses list_name as week fallback
@@ -58,10 +59,11 @@ export type HierarchyRecord = {
 export type HierarchySection = "operacional" | "documentos" | "relatorios";
 
 export type HierarchyContext = {
-  level: "all" | "year" | "client" | "unit" | "week" | "technician";
+  level: "all" | "year" | "client" | "platform" | "unit" | "week" | "technician";
   section?: HierarchySection;
   year?: string;
   client?: string;
+  platform?: string;
   unit?: string;
   week?: string;
   technician?: string;
@@ -74,6 +76,7 @@ const EMPTY_CTX: HierarchyContext = { level: "all" };
 export const HIERARCHY_FALLBACK = {
   year: "Sem Data",
   client: "Sem Cliente",
+  platform: "Sem Plataforma",
   unit: "Sem Work",
   week: "Sem Semana",
   technician: "Sem Técnico",
