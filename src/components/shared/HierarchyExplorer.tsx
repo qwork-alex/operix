@@ -424,7 +424,7 @@ export function HierarchyExplorer({
     }
   }, [collapsed, storageKey]);
 
-  const tree = useMemo(() => buildTree(records), [records]);
+  const tree = useMemo(() => buildTree(records, weekIcon), [records, weekIcon]);
 
   const toggle = useCallback((k: string) => {
     setOpen((prev) => {
