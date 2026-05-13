@@ -291,7 +291,7 @@ function Row({ node, depth, open, toggle, active, onView, onRequestDelete }: Row
     node.ctx.level === "year" &&
     !node.ctx.section &&
     !!node.ctx.year;
-  const isPendingDelete = false; // inline pending UI deprecated — replaced by modal
+  
 
   return (
     <>
