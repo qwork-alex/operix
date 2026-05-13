@@ -266,7 +266,9 @@ function buildTree(records: HierarchyRecord[], weekIcon?: LucideIcon, extraYears
           count: yearRows.length,
           icon: Sprout,
           ctx: { level: "year", year, section: "operacional" } as HierarchyContext,
-          children: tagOperational(operationalChildren),
+          children: operationalChildren.length > 0
+            ? tagOperational(operationalChildren)
+            : buildPlaceholderTree(year),
         },
         {
           key: `y:${year}|sec:documentos`,
