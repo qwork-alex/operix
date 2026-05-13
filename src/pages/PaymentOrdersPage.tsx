@@ -302,7 +302,7 @@ function BottomCanvas({ hasExtractions, children }: { hasExtractions: boolean; c
       >
         <ChevronDown className="h-3 w-3" />
         <span className="uppercase tracking-wide">Tabela operacional</span>
-        <span className="ml-auto opacity-60">recolher</span>
+        
       </button>
       <div className="flex-1 min-h-0 overflow-auto max-h-[40vh]">{children}</div>
     </div>
