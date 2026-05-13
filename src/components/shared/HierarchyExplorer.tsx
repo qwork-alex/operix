@@ -159,7 +159,7 @@ function buildTree(records: HierarchyRecord[]): TreeNode[] {
               key: `y:${year}|c:${client}|u:${unit}`,
               label: unit,
               count: unitRows.length,
-              icon: Wrench,
+              icon: MapPin,
               ctx: { level: "unit", year, client, unit } as HierarchyContext,
               children: sortKeys([...byTech.keys()]).map((tech) => {
                 const techRows = byTech.get(tech)!;
