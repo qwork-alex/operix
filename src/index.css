@@ -6,7 +6,62 @@
 @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
 
 @layer base {
+  /* ===== LIGHT THEME (default) ===== */
   :root {
+    --background: 220 25% 97%;
+    --foreground: 220 25% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 25% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 25% 12%;
+
+    --primary: 142 71% 38%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 16% 92%;
+    --secondary-foreground: 220 25% 18%;
+
+    --muted: 220 16% 94%;
+    --muted-foreground: 220 12% 42%;
+
+    --accent: 210 80% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 152 60% 38%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 48%;
+    --warning-foreground: 38 100% 10%;
+
+    --border: 220 16% 88%;
+    --input: 220 16% 88%;
+    --ring: 142 71% 38%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 220 22% 96%;
+    --sidebar-foreground: 220 20% 25%;
+    --sidebar-primary: 142 71% 38%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 16% 90%;
+    --sidebar-accent-foreground: 220 25% 12%;
+    --sidebar-border: 220 16% 86%;
+    --sidebar-ring: 142 71% 38%;
+
+    --chart-1: 43 85% 50%;
+    --chart-2: 210 80% 50%;
+    --chart-3: 152 60% 38%;
+    --chart-4: 280 60% 50%;
+    --chart-5: 0 72% 50%;
+  }
+
+  /* ===== DARK THEME ===== */
+  .dark {
     --background: 220 15% 8%;
     --foreground: 40 10% 92%;
 
@@ -41,8 +96,6 @@
     --input: 220 12% 18%;
     --ring: 142 71% 45%;
 
-    --radius: 0.5rem;
-
     --sidebar-background: 220 16% 6%;
     --sidebar-foreground: 40 10% 75%;
     --sidebar-primary: 142 71% 45%;
@@ -65,10 +118,22 @@
     @apply border-border;
   }
 
+  html, body {
+    transition: background-color 200ms ease, color 200ms ease;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
     font-family: 'Sora', 'Inter', system-ui, -apple-system, sans-serif;
     font-feature-settings: 'cv11', 'ss01', 'ss03';
+  }
+
+  /* Smooth theme transitions for common surfaces */
+  button, a, input, textarea, select,
+  [class*="bg-"], [class*="border-"], [class*="text-"] {
+    transition-property: background-color, border-color, color, box-shadow;
+    transition-duration: 180ms;
+    transition-timing-function: ease;
   }
 
   /* Custom scrollbar */

@@ -1,4 +1,5 @@
-import { Bell, Globe, LogOut, Check, Trash2, FileText, CreditCard, AlertTriangle, Info, Clock } from "lucide-react";
+import { Bell, Globe, LogOut, Check, Trash2, FileText, CreditCard, AlertTriangle, Info, Clock, Sun, Moon } from "lucide-react";
+import { useTheme } from "@/hooks/useTheme";
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { BrandLogo } from "@/components/BrandLogo";
 import { brandConfig } from "@/brand.config";
@@ -44,6 +45,22 @@ function timeAgo(dateStr: string, t: (k: string, fb?: string) => string): string
   if (hrs < 24) return `${hrs}h`;
   const days = Math.floor(hrs / 24);
   return `${days}d`;
+}
+
+function ThemeToggleButton() {
+  const { theme, toggleTheme } = useTheme();
+  const Icon = theme === "dark" ? Sun : Moon;
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={toggleTheme}
+      className="text-muted-foreground hover:text-foreground"
+      aria-label="Toggle theme"
+    >
+      <Icon className="h-4 w-4" />
+    </Button>
+  );
 }
 
 export function TopBar() {
@@ -209,6 +226,9 @@ export function TopBar() {
             </ScrollArea>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/* Theme toggle */}
+        <ThemeToggleButton />
 
         {/* User avatar */}
         <DropdownMenu>
