@@ -692,11 +692,7 @@ export function HierarchyExplorer({
                 toggle={toggle}
                 active={context}
                 onView={onContextChange}
-                deletableYears={new Set(extraYears.filter((y) => !dataYears.has(y)))}
-                pendingDeleteKey={pendingDeleteKey}
-                onRequestDelete={setPendingDeleteKey}
-                onConfirmDelete={confirmDeleteYear}
-                onCancelDelete={() => setPendingDeleteKey(null)}
+                onRequestDelete={(year) => setPendingDeleteYear(year)}
               />
             ))
           )}
