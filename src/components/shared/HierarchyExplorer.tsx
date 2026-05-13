@@ -580,12 +580,12 @@ export function HierarchyExplorer({
           <FolderTree className="h-3.5 w-3.5 shrink-0" />
           {!collapsed && <span>{title}</span>}
         </div>
-        {!collapsed && (
+        {!collapsed && !addingYear && (
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              handleAddYear();
+              startAddYear();
             }}
             className="flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition-colors"
             title="Novo ano operacional"
