@@ -47,6 +47,22 @@ function timeAgo(dateStr: string, t: (k: string, fb?: string) => string): string
   return `${days}d`;
 }
 
+function ThemeToggleButton() {
+  const { theme, toggleTheme } = useTheme();
+  const Icon = theme === "dark" ? Sun : Moon;
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={toggleTheme}
+      className="text-muted-foreground hover:text-foreground"
+      aria-label="Toggle theme"
+    >
+      <Icon className="h-4 w-4" />
+    </Button>
+  );
+}
+
 export function TopBar() {
   const { profile, signOut } = useAuth();
   const { role } = useRole();
