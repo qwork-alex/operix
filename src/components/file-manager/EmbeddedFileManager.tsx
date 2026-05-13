@@ -576,8 +576,8 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
           </Select>
           <Dialog open={showFolderDialog} onOpenChange={setShowFolderDialog}>
             <DialogTrigger asChild>
-              <Button variant="outline" size="sm" className="h-7 text-[11px]">
-                <FolderPlus className="h-3 w-3 mr-1" />{t("docs.newFolder")}
+              <Button variant="outline" size="icon" className="h-7 w-7" title={t("docs.newFolder")}>
+                <FolderPlus className="h-3 w-3" />
               </Button>
             </DialogTrigger>
             <DialogContent className="bg-card border-border">
