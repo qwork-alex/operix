@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
   FolderOpen, FolderPlus, ChevronRight, Trash2, Download,
   Eye, Printer, FileText, MoveRight, Filter, CheckSquare, Pencil, Check, X,
-  ExternalLink, Loader2, Share2,
+  ExternalLink, Loader2, Share2, Home,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
