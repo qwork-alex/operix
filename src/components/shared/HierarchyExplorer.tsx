@@ -3,14 +3,12 @@ import {
   ChevronRight,
   FolderTree,
   Calendar,
-  Sprout,
-  Folder,
-  BarChart3,
-  Building2,
-  Layers,
-  MapPin,
-  User,
   CalendarDays,
+  Landmark,
+  MapPin,
+  HardHat,
+  Wrench,
+  Factory,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
@@ -164,26 +162,36 @@ function sortKeys(keys: string[], opts?: { numericAsc?: boolean; numericDesc?: b
 
 function buildPlaceholderTree(year: string): TreeNode[] {
   // Live placeholder shown when a year has no real OS/OP records yet.
-  // Generic names (Work, Técnico) act as structural hints — they disappear
-  // automatically as soon as real data is extracted.
+  // Structure: Operações → Work → Técnico. Disappears as soon as real data arrives.
   return [
     {
-      key: `y:${year}|placeholder|work`,
-      label: "Work",
+      key: `y:${year}|placeholder|ops`,
+      label: "Operações",
       count: 0,
-      icon: MapPin,
-      ctx: { level: "year", year, section: "operacional" } as HierarchyContext,
+      icon: Wrench,
+      ctx: { level: "year", year } as HierarchyContext,
       disabled: true,
       hint: "Sem dados",
       children: [
         {
-          key: `y:${year}|placeholder|work|tech`,
-          label: "Técnico",
+          key: `y:${year}|placeholder|ops|work`,
+          label: "Work",
           count: 0,
-          icon: User,
-          ctx: { level: "year", year, section: "operacional" } as HierarchyContext,
+          icon: Factory,
+          ctx: { level: "year", year } as HierarchyContext,
           disabled: true,
           hint: "Sem dados",
+          children: [
+            {
+              key: `y:${year}|placeholder|ops|work|tech`,
+              label: "Técnico",
+              count: 0,
+              icon: HardHat,
+              ctx: { level: "year", year } as HierarchyContext,
+              disabled: true,
+              hint: "Sem dados",
+            },
+          ],
         },
       ],
     },
@@ -196,8 +204,7 @@ function buildTree(records: HierarchyRecord[], weekIcon?: LucideIcon, extraYears
   return sortKeys([...allYears], { numericAsc: true }).map((year) => {
     const yearRows = byYear.get(year) ?? [];
     const byClient = groupBy(yearRows, getClient);
-    // Year → Client → Platform → Technician → Week.
-    // The "Work" / "Unit" intermediate layer was removed: platform IS the work/local.
+    // Year → Client → Platform → Technician → Week. NO "Operacional" wrapper.
     const operationalChildren: TreeNode[] = sortKeys([...byClient.keys()]).map((client) => {
       const clientRows = byClient.get(client)!;
       const byPlatform = groupBy(clientRows, getPlatform);
@@ -209,7 +216,7 @@ function buildTree(records: HierarchyRecord[], weekIcon?: LucideIcon, extraYears
           label: platform,
           count: platRows.length,
           icon: MapPin,
-          ctx: { level: "platform", year, client, platform } as HierarchyContext,
+          ctx: { level: "platform", year, client, platform, section: "operacional" } as HierarchyContext,
           children: sortKeys([...byTech.keys()]).map((tech) => {
             const techRows = byTech.get(tech)!;
             const byWeek = groupBy(techRows, getWeek);
@@ -217,8 +224,8 @@ function buildTree(records: HierarchyRecord[], weekIcon?: LucideIcon, extraYears
               key: `y:${year}|c:${client}|p:${platform}|t:${tech}`,
               label: tech,
               count: techRows.length,
-              icon: User,
-              ctx: { level: "technician", year, client, platform, technician: tech } as HierarchyContext,
+              icon: HardHat,
+              ctx: { level: "technician", year, client, platform, technician: tech, section: "operacional" } as HierarchyContext,
               children: sortKeys([...byWeek.keys()]).map((week) => ({
                 key: `y:${year}|c:${client}|p:${platform}|t:${tech}|w:${week}`,
                 label: week,
@@ -231,6 +238,7 @@ function buildTree(records: HierarchyRecord[], weekIcon?: LucideIcon, extraYears
                   platform,
                   technician: tech,
                   week,
+                  section: "operacional",
                 } as HierarchyContext,
               })),
             };
@@ -241,52 +249,21 @@ function buildTree(records: HierarchyRecord[], weekIcon?: LucideIcon, extraYears
         key: `y:${year}|c:${client}`,
         label: client,
         count: clientRows.length,
-        icon: Building2,
-        ctx: { level: "client", year, client } as HierarchyContext,
+        icon: Landmark,
+        ctx: { level: "client", year, client, section: "operacional" } as HierarchyContext,
         children: platformChildren,
       };
     });
-    // Tag operational subtree with section so canvas knows it's the data view
-    const tagOperational = (nodes: TreeNode[]): TreeNode[] =>
-      nodes.map((n) => ({
-        ...n,
-        ctx: { ...n.ctx, section: "operacional" as HierarchySection },
-        children: n.children ? tagOperational(n.children) : undefined,
-      }));
     return {
       key: `y:${year}`,
       label: year,
       count: yearRows.length,
       icon: Calendar,
-      ctx: { level: "year", year, section: "operacional" } as HierarchyContext,
-      children: [
-        {
-          key: `y:${year}|sec:operacional`,
-          label: "Operacional",
-          count: yearRows.length,
-          icon: Sprout,
-          ctx: { level: "year", year, section: "operacional" } as HierarchyContext,
-          children: operationalChildren.length > 0
-            ? tagOperational(operationalChildren)
-            : buildPlaceholderTree(year),
-        },
-        {
-          key: `y:${year}|sec:documentos`,
-          label: "Documentos",
-          count: 0,
-          icon: Folder,
-          ctx: { level: "year", year, section: "documentos" } as HierarchyContext,
-          hint: "Em breve",
-        } as TreeNode,
-        {
-          key: `y:${year}|sec:relatorios`,
-          label: "Relatórios",
-          count: 0,
-          icon: BarChart3,
-          ctx: { level: "year", year, section: "relatorios" } as HierarchyContext,
-          hint: "Em breve",
-        } as TreeNode,
-      ],
+      // No `section` on the year ctx → enables the inline delete button.
+      ctx: { level: "year", year } as HierarchyContext,
+      children: operationalChildren.length > 0
+        ? operationalChildren
+        : buildPlaceholderTree(year),
     };
   });
 }
@@ -395,11 +372,11 @@ function Row({ node, depth, open, toggle, active, onView, onRequestDelete }: Row
               e.stopPropagation();
               onRequestDelete?.(node.ctx.year!);
             }}
-            className="flex h-4 w-4 shrink-0 items-center justify-center rounded-sm opacity-0 group-hover:opacity-60 hover:!opacity-100 hover:text-destructive transition-opacity"
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground opacity-70 hover:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-colors"
             title="Excluir ano operacional"
             aria-label="Excluir ano operacional"
           >
-            <Trash2 className="h-3 w-3" />
+            <Trash2 className="h-3.5 w-3.5" />
           </button>
         )}
       </div>
