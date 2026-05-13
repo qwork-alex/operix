@@ -27,6 +27,7 @@ import {
   SettingsPage,
 } from "./pages/ModulePages";
 import FleetPage from "./pages/FleetPage";
+import BillingPage from "./pages/BillingPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -71,6 +72,7 @@ const App = () => (
                             <Route path="/profit" element={<PermissionGuard permission="profit.view"><ProfitDistribution /></PermissionGuard>} />
                             <Route path="/accounting" element={<PermissionGuard permission="accounting.view"><Accounting /></PermissionGuard>} />
                             <Route path="/fleet" element={<PermissionGuard permission="fleet.view"><FleetPage /></PermissionGuard>} />
+                            <Route path="/billing/*" element={<BillingPage />} />
                             <Route path="/documents" element={<PermissionGuard permission="documents.view"><Documents /></PermissionGuard>} />
                             <Route path="/users" element={<PermissionGuard permission="users.view"><UsersPage /></PermissionGuard>} />
                             <Route path="/settings" element={<SettingsPage />} />

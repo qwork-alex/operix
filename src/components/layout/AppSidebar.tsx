@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import {
   LayoutDashboard, FileText, CreditCard, TrendingUp, PieChart,
-  BookOpen, Car, FolderOpen, Users, Settings,
+  BookOpen, Car, FolderOpen, Users, Settings, Receipt,
 } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
@@ -44,6 +44,7 @@ export function AppSidebar() {
     { title: t("nav.profit"), url: "/profit", icon: PieChart, module: "profit", action: "view" },
     { title: t("nav.accounting"), url: "/accounting", icon: BookOpen, module: "accounting", action: "view" },
     { title: t("nav.fleet"), url: "/fleet", icon: Car, module: "fleet", action: "view" },
+    { title: "Faturamento", url: "/billing", icon: Receipt, module: "accounting", action: "view" },
     { title: t("nav.documents"), url: "/documents", icon: FolderOpen, module: "documents", action: "view" },
     { title: t("nav.users"), url: "/users", icon: Users, module: "users", action: "view" },
   ];
