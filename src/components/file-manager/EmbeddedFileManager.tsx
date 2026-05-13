@@ -26,6 +26,8 @@ interface Props {
   sessionFileNames?: string[];
   /** Phase 1C.2 — start collapsed when there is no upload activity. */
   defaultCollapsed?: boolean;
+  /** Phase 1E-Z — isolate documents per operational year context. */
+  year?: string | null;
 }
 
 interface PreviewState {
