@@ -407,6 +407,15 @@ export function HierarchyExplorer({
     }
   }, [context, storageKey]);
 
+  // Persist collapsed state
+  useEffect(() => {
+    try {
+      localStorage.setItem(`${storageKey}.collapsed`, collapsed ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, [collapsed, storageKey]);
+
   const tree = useMemo(() => buildTree(records), [records]);
 
   const toggle = useCallback((k: string) => {
