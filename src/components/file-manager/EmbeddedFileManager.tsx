@@ -540,7 +540,6 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
   };
 
   if (collapsed) {
-    const fileCount = filteredDocs.filter((d: any) => d.type === "file").length;
     return (
       <button
         type="button"
@@ -551,26 +550,18 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
           <ChevronRight className="h-3.5 w-3.5" />
           <FolderOpen className="h-3.5 w-3.5 text-primary" />
           <span className="font-medium text-foreground">{t("fm.title")}</span>
-          <span className="text-[10px]">{fileCount} {t("common.file").toLowerCase()}(s)</span>
         </span>
-        <span className="text-[10px] uppercase tracking-wide">Expandir</span>
       </button>
     );
   }
 
   return (
     <div className="space-y-3 rounded-lg border border-border/50 bg-card/50 p-4">
-      <div className="flex justify-end">
-        <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => setCollapsed(true)}>Recolher</Button>
-      </div>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <FolderOpen className="h-4 w-4 text-primary" />
           <span className="text-sm font-medium text-foreground">{t("fm.title")}</span>
-          <Badge variant="secondary" className="text-[10px]">
-            {filteredDocs.filter((d: any) => d.type === "file").length} {t("common.file").toLowerCase()}(s)
-          </Badge>
         </div>
         <div className="flex items-center gap-2">
           <Select value={filterMode} onValueChange={(v) => setFilterMode(v as any)}>
@@ -585,8 +576,8 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
           </Select>
           <Dialog open={showFolderDialog} onOpenChange={setShowFolderDialog}>
             <DialogTrigger asChild>
-              <Button variant="outline" size="sm" className="h-7 text-[11px]">
-                <FolderPlus className="h-3 w-3 mr-1" />{t("docs.newFolder")}
+              <Button variant="outline" size="icon" className="h-7 w-7" title={t("docs.newFolder")}>
+                <FolderPlus className="h-3 w-3" />
               </Button>
             </DialogTrigger>
             <DialogContent className="bg-card border-border">

@@ -10,6 +10,8 @@ import {
   Wrench,
   User,
   CalendarDays,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -318,15 +320,7 @@ function Row({ node, depth, open, toggle, active, onView }: RowProps) {
           {node.label}
         </span>
 
-        {node.hint ? (
-          <span className="rounded-sm bg-muted/40 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
-            {node.hint}
-          </span>
-        ) : (
-          <span className="text-[10px] tabular-nums text-muted-foreground">
-            {node.count}
-          </span>
-        )}
+        {/* Counters and hints removed — Phase 1E visual compaction */}
       </div>
 
       {isOpen && hasChildren && (
@@ -356,6 +350,8 @@ interface Props {
   title?: string;
   /** Optional override for the empty state. Falls back to a smart contextual message. */
   emptyMessage?: string;
+  /** Phase 1E — allow complete lateral collapse into icon-only rail. */
+  collapsible?: boolean;
 }
 
 export function HierarchyExplorer({
@@ -365,7 +361,17 @@ export function HierarchyExplorer({
   onContextChange,
   title = "OPERACIONAL",
   emptyMessage,
+  collapsible = false,
 }: Props) {
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try {
+      const raw = localStorage.getItem(`${storageKey}.collapsed`);
+      return raw === "1";
+    } catch {
+      return false;
+    }
+  });
+
   const [open, setOpen] = useState<Set<string>>(() => {
     try {
       const raw = localStorage.getItem(`${storageKey}.open`);
@@ -392,6 +398,15 @@ export function HierarchyExplorer({
       /* ignore */
     }
   }, [context, storageKey]);
+
+  // Persist collapsed state
+  useEffect(() => {
+    try {
+      localStorage.setItem(`${storageKey}.collapsed`, collapsed ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, [collapsed, storageKey]);
 
   const tree = useMemo(() => buildTree(records), [records]);
 
@@ -422,38 +437,99 @@ export function HierarchyExplorer({
     <aside className="flex h-full w-full flex-col rounded-lg border border-border/50 bg-card/40 backdrop-blur">
       <header
         className={cn(
-          "flex items-center justify-between gap-2 border-b border-border/50 px-3 py-2 cursor-pointer hover:bg-sidebar-accent/40",
+          "flex items-center gap-2 border-b border-border/50 px-3 py-2",
           context.level === "all" && "text-primary",
         )}
-        onClick={() => onContextChange(EMPTY_CTX)}
-        title="Limpar contexto"
       >
-        <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          <FolderTree className="h-3.5 w-3.5" />
-          <span>{title}</span>
+        <div
+          className="flex flex-1 items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground cursor-pointer hover:text-foreground"
+          onClick={() => onContextChange(EMPTY_CTX)}
+          title="Limpar contexto"
+        >
+          <FolderTree className="h-3.5 w-3.5 shrink-0" />
+          {!collapsed && <span>{title}</span>}
         </div>
-        <span className="text-[10px] tabular-nums text-muted-foreground">{total}</span>
+        {collapsible && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setCollapsed((c) => !c);
+            }}
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-sm hover:bg-sidebar-accent transition-colors"
+            title={collapsed ? "Expandir" : "Recolher"}
+            aria-label={collapsed ? "Expandir" : "Recolher"}
+          >
+            {collapsed ? (
+              <PanelLeftOpen className="h-3 w-3" />
+            ) : (
+              <PanelLeftClose className="h-3 w-3" />
+            )}
+          </button>
+        )}
       </header>
 
-      <div className="flex-1 overflow-auto py-1">
-        {tree.length === 0 ? (
-          <p className="px-3 py-4 text-xs text-muted-foreground">
-            {smartEmpty}
-          </p>
-        ) : (
-          tree.map((node) => (
-            <Row
-              key={node.key}
-              node={node}
-              depth={0}
-              open={open}
-              toggle={toggle}
-              active={context}
-              onView={onContextChange}
-            />
-          ))
-        )}
-      </div>
+      {collapsed ? (
+        <div className="flex flex-1 flex-col items-center gap-1 overflow-auto py-2">
+          {tree.map((node) => {
+            const isActive = context.year === node.label;
+            return (
+              <button
+                key={node.key}
+                type="button"
+                onClick={() => {
+                  setCollapsed(false);
+                  onContextChange(node.ctx);
+                }}
+                className={cn(
+                  "flex h-7 w-7 items-center justify-center rounded-md transition-colors",
+                  isActive
+                    ? "bg-sidebar-accent text-primary"
+                    : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground",
+                )}
+                title={node.label}
+              >
+                <Calendar className="h-3.5 w-3.5" />
+              </button>
+            );
+          })}
+          {context.level !== "all" && (
+            <div className="mt-2 flex flex-col items-center gap-1 border-t border-border/40 pt-2 w-full px-1">
+              {[context.year, context.client, context.unit, context.week, context.technician]
+                .filter(Boolean)
+                .map((label, i) => (
+                  <span
+                    key={i}
+                    className="block w-full truncate text-center text-[9px] text-muted-foreground"
+                    title={label}
+                  >
+                    {label}
+                  </span>
+                ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="flex-1 overflow-auto py-1">
+          {tree.length === 0 ? (
+            <p className="px-3 py-4 text-xs text-muted-foreground">
+              {smartEmpty}
+            </p>
+          ) : (
+            tree.map((node) => (
+              <Row
+                key={node.key}
+                node={node}
+                depth={0}
+                open={open}
+                toggle={toggle}
+                active={context}
+                onView={onContextChange}
+              />
+            ))
+          )}
+        </div>
+      )}
     </aside>
   );
 }

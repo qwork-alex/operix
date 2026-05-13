@@ -1,5 +1,6 @@
 import { useCallback, useState, useRef, useEffect } from "react";
 import { Upload, FileText, Image, Loader2, Camera, ScanLine, SwitchCamera, X, Check, RotateCcw } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/hooks/useLanguage";
 import { Button } from "@/components/ui/button";
@@ -195,42 +196,35 @@ export function FileUploadZone({ onFilesSelected, isProcessing, compact = false 
   if (compact) {
     return (
       <>
-        <div className="flex items-center gap-1.5">
-          <Can permission="service_orders.upload_document">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
             <Button
               variant="outline"
-              size="sm"
-              className="h-8 text-xs gap-1.5"
-              onClick={() => fileInputRef.current?.click()}
+              size="icon"
+              className="h-8 w-8"
               disabled={isProcessing}
+              aria-label={t("upload.add") || "Adicionar"}
             >
               {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-              {isProcessing ? (t("upload.extracting") || "...") : (t("upload.file") || "Upload")}
             </Button>
-          </Can>
-          <Can permission="service_orders.scan_document">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 text-xs gap-1.5"
-              onClick={() => startCamera("photo")}
-              disabled={isProcessing}
-            >
-              <Camera className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">{t("upload.photo") || "Photo"}</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 text-xs gap-1.5"
-              onClick={() => startCamera("scan")}
-              disabled={isProcessing}
-            >
-              <ScanLine className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">{t("upload.scan") || "Scan"}</span>
-            </Button>
-          </Can>
-        </div>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-[180px]">
+            <DropdownMenuItem onClick={() => fileInputRef.current?.click()} disabled={isProcessing}>
+              <FileText className="h-3.5 w-3.5 mr-2" />
+              {t("upload.file") || "Enviar arquivo"}
+            </DropdownMenuItem>
+            <Can permission="service_orders.scan_document">
+              <DropdownMenuItem onClick={() => startCamera("photo")} disabled={isProcessing}>
+                <Camera className="h-3.5 w-3.5 mr-2" />
+                {t("upload.photo") || "Tirar foto"}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => startCamera("scan")} disabled={isProcessing}>
+                <ScanLine className="h-3.5 w-3.5 mr-2" />
+                {t("upload.scan") || "Escanear documento"}
+              </DropdownMenuItem>
+            </Can>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <input
           ref={fileInputRef}
           type="file"

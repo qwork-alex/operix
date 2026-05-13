@@ -193,12 +193,13 @@ export default function PaymentOrdersPage() {
   return (
     <div className="animate-fade-in flex h-[calc(100vh-3.5rem)] w-full">
       {/* SIDEBAR OPERACIONAL */}
-      <aside className="hidden md:flex w-56 shrink-0 border-r border-border/40 bg-card/20">
+      <aside className="hidden md:flex w-56 shrink-0 border-r border-border/40 bg-card/20 transition-all">
         <HierarchyExplorer
           records={orders as any}
           storageKey="hierarchy.payment_orders"
           context={hCtx}
           onContextChange={setHCtx}
+          collapsible
         />
       </aside>
 
