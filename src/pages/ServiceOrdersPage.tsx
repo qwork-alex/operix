@@ -245,8 +245,35 @@ export default function ServiceOrdersPage() {
 
   const hasExtractions = extractions.length > 0;
 
+  const handleDeleteYear = useCallback(async (year: string) => {
+    const y = parseInt(year, 10);
+    if (!Number.isFinite(y)) return;
+    const start = new Date(Date.UTC(y, 0, 1)).toISOString();
+    const end = new Date(Date.UTC(y + 1, 0, 1)).toISOString();
+    try {
+      const ordersRes = await supabase
+        .from("service_orders")
+        .delete()
+        .gte("created_at", start)
+        .lt("created_at", end);
+      if (ordersRes.error) throw ordersRes.error;
+      await supabase
+        .from("documents")
+        .delete()
+        .eq("entity_type", "service_order")
+        .gte("created_at", start)
+        .lt("created_at", end);
+      await queryClient.invalidateQueries({ queryKey: ["service_orders"] });
+      await queryClient.invalidateQueries({ queryKey: ["embedded-docs", "service_order"] });
+      toast.success(`Operacional de ${year} excluído.`);
+    } catch (err) {
+      toast.error(`Erro ao excluir ${year}: ${(err as Error).message}`, { duration: 8000 });
+      throw err;
+    }
+  }, [queryClient]);
+
   return (
-    <div className="animate-fade-in flex h-[calc(100vh-3.5rem)] w-full flex-col p-3 gap-3">
+    <div className="animate-fade-in flex h-[calc(100vh-3.5rem)] w-full flex-col p-2 gap-2">
       {/* HEADER — sits ABOVE the operational tree, full width */}
       <header className="flex items-center justify-between gap-3 border-b border-border/40 px-1 pb-2 shrink-0">
         <div className="flex items-center gap-3 min-w-0">
