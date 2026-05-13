@@ -62,7 +62,7 @@ const EMPTY_CTX: HierarchyContext = { level: "all" };
 export const HIERARCHY_FALLBACK = {
   year: "Sem Data",
   client: "Sem Cliente",
-  unit: "Sem Unidade Operacional",
+  unit: "Sem Work",
   week: "Sem Semana",
   technician: "Sem Técnico",
 } as const;
