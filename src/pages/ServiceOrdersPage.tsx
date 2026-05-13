@@ -33,6 +33,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTechnicianEarnings, getTechEarnings } from "@/hooks/useTechnicianEarnings";
 import { Can } from "@/components/Can";
 import { getCurrentUser } from "@/lib/authUser";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function ServiceOrdersPage() {
   const { t, formatCurrency } = useLanguage();
