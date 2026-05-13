@@ -23,6 +23,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import InvoicesScreen from "@/components/billing/InvoicesScreen";
 
 // ─────────────────────────────────────────────────────────────
 // Sub-nav definition
