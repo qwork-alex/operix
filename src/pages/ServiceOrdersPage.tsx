@@ -251,6 +251,20 @@ export default function ServiceOrdersPage() {
     const start = new Date(Date.UTC(y, 0, 1)).toISOString();
     const end = new Date(Date.UTC(y + 1, 0, 1)).toISOString();
     try {
+      // Collect SO ids in range to cascade-clean dependents that reference them.
+      const soIdsRes = await supabase
+        .from("service_orders")
+        .select("id")
+        .gte("created_at", start)
+        .lt("created_at", end);
+      const soIds = (soIdsRes.data ?? []).map((r: any) => r.id);
+      if (soIds.length > 0) {
+        // Cascade dependents (best-effort; ignore errors so the year still wipes).
+        await supabase.from("service_order_distributions").delete().in("service_order_id", soIds);
+        await supabase.from("discrepancies").delete().in("service_order_id", soIds);
+        await supabase.from("reconciliations").delete().in("service_order_id", soIds);
+        await supabase.from("financial_records").delete().in("service_order_id", soIds);
+      }
       const ordersRes = await supabase
         .from("service_orders")
         .delete()
@@ -263,8 +277,13 @@ export default function ServiceOrdersPage() {
         .eq("entity_type", "service_order")
         .gte("created_at", start)
         .lt("created_at", end);
-      await queryClient.invalidateQueries({ queryKey: ["service_orders"] });
-      await queryClient.invalidateQueries({ queryKey: ["embedded-docs", "service_order"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["service_orders"] }),
+        queryClient.invalidateQueries({ queryKey: ["embedded-docs", "service_order"] }),
+        queryClient.invalidateQueries({ queryKey: ["financial_records"] }),
+        queryClient.invalidateQueries({ queryKey: ["reconciliations"] }),
+        queryClient.invalidateQueries({ queryKey: ["discrepancies"] }),
+      ]);
       toast.success(`Operacional de ${year} excluído.`);
     } catch (err) {
       toast.error(`Erro ao excluir ${year}: ${(err as Error).message}`, { duration: 8000 });
