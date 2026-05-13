@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import {
   ChevronRight,
   FolderTree,
@@ -10,10 +10,10 @@ import {
   MapPin,
   User,
   CalendarDays,
-  ClipboardList,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
+  Trash2,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
