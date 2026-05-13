@@ -490,14 +490,22 @@ export function HierarchyExplorer({
     setYearError(null);
   }, [yearInput]);
 
-  const confirmDeleteYear = useCallback((year: string) => {
-    setExtraYears((prev) => prev.filter((y) => y !== year));
-    setPendingDeleteKey(null);
-    // Clear active context if it referenced the removed year
-    if (context.year === year) {
-      onContextChange(EMPTY_CTX);
+  const confirmDeleteYear = useCallback(async (year: string) => {
+    setDeleteBusy(true);
+    try {
+      // If year has stored data, hand off to parent to wipe it.
+      if (dataYears.has(year)) {
+        await onDeleteYear?.(year);
+      }
+      setExtraYears((prev) => prev.filter((y) => y !== year));
+      if (context.year === year) {
+        onContextChange(EMPTY_CTX);
+      }
+    } finally {
+      setDeleteBusy(false);
+      setPendingDeleteYear(null);
     }
-  }, [context.year, onContextChange]);
+  }, [dataYears, onDeleteYear, context.year, onContextChange]);
 
   // Persist opened nodes
   useEffect(() => {
