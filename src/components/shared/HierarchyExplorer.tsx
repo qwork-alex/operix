@@ -394,6 +394,8 @@ interface Props {
   onCollapsedChange?: (collapsed: boolean) => void;
   /** Optional override for the week-level icon (default CalendarDays). */
   weekIcon?: LucideIcon;
+  /** Phase 1F-C — wipe all data attached to a year. Receives the year as string. */
+  onDeleteYear?: (year: string) => Promise<void> | void;
 }
 
 export function HierarchyExplorer({
@@ -407,6 +409,7 @@ export function HierarchyExplorer({
   collapsed: controlledCollapsed,
   onCollapsedChange,
   weekIcon,
+  onDeleteYear,
 }: Props) {
   const [internalCollapsed, setInternalCollapsed] = useState<boolean>(() => {
     try {
