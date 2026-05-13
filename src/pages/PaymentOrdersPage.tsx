@@ -138,6 +138,16 @@ export default function PaymentOrdersPage() {
         status: "pending",
         group_id: r.list_name ?? ctxDefaults.week ?? null,
       };
+      // Phase 1E-X: respect active operational year context.
+      if (hCtx.year && /^\d{4}$/.test(hCtx.year)) {
+        const y = parseInt(hCtx.year, 10);
+        const now = new Date();
+        if (y !== now.getFullYear()) {
+          const d = new Date(now);
+          d.setFullYear(y);
+          payload.created_at = d.toISOString();
+        }
+      }
       return payload as PaymentOrderInsert;
     });
 
