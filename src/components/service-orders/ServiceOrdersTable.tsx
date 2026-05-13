@@ -366,13 +366,38 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
     );
   }
 
-  // Group orders by week
-  const groupedOrders = allWeeks.map(week => ({
-    week,
-    orders: orders.filter(o => o.week === week),
-    status: getWeekStatus(week),
-    total: orders.filter(o => o.week === week).reduce((s, o) => s + (Number(o.total) || 0), 0),
-  }));
+  // Group by composite identity (year|client|platform|unit|tech|week)
+  const groupMap = new Map<string, { key: string; orders: ServiceOrderRow[] }>();
+  for (const o of orders) {
+    const k = groupKeyOf(o);
+    const g = groupMap.get(k);
+    if (g) g.orders.push(o);
+    else groupMap.set(k, { key: k, orders: [o] });
+  }
+  const groupedOrders = [...groupMap.values()]
+    .map(g => {
+      const parts = g.key.split("||");
+      return {
+        key: g.key,
+        year: parts[0],
+        client: parts[1],
+        platform: parts[2],
+        unit: parts[3],
+        tech: parts[4],
+        week: parts[5],
+        orders: g.orders,
+        status: getGroupStatus(g.orders),
+        total: g.orders.reduce((s, o) => s + (Number(o.total) || 0), 0),
+      };
+    })
+    .sort((a, b) =>
+      a.year.localeCompare(b.year) ||
+      a.client.localeCompare(b.client) ||
+      a.platform.localeCompare(b.platform) ||
+      a.unit.localeCompare(b.unit) ||
+      a.tech.localeCompare(b.tech) ||
+      a.week.localeCompare(b.week, undefined, { numeric: true })
+    );
 
   return (
     <div className="space-y-4">
@@ -396,20 +421,40 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
         </div>
       )}
 
-      {/* Grouped by week */}
-      {groupedOrders.map(group => (
-        <div key={group.week || "__none__"} className="space-y-1">
-          {/* Week group header */}
-          <div className="flex items-center justify-between rounded-lg bg-secondary/40 px-4 py-2">
-            <div className="flex items-center gap-3">
+      {/* Grouped by composite identity */}
+      {groupedOrders.map(group => {
+        const isCollapsed = collapsedGroups.has(group.key);
+        return (
+        <div key={group.key} className="space-y-1">
+          {/* Group header */}
+          <div className="flex items-center justify-between rounded-lg bg-secondary/40 px-3 py-2">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <button
+                type="button"
+                onClick={() => toggleCollapse(group.key)}
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-sm hover:bg-background/40 text-muted-foreground"
+                title={isCollapsed ? "Expandir" : "Recolher"}
+                aria-label={isCollapsed ? "Expandir" : "Recolher"}
+              >
+                {isCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              </button>
               <Button
                 variant={group.orders.every(o => selected.has(o.id)) ? "secondary" : "outline"}
                 size="sm"
-                className="h-6 text-[10px] px-2"
-                onClick={() => toggleWeek(group.week)}
+                className="h-6 text-[10px] px-2 shrink-0"
+                onClick={() => toggleGroupSelection(group.orders)}
               >
-                {group.week || "Sem semana"}
+                {group.week}
               </Button>
+              <span className="hidden md:flex items-center gap-1.5 text-[11px] text-muted-foreground min-w-0 truncate">
+                <span className="text-foreground/80 font-medium">{group.client}</span>
+                <span>·</span><span>{group.platform}</span>
+                <span>·</span><span>{group.unit}</span>
+                <span>·</span><span>{group.tech}</span>
+                <span>·</span><span>{group.year}</span>
+              </span>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
               <span className="text-xs text-muted-foreground">
                 {group.orders.length} itens · {formatCurrency(group.total)}
               </span>
@@ -418,6 +463,8 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
               </span>
             </div>
           </div>
+
+          {!isCollapsed && (
 
           {/* Table for this week */}
           <div className="rounded-lg border border-border/50 overflow-hidden">
