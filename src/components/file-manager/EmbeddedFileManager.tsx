@@ -549,41 +549,15 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
     setShowMoveDialog(true);
   };
 
-  if (collapsed) {
-    return (
-      <button
-        type="button"
-        onClick={() => setCollapsed(false)}
-        className="flex w-full items-center justify-between rounded-md border border-border/50 bg-card/40 px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-card/70"
-      >
-        <span className="flex items-center gap-2">
-          <ChevronRight className="h-3.5 w-3.5" />
-          <FolderOpen className="h-3.5 w-3.5 text-primary" />
-          <span className="font-medium text-foreground">{t("fm.title")}</span>
-        </span>
-      </button>
-    );
-  }
-
   return (
-    <div className="space-y-3 rounded-lg border border-border/50 bg-card/50 p-4">
-      {/* Header */}
+    <div className="space-y-3">
+      {/* Header — minimal, no card wrapper */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <FolderOpen className="h-4 w-4 text-primary" />
           <span className="text-sm font-medium text-foreground">{t("fm.title")}</span>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={filterMode} onValueChange={(v) => setFilterMode(v as any)}>
-            <SelectTrigger className="h-7 w-[130px] text-[11px]">
-              <Filter className="h-3 w-3 mr-1" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t("fm.allFiles")}</SelectItem>
-              <SelectItem value="session">{t("fm.sessionFiles")}</SelectItem>
-            </SelectContent>
-          </Select>
           <Dialog open={showFolderDialog} onOpenChange={setShowFolderDialog}>
             <DialogTrigger asChild>
               <Button variant="outline" size="icon" className="h-7 w-7" title={t("docs.newFolder")}>
