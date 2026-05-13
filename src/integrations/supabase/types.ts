@@ -74,6 +74,364 @@ export type Database = {
         }
         Relationships: []
       }
+      billing_attachments: {
+        Row: {
+          created_at: string
+          file_name: string
+          id: string
+          invoice_id: string | null
+          mime_type: string | null
+          payment_id: string | null
+          size_bytes: number | null
+          storage_path: string
+          supplier_id: string | null
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          id?: string
+          invoice_id?: string | null
+          mime_type?: string | null
+          payment_id?: string | null
+          size_bytes?: number | null
+          storage_path: string
+          supplier_id?: string | null
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          id?: string
+          invoice_id?: string | null
+          mime_type?: string | null
+          payment_id?: string | null
+          size_bytes?: number | null
+          storage_path?: string
+          supplier_id?: string | null
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_attachments_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "billing_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billing_attachments_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "billing_payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billing_attachments_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "billing_suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      billing_invoice_items: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          invoice_id: string
+          position: number
+          quantity: number
+          total: number
+          unit_price: number
+          vat_rate: number
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          id?: string
+          invoice_id: string
+          position?: number
+          quantity?: number
+          total?: number
+          unit_price?: number
+          vat_rate?: number
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          invoice_id?: string
+          position?: number
+          quantity?: number
+          total?: number
+          unit_price?: number
+          vat_rate?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_invoice_items_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "billing_invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      billing_invoices: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          customer_name: string | null
+          due_date: string | null
+          fleet_id: string | null
+          id: string
+          invoice_number: string
+          issue_date: string
+          notes: string | null
+          paid_amount: number
+          remaining_amount: number | null
+          service_order_id: string | null
+          status: Database["public"]["Enums"]["billing_invoice_status"]
+          supplier_id: string | null
+          total_amount: number
+          type: Database["public"]["Enums"]["billing_invoice_type"]
+          updated_at: string
+          vehicle_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          customer_name?: string | null
+          due_date?: string | null
+          fleet_id?: string | null
+          id?: string
+          invoice_number: string
+          issue_date?: string
+          notes?: string | null
+          paid_amount?: number
+          remaining_amount?: number | null
+          service_order_id?: string | null
+          status?: Database["public"]["Enums"]["billing_invoice_status"]
+          supplier_id?: string | null
+          total_amount?: number
+          type?: Database["public"]["Enums"]["billing_invoice_type"]
+          updated_at?: string
+          vehicle_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          customer_name?: string | null
+          due_date?: string | null
+          fleet_id?: string | null
+          id?: string
+          invoice_number?: string
+          issue_date?: string
+          notes?: string | null
+          paid_amount?: number
+          remaining_amount?: number | null
+          service_order_id?: string | null
+          status?: Database["public"]["Enums"]["billing_invoice_status"]
+          supplier_id?: string | null
+          total_amount?: number
+          type?: Database["public"]["Enums"]["billing_invoice_type"]
+          updated_at?: string
+          vehicle_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_invoices_service_order_id_fkey"
+            columns: ["service_order_id"]
+            isOneToOne: false
+            referencedRelation: "service_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billing_invoices_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "billing_suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      billing_payment_methods: {
+        Row: {
+          code: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          code?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          code?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      billing_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          id: string
+          invoice_id: string
+          notes: string | null
+          payment_date: string
+          payment_method_id: string | null
+          reconciliation_id: string | null
+          reference: string | null
+          status: Database["public"]["Enums"]["billing_payment_status"]
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          invoice_id: string
+          notes?: string | null
+          payment_date?: string
+          payment_method_id?: string | null
+          reconciliation_id?: string | null
+          reference?: string | null
+          status?: Database["public"]["Enums"]["billing_payment_status"]
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          invoice_id?: string
+          notes?: string | null
+          payment_date?: string
+          payment_method_id?: string | null
+          reconciliation_id?: string | null
+          reference?: string | null
+          status?: Database["public"]["Enums"]["billing_payment_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_payments_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "billing_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billing_payments_payment_method_id_fkey"
+            columns: ["payment_method_id"]
+            isOneToOne: false
+            referencedRelation: "billing_payment_methods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billing_payments_reconciliation_id_fkey"
+            columns: ["reconciliation_id"]
+            isOneToOne: false
+            referencedRelation: "billing_reconciliations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      billing_reconciliations: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          reconciliation_date: string
+          reference: string | null
+          status: Database["public"]["Enums"]["billing_reconciliation_status"]
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          reconciliation_date?: string
+          reference?: string | null
+          status?: Database["public"]["Enums"]["billing_reconciliation_status"]
+          total_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          reconciliation_date?: string
+          reference?: string | null
+          status?: Database["public"]["Enums"]["billing_reconciliation_status"]
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      billing_suppliers: {
+        Row: {
+          address: string | null
+          created_at: string
+          created_by: string | null
+          email: string | null
+          id: string
+          is_active: boolean
+          name: string
+          notes: string | null
+          phone: string | null
+          tax_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          notes?: string | null
+          phone?: string | null
+          tax_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          tax_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       clients: {
         Row: {
           address: string | null
@@ -1943,6 +2301,20 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "partner" | "technician" | "client"
+      billing_invoice_status:
+        | "draft"
+        | "pending"
+        | "partial"
+        | "paid"
+        | "overdue"
+        | "cancelled"
+      billing_invoice_type: "incoming" | "outgoing"
+      billing_payment_status: "pending" | "confirmed" | "failed" | "refunded"
+      billing_reconciliation_status:
+        | "pending"
+        | "matched"
+        | "partial"
+        | "rejected"
       membership_role: "admin" | "tecnico" | "cliente" | "socio"
       membership_status: "active" | "pending"
       permission_scope: "own" | "team" | "all"
@@ -2074,6 +2446,22 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "partner", "technician", "client"],
+      billing_invoice_status: [
+        "draft",
+        "pending",
+        "partial",
+        "paid",
+        "overdue",
+        "cancelled",
+      ],
+      billing_invoice_type: ["incoming", "outgoing"],
+      billing_payment_status: ["pending", "confirmed", "failed", "refunded"],
+      billing_reconciliation_status: [
+        "pending",
+        "matched",
+        "partial",
+        "rejected",
+      ],
       membership_role: ["admin", "tecnico", "cliente", "socio"],
       membership_status: ["active", "pending"],
       permission_scope: ["own", "team", "all"],
