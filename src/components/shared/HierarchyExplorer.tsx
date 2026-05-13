@@ -139,10 +139,11 @@ function sortKeys(keys: string[], opts?: { numericDesc?: boolean }) {
   });
 }
 
-function buildTree(records: HierarchyRecord[], weekIcon?: LucideIcon): TreeNode[] {
+function buildTree(records: HierarchyRecord[], weekIcon?: LucideIcon, extraYears: string[] = []): TreeNode[] {
   const byYear = groupBy(records, getYear);
-  return sortKeys([...byYear.keys()], { numericDesc: true }).map((year) => {
-    const yearRows = byYear.get(year)!;
+  const allYears = new Set<string>([...byYear.keys(), ...extraYears]);
+  return sortKeys([...allYears], { numericDesc: true }).map((year) => {
+    const yearRows = byYear.get(year) ?? [];
     const byClient = groupBy(yearRows, getClient);
     const operationalChildren: TreeNode[] = sortKeys([...byClient.keys()]).map((client) => {
         const clientRows = byClient.get(client)!;
