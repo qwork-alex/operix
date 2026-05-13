@@ -265,14 +265,10 @@ interface RowProps {
   toggle: (k: string) => void;
   active: HierarchyContext;
   onView: (ctx: HierarchyContext) => void;
-  deletableYears?: Set<string>;
-  pendingDeleteKey?: string | null;
-  onRequestDelete?: (key: string) => void;
-  onConfirmDelete?: (year: string) => void;
-  onCancelDelete?: () => void;
+  onRequestDelete?: (year: string) => void;
 }
 
-function Row({ node, depth, open, toggle, active, onView, deletableYears, pendingDeleteKey, onRequestDelete, onConfirmDelete, onCancelDelete }: RowProps) {
+function Row({ node, depth, open, toggle, active, onView, onRequestDelete }: RowProps) {
   const isOpen = open.has(node.key);
   const hasChildren = !!node.children?.length;
   const isDisabled = !!node.disabled;
