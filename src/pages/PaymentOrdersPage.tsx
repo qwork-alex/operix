@@ -211,6 +211,16 @@ export default function PaymentOrdersPage() {
     const start = new Date(Date.UTC(y, 0, 1)).toISOString();
     const end = new Date(Date.UTC(y + 1, 0, 1)).toISOString();
     try {
+      const poIdsRes = await supabase
+        .from("payment_orders")
+        .select("id")
+        .gte("created_at", start)
+        .lt("created_at", end);
+      const poIds = (poIdsRes.data ?? []).map((r: any) => r.id);
+      if (poIds.length > 0) {
+        await supabase.from("reconciliations").delete().in("payment_order_id", poIds);
+        await supabase.from("financial_records").delete().in("payment_order_id", poIds);
+      }
       const ordersRes = await supabase
         .from("payment_orders")
         .delete()
@@ -223,8 +233,12 @@ export default function PaymentOrdersPage() {
         .eq("entity_type", "payment_order")
         .gte("created_at", start)
         .lt("created_at", end);
-      await queryClient.invalidateQueries({ queryKey: ["payment_orders"] });
-      await queryClient.invalidateQueries({ queryKey: ["embedded-docs", "payment_order"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["payment_orders"] }),
+        queryClient.invalidateQueries({ queryKey: ["embedded-docs", "payment_order"] }),
+        queryClient.invalidateQueries({ queryKey: ["financial_records"] }),
+        queryClient.invalidateQueries({ queryKey: ["reconciliations"] }),
+      ]);
       toast.success(`Operacional de ${year} excluído.`);
     } catch (err) {
       toast.error(`Erro ao excluir ${year}: ${(err as Error).message}`, { duration: 8000 });
