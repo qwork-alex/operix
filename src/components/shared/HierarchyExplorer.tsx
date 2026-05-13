@@ -13,6 +13,7 @@ import {
   ClipboardList,
   PanelLeftClose,
   PanelLeftOpen,
+  Plus,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
