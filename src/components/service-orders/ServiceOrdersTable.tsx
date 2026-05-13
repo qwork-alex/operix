@@ -32,6 +32,7 @@ interface ServiceOrderRow {
   user_id?: string | null;
   assigned_user_id?: string | null;
   week: string | null;
+  operational_unit?: string | null;
   car_name: string | null;
   license_plate: string | null;
   service_1_name: string | null;
