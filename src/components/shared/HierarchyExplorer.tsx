@@ -174,7 +174,7 @@ function buildTree(records: HierarchyRecord[]): TreeNode[] {
                     key: `y:${year}|c:${client}|u:${unit}|t:${tech}|w:${week}`,
                     label: week,
                     count: byWeek.get(week)!.length,
-                    icon: CalendarDays,
+                    icon: weekIcon ?? CalendarDays,
                     ctx: {
                       level: "week",
                       year,
