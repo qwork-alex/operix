@@ -255,9 +255,14 @@ interface RowProps {
   toggle: (k: string) => void;
   active: HierarchyContext;
   onView: (ctx: HierarchyContext) => void;
+  deletableYears?: Set<string>;
+  pendingDeleteKey?: string | null;
+  onRequestDelete?: (key: string) => void;
+  onConfirmDelete?: (year: string) => void;
+  onCancelDelete?: () => void;
 }
 
-function Row({ node, depth, open, toggle, active, onView }: RowProps) {
+function Row({ node, depth, open, toggle, active, onView, deletableYears, pendingDeleteKey, onRequestDelete, onConfirmDelete, onCancelDelete }: RowProps) {
   const isOpen = open.has(node.key);
   const hasChildren = !!node.children?.length;
   const isDisabled = !!node.disabled;
@@ -275,6 +280,13 @@ function Row({ node, depth, open, toggle, active, onView }: RowProps) {
     onView(node.ctx);
     if (hasChildren && !isOpen) toggle(node.key);
   };
+
+  const isDeletable =
+    node.ctx.level === "year" &&
+    !node.ctx.section &&
+    !!node.ctx.year &&
+    !!deletableYears?.has(node.ctx.year);
+  const isPendingDelete = pendingDeleteKey === node.key;
 
   return (
     <>
@@ -326,7 +338,38 @@ function Row({ node, depth, open, toggle, active, onView }: RowProps) {
           {node.label}
         </span>
 
-        {/* Counters and hints removed — Phase 1E visual compaction */}
+        {isDeletable && !isPendingDelete && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRequestDelete?.(node.key);
+            }}
+            className="flex h-4 w-4 shrink-0 items-center justify-center rounded-sm opacity-0 group-hover:opacity-60 hover:!opacity-100 hover:text-destructive transition-opacity"
+            title="Excluir ano operacional"
+            aria-label="Excluir ano operacional"
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        )}
+        {isDeletable && isPendingDelete && (
+          <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => onConfirmDelete?.(node.ctx.year!)}
+              className="rounded-sm px-1.5 py-0.5 text-[10px] font-medium text-destructive hover:bg-destructive/10"
+            >
+              Excluir
+            </button>
+            <button
+              type="button"
+              onClick={() => onCancelDelete?.()}
+              className="rounded-sm px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-sidebar-accent"
+            >
+              Cancelar
+            </button>
+          </div>
+        )}
       </div>
 
       {isOpen && hasChildren && (
@@ -340,6 +383,11 @@ function Row({ node, depth, open, toggle, active, onView }: RowProps) {
               toggle={toggle}
               active={active}
               onView={onView}
+              deletableYears={deletableYears}
+              pendingDeleteKey={pendingDeleteKey}
+              onRequestDelete={onRequestDelete}
+              onConfirmDelete={onConfirmDelete}
+              onCancelDelete={onCancelDelete}
             />
           ))}
         </div>
