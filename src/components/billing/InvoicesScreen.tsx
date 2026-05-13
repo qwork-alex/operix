@@ -1,0 +1,861 @@
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { format, parseISO } from "date-fns";
+import {
+  Search, Plus, Filter, Download, FileText, FileSpreadsheet,
+  MoreHorizontal, Eye, Pencil, Trash2, ChevronLeft, ChevronRight,
+  X, History, Loader2, ArrowDownToLine, ArrowUpFromLine,
+} from "lucide-react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import * as XLSX from "xlsx";
+import { toast } from "sonner";
+
+import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Sheet, SheetContent, SheetHeader, SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Tabs, TabsContent, TabsList, TabsTrigger,
+} from "@/components/ui/tabs";
+import {
+  Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
+  BreadcrumbPage, BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+
+// ───────────────────────────── types
+type InvoiceStatus = "draft" | "pending" | "partial" | "paid" | "overdue" | "cancelled";
+type InvoiceType = "incoming" | "outgoing";
+
+type Invoice = {
+  id: string;
+  invoice_number: string;
+  type: InvoiceType;
+  supplier_id: string | null;
+  customer_name: string | null;
+  vehicle_id: string | null;
+  fleet_id: string | null;
+  service_order_id: string | null;
+  issue_date: string;
+  due_date: string | null;
+  total_amount: number;
+  paid_amount: number;
+  remaining_amount: number;
+  status: InvoiceStatus;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type Supplier = { id: string; name: string };
+
+const STATUS_META: Record<InvoiceStatus, { label: string; cls: string; dot: string }> = {
+  draft:     { label: "Rascunho", cls: "bg-muted/40 text-muted-foreground border-border",            dot: "bg-muted-foreground" },
+  pending:   { label: "Pendente", cls: "bg-amber-500/10 text-amber-400 border-amber-500/30",         dot: "bg-amber-400" },
+  partial:   { label: "Parcial",  cls: "bg-blue-500/10 text-blue-400 border-blue-500/30",            dot: "bg-blue-400" },
+  paid:      { label: "Pago",     cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",   dot: "bg-emerald-400" },
+  overdue:   { label: "Vencida",  cls: "bg-destructive/15 text-destructive border-destructive/40",   dot: "bg-destructive" },
+  cancelled: { label: "Cancelada",cls: "bg-zinc-500/10 text-zinc-400 border-zinc-500/30 line-through", dot: "bg-zinc-400" },
+};
+
+const TYPE_META: Record<InvoiceType, { label: string; icon: typeof ArrowDownToLine; cls: string }> = {
+  incoming: { label: "Entrada", icon: ArrowDownToLine, cls: "text-emerald-400" },
+  outgoing: { label: "Saída",   icon: ArrowUpFromLine, cls: "text-blue-400" },
+};
+
+const fmtMoney = (n: number) =>
+  new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" }).format(Number(n) || 0);
+
+const fmtDate = (d?: string | null) => {
+  if (!d) return "—";
+  try { return format(parseISO(d), "dd/MM/yyyy"); } catch { return d; }
+};
+
+// ───────────────────────────── form
+type FormState = {
+  invoice_number: string;
+  type: InvoiceType;
+  supplier_id: string | null;
+  customer_name: string;
+  issue_date: string;
+  due_date: string;
+  total_amount: string;
+  paid_amount: string;
+  status: InvoiceStatus;
+  notes: string;
+};
+
+const emptyForm = (): FormState => ({
+  invoice_number: "",
+  type: "incoming",
+  supplier_id: null,
+  customer_name: "",
+  issue_date: new Date().toISOString().slice(0, 10),
+  due_date: "",
+  total_amount: "0",
+  paid_amount: "0",
+  status: "draft",
+  notes: "",
+});
+
+// ───────────────────────────── component
+export default function InvoicesScreen() {
+  const qc = useQueryClient();
+
+  // filters
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 12;
+
+  // selection
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // dialogs
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<Invoice | null>(null);
+  const [form, setForm] = useState<FormState>(emptyForm());
+
+  const [detail, setDetail] = useState<Invoice | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Invoice | null>(null);
+
+  // ── data
+  const invoicesQ = useQuery({
+    queryKey: ["billing_invoices"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("billing_invoices")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as Invoice[];
+    },
+  });
+
+  const suppliersQ = useQuery({
+    queryKey: ["billing_suppliers_lite"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("billing_suppliers")
+        .select("id,name")
+        .order("name");
+      if (error) throw error;
+      return (data ?? []) as Supplier[];
+    },
+  });
+
+  const supplierMap = useMemo(() => {
+    const m = new Map<string, string>();
+    (suppliersQ.data ?? []).forEach((s) => m.set(s.id, s.name));
+    return m;
+  }, [suppliersQ.data]);
+
+  // ── filtering
+  const filtered = useMemo(() => {
+    const list = invoicesQ.data ?? [];
+    const s = search.trim().toLowerCase();
+    return list.filter((r) => {
+      if (statusFilter !== "all" && r.status !== statusFilter) return false;
+      if (typeFilter !== "all" && r.type !== typeFilter) return false;
+      if (dateFrom && r.issue_date < dateFrom) return false;
+      if (dateTo && r.issue_date > dateTo) return false;
+      if (s) {
+        const hay = [
+          r.invoice_number,
+          r.customer_name ?? "",
+          r.notes ?? "",
+          supplierMap.get(r.supplier_id ?? "") ?? "",
+        ].join(" ").toLowerCase();
+        if (!hay.includes(s)) return false;
+      }
+      return true;
+    });
+  }, [invoicesQ.data, search, statusFilter, typeFilter, dateFrom, dateTo, supplierMap]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const current = page > totalPages ? 1 : page;
+  const pageData = filtered.slice((current - 1) * pageSize, current * pageSize);
+
+  useEffect(() => { setSelected(new Set()); }, [statusFilter, typeFilter, dateFrom, dateTo, search]);
+
+  // ── KPIs
+  const kpi = useMemo(() => {
+    const total = filtered.reduce((s, r) => s + Number(r.total_amount || 0), 0);
+    const paid = filtered.reduce((s, r) => s + Number(r.paid_amount || 0), 0);
+    return {
+      count: filtered.length,
+      total,
+      paid,
+      remaining: total - paid,
+      pending: filtered.filter((r) => r.status === "pending").length,
+      overdue: filtered.filter((r) => r.status === "overdue").length,
+    };
+  }, [filtered]);
+
+  // ── mutations
+  const upsertMut = useMutation({
+    mutationFn: async (payload: Partial<Invoice> & { id?: string }) => {
+      const { id, ...rest } = payload;
+      if (id) {
+        const { error } = await supabase.from("billing_invoices").update(rest).eq("id", id);
+        if (error) throw error;
+        return id;
+      }
+      const { data, error } = await supabase.from("billing_invoices").insert(rest as any).select("id").single();
+      if (error) throw error;
+      return data!.id as string;
+    },
+    onSuccess: (_id, vars) => {
+      qc.invalidateQueries({ queryKey: ["billing_invoices"] });
+      toast.success(vars.id ? "Fatura atualizada" : "Fatura criada");
+      setFormOpen(false);
+      setEditing(null);
+      setForm(emptyForm());
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Erro ao gravar fatura"),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await supabase.from("billing_invoices").delete().in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: (_, ids) => {
+      qc.invalidateQueries({ queryKey: ["billing_invoices"] });
+      toast.success(`${ids.length} fatura(s) eliminada(s)`);
+      setSelected(new Set());
+      setConfirmDelete(null);
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Erro ao eliminar"),
+  });
+
+  // ── actions
+  const openCreate = () => {
+    setEditing(null);
+    setForm(emptyForm());
+    setFormOpen(true);
+  };
+  const openEdit = (inv: Invoice) => {
+    setEditing(inv);
+    setForm({
+      invoice_number: inv.invoice_number,
+      type: inv.type,
+      supplier_id: inv.supplier_id,
+      customer_name: inv.customer_name ?? "",
+      issue_date: inv.issue_date,
+      due_date: inv.due_date ?? "",
+      total_amount: String(inv.total_amount ?? 0),
+      paid_amount: String(inv.paid_amount ?? 0),
+      status: inv.status,
+      notes: inv.notes ?? "",
+    });
+    setFormOpen(true);
+  };
+
+  const submitForm = () => {
+    if (!form.invoice_number.trim()) {
+      toast.error("Número da fatura é obrigatório");
+      return;
+    }
+    upsertMut.mutate({
+      id: editing?.id,
+      invoice_number: form.invoice_number.trim(),
+      type: form.type,
+      supplier_id: form.supplier_id || null,
+      customer_name: form.customer_name.trim() || null,
+      issue_date: form.issue_date,
+      due_date: form.due_date || null,
+      total_amount: Number(form.total_amount) || 0,
+      paid_amount: Number(form.paid_amount) || 0,
+      status: form.status,
+      notes: form.notes.trim() || null,
+    });
+  };
+
+  // ── export
+  const exportRows = () => (selected.size > 0
+    ? filtered.filter((r) => selected.has(r.id))
+    : filtered);
+
+  const exportExcel = () => {
+    const rows = exportRows().map((r) => ({
+      Número: r.invoice_number,
+      Tipo: TYPE_META[r.type].label,
+      Cliente_Fornecedor: r.customer_name ?? supplierMap.get(r.supplier_id ?? "") ?? "",
+      "Valor total": Number(r.total_amount),
+      "Valor pago": Number(r.paid_amount),
+      "Saldo restante": Number(r.remaining_amount),
+      Emissão: fmtDate(r.issue_date),
+      Vencimento: fmtDate(r.due_date),
+      Estado: STATUS_META[r.status].label,
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Faturas");
+    XLSX.writeFile(wb, `faturas_${format(new Date(), "yyyyMMdd_HHmm")}.xlsx`);
+    toast.success("Excel exportado");
+  };
+
+  const exportPDF = () => {
+    const rows = exportRows();
+    const doc = new jsPDF({ orientation: "landscape" });
+    doc.setFontSize(14);
+    doc.text("Faturas", 14, 14);
+    doc.setFontSize(9);
+    doc.text(`Gerado em ${format(new Date(), "dd/MM/yyyy HH:mm")} · ${rows.length} registros`, 14, 20);
+    autoTable(doc, {
+      startY: 26,
+      head: [["Número", "Tipo", "Cliente/Fornecedor", "Total", "Pago", "Saldo", "Emissão", "Vencimento", "Estado"]],
+      body: rows.map((r) => [
+        r.invoice_number,
+        TYPE_META[r.type].label,
+        r.customer_name ?? supplierMap.get(r.supplier_id ?? "") ?? "",
+        fmtMoney(Number(r.total_amount)),
+        fmtMoney(Number(r.paid_amount)),
+        fmtMoney(Number(r.remaining_amount)),
+        fmtDate(r.issue_date),
+        fmtDate(r.due_date),
+        STATUS_META[r.status].label,
+      ]),
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [30, 30, 35] },
+    });
+    doc.save(`faturas_${format(new Date(), "yyyyMMdd_HHmm")}.pdf`);
+    toast.success("PDF exportado");
+  };
+
+  // ── selection helpers
+  const allOnPageSelected = pageData.length > 0 && pageData.every((r) => selected.has(r.id));
+  const toggleAllOnPage = () => {
+    const next = new Set(selected);
+    if (allOnPageSelected) pageData.forEach((r) => next.delete(r.id));
+    else pageData.forEach((r) => next.add(r.id));
+    setSelected(next);
+  };
+
+  // ───────────────────────────── render
+  return (
+    <div className="space-y-6 animate-fade-in">
+      {/* Breadcrumbs */}
+      <Breadcrumb>
+        <BreadcrumbList className="text-xs">
+          <BreadcrumbItem><BreadcrumbLink href="/billing/faturas">Faturamento</BreadcrumbLink></BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem><BreadcrumbPage>Faturas</BreadcrumbPage></BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
+
+      {/* Header */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Faturas</h1>
+          <p className="text-xs text-muted-foreground mt-1">
+            Gestão completa de faturas — entrada, saída, pagamentos e estado.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8">
+                <Download className="h-3.5 w-3.5 mr-1.5" />
+                Exportar
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="text-xs">
+              <DropdownMenuItem onClick={exportExcel}>
+                <FileSpreadsheet className="h-3.5 w-3.5 mr-2 text-emerald-400" />
+                Exportar Excel
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={exportPDF}>
+                <FileText className="h-3.5 w-3.5 mr-2 text-rose-400" />
+                Exportar PDF
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button size="sm" className="h-8" onClick={openCreate}>
+            <Plus className="h-3.5 w-3.5 mr-1.5" />
+            Nova fatura
+          </Button>
+        </div>
+      </div>
+
+      {/* KPI band */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <KpiCard label="Total" value={String(kpi.count)} />
+        <KpiCard label="Montante" value={fmtMoney(kpi.total)} accent="text-primary" />
+        <KpiCard label="Pago" value={fmtMoney(kpi.paid)} accent="text-emerald-400" />
+        <KpiCard label="Saldo restante" value={fmtMoney(kpi.remaining)} accent="text-amber-400" />
+      </div>
+
+      {/* Filters */}
+      <Card className="border-border/50">
+        <CardContent className="pt-4 pb-3 grid grid-cols-1 md:grid-cols-12 gap-2">
+          <div className="relative md:col-span-4">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              placeholder="Pesquisar nº, cliente, fornecedor, notas..."
+              className="h-8 pl-8 text-xs"
+            />
+          </div>
+          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
+            <SelectTrigger className="h-8 text-xs md:col-span-2"><Filter className="h-3 w-3 mr-1.5" /><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os estados</SelectItem>
+              {Object.entries(STATUS_META).map(([k, v]) => (
+                <SelectItem key={k} value={k}>{v.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={typeFilter} onValueChange={(v) => { setTypeFilter(v); setPage(1); }}>
+            <SelectTrigger className="h-8 text-xs md:col-span-2"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os tipos</SelectItem>
+              <SelectItem value="incoming">Entrada</SelectItem>
+              <SelectItem value="outgoing">Saída</SelectItem>
+            </SelectContent>
+          </Select>
+          <Input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1); }} className="h-8 text-xs md:col-span-2" />
+          <Input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1); }} className="h-8 text-xs md:col-span-2" />
+        </CardContent>
+      </Card>
+
+      {/* Bulk action bar */}
+      {selected.size > 0 && (
+        <div className="flex items-center justify-between rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs animate-fade-in">
+          <span className="text-primary font-medium">{selected.size} selecionada(s)</span>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" className="h-7" onClick={exportExcel}>
+              <FileSpreadsheet className="h-3.5 w-3.5 mr-1.5" /> Excel
+            </Button>
+            <Button size="sm" variant="outline" className="h-7" onClick={exportPDF}>
+              <FileText className="h-3.5 w-3.5 mr-1.5" /> PDF
+            </Button>
+            <Button
+              size="sm" variant="destructive" className="h-7"
+              onClick={() => {
+                const list = filtered.filter((r) => selected.has(r.id));
+                setConfirmDelete({ ...list[0], invoice_number: `${list.length} fatura(s)` } as any);
+              }}
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Eliminar
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7" onClick={() => setSelected(new Set())}>
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Table */}
+      <Card className="border-border/50 overflow-hidden">
+        <div className="overflow-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="text-[10px] uppercase tracking-wider">
+                <TableHead className="w-[36px]">
+                  <Checkbox
+                    checked={allOnPageSelected}
+                    onCheckedChange={toggleAllOnPage}
+                    aria-label="Selecionar tudo"
+                  />
+                </TableHead>
+                <TableHead className="w-[140px]">Número</TableHead>
+                <TableHead>Cliente / Fornecedor</TableHead>
+                <TableHead className="w-[90px]">Tipo</TableHead>
+                <TableHead className="text-right w-[110px]">Valor total</TableHead>
+                <TableHead className="text-right w-[110px]">Pago</TableHead>
+                <TableHead className="text-right w-[110px]">Saldo</TableHead>
+                <TableHead className="w-[110px]">Emissão</TableHead>
+                <TableHead className="w-[110px]">Vencimento</TableHead>
+                <TableHead className="w-[110px]">Estado</TableHead>
+                <TableHead className="w-[60px] text-right">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {invoicesQ.isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={11} className="text-center py-12">
+                    <Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" />
+                  </TableCell>
+                </TableRow>
+              ) : pageData.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={11} className="text-center py-12 text-xs text-muted-foreground">
+                    Nenhuma fatura encontrada.
+                  </TableCell>
+                </TableRow>
+              ) : pageData.map((r) => {
+                const TypeIcon = TYPE_META[r.type].icon;
+                const partyName = r.customer_name ?? supplierMap.get(r.supplier_id ?? "") ?? "—";
+                const isSel = selected.has(r.id);
+                return (
+                  <TableRow
+                    key={r.id}
+                    className={cn("text-xs cursor-pointer hover:bg-accent/30 transition-colors", isSel && "bg-primary/5")}
+                    onClick={(e) => {
+                      if ((e.target as HTMLElement).closest("[data-stop]")) return;
+                      setDetail(r);
+                    }}
+                  >
+                    <TableCell data-stop>
+                      <Checkbox
+                        checked={isSel}
+                        onCheckedChange={(c) => {
+                          const next = new Set(selected);
+                          c ? next.add(r.id) : next.delete(r.id);
+                          setSelected(next);
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell className="font-mono text-[11px] text-primary">{r.invoice_number}</TableCell>
+                    <TableCell className="font-medium">{partyName}</TableCell>
+                    <TableCell>
+                      <span className={cn("inline-flex items-center gap-1.5", TYPE_META[r.type].cls)}>
+                        <TypeIcon className="h-3 w-3" />
+                        {TYPE_META[r.type].label}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums font-medium">{fmtMoney(Number(r.total_amount))}</TableCell>
+                    <TableCell className="text-right tabular-nums text-emerald-400">{fmtMoney(Number(r.paid_amount))}</TableCell>
+                    <TableCell className="text-right tabular-nums text-amber-400">{fmtMoney(Number(r.remaining_amount))}</TableCell>
+                    <TableCell className="text-muted-foreground">{fmtDate(r.issue_date)}</TableCell>
+                    <TableCell className="text-muted-foreground">{fmtDate(r.due_date)}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={cn("text-[10px] gap-1.5", STATUS_META[r.status].cls)}>
+                        <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_META[r.status].dot)} />
+                        {STATUS_META[r.status].label}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right" data-stop>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-7 w-7">
+                            <MoreHorizontal className="h-3.5 w-3.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="text-xs">
+                          <DropdownMenuItem onClick={() => setDetail(r)}>
+                            <Eye className="h-3.5 w-3.5 mr-2" /> Ver detalhes
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openEdit(r)}>
+                            <Pencil className="h-3.5 w-3.5 mr-2" /> Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="text-destructive" onClick={() => setConfirmDelete(r)}>
+                            <Trash2 className="h-3.5 w-3.5 mr-2" /> Eliminar
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+
+        {/* Pagination */}
+        <div className="flex items-center justify-between border-t border-border/50 px-4 py-2.5 text-xs text-muted-foreground">
+          <span>Página {current} de {totalPages} · {filtered.length} registros</span>
+          <div className="flex items-center gap-1">
+            <Button variant="outline" size="sm" className="h-7 px-2" disabled={current <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant="outline" size="sm" className="h-7 px-2" disabled={current >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      {/* ─── Form dialog */}
+      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{editing ? "Editar fatura" : "Nova fatura"}</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <Field label="Número *">
+              <Input value={form.invoice_number} onChange={(e) => setForm({ ...form, invoice_number: e.target.value })} className="h-8" />
+            </Field>
+            <Field label="Tipo">
+              <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v as InvoiceType })}>
+                <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="incoming">Entrada</SelectItem>
+                  <SelectItem value="outgoing">Saída</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Fornecedor">
+              <Select
+                value={form.supplier_id ?? "__none"}
+                onValueChange={(v) => setForm({ ...form, supplier_id: v === "__none" ? null : v })}
+              >
+                <SelectTrigger className="h-8"><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">— Nenhum —</SelectItem>
+                  {(suppliersQ.data ?? []).map((s) => (
+                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Cliente (texto livre)">
+              <Input value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} className="h-8" />
+            </Field>
+            <Field label="Data emissão">
+              <Input type="date" value={form.issue_date} onChange={(e) => setForm({ ...form, issue_date: e.target.value })} className="h-8" />
+            </Field>
+            <Field label="Vencimento">
+              <Input type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} className="h-8" />
+            </Field>
+            <Field label="Valor total (€)">
+              <Input type="number" step="0.01" value={form.total_amount} onChange={(e) => setForm({ ...form, total_amount: e.target.value })} className="h-8" />
+            </Field>
+            <Field label="Valor pago (€)">
+              <Input type="number" step="0.01" value={form.paid_amount} onChange={(e) => setForm({ ...form, paid_amount: e.target.value })} className="h-8" />
+            </Field>
+            <Field label="Estado">
+              <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as InvoiceStatus })}>
+                <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(STATUS_META).map(([k, v]) => (
+                    <SelectItem key={k} value={k}>{v.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Observações" full>
+              <Textarea rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="text-xs" />
+            </Field>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFormOpen(false)}>Cancelar</Button>
+            <Button onClick={submitForm} disabled={upsertMut.isPending}>
+              {upsertMut.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+              Gravar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Delete confirm */}
+      <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar fatura?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação é definitiva. {confirmDelete?.invoice_number ? `(${confirmDelete.invoice_number})` : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                const ids = selected.size > 0
+                  ? Array.from(selected)
+                  : confirmDelete ? [confirmDelete.id] : [];
+                if (ids.length) deleteMut.mutate(ids);
+              }}
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ─── Side detail panel */}
+      <Sheet open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+          {detail && (
+            <DetailContent
+              invoice={detail}
+              supplierName={supplierMap.get(detail.supplier_id ?? "") ?? null}
+              onEdit={() => { openEdit(detail); setDetail(null); }}
+              onDelete={() => { setConfirmDelete(detail); setDetail(null); }}
+            />
+          )}
+        </SheetContent>
+      </Sheet>
+    </div>
+  );
+}
+
+// ───────────────────────────── small bits
+function KpiCard({ label, value, accent }: { label: string; value: string; accent?: string }) {
+  return (
+    <Card className="border-border/50">
+      <CardContent className="pt-4 pb-3">
+        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
+        <p className={cn("text-lg font-semibold tabular-nums", accent)}>{value}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function Field({ label, children, full }: { label: string; children: React.ReactNode; full?: boolean }) {
+  return (
+    <div className={cn("space-y-1", full && "sm:col-span-2")}>
+      <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</Label>
+      {children}
+    </div>
+  );
+}
+
+// ───────────────────────────── side panel content
+function DetailContent({
+  invoice, supplierName, onEdit, onDelete,
+}: {
+  invoice: Invoice;
+  supplierName: string | null;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const auditQ = useQuery({
+    queryKey: ["invoice_audit", invoice.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("backend_event_logs")
+        .select("id,action,created_at,payload,actor_user_id")
+        .eq("table_name", "billing_invoices")
+        .eq("row_id", invoice.id)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  return (
+    <>
+      <SheetHeader className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className={cn("text-[10px] gap-1.5", STATUS_META[invoice.status].cls)}>
+            <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_META[invoice.status].dot)} />
+            {STATUS_META[invoice.status].label}
+          </Badge>
+          <Badge variant="outline" className="text-[10px]">{TYPE_META[invoice.type].label}</Badge>
+        </div>
+        <SheetTitle className="font-mono text-base">{invoice.invoice_number}</SheetTitle>
+        <p className="text-xs text-muted-foreground">
+          {invoice.customer_name ?? supplierName ?? "—"}
+        </p>
+      </SheetHeader>
+
+      <div className="mt-5 grid grid-cols-3 gap-2 text-xs">
+        <MiniKpi label="Total" value={fmtMoney(Number(invoice.total_amount))} />
+        <MiniKpi label="Pago"  value={fmtMoney(Number(invoice.paid_amount))} accent="text-emerald-400" />
+        <MiniKpi label="Saldo" value={fmtMoney(Number(invoice.remaining_amount))} accent="text-amber-400" />
+      </div>
+
+      <Tabs defaultValue="info" className="mt-5">
+        <TabsList className="grid grid-cols-2 w-full h-8">
+          <TabsTrigger value="info" className="text-xs">Detalhes</TabsTrigger>
+          <TabsTrigger value="history" className="text-xs">
+            <History className="h-3 w-3 mr-1" /> Histórico
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="info" className="space-y-3 mt-3 text-xs">
+          <Row k="Tipo"           v={TYPE_META[invoice.type].label} />
+          <Row k="Fornecedor"     v={supplierName ?? "—"} />
+          <Row k="Cliente"        v={invoice.customer_name ?? "—"} />
+          <Row k="Data emissão"   v={fmtDate(invoice.issue_date)} />
+          <Row k="Vencimento"     v={fmtDate(invoice.due_date)} />
+          <Row k="Criada em"      v={fmtDate(invoice.created_at)} />
+          <Row k="Atualizada em"  v={fmtDate(invoice.updated_at)} />
+          {invoice.notes && (
+            <div className="pt-2 border-t border-border/50">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Observações</p>
+              <p className="text-xs whitespace-pre-wrap">{invoice.notes}</p>
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="history" className="mt-3">
+          {auditQ.isLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          ) : (auditQ.data ?? []).length === 0 ? (
+            <p className="text-xs text-muted-foreground py-6 text-center">Sem histórico registado.</p>
+          ) : (
+            <ul className="space-y-2">
+              {(auditQ.data ?? []).map((e: any) => (
+                <li key={e.id} className="rounded-md border border-border/50 px-3 py-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">{e.action}</span>
+                    <span className="text-muted-foreground">{format(parseISO(e.created_at), "dd/MM HH:mm")}</span>
+                  </div>
+                  {e.actor_user_id && (
+                    <p className="text-[10px] text-muted-foreground font-mono mt-0.5 truncate">
+                      {e.actor_user_id}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      <div className="mt-6 flex items-center gap-2">
+        <Button variant="outline" size="sm" className="h-8 flex-1" onClick={onEdit}>
+          <Pencil className="h-3.5 w-3.5 mr-1.5" /> Editar
+        </Button>
+        <Button variant="destructive" size="sm" className="h-8" onClick={onDelete}>
+          <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Eliminar
+        </Button>
+      </div>
+    </>
+  );
+}
+
+function MiniKpi({ label, value, accent }: { label: string; value: string; accent?: string }) {
+  return (
+    <div className="rounded-md border border-border/50 bg-card/40 px-2 py-2">
+      <p className="text-[9px] uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className={cn("text-xs font-semibold tabular-nums", accent)}>{value}</p>
+    </div>
+  );
+}
+
+function Row({ k, v }: { k: string; v: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-1 border-b border-border/30 last:border-0">
+      <span className="text-muted-foreground">{k}</span>
+      <span className="font-medium text-right">{v}</span>
+    </div>
+  );
+}
