@@ -176,6 +176,18 @@
     @apply bg-card/80 backdrop-blur-sm border border-border/50;
   }
 
+  /* Subtle vertical column tonal alternation — no grid lines.
+     Applied on a parent <table> via class="table-cols-zebra".
+     Tonality is driven by --muted so it adapts to light & dark. */
+  .table-cols-zebra thead th:nth-child(even),
+  .table-cols-zebra tbody td:nth-child(even) {
+    background-color: hsl(var(--muted) / 0.35);
+  }
+  .dark .table-cols-zebra thead th:nth-child(even),
+  .dark .table-cols-zebra tbody td:nth-child(even) {
+    background-color: hsl(var(--muted) / 0.45);
+  }
+
   @keyframes slide-in-right-kf {
     from { transform: translateX(100%); }
     to { transform: translateX(0); }
