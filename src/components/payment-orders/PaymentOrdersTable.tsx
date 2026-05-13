@@ -466,7 +466,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
           </div>
 
           <div className="rounded-lg border border-border/50 overflow-auto">
-            <Table>
+            <Table className="table-cols-zebra">
               <TableHeader>
                 <TableRow className="text-[11px]">
                   <TableHead className="w-10" />
