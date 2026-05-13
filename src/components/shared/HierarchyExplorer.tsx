@@ -167,45 +167,57 @@ function buildTree(records: HierarchyRecord[], weekIcon?: LucideIcon, extraYears
     const byClient = groupBy(yearRows, getClient);
     const operationalChildren: TreeNode[] = sortKeys([...byClient.keys()]).map((client) => {
         const clientRows = byClient.get(client)!;
-        const byUnit = groupBy(clientRows, getUnit);
+        const byPlatform = groupBy(clientRows, getPlatform);
         return {
           key: `y:${year}|c:${client}`,
           label: client,
           count: clientRows.length,
           icon: Building2,
           ctx: { level: "client", year, client } as HierarchyContext,
-          children: sortKeys([...byUnit.keys()]).map((unit) => {
-            const unitRows = byUnit.get(unit)!;
-            const byTech = groupBy(unitRows, getTech);
+          children: sortKeys([...byPlatform.keys()]).map((platform) => {
+            const platRows = byPlatform.get(platform)!;
+            const byUnit = groupBy(platRows, getUnit);
             return {
-              key: `y:${year}|c:${client}|u:${unit}`,
-              label: unit,
-              count: unitRows.length,
-              icon: MapPin,
-              ctx: { level: "unit", year, client, unit } as HierarchyContext,
-              children: sortKeys([...byTech.keys()]).map((tech) => {
-                const techRows = byTech.get(tech)!;
-                const byWeek = groupBy(techRows, getWeek);
+              key: `y:${year}|c:${client}|p:${platform}`,
+              label: platform,
+              count: platRows.length,
+              icon: Layers,
+              ctx: { level: "platform", year, client, platform } as HierarchyContext,
+              children: sortKeys([...byUnit.keys()]).map((unit) => {
+                const unitRows = byUnit.get(unit)!;
+                const byTech = groupBy(unitRows, getTech);
                 return {
-                  key: `y:${year}|c:${client}|u:${unit}|t:${tech}`,
-                  label: tech,
-                  count: techRows.length,
-                  icon: User,
-                  ctx: { level: "technician", year, client, unit, technician: tech } as HierarchyContext,
-                  children: sortKeys([...byWeek.keys()]).map((week) => ({
-                    key: `y:${year}|c:${client}|u:${unit}|t:${tech}|w:${week}`,
-                    label: week,
-                    count: byWeek.get(week)!.length,
-                    icon: weekIcon ?? CalendarDays,
-                    ctx: {
-                      level: "week",
-                      year,
-                      client,
-                      unit,
-                      technician: tech,
-                      week,
-                    } as HierarchyContext,
-                  })),
+                  key: `y:${year}|c:${client}|p:${platform}|u:${unit}`,
+                  label: unit,
+                  count: unitRows.length,
+                  icon: MapPin,
+                  ctx: { level: "unit", year, client, platform, unit } as HierarchyContext,
+                  children: sortKeys([...byTech.keys()]).map((tech) => {
+                    const techRows = byTech.get(tech)!;
+                    const byWeek = groupBy(techRows, getWeek);
+                    return {
+                      key: `y:${year}|c:${client}|p:${platform}|u:${unit}|t:${tech}`,
+                      label: tech,
+                      count: techRows.length,
+                      icon: User,
+                      ctx: { level: "technician", year, client, platform, unit, technician: tech } as HierarchyContext,
+                      children: sortKeys([...byWeek.keys()]).map((week) => ({
+                        key: `y:${year}|c:${client}|p:${platform}|u:${unit}|t:${tech}|w:${week}`,
+                        label: week,
+                        count: byWeek.get(week)!.length,
+                        icon: weekIcon ?? CalendarDays,
+                        ctx: {
+                          level: "week",
+                          year,
+                          client,
+                          platform,
+                          unit,
+                          technician: tech,
+                          week,
+                        } as HierarchyContext,
+                      })),
+                    };
+                  }),
                 };
               }),
             };
