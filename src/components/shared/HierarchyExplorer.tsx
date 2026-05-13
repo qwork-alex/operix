@@ -138,7 +138,7 @@ function sortKeys(keys: string[], opts?: { numericDesc?: boolean }) {
   });
 }
 
-function buildTree(records: HierarchyRecord[]): TreeNode[] {
+function buildTree(records: HierarchyRecord[], weekIcon?: LucideIcon): TreeNode[] {
   const byYear = groupBy(records, getYear);
   return sortKeys([...byYear.keys()], { numericDesc: true }).map((year) => {
     const yearRows = byYear.get(year)!;
