@@ -411,22 +411,46 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
     );
   }
 
-  const groupedOrders = listNames.map(listName => {
-    const groupOrders = orders.filter(o => o.list_name === listName);
-    // Calculate max services used in this group for dynamic column rendering
-    const maxServices = groupOrders.reduce((max, o) => {
-      const raw = Array.isArray(o.services) ? (o.services as unknown as ServiceEntry[]) : [];
-      const filled = raw.filter(s => s.name || s.price).length;
-      return Math.max(max, filled);
-    }, 0) || 1; // at least 1 column
-    return {
-      listName,
-      orders: groupOrders,
-      status: getListStatus(listName),
-      total: groupOrders.reduce((s, o) => s + (o.total || 0), 0),
-      maxServices: Math.min(maxServices, MAX_SERVICES),
-    };
-  });
+  // Build composite groups
+  const groupMap = new Map<string, PaymentOrderRow[]>();
+  for (const o of orders) {
+    const k = groupKeyOf(o);
+    const arr = groupMap.get(k);
+    if (arr) arr.push(o); else groupMap.set(k, [o]);
+  }
+  const groupedOrders = [...groupMap.entries()]
+    .map(([key, groupOrders]) => {
+      const parts = key.split("||");
+      const maxServices = groupOrders.reduce((max, o) => {
+        const raw = Array.isArray(o.services) ? (o.services as unknown as ServiceEntry[]) : [];
+        const filled = raw.filter(s => s.name || s.price).length;
+        return Math.max(max, filled);
+      }, 0) || 1;
+      // Use the first row's actual list_name (preserving null) for batch mutation
+      const actualListName = groupOrders[0]?.list_name ?? null;
+      return {
+        key,
+        year: parts[0],
+        client: parts[1],
+        platform: parts[2],
+        unit: parts[3],
+        tech: parts[4],
+        listLabel: parts[5],
+        listName: actualListName,
+        orders: groupOrders,
+        status: getGroupStatus(groupOrders),
+        total: groupOrders.reduce((s, o) => s + (o.total || 0), 0),
+        maxServices: Math.min(maxServices, MAX_SERVICES),
+      };
+    })
+    .sort((a, b) =>
+      a.year.localeCompare(b.year) ||
+      a.client.localeCompare(b.client) ||
+      a.platform.localeCompare(b.platform) ||
+      a.unit.localeCompare(b.unit) ||
+      a.tech.localeCompare(b.tech) ||
+      a.listLabel.localeCompare(b.listLabel, undefined, { numeric: true })
+    );
 
   return (
     <div className="space-y-2">
@@ -444,40 +468,60 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
         </div>
       )}
 
-      {groupedOrders.map(group => (
-        <div key={group.listName || "__none__"} className="space-y-1">
-          <div className="flex items-center justify-between rounded-lg bg-secondary/40 px-4 py-2">
-            <div className="flex items-center gap-3">
-              <Button
-                variant={orders.filter(o => o.list_name === group.listName).every(o => selected.has(o.id)) ? "secondary" : "outline"}
-                size="sm"
-                className="h-6 text-[10px] px-2"
-                onClick={() => toggleList(group.listName)}
+      {groupedOrders.map(group => {
+        const isCollapsed = collapsedGroups.has(group.key);
+        return (
+        <div key={group.key} className="space-y-1">
+          <div className="flex items-center justify-between rounded-lg bg-secondary/40 px-3 py-2">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <button
+                type="button"
+                onClick={() => toggleCollapse(group.key)}
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-sm hover:bg-background/40 text-muted-foreground"
+                title={isCollapsed ? "Expandir" : "Recolher"}
+                aria-label={isCollapsed ? "Expandir" : "Recolher"}
               >
-                {group.listName || "Sem semana"}
+                {isCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              </button>
+              <Button
+                variant={group.orders.every(o => selected.has(o.id)) ? "secondary" : "outline"}
+                size="sm"
+                className="h-6 text-[10px] px-2 shrink-0"
+                onClick={() => toggleGroupSelection(group.orders)}
+              >
+                {group.listLabel}
               </Button>
+              <span className="hidden md:flex items-center gap-1.5 text-[11px] text-muted-foreground min-w-0 truncate">
+                <span className="text-foreground/80 font-medium">{group.client}</span>
+                <span>·</span><span>{group.platform}</span>
+                <span>·</span><span>{group.unit}</span>
+                <span>·</span><span>{group.tech}</span>
+                <span>·</span><span>{group.year}</span>
+              </span>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
               <span className="text-xs text-muted-foreground">
                 {group.orders.length} itens · {formatCurrency(group.total)}
               </span>
               <span className={cn("text-xs font-medium", groupStatusStyle[group.status])}>
                 {groupStatusLabel[group.status]}
               </span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="text-[10px] text-muted-foreground mr-1">Alterar lote:</span>
-              <Button variant="outline" size="sm" className="h-6 text-[10px] px-2 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
-                onClick={() => group.listName && batchStatusMutation.mutate({ listName: group.listName, mode: "paid" })}
-                disabled={batchStatusMutation.isPending || !group.listName}>
-                <CheckCircle2 className="h-3 w-3 mr-0.5" /> Pago
-              </Button>
-              <Button variant="outline" size="sm" className="h-6 text-[10px] px-2 border-red-500/30 text-red-400 hover:bg-red-500/10"
-                onClick={() => group.listName && batchStatusMutation.mutate({ listName: group.listName, mode: "pending" })}
-                disabled={batchStatusMutation.isPending || !group.listName}>
-                Pendente
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
+                  onClick={() => group.listName && batchStatusMutation.mutate({ listName: group.listName, mode: "paid" })}
+                  disabled={batchStatusMutation.isPending || !group.listName}>
+                  <CheckCircle2 className="h-3 w-3 mr-0.5" /> Pago
+                </Button>
+                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2 border-red-500/30 text-red-400 hover:bg-red-500/10"
+                  onClick={() => group.listName && batchStatusMutation.mutate({ listName: group.listName, mode: "pending" })}
+                  disabled={batchStatusMutation.isPending || !group.listName}>
+                  Pendente
+                </Button>
+              </div>
             </div>
           </div>
 
+          {!isCollapsed && (
           <div className="rounded-lg border border-border/50 overflow-auto">
             <Table className="table-cols-zebra">
               <TableHeader>
