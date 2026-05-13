@@ -557,9 +557,6 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
 
   return (
     <div className="space-y-3 rounded-lg border border-border/50 bg-card/50 p-4">
-      <div className="flex justify-end">
-        <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => setCollapsed(true)}>Recolher</Button>
-      </div>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
