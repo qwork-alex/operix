@@ -65,8 +65,9 @@ export default function ServiceOrdersPage() {
 
   const handleFiles = useCallback((files: File[]) => {
     const ctxDefaults = hierarchyDefaults(hCtx);
+    const targetYear = hCtx.year ?? null;
     addFiles(files, async (file, onStatus) => {
-      const storedDocument = await storeFileInDocuments(file, "service_order", user?.id).then((doc) => {
+      const storedDocument = await storeFileInDocuments(file, "service_order", user?.id, "orders", targetYear).then((doc) => {
         queryClient.invalidateQueries({ queryKey: ["embedded-docs", "service_order"] });
         return doc;
       });
