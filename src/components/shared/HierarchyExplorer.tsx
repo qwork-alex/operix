@@ -76,11 +76,14 @@ const EMPTY_CTX: HierarchyContext = { level: "all" };
 export const HIERARCHY_FALLBACK = {
   year: "Sem Data",
   client: "Sem Cliente",
-  platform: "Sem Plataforma",
-  unit: "Sem Work",
+  platform: "Plataforma",
+  unit: "Work",
   week: "Sem Semana",
   technician: "Sem Técnico",
 } as const;
+
+/** Static container label inserted between Client and Platform/Local. */
+export const WORK_CONTAINER_LABEL = "Work";
 
 function getYear(r: HierarchyRecord): string {
   if (!r.created_at) return HIERARCHY_FALLBACK.year;
