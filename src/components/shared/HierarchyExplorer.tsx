@@ -565,10 +565,10 @@ export function HierarchyExplorer({
   })();
 
   return (
-    <aside className="flex h-full w-full flex-col rounded-lg border border-border/50 bg-card/40 backdrop-blur">
+    <aside className="flex h-full w-full flex-col">
       <header
         className={cn(
-          "flex items-center gap-2 border-b border-border/50 px-3 py-2",
+          "flex items-center gap-2 px-1 py-1.5",
           context.level === "all" && "text-primary",
         )}
       >
