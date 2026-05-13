@@ -369,8 +369,16 @@ export function HierarchyExplorer({
   onContextChange,
   title = "OPERACIONAL",
   emptyMessage,
+  collapsible = false,
 }: Props) {
-  const [open, setOpen] = useState<Set<string>>(() => {
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try {
+      const raw = localStorage.getItem(`${storageKey}.collapsed`);
+      return raw === "1";
+    } catch {
+      return false;
+    }
+  });
     try {
       const raw = localStorage.getItem(`${storageKey}.open`);
       return new Set(raw ? (JSON.parse(raw) as string[]) : []);
