@@ -13,6 +13,7 @@ import {
   ClipboardList,
   PanelLeftClose,
   PanelLeftOpen,
+  Plus,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -138,10 +139,11 @@ function sortKeys(keys: string[], opts?: { numericDesc?: boolean }) {
   });
 }
 
-function buildTree(records: HierarchyRecord[], weekIcon?: LucideIcon): TreeNode[] {
+function buildTree(records: HierarchyRecord[], weekIcon?: LucideIcon, extraYears: string[] = []): TreeNode[] {
   const byYear = groupBy(records, getYear);
-  return sortKeys([...byYear.keys()], { numericDesc: true }).map((year) => {
-    const yearRows = byYear.get(year)!;
+  const allYears = new Set<string>([...byYear.keys(), ...extraYears]);
+  return sortKeys([...allYears], { numericDesc: true }).map((year) => {
+    const yearRows = byYear.get(year) ?? [];
     const byClient = groupBy(yearRows, getClient);
     const operationalChildren: TreeNode[] = sortKeys([...byClient.keys()]).map((client) => {
         const clientRows = byClient.get(client)!;
@@ -397,6 +399,34 @@ export function HierarchyExplorer({
     }
   });
 
+  const [extraYears, setExtraYears] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(`${storageKey}.extraYears`);
+      return raw ? (JSON.parse(raw) as string[]) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(`${storageKey}.extraYears`, JSON.stringify(extraYears));
+    } catch {
+      /* ignore */
+    }
+  }, [extraYears, storageKey]);
+
+  const handleAddYear = useCallback(() => {
+    const input = window.prompt("Novo ano operacional (ex: 2027):");
+    if (!input) return;
+    const trimmed = input.trim();
+    if (!/^\d{4}$/.test(trimmed)) {
+      window.alert("Informe um ano com 4 dígitos.");
+      return;
+    }
+    setExtraYears((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
+  }, []);
+
   // Persist opened nodes
   useEffect(() => {
     try {
@@ -424,7 +454,7 @@ export function HierarchyExplorer({
     }
   }, [collapsed, storageKey]);
 
-  const tree = useMemo(() => buildTree(records, weekIcon), [records, weekIcon]);
+  const tree = useMemo(() => buildTree(records, weekIcon, extraYears), [records, weekIcon, extraYears]);
 
   const toggle = useCallback((k: string) => {
     setOpen((prev) => {
@@ -465,6 +495,20 @@ export function HierarchyExplorer({
           <FolderTree className="h-3.5 w-3.5 shrink-0" />
           {!collapsed && <span>{title}</span>}
         </div>
+        {!collapsed && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleAddYear();
+            }}
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition-colors"
+            title="Novo ano operacional"
+            aria-label="Novo ano operacional"
+          >
+            <Plus className="h-3 w-3" />
+          </button>
+        )}
         {collapsible && (
           <button
             type="button"
