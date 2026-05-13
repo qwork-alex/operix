@@ -379,6 +379,8 @@ export function HierarchyExplorer({
       return false;
     }
   });
+
+  const [open, setOpen] = useState<Set<string>>(() => {
     try {
       const raw = localStorage.getItem(`${storageKey}.open`);
       return new Set(raw ? (JSON.parse(raw) as string[]) : []);
