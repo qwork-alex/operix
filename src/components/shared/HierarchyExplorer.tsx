@@ -443,7 +443,7 @@ export function HierarchyExplorer({
     if (records.length === 0) return "Nenhum registro salvo ainda.";
     if (context.level === "technician") return "Nenhum registro deste técnico.";
     if (context.level === "week") return "Nenhum registro nesta semana.";
-    if (context.level === "unit") return "Nenhum registro nesta unidade operacional.";
+    if (context.level === "unit") return "Nenhum registro nesta Work.";
     if (context.level === "client") return "Nenhum registro deste cliente.";
     if (context.level === "year") return "Nenhum registro neste período.";
     return "Sem dados para organizar.";
