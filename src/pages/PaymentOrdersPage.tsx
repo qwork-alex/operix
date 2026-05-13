@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, Wallet } from "lucide-react";
 import {
   HierarchyExplorer,
   applyHierarchyContext,
@@ -194,10 +194,10 @@ export default function PaymentOrdersPage() {
   const hasExtractions = extractions.length > 0;
 
   return (
-    <div className="animate-fade-in flex h-[calc(100vh-3.5rem)] w-full">
+    <div className="animate-fade-in flex h-[calc(100vh-3.5rem)] w-full gap-3 p-3">
       {/* SIDEBAR OPERACIONAL */}
       <aside
-        className={`hidden md:flex shrink-0 border-r border-border/40 bg-card/20 transition-[width] duration-200 ${sidebarCollapsed ? "w-10" : "w-56"}`}
+        className={`hidden md:flex shrink-0 transition-[width] duration-200 ${sidebarCollapsed ? "w-12" : "w-56"}`}
       >
         <HierarchyExplorer
           records={orders as any}
@@ -210,10 +210,18 @@ export default function PaymentOrdersPage() {
         />
       </aside>
 
-      {/* CANVAS PRINCIPAL */}
-      <div className="flex-1 min-w-0 flex flex-col">
-        <header className="flex items-center justify-between gap-2 border-b border-border/40 px-4 py-2">
-          <h1 className="text-sm font-semibold text-foreground">{t("po.title") || "Ordens de pagamento"}</h1>
+      {/* CANVAS PRINCIPAL — premium card matching sidebar frame */}
+      <div className="flex-1 min-w-0 flex flex-col rounded-lg border border-border/50 bg-card/40 backdrop-blur overflow-hidden">
+        <header className="flex items-center justify-between gap-3 border-b border-border/50 px-4 py-3 shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+              <Wallet className="h-5 w-5 text-primary" />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-lg font-semibold text-foreground truncate">{t("po.title") || "Ordens de pagamento"}</h1>
+              <p className="text-xs text-muted-foreground truncate">{t("po.subtitle") || "Validação e conciliação documental de pagamentos"}</p>
+            </div>
+          </div>
           <Can permission="payment_orders.create">
             <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} compact />
           </Can>
