@@ -33,6 +33,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { Json } from "@/integrations/supabase/types";
 import { Can } from "@/components/Can";
 import { getCurrentUser } from "@/lib/authUser";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function PaymentOrdersPage() {
   const { t, formatCurrency } = useLanguage();
