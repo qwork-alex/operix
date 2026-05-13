@@ -370,11 +370,7 @@ function Row({ node, depth, open, toggle, active, onView, onRequestDelete }: Row
               toggle={toggle}
               active={active}
               onView={onView}
-              deletableYears={deletableYears}
-              pendingDeleteKey={pendingDeleteKey}
               onRequestDelete={onRequestDelete}
-              onConfirmDelete={onConfirmDelete}
-              onCancelDelete={onCancelDelete}
             />
           ))}
         </div>
