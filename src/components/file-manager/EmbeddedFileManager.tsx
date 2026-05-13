@@ -627,22 +627,23 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
         </div>
       )}
 
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-        {path.map((p, i) => (
-          <span key={i} className="flex items-center gap-1">
-            {i > 0 && <ChevronRight className="h-3 w-3" />}
-            <button
-              onClick={() => navigateTo(p.id, p.name)}
-              className="hover:text-foreground flex items-center"
-              title={p.name}
-            >
-              {i === 0 ? <Home className="h-3 w-3" /> : p.name}
-            </button>
-          </span>
-        ))}
-      </div>
-
+      {/* Breadcrumb — only show when navigated into a subfolder */}
+      {path.length > 1 && (
+        <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+          {path.slice(1).map((p, i) => (
+            <span key={i} className="flex items-center gap-1">
+              {i > 0 && <ChevronRight className="h-3 w-3" />}
+              <button
+                onClick={() => navigateTo(p.id, p.name)}
+                className="hover:text-foreground truncate max-w-[160px]"
+                title={p.name}
+              >
+                {p.name}
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
       {/* Table */}
       {isLoading ? (
         <div className="space-y-2">
