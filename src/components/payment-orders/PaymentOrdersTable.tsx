@@ -673,8 +673,10 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
               </TableBody>
             </Table>
           </div>
+          )}
         </div>
-      ))}
+        );
+      })}
 
       <BulkDeleteDialog
         open={showDeleteDialog}
