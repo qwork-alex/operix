@@ -357,6 +357,8 @@ interface Props {
   /** Optional controlled collapsed state. When provided, parent owns the value. */
   collapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
+  /** Optional override for the week-level icon (default CalendarDays). */
+  weekIcon?: LucideIcon;
 }
 
 export function HierarchyExplorer({
