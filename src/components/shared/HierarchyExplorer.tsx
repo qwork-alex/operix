@@ -372,11 +372,11 @@ function Row({ node, depth, open, toggle, active, onView, onRequestDelete }: Row
               e.stopPropagation();
               onRequestDelete?.(node.ctx.year!);
             }}
-            className="flex h-4 w-4 shrink-0 items-center justify-center rounded-sm opacity-0 group-hover:opacity-60 hover:!opacity-100 hover:text-destructive transition-opacity"
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground opacity-70 hover:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-colors"
             title="Excluir ano operacional"
             aria-label="Excluir ano operacional"
           >
-            <Trash2 className="h-3 w-3" />
+            <Trash2 className="h-3.5 w-3.5" />
           </button>
         )}
       </div>
