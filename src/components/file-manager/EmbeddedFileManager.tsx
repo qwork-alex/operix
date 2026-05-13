@@ -562,9 +562,6 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
         <div className="flex items-center gap-2">
           <FolderOpen className="h-4 w-4 text-primary" />
           <span className="text-sm font-medium text-foreground">{t("fm.title")}</span>
-          <Badge variant="secondary" className="text-[10px]">
-            {filteredDocs.filter((d: any) => d.type === "file").length} {t("common.file").toLowerCase()}(s)
-          </Badge>
         </div>
         <div className="flex items-center gap-2">
           <Select value={filterMode} onValueChange={(v) => setFilterMode(v as any)}>
