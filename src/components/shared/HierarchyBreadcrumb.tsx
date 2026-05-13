@@ -33,6 +33,7 @@ function buildCrumbs(ctx: HierarchyContext): Crumb[] {
   };
   push("year", ctx.year, HIERARCHY_FALLBACK.year);
   push("client", ctx.client, HIERARCHY_FALLBACK.client);
+  push("platform" as any, ctx.platform, HIERARCHY_FALLBACK.platform);
   push("unit", ctx.unit, HIERARCHY_FALLBACK.unit);
   push("week", ctx.week, HIERARCHY_FALLBACK.week);
   push("technician", ctx.technician, HIERARCHY_FALLBACK.technician);

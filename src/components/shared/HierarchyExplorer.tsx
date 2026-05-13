@@ -7,6 +7,7 @@ import {
   Folder,
   BarChart3,
   Building2,
+  Layers,
   MapPin,
   User,
   CalendarDays,
@@ -46,6 +47,7 @@ export type HierarchyRecord = {
   id: string;
   created_at?: string | null;
   client_name?: string | null;
+  platform?: string | null;
   operational_unit?: string | null;
   week?: string | null;
   list_name?: string | null; // PO uses list_name as week fallback
@@ -57,10 +59,11 @@ export type HierarchyRecord = {
 export type HierarchySection = "operacional" | "documentos" | "relatorios";
 
 export type HierarchyContext = {
-  level: "all" | "year" | "client" | "unit" | "week" | "technician";
+  level: "all" | "year" | "client" | "platform" | "unit" | "week" | "technician";
   section?: HierarchySection;
   year?: string;
   client?: string;
+  platform?: string;
   unit?: string;
   week?: string;
   technician?: string;
@@ -73,6 +76,7 @@ const EMPTY_CTX: HierarchyContext = { level: "all" };
 export const HIERARCHY_FALLBACK = {
   year: "Sem Data",
   client: "Sem Cliente",
+  platform: "Sem Plataforma",
   unit: "Sem Work",
   week: "Sem Semana",
   technician: "Sem Técnico",
@@ -88,6 +92,9 @@ function getWeek(r: HierarchyRecord): string {
 }
 function getClient(r: HierarchyRecord): string {
   return (r.client_name || "").trim() || HIERARCHY_FALLBACK.client;
+}
+function getPlatform(r: HierarchyRecord): string {
+  return (r.platform || "").trim() || HIERARCHY_FALLBACK.platform;
 }
 function getUnit(r: HierarchyRecord): string {
   return (r.operational_unit || "").trim() || HIERARCHY_FALLBACK.unit;
@@ -107,6 +114,7 @@ export function applyHierarchyContext<T extends HierarchyRecord>(
   return records.filter((r) => {
     if (ctx.year && getYear(r) !== ctx.year) return false;
     if (ctx.client && getClient(r) !== ctx.client) return false;
+    if (ctx.platform && getPlatform(r) !== ctx.platform) return false;
     if (ctx.unit && getUnit(r) !== ctx.unit) return false;
     if (ctx.week && getWeek(r) !== ctx.week) return false;
     if (ctx.technician && getTech(r) !== ctx.technician) return false;
@@ -159,45 +167,57 @@ function buildTree(records: HierarchyRecord[], weekIcon?: LucideIcon, extraYears
     const byClient = groupBy(yearRows, getClient);
     const operationalChildren: TreeNode[] = sortKeys([...byClient.keys()]).map((client) => {
         const clientRows = byClient.get(client)!;
-        const byUnit = groupBy(clientRows, getUnit);
+        const byPlatform = groupBy(clientRows, getPlatform);
         return {
           key: `y:${year}|c:${client}`,
           label: client,
           count: clientRows.length,
           icon: Building2,
           ctx: { level: "client", year, client } as HierarchyContext,
-          children: sortKeys([...byUnit.keys()]).map((unit) => {
-            const unitRows = byUnit.get(unit)!;
-            const byTech = groupBy(unitRows, getTech);
+          children: sortKeys([...byPlatform.keys()]).map((platform) => {
+            const platRows = byPlatform.get(platform)!;
+            const byUnit = groupBy(platRows, getUnit);
             return {
-              key: `y:${year}|c:${client}|u:${unit}`,
-              label: unit,
-              count: unitRows.length,
-              icon: MapPin,
-              ctx: { level: "unit", year, client, unit } as HierarchyContext,
-              children: sortKeys([...byTech.keys()]).map((tech) => {
-                const techRows = byTech.get(tech)!;
-                const byWeek = groupBy(techRows, getWeek);
+              key: `y:${year}|c:${client}|p:${platform}`,
+              label: platform,
+              count: platRows.length,
+              icon: Layers,
+              ctx: { level: "platform", year, client, platform } as HierarchyContext,
+              children: sortKeys([...byUnit.keys()]).map((unit) => {
+                const unitRows = byUnit.get(unit)!;
+                const byTech = groupBy(unitRows, getTech);
                 return {
-                  key: `y:${year}|c:${client}|u:${unit}|t:${tech}`,
-                  label: tech,
-                  count: techRows.length,
-                  icon: User,
-                  ctx: { level: "technician", year, client, unit, technician: tech } as HierarchyContext,
-                  children: sortKeys([...byWeek.keys()]).map((week) => ({
-                    key: `y:${year}|c:${client}|u:${unit}|t:${tech}|w:${week}`,
-                    label: week,
-                    count: byWeek.get(week)!.length,
-                    icon: weekIcon ?? CalendarDays,
-                    ctx: {
-                      level: "week",
-                      year,
-                      client,
-                      unit,
-                      technician: tech,
-                      week,
-                    } as HierarchyContext,
-                  })),
+                  key: `y:${year}|c:${client}|p:${platform}|u:${unit}`,
+                  label: unit,
+                  count: unitRows.length,
+                  icon: MapPin,
+                  ctx: { level: "unit", year, client, platform, unit } as HierarchyContext,
+                  children: sortKeys([...byTech.keys()]).map((tech) => {
+                    const techRows = byTech.get(tech)!;
+                    const byWeek = groupBy(techRows, getWeek);
+                    return {
+                      key: `y:${year}|c:${client}|p:${platform}|u:${unit}|t:${tech}`,
+                      label: tech,
+                      count: techRows.length,
+                      icon: User,
+                      ctx: { level: "technician", year, client, platform, unit, technician: tech } as HierarchyContext,
+                      children: sortKeys([...byWeek.keys()]).map((week) => ({
+                        key: `y:${year}|c:${client}|p:${platform}|u:${unit}|t:${tech}|w:${week}`,
+                        label: week,
+                        count: byWeek.get(week)!.length,
+                        icon: weekIcon ?? CalendarDays,
+                        ctx: {
+                          level: "week",
+                          year,
+                          client,
+                          platform,
+                          unit,
+                          technician: tech,
+                          week,
+                        } as HierarchyContext,
+                      })),
+                    };
+                  }),
                 };
               }),
             };
@@ -276,6 +296,7 @@ function Row({ node, depth, open, toggle, active, onView, onRequestDelete }: Row
     active.level === node.ctx.level &&
     active.year === node.ctx.year &&
     active.client === node.ctx.client &&
+    active.platform === node.ctx.platform &&
     active.unit === node.ctx.unit &&
     active.week === node.ctx.week &&
     active.technician === node.ctx.technician;

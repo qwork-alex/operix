@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Trash2, Pencil, Save, X, Loader2 } from "lucide-react";
+import { Trash2, Pencil, Save, X, Loader2, ChevronDown, ChevronRight } from "lucide-react";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useAuth } from "@/hooks/useAuth";
 import { useClients } from "@/hooks/useServiceOrders";
@@ -32,6 +32,7 @@ interface ServiceOrderRow {
   user_id?: string | null;
   assigned_user_id?: string | null;
   week: string | null;
+  operational_unit?: string | null;
   car_name: string | null;
   license_plate: string | null;
   service_1_name: string | null;
@@ -159,25 +160,32 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
     });
   };
 
-  const toggleWeek = (week: string | null) => {
-    const weekOrders = orders.filter(o => o.week === week);
-    const allSelected = weekOrders.every(o => selected.has(o.id));
+  // Composite group identity: year|client|platform|unit|tech|week
+  type GroupKey = string;
+  const groupKeyOf = (o: ServiceOrderRow): GroupKey => {
+    const year = o.created_at ? new Date(o.created_at).getFullYear().toString() : "—";
+    const client = (o.client_name || "Sem Cliente").trim();
+    const plat = (o.platform || "Sem Plataforma").trim();
+    const unit = (o.operational_unit || "Sem Work").trim();
+    const tech = (o.technician_name || "Sem Técnico").trim();
+    const week = (o.week || "Sem Semana").trim();
+    return `${year}||${client}||${plat}||${unit}||${tech}||${week}`;
+  };
+
+  const toggleGroupSelection = (groupOrders: ServiceOrderRow[]) => {
+    const allSelected = groupOrders.every(o => selected.has(o.id));
     setSelected(prev => {
       const next = new Set(prev);
-      weekOrders.forEach(o => {
+      groupOrders.forEach(o => {
         if (allSelected) next.delete(o.id); else next.add(o.id);
       });
       return next;
     });
   };
 
-  const allWeeks = [...new Set(orders.map(o => o.week))];
-
-  // Compute group status for each week
-  const getWeekStatus = (week: string | null): PaymentStatus => {
-    const weekOrders = orders.filter(o => o.week === week);
-    if (!weekOrders.length) return "none";
-    const statuses = weekOrders.map(o => getPaymentStatus(o));
+  const getGroupStatus = (groupOrders: ServiceOrderRow[]): PaymentStatus => {
+    if (!groupOrders.length) return "none";
+    const statuses = groupOrders.map(o => getPaymentStatus(o));
     const allPaid = statuses.every(s => s === "paid");
     const allPending = statuses.every(s => s === "pending" || s === "none" || s === "draft");
     if (allPaid) return "paid";
@@ -192,6 +200,11 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
     draft: "— Rascunho",
     none: "— Sem dados",
   };
+
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const toggleCollapse = (k: string) => setCollapsedGroups(prev => {
+    const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n;
+  });
 
   // --- Delete mutation ---
   const deleteMutation = useMutation({
@@ -353,13 +366,38 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
     );
   }
 
-  // Group orders by week
-  const groupedOrders = allWeeks.map(week => ({
-    week,
-    orders: orders.filter(o => o.week === week),
-    status: getWeekStatus(week),
-    total: orders.filter(o => o.week === week).reduce((s, o) => s + (Number(o.total) || 0), 0),
-  }));
+  // Group by composite identity (year|client|platform|unit|tech|week)
+  const groupMap = new Map<string, { key: string; orders: ServiceOrderRow[] }>();
+  for (const o of orders) {
+    const k = groupKeyOf(o);
+    const g = groupMap.get(k);
+    if (g) g.orders.push(o);
+    else groupMap.set(k, { key: k, orders: [o] });
+  }
+  const groupedOrders = [...groupMap.values()]
+    .map(g => {
+      const parts = g.key.split("||");
+      return {
+        key: g.key,
+        year: parts[0],
+        client: parts[1],
+        platform: parts[2],
+        unit: parts[3],
+        tech: parts[4],
+        week: parts[5],
+        orders: g.orders,
+        status: getGroupStatus(g.orders),
+        total: g.orders.reduce((s, o) => s + (Number(o.total) || 0), 0),
+      };
+    })
+    .sort((a, b) =>
+      a.year.localeCompare(b.year) ||
+      a.client.localeCompare(b.client) ||
+      a.platform.localeCompare(b.platform) ||
+      a.unit.localeCompare(b.unit) ||
+      a.tech.localeCompare(b.tech) ||
+      a.week.localeCompare(b.week, undefined, { numeric: true })
+    );
 
   return (
     <div className="space-y-4">
@@ -383,20 +421,40 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
         </div>
       )}
 
-      {/* Grouped by week */}
-      {groupedOrders.map(group => (
-        <div key={group.week || "__none__"} className="space-y-1">
-          {/* Week group header */}
-          <div className="flex items-center justify-between rounded-lg bg-secondary/40 px-4 py-2">
-            <div className="flex items-center gap-3">
+      {/* Grouped by composite identity */}
+      {groupedOrders.map(group => {
+        const isCollapsed = collapsedGroups.has(group.key);
+        return (
+        <div key={group.key} className="space-y-1">
+          {/* Group header */}
+          <div className="flex items-center justify-between rounded-lg bg-secondary/40 px-3 py-2">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <button
+                type="button"
+                onClick={() => toggleCollapse(group.key)}
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-sm hover:bg-background/40 text-muted-foreground"
+                title={isCollapsed ? "Expandir" : "Recolher"}
+                aria-label={isCollapsed ? "Expandir" : "Recolher"}
+              >
+                {isCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              </button>
               <Button
                 variant={group.orders.every(o => selected.has(o.id)) ? "secondary" : "outline"}
                 size="sm"
-                className="h-6 text-[10px] px-2"
-                onClick={() => toggleWeek(group.week)}
+                className="h-6 text-[10px] px-2 shrink-0"
+                onClick={() => toggleGroupSelection(group.orders)}
               >
-                {group.week || "Sem semana"}
+                {group.week}
               </Button>
+              <span className="hidden md:flex items-center gap-1.5 text-[11px] text-muted-foreground min-w-0 truncate">
+                <span className="text-foreground/80 font-medium">{group.client}</span>
+                <span>·</span><span>{group.platform}</span>
+                <span>·</span><span>{group.unit}</span>
+                <span>·</span><span>{group.tech}</span>
+                <span>·</span><span>{group.year}</span>
+              </span>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
               <span className="text-xs text-muted-foreground">
                 {group.orders.length} itens · {formatCurrency(group.total)}
               </span>
@@ -406,7 +464,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
             </div>
           </div>
 
-          {/* Table for this week */}
+          {!isCollapsed && (
           <div className="rounded-lg border border-border/50 overflow-hidden">
             <Table className="table-cols-zebra">
               <TableHeader>
@@ -603,8 +661,10 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
               </TableBody>
             </Table>
           </div>
+          )}
         </div>
-      ))}
+        );
+      })}
 
       <BulkDeleteDialog
         open={showDeleteDialog}
