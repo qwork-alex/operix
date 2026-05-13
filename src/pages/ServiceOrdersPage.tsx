@@ -236,13 +236,17 @@ export default function ServiceOrdersPage() {
   return (
     <div className="animate-fade-in flex h-[calc(100vh-3.5rem)] w-full">
       {/* SIDEBAR OPERACIONAL */}
-      <aside className="hidden md:flex w-56 shrink-0 border-r border-border/40 bg-card/20 transition-all">
+      <aside
+        className={`hidden md:flex shrink-0 border-r border-border/40 bg-card/20 transition-[width] duration-200 ${sidebarCollapsed ? "w-10" : "w-56"}`}
+      >
         <HierarchyExplorer
           records={orders as any}
           storageKey="hierarchy.service_orders"
           context={hCtx}
           onContextChange={setHCtx}
           collapsible
+          collapsed={sidebarCollapsed}
+          onCollapsedChange={setSidebarCollapsed}
         />
       </aside>
 
