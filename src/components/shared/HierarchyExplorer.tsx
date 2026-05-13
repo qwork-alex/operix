@@ -466,16 +466,51 @@ export function HierarchyExplorer({
     }
   }, [extraYears, storageKey]);
 
-  const handleAddYear = useCallback(() => {
-    const input = window.prompt("Novo ano operacional (ex: 2027):");
-    if (!input) return;
-    const trimmed = input.trim();
+  const [addingYear, setAddingYear] = useState(false);
+  const [yearInput, setYearInput] = useState("");
+  const [yearError, setYearError] = useState<string | null>(null);
+  const [pendingDeleteKey, setPendingDeleteKey] = useState<string | null>(null);
+  const yearInputRef = useRef<HTMLInputElement>(null);
+
+  const dataYears = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of records) set.add(getYear(r));
+    return set;
+  }, [records]);
+
+  const startAddYear = useCallback(() => {
+    setAddingYear(true);
+    setYearInput("");
+    setYearError(null);
+    setTimeout(() => yearInputRef.current?.focus(), 0);
+  }, []);
+
+  const cancelAddYear = useCallback(() => {
+    setAddingYear(false);
+    setYearInput("");
+    setYearError(null);
+  }, []);
+
+  const commitAddYear = useCallback(() => {
+    const trimmed = yearInput.trim();
     if (!/^\d{4}$/.test(trimmed)) {
-      window.alert("Informe um ano com 4 dígitos.");
+      setYearError("4 dígitos");
       return;
     }
     setExtraYears((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
-  }, []);
+    setAddingYear(false);
+    setYearInput("");
+    setYearError(null);
+  }, [yearInput]);
+
+  const confirmDeleteYear = useCallback((year: string) => {
+    setExtraYears((prev) => prev.filter((y) => y !== year));
+    setPendingDeleteKey(null);
+    // Clear active context if it referenced the removed year
+    if (context.year === year) {
+      onContextChange(EMPTY_CTX);
+    }
+  }, [context.year, onContextChange]);
 
   // Persist opened nodes
   useEffect(() => {
