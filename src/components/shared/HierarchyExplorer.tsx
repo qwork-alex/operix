@@ -296,6 +296,7 @@ function Row({ node, depth, open, toggle, active, onView, onRequestDelete }: Row
     active.level === node.ctx.level &&
     active.year === node.ctx.year &&
     active.client === node.ctx.client &&
+    active.platform === node.ctx.platform &&
     active.unit === node.ctx.unit &&
     active.week === node.ctx.week &&
     active.technician === node.ctx.technician;
