@@ -303,6 +303,7 @@ export default function ServiceOrdersPage() {
             collapsible
             collapsed={sidebarCollapsed}
             onCollapsedChange={setSidebarCollapsed}
+            onDeleteYear={handleDeleteYear}
           />
         </aside>
 
