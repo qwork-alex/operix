@@ -352,6 +352,9 @@ interface Props {
   emptyMessage?: string;
   /** Phase 1E — allow complete lateral collapse into icon-only rail. */
   collapsible?: boolean;
+  /** Optional controlled collapsed state. When provided, parent owns the value. */
+  collapsed?: boolean;
+  onCollapsedChange?: (collapsed: boolean) => void;
 }
 
 export function HierarchyExplorer({
@@ -362,8 +365,10 @@ export function HierarchyExplorer({
   title = "OPERACIONAL",
   emptyMessage,
   collapsible = false,
+  collapsed: controlledCollapsed,
+  onCollapsedChange,
 }: Props) {
-  const [collapsed, setCollapsed] = useState<boolean>(() => {
+  const [internalCollapsed, setInternalCollapsed] = useState<boolean>(() => {
     try {
       const raw = localStorage.getItem(`${storageKey}.collapsed`);
       return raw === "1";
@@ -371,6 +376,12 @@ export function HierarchyExplorer({
       return false;
     }
   });
+  const collapsed = controlledCollapsed ?? internalCollapsed;
+  const setCollapsed = (v: boolean | ((prev: boolean) => boolean)) => {
+    const next = typeof v === "function" ? (v as (p: boolean) => boolean)(collapsed) : v;
+    if (controlledCollapsed === undefined) setInternalCollapsed(next);
+    onCollapsedChange?.(next);
+  };
 
   const [open, setOpen] = useState<Set<string>>(() => {
     try {
