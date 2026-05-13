@@ -656,6 +656,45 @@ export function HierarchyExplorer({
         </div>
       ) : (
         <div className="flex-1 overflow-auto py-1">
+          {addingYear && (
+            <div className="flex items-center gap-1 px-2 py-1.5 border-b border-border/40 bg-sidebar-accent/30">
+              <Calendar className="h-3 w-3 shrink-0 text-muted-foreground" />
+              <input
+                ref={yearInputRef}
+                type="text"
+                inputMode="numeric"
+                maxLength={4}
+                value={yearInput}
+                onChange={(e) => { setYearInput(e.target.value.replace(/\D/g, "")); setYearError(null); }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { e.preventDefault(); commitAddYear(); }
+                  else if (e.key === "Escape") { e.preventDefault(); cancelAddYear(); }
+                }}
+                onBlur={() => { if (!yearInput.trim()) cancelAddYear(); }}
+                placeholder="2027"
+                className={cn(
+                  "flex-1 min-w-0 bg-transparent border-b text-xs outline-none px-0.5 py-0",
+                  yearError ? "border-destructive text-destructive" : "border-primary/60 text-foreground",
+                )}
+              />
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={commitAddYear}
+                className="text-[10px] px-1.5 py-0.5 rounded-sm text-primary hover:bg-sidebar-accent"
+              >
+                OK
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={cancelAddYear}
+                className="text-[10px] px-1.5 py-0.5 rounded-sm text-muted-foreground hover:bg-sidebar-accent"
+              >
+                ✕
+              </button>
+            </div>
+          )}
           {tree.length === 0 ? (
             <p className="px-3 py-4 text-xs text-muted-foreground">
               {smartEmpty}
@@ -670,6 +709,11 @@ export function HierarchyExplorer({
                 toggle={toggle}
                 active={context}
                 onView={onContextChange}
+                deletableYears={new Set(extraYears.filter((y) => !dataYears.has(y)))}
+                pendingDeleteKey={pendingDeleteKey}
+                onRequestDelete={setPendingDeleteKey}
+                onConfirmDelete={confirmDeleteYear}
+                onCancelDelete={() => setPendingDeleteKey(null)}
               />
             ))
           )}
