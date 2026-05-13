@@ -208,7 +208,7 @@ function buildTree(records: HierarchyRecord[]): TreeNode[] {
           key: `y:${year}|sec:operacional`,
           label: "Operacional",
           count: yearRows.length,
-          icon: Settings,
+          icon: Sprout,
           ctx: { level: "year", year, section: "operacional" } as HierarchyContext,
           children: tagOperational(operationalChildren),
         },
