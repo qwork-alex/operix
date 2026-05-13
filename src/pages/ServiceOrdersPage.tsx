@@ -152,6 +152,16 @@ export default function ServiceOrdersPage() {
         status: "draft",
         group_id: r.week ?? ctxDefaults.week ?? null,
       };
+      // Phase 1E-X: respect active operational year context.
+      if (hCtx.year && /^\d{4}$/.test(hCtx.year)) {
+        const y = parseInt(hCtx.year, 10);
+        const now = new Date();
+        if (y !== now.getFullYear()) {
+          const d = new Date(now);
+          d.setFullYear(y);
+          payload.created_at = d.toISOString();
+        }
+      }
       const techName = payload.technician_name || r.technician;
       const techEarn = getTechEarnings(techName, payload.total, earningsMap);
       payload.technician_percentage = techEarn?.percentage ?? 0;
