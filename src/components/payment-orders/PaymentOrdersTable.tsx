@@ -77,6 +77,7 @@ interface PaymentOrderRow {
   clients?: { name: string } | null;
   platform: string | null;
   list_name: string | null;
+  operational_unit?: string | null;
   technician_name?: string | null;
   user_id?: string | null;
   assigned_user_id?: string | null;
