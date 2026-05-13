@@ -540,7 +540,6 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
   };
 
   if (collapsed) {
-    const fileCount = filteredDocs.filter((d: any) => d.type === "file").length;
     return (
       <button
         type="button"
@@ -551,9 +550,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
           <ChevronRight className="h-3.5 w-3.5" />
           <FolderOpen className="h-3.5 w-3.5 text-primary" />
           <span className="font-medium text-foreground">{t("fm.title")}</span>
-          <span className="text-[10px]">{fileCount} {t("common.file").toLowerCase()}(s)</span>
         </span>
-        <span className="text-[10px] uppercase tracking-wide">Expandir</span>
       </button>
     );
   }
