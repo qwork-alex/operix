@@ -93,6 +93,9 @@ function getWeek(r: HierarchyRecord): string {
 function getClient(r: HierarchyRecord): string {
   return (r.client_name || "").trim() || HIERARCHY_FALLBACK.client;
 }
+function getPlatform(r: HierarchyRecord): string {
+  return (r.platform || "").trim() || HIERARCHY_FALLBACK.platform;
+}
 function getUnit(r: HierarchyRecord): string {
   return (r.operational_unit || "").trim() || HIERARCHY_FALLBACK.unit;
 }
@@ -111,6 +114,7 @@ export function applyHierarchyContext<T extends HierarchyRecord>(
   return records.filter((r) => {
     if (ctx.year && getYear(r) !== ctx.year) return false;
     if (ctx.client && getClient(r) !== ctx.client) return false;
+    if (ctx.platform && getPlatform(r) !== ctx.platform) return false;
     if (ctx.unit && getUnit(r) !== ctx.unit) return false;
     if (ctx.week && getWeek(r) !== ctx.week) return false;
     if (ctx.technician && getTech(r) !== ctx.technician) return false;
