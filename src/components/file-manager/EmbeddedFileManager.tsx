@@ -632,8 +632,12 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
         {path.map((p, i) => (
           <span key={i} className="flex items-center gap-1">
             {i > 0 && <ChevronRight className="h-3 w-3" />}
-            <button onClick={() => navigateTo(p.id, p.name)} className="hover:text-foreground">
-              {p.name}
+            <button
+              onClick={() => navigateTo(p.id, p.name)}
+              className="hover:text-foreground flex items-center"
+              title={p.name}
+            >
+              {i === 0 ? <Home className="h-3 w-3" /> : p.name}
             </button>
           </span>
         ))}
