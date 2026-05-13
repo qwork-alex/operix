@@ -207,6 +207,7 @@ export default function PaymentOrdersPage() {
           collapsible
           collapsed={sidebarCollapsed}
           onCollapsedChange={setSidebarCollapsed}
+          weekIcon={ClipboardList}
         />
       </aside>
 
