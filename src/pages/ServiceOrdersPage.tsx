@@ -55,6 +55,9 @@ export default function ServiceOrdersPage() {
   const [hCtx, setHCtx] = useState<HierarchyContext>(() =>
     loadHierarchyContext("hierarchy.service_orders"),
   );
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    try { return localStorage.getItem("hierarchy.service_orders.collapsed") === "1"; } catch { return false; }
+  });
   const visibleOrders = useMemo(
     () => applyHierarchyContext(orders as any[], hCtx),
     [orders, hCtx],
