@@ -1,5 +1,5 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
-import { ChevronDown, ChevronRight, ClipboardList } from "lucide-react";
+import { useState, useCallback, useMemo } from "react";
+import { ClipboardList } from "lucide-react";
 import {
   HierarchyExplorer,
   applyHierarchyContext,
