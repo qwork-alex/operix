@@ -455,7 +455,8 @@ export function HierarchyExplorer({
   const [addingYear, setAddingYear] = useState(false);
   const [yearInput, setYearInput] = useState("");
   const [yearError, setYearError] = useState<string | null>(null);
-  const [pendingDeleteKey, setPendingDeleteKey] = useState<string | null>(null);
+  const [pendingDeleteYear, setPendingDeleteYear] = useState<string | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const yearInputRef = useRef<HTMLInputElement>(null);
 
   const dataYears = useMemo(() => {
