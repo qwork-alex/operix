@@ -7,6 +7,7 @@ import {
   Folder,
   BarChart3,
   Building2,
+  Layers,
   MapPin,
   User,
   CalendarDays,
