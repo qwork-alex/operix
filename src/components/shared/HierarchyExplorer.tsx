@@ -320,15 +320,7 @@ function Row({ node, depth, open, toggle, active, onView }: RowProps) {
           {node.label}
         </span>
 
-        {node.hint ? (
-          <span className="rounded-sm bg-muted/40 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
-            {node.hint}
-          </span>
-        ) : (
-          <span className="text-[10px] tabular-nums text-muted-foreground">
-            {node.count}
-          </span>
-        )}
+        {/* Counters and hints removed — Phase 1E visual compaction */}
       </div>
 
       {isOpen && hasChildren && (
