@@ -245,42 +245,41 @@ export default function ServiceOrdersPage() {
   const hasExtractions = extractions.length > 0;
 
   return (
-    <div className="animate-fade-in flex h-[calc(100vh-3.5rem)] w-full gap-3 p-3">
-      {/* SIDEBAR OPERACIONAL */}
-      <aside
-        className={`hidden md:flex shrink-0 transition-[width] duration-200 ${sidebarCollapsed ? "w-12" : "w-56"}`}
-      >
-        <HierarchyExplorer
-          records={orders as any}
-          storageKey="hierarchy.service_orders"
-          context={hCtx}
-          onContextChange={setHCtx}
-          collapsible
-          collapsed={sidebarCollapsed}
-          onCollapsedChange={setSidebarCollapsed}
-        />
-      </aside>
-
-      {/* CANVAS PRINCIPAL — fluid workspace, no extra card wrapper */}
-      <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
-        {/* HEADER — minimal operational header */}
-        <header className="flex items-center justify-between gap-3 border-b border-border/40 px-1 pb-2 mb-2 shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10">
-              <ClipboardList className="h-4 w-4 text-primary" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-sm font-semibold text-foreground truncate">{t("so.title") || "Ordens de serviço"}</h1>
-              <p className="text-[11px] text-muted-foreground truncate">{t("so.subtitle") || "Gestão e validação documental operacional"}</p>
-            </div>
+    <div className="animate-fade-in flex h-[calc(100vh-3.5rem)] w-full flex-col p-3 gap-3">
+      {/* HEADER — sits ABOVE the operational tree, full width */}
+      <header className="flex items-center justify-between gap-3 border-b border-border/40 px-1 pb-2 shrink-0">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10">
+            <ClipboardList className="h-4 w-4 text-primary" />
           </div>
-          <Can permission="service_orders.create">
-            <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} compact />
-          </Can>
-        </header>
+          <div className="min-w-0">
+            <h1 className="text-sm font-semibold text-foreground truncate">{t("so.title") || "Ordens de serviço"}</h1>
+            <p className="text-[11px] text-muted-foreground truncate">{t("so.subtitle") || "Gestão e validação documental operacional"}</p>
+          </div>
+        </div>
+        <Can permission="service_orders.create">
+          <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} compact />
+        </Can>
+      </header>
 
-        {/* SCROLL AREA — preview + table flow naturally */}
-        <div className="flex-1 min-h-0 flex flex-col overflow-auto">
+      {/* WORKSPACE — sidebar + canvas, both starting at the same baseline */}
+      <div className="flex flex-1 min-h-0 w-full gap-3">
+        <aside
+          className={`hidden md:flex shrink-0 transition-[width] duration-200 ${sidebarCollapsed ? "w-12" : "w-56"}`}
+        >
+          <HierarchyExplorer
+            records={orders as any}
+            storageKey="hierarchy.service_orders"
+            context={hCtx}
+            onContextChange={setHCtx}
+            collapsible
+            collapsed={sidebarCollapsed}
+            onCollapsedChange={setSidebarCollapsed}
+          />
+        </aside>
+
+        {/* CANVAS — fluid, single scroll, no extra wrappers */}
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-auto">
           {hasExtractions && extractions.map((extraction) => (
             <ActiveDocumentBand
               key={extraction._id}
@@ -313,9 +312,9 @@ export default function ServiceOrdersPage() {
             </ActiveDocumentBand>
           ))}
 
-          <BottomCanvas hasExtractions={hasExtractions}>
-            {hCtx.section === "documentos" ? (
-              <EmbeddedFileManager entityType="service_order" module="orders" defaultCollapsed={hasExtractions} />
+          {!hasExtractions && (
+            hCtx.section === "documentos" ? (
+              <EmbeddedFileManager entityType="service_order" module="orders" year={hCtx.year ?? null} />
             ) : hCtx.section === "relatorios" ? (
               <SectionPlaceholder
                 icon="chart"
@@ -325,48 +324,10 @@ export default function ServiceOrdersPage() {
               />
             ) : (
               <ServiceOrdersTable orders={visibleOrders as any} isLoading={isLoading} />
-            )}
-          </BottomCanvas>
+            )
+          )}
         </div>
       </div>
-    </div>
-  );
-}
-
-/** Phase 1D — when a document is being validated, the bottom canvas
- * (table or files) auto-minimizes to a thin reveal bar so the operator
- * focuses on the document workspace. Click to peek. */
-function BottomCanvas({ hasExtractions, children }: { hasExtractions: boolean; children: React.ReactNode }) {
-  const [peek, setPeek] = useState(false);
-  useEffect(() => { if (!hasExtractions) setPeek(false); }, [hasExtractions]);
-  if (!hasExtractions) {
-    return <div className="flex-1 min-h-0 overflow-auto">{children}</div>;
-  }
-  if (!peek) {
-    return (
-      <button
-        type="button"
-        onClick={() => setPeek(true)}
-        className="flex w-full items-center gap-2 border-t border-border/40 bg-card/30 px-4 py-1.5 text-[11px] text-muted-foreground hover:bg-card/50 transition-colors"
-        title="Mostrar tabela"
-      >
-        <ChevronRight className="h-3 w-3" />
-        <span className="uppercase tracking-wide">Tabela operacional</span>
-      </button>
-    );
-  }
-  return (
-    <div className="flex flex-col min-h-0 border-t border-border/40">
-      <button
-        type="button"
-        onClick={() => setPeek(false)}
-        className="flex w-full items-center gap-2 bg-card/30 px-4 py-1.5 text-[11px] text-muted-foreground hover:bg-card/50 transition-colors shrink-0"
-        title="Recolher tabela"
-      >
-        <ChevronDown className="h-3 w-3" />
-        <span className="uppercase tracking-wide">Tabela operacional</span>
-      </button>
-      <div className="flex-1 min-h-0 overflow-auto max-h-[40vh]">{children}</div>
     </div>
   );
 }
