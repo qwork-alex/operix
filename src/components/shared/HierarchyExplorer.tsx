@@ -294,9 +294,8 @@ function Row({ node, depth, open, toggle, active, onView, deletableYears, pendin
   const isDeletable =
     node.ctx.level === "year" &&
     !node.ctx.section &&
-    !!node.ctx.year &&
-    !!deletableYears?.has(node.ctx.year);
-  const isPendingDelete = pendingDeleteKey === node.key;
+    !!node.ctx.year;
+  const isPendingDelete = false; // inline pending UI deprecated — replaced by modal
 
   return (
     <>
