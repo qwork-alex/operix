@@ -263,6 +263,7 @@ export default function PaymentOrdersPage() {
             collapsed={sidebarCollapsed}
             onCollapsedChange={setSidebarCollapsed}
             weekIcon={ClipboardList}
+            onDeleteYear={handleDeleteYear}
           />
         </aside>
 
