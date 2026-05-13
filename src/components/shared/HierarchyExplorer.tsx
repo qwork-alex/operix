@@ -371,6 +371,7 @@ export function HierarchyExplorer({
   collapsible = false,
   collapsed: controlledCollapsed,
   onCollapsedChange,
+  weekIcon,
 }: Props) {
   const [internalCollapsed, setInternalCollapsed] = useState<boolean>(() => {
     try {
