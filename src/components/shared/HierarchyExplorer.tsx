@@ -347,12 +347,12 @@ function Row({ node, depth, open, toggle, active, onView, deletableYears, pendin
           {node.label}
         </span>
 
-        {isDeletable && !isPendingDelete && (
+        {isDeletable && (
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onRequestDelete?.(node.key);
+              onRequestDelete?.(node.ctx.year!);
             }}
             className="flex h-4 w-4 shrink-0 items-center justify-center rounded-sm opacity-0 group-hover:opacity-60 hover:!opacity-100 hover:text-destructive transition-opacity"
             title="Excluir ano operacional"
@@ -360,24 +360,6 @@ function Row({ node, depth, open, toggle, active, onView, deletableYears, pendin
           >
             <Trash2 className="h-3 w-3" />
           </button>
-        )}
-        {isDeletable && isPendingDelete && (
-          <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              onClick={() => onConfirmDelete?.(node.ctx.year!)}
-              className="rounded-sm px-1.5 py-0.5 text-[10px] font-medium text-destructive hover:bg-destructive/10"
-            >
-              Excluir
-            </button>
-            <button
-              type="button"
-              onClick={() => onCancelDelete?.()}
-              className="rounded-sm px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-sidebar-accent"
-            >
-              Cancelar
-            </button>
-          </div>
         )}
       </div>
 
