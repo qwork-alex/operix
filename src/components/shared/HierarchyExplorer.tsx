@@ -399,6 +399,34 @@ export function HierarchyExplorer({
     }
   });
 
+  const [extraYears, setExtraYears] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(`${storageKey}.extraYears`);
+      return raw ? (JSON.parse(raw) as string[]) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(`${storageKey}.extraYears`, JSON.stringify(extraYears));
+    } catch {
+      /* ignore */
+    }
+  }, [extraYears, storageKey]);
+
+  const handleAddYear = useCallback(() => {
+    const input = window.prompt("Novo ano operacional (ex: 2027):");
+    if (!input) return;
+    const trimmed = input.trim();
+    if (!/^\d{4}$/.test(trimmed)) {
+      window.alert("Informe um ano com 4 dígitos.");
+      return;
+    }
+    setExtraYears((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
+  }, []);
+
   // Persist opened nodes
   useEffect(() => {
     try {
