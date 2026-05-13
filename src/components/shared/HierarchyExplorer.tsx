@@ -162,81 +162,90 @@ function sortKeys(keys: string[], opts?: { numericAsc?: boolean; numericDesc?: b
   });
 }
 
+function buildPlaceholderTree(year: string): TreeNode[] {
+  // Live placeholder shown when a year has no real OS/OP records yet.
+  // Generic names (Work, Técnico) act as structural hints — they disappear
+  // automatically as soon as real data is extracted.
+  return [
+    {
+      key: `y:${year}|placeholder|work`,
+      label: "Work",
+      count: 0,
+      icon: MapPin,
+      ctx: { level: "year", year, section: "operacional" } as HierarchyContext,
+      disabled: true,
+      hint: "Sem dados",
+      children: [
+        {
+          key: `y:${year}|placeholder|work|tech`,
+          label: "Técnico",
+          count: 0,
+          icon: User,
+          ctx: { level: "year", year, section: "operacional" } as HierarchyContext,
+          disabled: true,
+          hint: "Sem dados",
+        },
+      ],
+    },
+  ];
+}
+
 function buildTree(records: HierarchyRecord[], weekIcon?: LucideIcon, extraYears: string[] = []): TreeNode[] {
   const byYear = groupBy(records, getYear);
   const allYears = new Set<string>([...byYear.keys(), ...extraYears]);
   return sortKeys([...allYears], { numericAsc: true }).map((year) => {
     const yearRows = byYear.get(year) ?? [];
     const byClient = groupBy(yearRows, getClient);
+    // Year → Client → Platform → Technician → Week.
+    // The "Work" / "Unit" intermediate layer was removed: platform IS the work/local.
     const operationalChildren: TreeNode[] = sortKeys([...byClient.keys()]).map((client) => {
-        const clientRows = byClient.get(client)!;
-        const byPlatform = groupBy(clientRows, getPlatform);
-        const platformChildren: TreeNode[] = sortKeys([...byPlatform.keys()]).map((platform) => {
-          const platRows = byPlatform.get(platform)!;
-          const byUnit = groupBy(platRows, getUnit);
-          return {
-            key: `y:${year}|c:${client}|p:${platform}`,
-            label: platform,
-            count: platRows.length,
-            icon: MapPin,
-            ctx: { level: "platform", year, client, platform } as HierarchyContext,
-            children: sortKeys([...byUnit.keys()]).map((unit) => {
-              const unitRows = byUnit.get(unit)!;
-              const byTech = groupBy(unitRows, getTech);
-              return {
-                key: `y:${year}|c:${client}|p:${platform}|u:${unit}`,
-                label: unit,
-                count: unitRows.length,
-                icon: Layers,
-                ctx: { level: "unit", year, client, platform, unit } as HierarchyContext,
-                children: sortKeys([...byTech.keys()]).map((tech) => {
-                  const techRows = byTech.get(tech)!;
-                  const byWeek = groupBy(techRows, getWeek);
-                  return {
-                    key: `y:${year}|c:${client}|p:${platform}|u:${unit}|t:${tech}`,
-                    label: tech,
-                    count: techRows.length,
-                    icon: User,
-                    ctx: { level: "technician", year, client, platform, unit, technician: tech } as HierarchyContext,
-                    children: sortKeys([...byWeek.keys()]).map((week) => ({
-                      key: `y:${year}|c:${client}|p:${platform}|u:${unit}|t:${tech}|w:${week}`,
-                      label: week,
-                      count: byWeek.get(week)!.length,
-                      icon: weekIcon ?? CalendarDays,
-                      ctx: {
-                        level: "week",
-                        year,
-                        client,
-                        platform,
-                        unit,
-                        technician: tech,
-                        week,
-                      } as HierarchyContext,
-                    })),
-                  };
-                }),
-              };
-            }),
-          };
-        });
-        // Static "Work" container between Client and Platform/Local.
-        const workNode: TreeNode = {
-          key: `y:${year}|c:${client}|work`,
-          label: WORK_CONTAINER_LABEL,
-          count: clientRows.length,
-          icon: Building2,
-          ctx: { level: "client", year, client } as HierarchyContext,
-          children: platformChildren,
-        };
+      const clientRows = byClient.get(client)!;
+      const byPlatform = groupBy(clientRows, getPlatform);
+      const platformChildren: TreeNode[] = sortKeys([...byPlatform.keys()]).map((platform) => {
+        const platRows = byPlatform.get(platform)!;
+        const byTech = groupBy(platRows, getTech);
         return {
-          key: `y:${year}|c:${client}`,
-          label: client,
-          count: clientRows.length,
-          icon: Building2,
-          ctx: { level: "client", year, client } as HierarchyContext,
-          children: [workNode],
+          key: `y:${year}|c:${client}|p:${platform}`,
+          label: platform,
+          count: platRows.length,
+          icon: MapPin,
+          ctx: { level: "platform", year, client, platform } as HierarchyContext,
+          children: sortKeys([...byTech.keys()]).map((tech) => {
+            const techRows = byTech.get(tech)!;
+            const byWeek = groupBy(techRows, getWeek);
+            return {
+              key: `y:${year}|c:${client}|p:${platform}|t:${tech}`,
+              label: tech,
+              count: techRows.length,
+              icon: User,
+              ctx: { level: "technician", year, client, platform, technician: tech } as HierarchyContext,
+              children: sortKeys([...byWeek.keys()]).map((week) => ({
+                key: `y:${year}|c:${client}|p:${platform}|t:${tech}|w:${week}`,
+                label: week,
+                count: byWeek.get(week)!.length,
+                icon: weekIcon ?? CalendarDays,
+                ctx: {
+                  level: "week",
+                  year,
+                  client,
+                  platform,
+                  technician: tech,
+                  week,
+                } as HierarchyContext,
+              })),
+            };
+          }),
         };
       });
+      return {
+        key: `y:${year}|c:${client}`,
+        label: client,
+        count: clientRows.length,
+        icon: Building2,
+        ctx: { level: "client", year, client } as HierarchyContext,
+        children: platformChildren,
+      };
+    });
     // Tag operational subtree with section so canvas knows it's the data view
     const tagOperational = (nodes: TreeNode[]): TreeNode[] =>
       nodes.map((n) => ({
@@ -257,7 +266,9 @@ function buildTree(records: HierarchyRecord[], weekIcon?: LucideIcon, extraYears
           count: yearRows.length,
           icon: Sprout,
           ctx: { level: "year", year, section: "operacional" } as HierarchyContext,
-          children: tagOperational(operationalChildren),
+          children: operationalChildren.length > 0
+            ? tagOperational(operationalChildren)
+            : buildPlaceholderTree(year),
         },
         {
           key: `y:${year}|sec:documentos`,
