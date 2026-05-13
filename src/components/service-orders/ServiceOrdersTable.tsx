@@ -663,8 +663,10 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
               </TableBody>
             </Table>
           </div>
+          )}
         </div>
-      ))}
+        );
+      })}
 
       <BulkDeleteDialog
         open={showDeleteDialog}
