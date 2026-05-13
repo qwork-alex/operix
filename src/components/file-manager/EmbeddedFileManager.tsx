@@ -145,7 +145,7 @@ async function fetchDocumentBlobUrl(
   return { blobUrl, mimeType, signedUrl, blob: typedBlob };
 }
 
-export function EmbeddedFileManager({ entityType, module: moduleName = "orders", sessionFileNames = [], defaultCollapsed = false }: Props) {
+export function EmbeddedFileManager({ entityType, module: moduleName = "orders", sessionFileNames = [], defaultCollapsed = false, year = null }: Props) {
   const { t, formatDate } = useLanguage();
   const { user } = useAuth();
   const queryClient = useQueryClient();
