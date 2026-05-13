@@ -358,6 +358,8 @@ interface Props {
   title?: string;
   /** Optional override for the empty state. Falls back to a smart contextual message. */
   emptyMessage?: string;
+  /** Phase 1E — allow complete lateral collapse into icon-only rail. */
+  collapsible?: boolean;
 }
 
 export function HierarchyExplorer({
