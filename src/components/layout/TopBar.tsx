@@ -211,6 +211,9 @@ export function TopBar() {
           </DropdownMenuContent>
         </DropdownMenu>
 
+        {/* Theme toggle */}
+        <ThemeToggleButton />
+
         {/* User avatar */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
