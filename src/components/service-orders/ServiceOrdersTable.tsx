@@ -160,25 +160,32 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
     });
   };
 
-  const toggleWeek = (week: string | null) => {
-    const weekOrders = orders.filter(o => o.week === week);
-    const allSelected = weekOrders.every(o => selected.has(o.id));
+  // Composite group identity: year|client|platform|unit|tech|week
+  type GroupKey = string;
+  const groupKeyOf = (o: ServiceOrderRow): GroupKey => {
+    const year = o.created_at ? new Date(o.created_at).getFullYear().toString() : "—";
+    const client = (o.client_name || "Sem Cliente").trim();
+    const plat = (o.platform || "Sem Plataforma").trim();
+    const unit = (o.operational_unit || "Sem Work").trim();
+    const tech = (o.technician_name || "Sem Técnico").trim();
+    const week = (o.week || "Sem Semana").trim();
+    return `${year}||${client}||${plat}||${unit}||${tech}||${week}`;
+  };
+
+  const toggleGroupSelection = (groupOrders: ServiceOrderRow[]) => {
+    const allSelected = groupOrders.every(o => selected.has(o.id));
     setSelected(prev => {
       const next = new Set(prev);
-      weekOrders.forEach(o => {
+      groupOrders.forEach(o => {
         if (allSelected) next.delete(o.id); else next.add(o.id);
       });
       return next;
     });
   };
 
-  const allWeeks = [...new Set(orders.map(o => o.week))];
-
-  // Compute group status for each week
-  const getWeekStatus = (week: string | null): PaymentStatus => {
-    const weekOrders = orders.filter(o => o.week === week);
-    if (!weekOrders.length) return "none";
-    const statuses = weekOrders.map(o => getPaymentStatus(o));
+  const getGroupStatus = (groupOrders: ServiceOrderRow[]): PaymentStatus => {
+    if (!groupOrders.length) return "none";
+    const statuses = groupOrders.map(o => getPaymentStatus(o));
     const allPaid = statuses.every(s => s === "paid");
     const allPending = statuses.every(s => s === "pending" || s === "none" || s === "draft");
     if (allPaid) return "paid";
@@ -193,6 +200,11 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
     draft: "— Rascunho",
     none: "— Sem dados",
   };
+
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const toggleCollapse = (k: string) => setCollapsedGroups(prev => {
+    const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n;
+  });
 
   // --- Delete mutation ---
   const deleteMutation = useMutation({
