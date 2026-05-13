@@ -63,8 +63,9 @@ export default function PaymentOrdersPage() {
 
   const handleFiles = useCallback((files: File[]) => {
     const ctxDefaults = hierarchyDefaults(hCtx);
+    const targetYear = hCtx.year ?? null;
     addFiles(files, async (file, onStatus) => {
-      const storedDocument = await storeFileInDocuments(file, "payment_order", user?.id).then((doc) => {
+      const storedDocument = await storeFileInDocuments(file, "payment_order", user?.id, "orders", targetYear).then((doc) => {
         queryClient.invalidateQueries({ queryKey: ["embedded-docs", "payment_order"] });
         return doc;
       });
@@ -137,6 +138,16 @@ export default function PaymentOrdersPage() {
         status: "pending",
         group_id: r.list_name ?? ctxDefaults.week ?? null,
       };
+      // Phase 1E-X: respect active operational year context.
+      if (hCtx.year && /^\d{4}$/.test(hCtx.year)) {
+        const y = parseInt(hCtx.year, 10);
+        const now = new Date();
+        if (y !== now.getFullYear()) {
+          const d = new Date(now);
+          d.setFullYear(y);
+          payload.created_at = d.toISOString();
+        }
+      }
       return payload as PaymentOrderInsert;
     });
 
@@ -211,16 +222,16 @@ export default function PaymentOrdersPage() {
         />
       </aside>
 
-      {/* CANVAS PRINCIPAL — premium card matching sidebar frame */}
-      <div className="flex-1 min-w-0 flex flex-col rounded-lg border border-border/50 bg-card/40 backdrop-blur overflow-hidden">
-        <header className="flex items-center justify-between gap-3 border-b border-border/50 px-4 py-3 shrink-0">
+      {/* CANVAS PRINCIPAL — fluid workspace, no extra card wrapper */}
+      <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
+        <header className="flex items-center justify-between gap-3 border-b border-border/40 px-1 pb-2 mb-2 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-              <Wallet className="h-5 w-5 text-primary" />
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10">
+              <Wallet className="h-4 w-4 text-primary" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-lg font-semibold text-foreground truncate">{t("po.title") || "Ordens de pagamento"}</h1>
-              <p className="text-xs text-muted-foreground truncate">{t("po.subtitle") || "Validação e conciliação documental de pagamentos"}</p>
+              <h1 className="text-sm font-semibold text-foreground truncate">{t("po.title") || "Ordens de pagamento"}</h1>
+              <p className="text-[11px] text-muted-foreground truncate">{t("po.subtitle") || "Validação e conciliação documental de pagamentos"}</p>
             </div>
           </div>
           <Can permission="payment_orders.create">
@@ -228,54 +239,54 @@ export default function PaymentOrdersPage() {
           </Can>
         </header>
 
-        {hasExtractions && extractions.map((extraction) => (
-          <ActiveDocumentBand
-            key={extraction._id}
-            file={extraction._file}
-            stage="review"
-            initialState={extraction._docState}
-            onStateChange={(state) => setExtractions(prev => prev.map((e) => e._id === extraction._id ? { ...e, _docState: state } : e))}
-            onPersistState={(state) => updateDocumentState(extraction._id, state)}
-            onReprocessOcr={(state) => handleReprocessOcr(extraction._id, state)}
-            isReprocessing={reprocessingId === extraction._id}
-            onClose={() => handleDiscard(extraction._id)}
-          >
-            <ExtractedPaymentTable
-              key={`${extraction._id}:${extraction._ocrVersion}`}
-              orders={extraction.orders}
-              confidence={extraction.confidence}
-              notes={extraction.notes}
-              onSave={(rows) => handleSave(extraction._id, rows)}
-              onDiscard={() => handleDiscard(extraction._id)}
-              isSaving={saveMutation.isPending}
-              technicians={technicians}
-              isTechnicianRole={dbRole === "technician"}
-              isAdmin={canAssignAnyTechnician}
-              myTechnicianName={
-                myAssignableUserId
-                  ? technicians.find((t) => t.user_id === myAssignableUserId)?.name ?? null
-                  : null
-              }
-            />
-          </ActiveDocumentBand>
-        ))}
+        <div className="flex-1 min-h-0 flex flex-col overflow-auto">
+          {hasExtractions && extractions.map((extraction) => (
+            <ActiveDocumentBand
+              key={extraction._id}
+              file={extraction._file}
+              stage="review"
+              initialState={extraction._docState}
+              onStateChange={(state) => setExtractions(prev => prev.map((e) => e._id === extraction._id ? { ...e, _docState: state } : e))}
+              onPersistState={(state) => updateDocumentState(extraction._id, state)}
+              onReprocessOcr={(state) => handleReprocessOcr(extraction._id, state)}
+              isReprocessing={reprocessingId === extraction._id}
+              onClose={() => handleDiscard(extraction._id)}
+            >
+              <ExtractedPaymentTable
+                key={`${extraction._id}:${extraction._ocrVersion}`}
+                orders={extraction.orders}
+                confidence={extraction.confidence}
+                notes={extraction.notes}
+                onSave={(rows) => handleSave(extraction._id, rows)}
+                onDiscard={() => handleDiscard(extraction._id)}
+                isSaving={saveMutation.isPending}
+                technicians={technicians}
+                isTechnicianRole={dbRole === "technician"}
+                isAdmin={canAssignAnyTechnician}
+                myTechnicianName={
+                  myAssignableUserId
+                    ? technicians.find((t) => t.user_id === myAssignableUserId)?.name ?? null
+                    : null
+                }
+              />
+            </ActiveDocumentBand>
+          ))}
 
-        <BottomCanvas hasExtractions={hasExtractions}>
-          {hCtx.section === "documentos" ? (
-            <div className="p-4">
+          <BottomCanvas hasExtractions={hasExtractions}>
+            {hCtx.section === "documentos" ? (
               <EmbeddedFileManager entityType="payment_order" module="orders" defaultCollapsed={hasExtractions} />
-            </div>
-          ) : hCtx.section === "relatorios" ? (
-            <SectionPlaceholder
-              icon="chart"
-              title="Relatórios"
-              subtitle={hCtx.year ? `Ano ${hCtx.year}` : undefined}
-              hint="Relatórios automáticos serão disponibilizados em breve."
-            />
-          ) : (
-            <PaymentOrdersTable orders={visibleOrders as any} isLoading={isLoading} />
-          )}
-        </BottomCanvas>
+            ) : hCtx.section === "relatorios" ? (
+              <SectionPlaceholder
+                icon="chart"
+                title="Relatórios"
+                subtitle={hCtx.year ? `Ano ${hCtx.year}` : undefined}
+                hint="Relatórios automáticos serão disponibilizados em breve."
+              />
+            ) : (
+              <PaymentOrdersTable orders={visibleOrders as any} isLoading={isLoading} />
+            )}
+          </BottomCanvas>
+        </div>
       </div>
     </div>
   );

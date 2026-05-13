@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import {
   ChevronRight,
   FolderTree,
@@ -10,10 +10,10 @@ import {
   MapPin,
   User,
   CalendarDays,
-  ClipboardList,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
+  Trash2,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -126,14 +126,16 @@ function groupBy<T>(items: T[], keyFn: (i: T) => string): Map<string, T[]> {
   return map;
 }
 
-function sortKeys(keys: string[], opts?: { numericDesc?: boolean }) {
+function sortKeys(keys: string[], opts?: { numericAsc?: boolean; numericDesc?: boolean }) {
   return [...keys].sort((a, b) => {
     if (FALLBACK_VALUES.has(a) && !FALLBACK_VALUES.has(b)) return 1;
     if (FALLBACK_VALUES.has(b) && !FALLBACK_VALUES.has(a)) return -1;
-    if (opts?.numericDesc) {
+    if (opts?.numericDesc || opts?.numericAsc) {
       const an = Number(a);
       const bn = Number(b);
-      if (!Number.isNaN(an) && !Number.isNaN(bn)) return bn - an;
+      if (!Number.isNaN(an) && !Number.isNaN(bn)) {
+        return opts.numericAsc ? an - bn : bn - an;
+      }
     }
     return a.localeCompare(b, undefined, { numeric: true });
   });
@@ -142,7 +144,7 @@ function sortKeys(keys: string[], opts?: { numericDesc?: boolean }) {
 function buildTree(records: HierarchyRecord[], weekIcon?: LucideIcon, extraYears: string[] = []): TreeNode[] {
   const byYear = groupBy(records, getYear);
   const allYears = new Set<string>([...byYear.keys(), ...extraYears]);
-  return sortKeys([...allYears], { numericDesc: true }).map((year) => {
+  return sortKeys([...allYears], { numericAsc: true }).map((year) => {
     const yearRows = byYear.get(year) ?? [];
     const byClient = groupBy(yearRows, getClient);
     const operationalChildren: TreeNode[] = sortKeys([...byClient.keys()]).map((client) => {
@@ -253,9 +255,14 @@ interface RowProps {
   toggle: (k: string) => void;
   active: HierarchyContext;
   onView: (ctx: HierarchyContext) => void;
+  deletableYears?: Set<string>;
+  pendingDeleteKey?: string | null;
+  onRequestDelete?: (key: string) => void;
+  onConfirmDelete?: (year: string) => void;
+  onCancelDelete?: () => void;
 }
 
-function Row({ node, depth, open, toggle, active, onView }: RowProps) {
+function Row({ node, depth, open, toggle, active, onView, deletableYears, pendingDeleteKey, onRequestDelete, onConfirmDelete, onCancelDelete }: RowProps) {
   const isOpen = open.has(node.key);
   const hasChildren = !!node.children?.length;
   const isDisabled = !!node.disabled;
@@ -273,6 +280,13 @@ function Row({ node, depth, open, toggle, active, onView }: RowProps) {
     onView(node.ctx);
     if (hasChildren && !isOpen) toggle(node.key);
   };
+
+  const isDeletable =
+    node.ctx.level === "year" &&
+    !node.ctx.section &&
+    !!node.ctx.year &&
+    !!deletableYears?.has(node.ctx.year);
+  const isPendingDelete = pendingDeleteKey === node.key;
 
   return (
     <>
@@ -324,7 +338,38 @@ function Row({ node, depth, open, toggle, active, onView }: RowProps) {
           {node.label}
         </span>
 
-        {/* Counters and hints removed — Phase 1E visual compaction */}
+        {isDeletable && !isPendingDelete && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRequestDelete?.(node.key);
+            }}
+            className="flex h-4 w-4 shrink-0 items-center justify-center rounded-sm opacity-0 group-hover:opacity-60 hover:!opacity-100 hover:text-destructive transition-opacity"
+            title="Excluir ano operacional"
+            aria-label="Excluir ano operacional"
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        )}
+        {isDeletable && isPendingDelete && (
+          <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => onConfirmDelete?.(node.ctx.year!)}
+              className="rounded-sm px-1.5 py-0.5 text-[10px] font-medium text-destructive hover:bg-destructive/10"
+            >
+              Excluir
+            </button>
+            <button
+              type="button"
+              onClick={() => onCancelDelete?.()}
+              className="rounded-sm px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-sidebar-accent"
+            >
+              Cancelar
+            </button>
+          </div>
+        )}
       </div>
 
       {isOpen && hasChildren && (
@@ -338,6 +383,11 @@ function Row({ node, depth, open, toggle, active, onView }: RowProps) {
               toggle={toggle}
               active={active}
               onView={onView}
+              deletableYears={deletableYears}
+              pendingDeleteKey={pendingDeleteKey}
+              onRequestDelete={onRequestDelete}
+              onConfirmDelete={onConfirmDelete}
+              onCancelDelete={onCancelDelete}
             />
           ))}
         </div>
@@ -416,16 +466,51 @@ export function HierarchyExplorer({
     }
   }, [extraYears, storageKey]);
 
-  const handleAddYear = useCallback(() => {
-    const input = window.prompt("Novo ano operacional (ex: 2027):");
-    if (!input) return;
-    const trimmed = input.trim();
+  const [addingYear, setAddingYear] = useState(false);
+  const [yearInput, setYearInput] = useState("");
+  const [yearError, setYearError] = useState<string | null>(null);
+  const [pendingDeleteKey, setPendingDeleteKey] = useState<string | null>(null);
+  const yearInputRef = useRef<HTMLInputElement>(null);
+
+  const dataYears = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of records) set.add(getYear(r));
+    return set;
+  }, [records]);
+
+  const startAddYear = useCallback(() => {
+    setAddingYear(true);
+    setYearInput("");
+    setYearError(null);
+    setTimeout(() => yearInputRef.current?.focus(), 0);
+  }, []);
+
+  const cancelAddYear = useCallback(() => {
+    setAddingYear(false);
+    setYearInput("");
+    setYearError(null);
+  }, []);
+
+  const commitAddYear = useCallback(() => {
+    const trimmed = yearInput.trim();
     if (!/^\d{4}$/.test(trimmed)) {
-      window.alert("Informe um ano com 4 dígitos.");
+      setYearError("4 dígitos");
       return;
     }
     setExtraYears((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
-  }, []);
+    setAddingYear(false);
+    setYearInput("");
+    setYearError(null);
+  }, [yearInput]);
+
+  const confirmDeleteYear = useCallback((year: string) => {
+    setExtraYears((prev) => prev.filter((y) => y !== year));
+    setPendingDeleteKey(null);
+    // Clear active context if it referenced the removed year
+    if (context.year === year) {
+      onContextChange(EMPTY_CTX);
+    }
+  }, [context.year, onContextChange]);
 
   // Persist opened nodes
   useEffect(() => {
@@ -495,12 +580,12 @@ export function HierarchyExplorer({
           <FolderTree className="h-3.5 w-3.5 shrink-0" />
           {!collapsed && <span>{title}</span>}
         </div>
-        {!collapsed && (
+        {!collapsed && !addingYear && (
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              handleAddYear();
+              startAddYear();
             }}
             className="flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition-colors"
             title="Novo ano operacional"
@@ -571,6 +656,45 @@ export function HierarchyExplorer({
         </div>
       ) : (
         <div className="flex-1 overflow-auto py-1">
+          {addingYear && (
+            <div className="flex items-center gap-1 px-2 py-1.5 border-b border-border/40 bg-sidebar-accent/30">
+              <Calendar className="h-3 w-3 shrink-0 text-muted-foreground" />
+              <input
+                ref={yearInputRef}
+                type="text"
+                inputMode="numeric"
+                maxLength={4}
+                value={yearInput}
+                onChange={(e) => { setYearInput(e.target.value.replace(/\D/g, "")); setYearError(null); }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { e.preventDefault(); commitAddYear(); }
+                  else if (e.key === "Escape") { e.preventDefault(); cancelAddYear(); }
+                }}
+                onBlur={() => { if (!yearInput.trim()) cancelAddYear(); }}
+                placeholder="2027"
+                className={cn(
+                  "flex-1 min-w-0 bg-transparent border-b text-xs outline-none px-0.5 py-0",
+                  yearError ? "border-destructive text-destructive" : "border-primary/60 text-foreground",
+                )}
+              />
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={commitAddYear}
+                className="text-[10px] px-1.5 py-0.5 rounded-sm text-primary hover:bg-sidebar-accent"
+              >
+                OK
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={cancelAddYear}
+                className="text-[10px] px-1.5 py-0.5 rounded-sm text-muted-foreground hover:bg-sidebar-accent"
+              >
+                ✕
+              </button>
+            </div>
+          )}
           {tree.length === 0 ? (
             <p className="px-3 py-4 text-xs text-muted-foreground">
               {smartEmpty}
@@ -585,6 +709,11 @@ export function HierarchyExplorer({
                 toggle={toggle}
                 active={context}
                 onView={onContextChange}
+                deletableYears={new Set(extraYears.filter((y) => !dataYears.has(y)))}
+                pendingDeleteKey={pendingDeleteKey}
+                onRequestDelete={setPendingDeleteKey}
+                onConfirmDelete={confirmDeleteYear}
+                onCancelDelete={() => setPendingDeleteKey(null)}
               />
             ))
           )}

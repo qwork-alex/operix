@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
   FolderOpen, FolderPlus, ChevronRight, Trash2, Download,
   Eye, Printer, FileText, MoveRight, Filter, CheckSquare, Pencil, Check, X,
-  ExternalLink, Loader2, Share2, Home,
+  ExternalLink, Loader2, Share2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -627,22 +627,23 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
         </div>
       )}
 
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-        {path.map((p, i) => (
-          <span key={i} className="flex items-center gap-1">
-            {i > 0 && <ChevronRight className="h-3 w-3" />}
-            <button
-              onClick={() => navigateTo(p.id, p.name)}
-              className="hover:text-foreground flex items-center"
-              title={p.name}
-            >
-              {i === 0 ? <Home className="h-3 w-3" /> : p.name}
-            </button>
-          </span>
-        ))}
-      </div>
-
+      {/* Breadcrumb — only show when navigated into a subfolder */}
+      {path.length > 1 && (
+        <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+          {path.slice(1).map((p, i) => (
+            <span key={i} className="flex items-center gap-1">
+              {i > 0 && <ChevronRight className="h-3 w-3" />}
+              <button
+                onClick={() => navigateTo(p.id, p.name)}
+                className="hover:text-foreground truncate max-w-[160px]"
+                title={p.name}
+              >
+                {p.name}
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
       {/* Table */}
       {isLoading ? (
         <div className="space-y-2">
@@ -1014,7 +1015,8 @@ export async function storeFileInDocuments(
   file: File,
   entityType: "service_order" | "payment_order",
   userId?: string,
-  module: string = "orders"
+  module: string = "orders",
+  targetYear?: string | null,
 ) {
   try {
     // Validate file
@@ -1052,7 +1054,20 @@ export async function storeFileInDocuments(
       console.log("[FileManager] Upload verified, signed URL OK:", storagePath);
     }
 
-    const { data, error } = await (supabase as any).from("documents").insert({
+    // Honor active operational year context (Phase 1E-X) — uploads must
+    // attach to the year the user is currently viewing, not "today".
+    let createdAtOverride: string | undefined;
+    if (targetYear && /^\d{4}$/.test(targetYear)) {
+      const y = parseInt(targetYear, 10);
+      const now = new Date();
+      if (y !== now.getFullYear()) {
+        const d = new Date(now);
+        d.setFullYear(y);
+        createdAtOverride = d.toISOString();
+      }
+    }
+
+    const insertPayload: Record<string, any> = {
       name: file.name,
       display_name: file.name,
       rotation: 0,
@@ -1067,7 +1082,10 @@ export async function storeFileInDocuments(
       size_bytes: file.size,
       entity_type: entityType,
       module,
-    }).select("*").single();
+    };
+    if (createdAtOverride) insertPayload.created_at = createdAtOverride;
+
+    const { data, error } = await (supabase as any).from("documents").insert(insertPayload).select("*").single();
     if (error) console.error("[FileManager] Document record insert failed:", error.message);
     else console.log("[FileManager] Document record saved:", file.name);
     return data;
