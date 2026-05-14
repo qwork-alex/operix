@@ -541,9 +541,17 @@ export default function InvoicesScreen() {
 
   useEffect(() => {
     const enableBeforePrint = () => {
-      if (formOpen && viewMode === "preview") setInvoicePrintMode(true);
+      if (formOpen && viewMode === "preview") {
+        document.documentElement.classList.add("invoice-print-mode");
+        document.body.classList.add("invoice-print-mode");
+        setInvoicePrintMode(true);
+      }
     };
-    const disableAfterPrint = () => setInvoicePrintMode(false);
+    const disableAfterPrint = () => {
+      document.documentElement.classList.remove("invoice-print-mode");
+      document.body.classList.remove("invoice-print-mode");
+      setInvoicePrintMode(false);
+    };
     window.addEventListener("beforeprint", enableBeforePrint);
     window.addEventListener("afterprint", disableAfterPrint);
     return () => {
