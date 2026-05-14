@@ -343,24 +343,36 @@ export function OperationalMap() {
   }, [ordersGeo]);
 
   const hailGeo = useMemo(() => {
-    const features = hailEvents.map((h) => ({
-      type: "Feature",
-      geometry: { type: "Point", coordinates: [h.lng, h.lat] },
-      properties: {
-        id: h.id,
-        severity: h.severity,
-        status: h.status,
-        radius_km: h.radius_km,
-        color: HAIL_COLORS[h.severity] ?? HAIL_COLORS.low,
-        // pixel radius scales softly with severity; kept modest for performance
-        size_factor:
-          h.severity === "extreme" ? 28 :
-          h.severity === "severe" ? 22 :
-          h.severity === "moderate" ? 16 : 12,
-      },
-    }));
+    const features = visibleHailEvents.map((h) => {
+      const isForecast = h.status === "forecast";
+      const isConfirmed = h.status === "confirmed" || h.status === "ongoing";
+      const isClosed = h.status === "closed";
+      const sizeMm = h.hail_size_mm ?? 0;
+      // Hail size adds extra weight on top of severity bucket
+      const size_factor =
+        (h.severity === "extreme" ? 28 :
+         h.severity === "severe" ? 22 :
+         h.severity === "moderate" ? 16 : 12)
+        + Math.min(12, sizeMm / 4);
+      return {
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [h.lng, h.lat] },
+        properties: {
+          id: h.id,
+          severity: h.severity,
+          status: h.status,
+          radius_km: h.radius_km,
+          hail_size_mm: sizeMm,
+          color: HAIL_COLORS[h.severity] ?? HAIL_COLORS.low,
+          size_factor,
+          is_forecast: isForecast ? 1 : 0,
+          is_confirmed: isConfirmed ? 1 : 0,
+          is_closed: isClosed ? 1 : 0,
+        },
+      };
+    });
     return { type: "FeatureCollection", features };
-  }, [hailEvents]);
+  }, [visibleHailEvents]);
 
   /* -------- Init map ------------------------------------------------ */
   useEffect(() => {
