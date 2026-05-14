@@ -226,7 +226,7 @@ export function InvoiceDocumentA4({
               </p>
             )}
             <div style={{ marginTop: "4px", fontSize: "9.5px", color: "#52525b" }}>
-              {companyPhone && <div>Tel: {companyPhone}</div>}
+              {companyPhone && <div>{t.phoneShort}: {companyPhone}</div>}
               {companyEmail && <div>{companyEmail}</div>}
             </div>
           </div>
@@ -248,16 +248,16 @@ export function InvoiceDocumentA4({
               </div>
               <div style={{ fontSize: "9px", color: "#52525b", marginTop: "4px" }}>
                 {opt.show_tva !== false && client.tva_intracom && (
-                  <div>TVA: <span style={{ color: "#27272a" }}>{client.tva_intracom}</span></div>
+                  <div>{t.vat}: <span style={{ color: "#27272a" }}>{client.tva_intracom}</span></div>
                 )}
                 {opt.show_siret_vat !== false && (client.siret || client.siren || client.tax_id) && (
-                  <div>SIRET / VAT: <span style={{ color: "#27272a" }}>{client.siret || client.siren || client.tax_id}</span></div>
+                  <div>{t.taxId}: <span style={{ color: "#27272a" }}>{client.siret || client.siren || client.tax_id}</span></div>
                 )}
               </div>
             </div>
           ) : (
             <p style={{ fontSize: "10px", color: "#a1a1aa", fontStyle: "italic" }}>
-              Cliente não selecionado
+              {t.clientNotSelected}
             </p>
           )}
         </div>
@@ -284,7 +284,7 @@ export function InvoiceDocumentA4({
             letterSpacing: "0.02em",
             lineHeight: 1.1,
           }}>
-            Nº {form.invoice_number || "—"}
+            {t.number} {form.invoice_number || "—"}
           </span>
         </div>
       </section>
@@ -301,18 +301,18 @@ export function InvoiceDocumentA4({
           </colgroup>
           <thead>
             <tr style={{ borderBottom: "1.5px solid #18181b" }}>
-              <th style={cellTh("left")}>Designação</th>
-              <th style={cellTh("right")}>Quantidade</th>
-              <th style={cellTh("right")}>Preço unit.</th>
-              <th style={cellTh("right")}>TVA</th>
-              <th style={cellTh("right")}>Total HT</th>
+              <th style={cellTh("left")}>{t.designation}</th>
+              <th style={cellTh("right")}>{t.quantity}</th>
+              <th style={cellTh("right")}>{t.unitPrice}</th>
+              <th style={cellTh("right")}>{t.taxRate}</th>
+              <th style={cellTh("right")}>{t.totalHt}</th>
             </tr>
           </thead>
           <tbody>
             {form.items.length === 0 ? (
               <tr>
                 <td colSpan={5} style={{ padding: "16px 8px", textAlign: "center", color: "#a1a1aa", fontStyle: "italic" }}>
-                  Sem itens
+                  {t.noItems}
                 </td>
               </tr>
             ) : form.items.map((it) => {
@@ -320,7 +320,7 @@ export function InvoiceDocumentA4({
               return (
                 <tr key={it.id} style={{ borderBottom: "1px solid #f4f4f5", pageBreakInside: "avoid", breakInside: "avoid" }}>
                   <td style={cellTd("left", "#27272a")}>
-                    {it.designation || <span style={{ color: "#a1a1aa", fontStyle: "italic" }}>Sem descrição</span>}
+                    {it.designation || <span style={{ color: "#a1a1aa", fontStyle: "italic" }}>{t.noDescription}</span>}
                   </td>
                   <td style={cellTd("right", "#52525b")}>{Number(it.quantity) || 0}</td>
                   <td style={cellTd("right", "#52525b")}>{fmtMoney(Number(it.unit_price) || 0)}</td>
@@ -336,24 +336,24 @@ export function InvoiceDocumentA4({
       {/* ═══════════ 4. TOTALS ═══════════ */}
       <section className="avoid-break" style={{ marginTop: "18px", display: "flex", justifyContent: "flex-end", pageBreakInside: "avoid", breakInside: "avoid" }}>
         <div style={{ width: "270px" }}>
-          <Row label="Subtotal" value={fmtMoney(totals.subtotal)} />
+          <Row label={t.subtotal} value={fmtMoney(totals.subtotal)} />
           {opt.show_discount && totals.discount > 0 && (
             <Row
-              label={`Desconto${opt.discount_type === "percent" ? ` (${opt.discount_value || 0}%)` : ""}`}
+              label={`${t.discount}${opt.discount_type === "percent" ? ` (${opt.discount_value || 0}%)` : ""}`}
               value={`- ${fmtMoney(totals.discount)}`}
               tone="rose"
             />
           )}
-          <Row label="Total HT" value={fmtMoney(totals.netSubtotal)} divider />
+          <Row label={t.totalNet} value={fmtMoney(totals.netSubtotal)} divider />
           {Array.from(taxBuckets.entries()).filter(([, v]) => v > 0).map(([rate, val]) => (
-            <Row key={rate} label={`TVA (${rate}%)`} value={fmtMoney(val)} muted />
+            <Row key={rate} label={t.taxRow(rate)} value={fmtMoney(val)} muted />
           ))}
-          <Row label="Total TVA" value={fmtMoney(totals.tax)} divider />
+          <Row label={t.totalTax} value={fmtMoney(totals.tax)} divider />
           <div style={{
             display: "flex", justifyContent: "space-between", alignItems: "baseline",
             marginTop: "16px", padding: "12px 14px", background: "#0a0a0a", color: "#fff",
           }}>
-            <span style={{ fontSize: "9.5px", letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 600 }}>Total TTC</span>
+            <span style={{ fontSize: "9.5px", letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 600 }}>{t.totalGross}</span>
             <span style={{ fontSize: "14px", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
               {fmtMoney(totals.total)}
             </span>
@@ -368,13 +368,13 @@ export function InvoiceDocumentA4({
         textAlign: "center",
         pageBreakInside: "avoid", breakInside: "avoid",
       }}>
-        <DateBlock label="Data de emissão" value={fmtDate(form.issue_date)} />
-        <DateBlock label="Data de vencimento" value={fmtDate(form.due_date)} />
+        <DateBlock label={t.issueDate} value={fmtDate(form.issue_date)} />
+        <DateBlock label={t.dueDate} value={fmtDate(form.due_date)} />
         {opt.show_payment_terms !== false && (
-          <DateBlock label="Condições de pagamento" value={paymentLabel} />
+          <DateBlock label={t.paymentTerms} value={paymentLabel} />
         )}
         {opt.show_client_reference && opt.client_reference && (
-          <DateBlock label="Referência cliente" value={opt.client_reference} />
+          <DateBlock label={t.clientReference} value={opt.client_reference} />
         )}
       </section>
 
@@ -413,9 +413,9 @@ export function InvoiceDocumentA4({
           )}
           {(companyIban || companyBic) && (
             <div style={{ color: "#71717a", marginTop: "1px" }}>
-              {companyIban && <span>IBAN {companyIban}</span>}
+              {companyIban && <span>{t.iban} {companyIban}</span>}
               {companyIban && companyBic && <span> · </span>}
-              {companyBic && <span>BIC {companyBic}</span>}
+              {companyBic && <span>{t.bic} {companyBic}</span>}
             </div>
           )}
         </div>
