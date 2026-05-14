@@ -1003,8 +1003,11 @@ export default function InvoicesScreen() {
               </div>
             </FormSection>
 
-            {/* SECTION 2 — Client */}
-            <FormSection title="Cliente" subtitle="Selecione um cliente já cadastrado">
+            {/* SECTION 2 — Client (source of truth) */}
+            <FormSection
+              title="Cliente"
+              subtitle="Os dados fiscais são carregados automaticamente do cadastro do cliente"
+            >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <Field label="Cliente *">
                   <Select
@@ -1027,6 +1030,11 @@ export default function InvoicesScreen() {
                 </Field>
                 <ClientPreview client={(clientsQ.data ?? []).find((c) => c.id === form.client_id) || null} />
               </div>
+
+              {/* Read-only fiscal block (source of truth) */}
+              <ClientFiscalReadonly
+                client={(clientsQ.data ?? []).find((c) => c.id === form.client_id) || null}
+              />
             </FormSection>
 
             {/* SECTION 3 — Payment terms */}
