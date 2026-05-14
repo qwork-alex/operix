@@ -283,6 +283,7 @@ export default function InvoicesScreen() {
 
   const [detail, setDetail] = useState<Invoice | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Invoice | null>(null);
+  const [confirmDraft, setConfirmDraft] = useState(false);
 
   // ── data
   const invoicesQ = useQuery({
