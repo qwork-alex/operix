@@ -12,12 +12,13 @@ export interface ConfidenceBreakdown {
   auto_apply: boolean;  // true only if total >= AUTO_APPLY_THRESHOLD
 }
 
-export const AUTO_APPLY_THRESHOLD = 0.78;
+export const AUTO_APPLY_THRESHOLD = 0.85;
 
 const PROVIDER_WEIGHTS: Record<string, number> = {
-  "france-pappers":    0.95,
-  "brazil-brasilapi":  0.95,
-  "europe-vies":       0.65,
+  "france-pappers":               0.95,
+  "france-recherche-entreprises": 0.92,
+  "brazil-brasilapi":             0.95,
+  "europe-vies":                  0.65,
   "usa-structural":    0.35,
   "canada-structural": 0.35,
   "mexico-structural": 0.35,

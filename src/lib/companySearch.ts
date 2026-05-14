@@ -48,7 +48,7 @@ export interface ConfidenceBreakdown {
   field_completeness: number; total: number; level: ConfidenceLevel; auto_apply: boolean;
 }
 
-export const AUTO_APPLY_THRESHOLD = 0.78;
+export const AUTO_APPLY_THRESHOLD = 0.85;
 
 export interface LookupResponse {
   detected_kind: DocumentKind;
