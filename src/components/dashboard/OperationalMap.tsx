@@ -1,11 +1,45 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/hooks/useLanguage";
 import { Skeleton } from "@/components/ui/skeleton";
 import maplibregl, { Map as MLMap, GeoJSONSource } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { Users, CloudRain, Zap, Radar, Wrench, FileText, Layers } from "lucide-react";
+import { Users, CloudRain, Zap, Radar, Wrench, FileText, Layers, X, AlertTriangle, Wind, Clock, Gauge } from "lucide-react";
+
+/* ------------------------------------------------------------------ */
+/*  Hail severity → premium color palette                              */
+/* ------------------------------------------------------------------ */
+const HAIL_COLORS = {
+  low: "#eab308",       // yellow
+  moderate: "#f97316",  // orange
+  severe: "#ef4444",    // red
+  extreme: "#a855f7",   // purple — extreme
+} as const;
+type HailSeverity = keyof typeof HAIL_COLORS;
+type HailStatus = "forecast" | "ongoing" | "confirmed" | "closed";
+
+interface HailEvent {
+  id: string;
+  source: string;
+  city: string | null;
+  region: string | null;
+  country: string | null;
+  lat: number;
+  lng: number;
+  radius_km: number;
+  severity: HailSeverity;
+  status: HailStatus;
+  hail_size_mm: number | null;
+  probability: number | null;
+  intensity: number | null;
+  storm_speed_kmh: number | null;
+  storm_direction_deg: number | null;
+  forecast_time: string | null;
+  observed_time: string | null;
+  expires_at: string | null;
+  is_demo: boolean;
+}
 
 /* ------------------------------------------------------------------ */
 /*  City heuristic (kept from previous map for fallback inference)     */
