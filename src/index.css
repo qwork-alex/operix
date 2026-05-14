@@ -196,3 +196,20 @@
     animation: slide-in-right-kf 0.3s ease-out;
   }
 }
+
+/* ───────────── Print rules: invoice preview only ───────────── */
+@media print {
+  body * { visibility: hidden !important; }
+  .invoice-print-area, .invoice-print-area * { visibility: visible !important; }
+  .invoice-print-area {
+    position: fixed !important;
+    inset: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    z-index: 9999 !important;
+  }
+  [data-radix-dialog-overlay] { background: transparent !important; }
+  @page { size: A4; margin: 0; }
+}
