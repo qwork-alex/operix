@@ -263,6 +263,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           customer_name: string | null
+          customer_snapshot: Json | null
           due_date: string | null
           fleet_id: string | null
           id: string
@@ -285,6 +286,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           customer_name?: string | null
+          customer_snapshot?: Json | null
           due_date?: string | null
           fleet_id?: string | null
           id?: string
@@ -307,6 +309,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           customer_name?: string | null
+          customer_snapshot?: Json | null
           due_date?: string | null
           fleet_id?: string | null
           id?: string

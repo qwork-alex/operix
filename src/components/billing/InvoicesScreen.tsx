@@ -56,12 +56,37 @@ import {
 type InvoiceStatus = "draft" | "pending" | "partial" | "paid" | "overdue" | "cancelled";
 type InvoiceType = "incoming" | "outgoing";
 
+type CustomerSnapshot = {
+  billing_client_id: string | null;
+  name: string;
+  kind?: string | null;
+  tax_id?: string | null;
+  siren?: string | null;
+  siret?: string | null;
+  tva_intracom?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  address_complement?: string | null;
+  postal_code?: string | null;
+  city?: string | null;
+  country?: string | null;
+  iban?: string | null;
+  bic?: string | null;
+  language?: string | null;
+  currency?: string | null;
+  payment_terms?: string | null;
+  captured_at: string;
+};
+
 type Invoice = {
   id: string;
   invoice_number: string;
   type: InvoiceType;
   supplier_id: string | null;
+  billing_client_id: string | null;
   customer_name: string | null;
+  customer_snapshot: CustomerSnapshot | null;
   vehicle_id: string | null;
   fleet_id: string | null;
   service_order_id: string | null;
@@ -81,11 +106,51 @@ type Supplier = { id: string; name: string };
 type Client = {
   id: string;
   name: string;
-  contact_email: string | null;
-  contact_phone: string | null;
+  kind: string | null;
+  tax_id: string | null;
+  siren: string | null;
+  siret: string | null;
+  tva_intracom: string | null;
+  email: string | null;
+  phone: string | null;
   address: string | null;
-  notes: string | null;
+  address_complement: string | null;
+  postal_code: string | null;
+  city: string | null;
+  country: string | null;
+  iban: string | null;
+  bic: string | null;
+  // Compatibility with previous shape
+  contact_email?: string | null;
+  contact_phone?: string | null;
+  notes?: string | null;
 };
+
+function buildSnapshot(c: Client | null): CustomerSnapshot | null {
+  if (!c) return null;
+  return {
+    billing_client_id: c.id,
+    name: c.name,
+    kind: c.kind ?? null,
+    tax_id: c.tax_id ?? null,
+    siren: c.siren ?? null,
+    siret: c.siret ?? null,
+    tva_intracom: c.tva_intracom ?? null,
+    email: c.email ?? null,
+    phone: c.phone ?? null,
+    address: c.address ?? null,
+    address_complement: c.address_complement ?? null,
+    postal_code: c.postal_code ?? null,
+    city: c.city ?? null,
+    country: c.country ?? null,
+    iban: c.iban ?? null,
+    bic: c.bic ?? null,
+    language: null,
+    currency: "EUR",
+    payment_terms: null,
+    captured_at: new Date().toISOString(),
+  };
+}
 
 // Payment terms presets
 type PaymentTerm = "on_receipt" | "net_15" | "net_30" | "net_45" | "net_60" | "end_of_month" | "custom";
@@ -294,7 +359,7 @@ export default function InvoicesScreen() {
         .select("*")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []) as Invoice[];
+      return (data ?? []) as unknown as Invoice[];
     },
   });
 
@@ -311,14 +376,21 @@ export default function InvoicesScreen() {
   });
 
   const clientsQ = useQuery({
-    queryKey: ["clients_lite_for_invoices"],
+    queryKey: ["billing_clients_lite_for_invoices"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("clients")
-        .select("id,name,contact_email,contact_phone,address,notes")
+        .from("billing_clients")
+        .select("id,name,kind,tax_id,siren,siret,tva_intracom,email,phone,address,address_complement,postal_code,city,country,iban,bic")
+        .eq("is_active", true)
         .order("name");
       if (error) throw error;
-      return (data ?? []) as Client[];
+      const list = (data ?? []) as any[];
+      // Normalize legacy shape
+      return list.map((c) => ({
+        ...c,
+        contact_email: c.email,
+        contact_phone: c.phone,
+      })) as Client[];
     },
   });
 
@@ -419,7 +491,7 @@ export default function InvoicesScreen() {
     setForm({
       invoice_number: inv.invoice_number,
       type: inv.type,
-      client_id: null,
+      client_id: inv.billing_client_id ?? inv.customer_snapshot?.billing_client_id ?? null,
       issue_date: inv.issue_date,
       due_date: inv.due_date ?? "",
       payment_term: "custom",
@@ -476,13 +548,15 @@ export default function InvoicesScreen() {
       return;
     }
     const client = (clientsQ.data ?? []).find((c) => c.id === form.client_id) || null;
+    const snapshot = client ? buildSnapshot(client) : (editing?.customer_snapshot ?? null);
     upsertMut.mutate({
       id: editing?.id,
       invoice_number: form.invoice_number.trim(),
       type: form.type,
-      // Keep supplier_id untouched on edit (legacy). On create with new flow, leave null.
       supplier_id: editing?.supplier_id ?? null,
+      billing_client_id: client?.id ?? editing?.billing_client_id ?? null,
       customer_name: client?.name ?? editing?.customer_name ?? null,
+      customer_snapshot: snapshot as any,
       issue_date: form.issue_date,
       due_date: form.due_date || null,
       total_amount: totals.total,
@@ -496,12 +570,15 @@ export default function InvoicesScreen() {
   const saveDraft = () => {
     const number = form.invoice_number.trim() || `RASCUNHO-${Date.now().toString().slice(-6)}`;
     const client = (clientsQ.data ?? []).find((c) => c.id === form.client_id) || null;
+    const snapshot = client ? buildSnapshot(client) : (editing?.customer_snapshot ?? null);
     upsertMut.mutate({
       id: editing?.id,
       invoice_number: number,
       type: form.type,
       supplier_id: editing?.supplier_id ?? null,
+      billing_client_id: client?.id ?? editing?.billing_client_id ?? null,
       customer_name: client?.name ?? editing?.customer_name ?? null,
+      customer_snapshot: snapshot as any,
       issue_date: form.issue_date,
       due_date: form.due_date || null,
       total_amount: totals.total,
@@ -926,8 +1003,11 @@ export default function InvoicesScreen() {
               </div>
             </FormSection>
 
-            {/* SECTION 2 — Client */}
-            <FormSection title="Cliente" subtitle="Selecione um cliente já cadastrado">
+            {/* SECTION 2 — Client (source of truth) */}
+            <FormSection
+              title="Cliente"
+              subtitle="Os dados fiscais são carregados automaticamente do cadastro do cliente"
+            >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <Field label="Cliente *">
                   <Select
@@ -950,6 +1030,11 @@ export default function InvoicesScreen() {
                 </Field>
                 <ClientPreview client={(clientsQ.data ?? []).find((c) => c.id === form.client_id) || null} />
               </div>
+
+              {/* Read-only fiscal block (source of truth) */}
+              <ClientFiscalReadonly
+                client={(clientsQ.data ?? []).find((c) => c.id === form.client_id) || null}
+              />
             </FormSection>
 
             {/* SECTION 3 — Payment terms */}
@@ -1512,34 +1597,72 @@ function ClientPreview({ client }: { client: Client | null }) {
   if (!client) {
     return (
       <div className="rounded-md border border-dashed border-border/60 px-3 py-2.5 text-[11px] text-muted-foreground flex items-center">
-        Selecione um cliente para carregar dados fiscais, idioma, moeda e condições.
+        Selecione um cliente para carregar dados fiscais, endereço e contactos.
       </div>
     );
   }
-  const c: any = client;
-  const rows: { k: string; v: string }[] = [
-    { k: "VAT / TVA",      v: c.vat_number ?? c.tva_number ?? "—" },
-    { k: "SIRET",          v: c.siret ?? "—" },
-    { k: "Endereço",       v: client.address ?? "—" },
-    { k: "Idioma",         v: (c.language ?? "pt").toString().toUpperCase() },
-    { k: "Moeda",          v: c.currency ?? "EUR" },
-    { k: "Cond. pagamento",v: c.payment_terms ?? "30 dias" },
-  ];
+  const fiscal = client.tva_intracom || client.siret || client.siren || client.tax_id || "—";
+  const fullAddr = [
+    client.address,
+    client.address_complement,
+    [client.postal_code, client.city].filter(Boolean).join(" "),
+    client.country,
+  ].filter(Boolean).join(" · ");
   return (
     <div className="rounded-md border border-border/60 bg-muted/10 px-3 py-2.5 text-[11px] space-y-1">
       <p className="font-medium text-foreground text-xs">{client.name}</p>
       <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-muted-foreground">
-        {client.contact_email && <span>{client.contact_email}</span>}
-        {client.contact_phone && <span>{client.contact_phone}</span>}
+        {client.email && <span>{client.email}</span>}
+        {client.phone && <span>{client.phone}</span>}
       </div>
-      <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 pt-1 border-t border-border/40 mt-1">
-        {rows.map((r) => (
-          <div key={r.k} className="flex justify-between gap-2">
-            <span className="text-muted-foreground/80">{r.k}</span>
-            <span className="text-foreground/90 truncate">{r.v}</span>
+      <div className="pt-1 border-t border-border/40 mt-1 space-y-0.5">
+        <div className="flex justify-between gap-2">
+          <span className="text-muted-foreground/80">Identificação fiscal</span>
+          <span className="text-foreground/90 font-mono truncate">{fiscal}</span>
+        </div>
+        {fullAddr && (
+          <div className="flex justify-between gap-2">
+            <span className="text-muted-foreground/80">Endereço</span>
+            <span className="text-foreground/90 truncate text-right">{fullAddr}</span>
           </div>
-        ))}
+        )}
       </div>
+    </div>
+  );
+}
+
+function ClientFiscalReadonly({ client }: { client: Client | null }) {
+  if (!client) return null;
+  const F = ({ label, value }: { label: string; value?: string | null }) => (
+    <Field label={label}>
+      <Input value={value ?? ""} readOnly disabled className="h-9 bg-muted/30" placeholder="—" />
+    </Field>
+  );
+  return (
+    <div className="mt-3 rounded-md border border-border/60 bg-muted/5 p-3 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
+          Bloco fiscal (somente leitura)
+        </p>
+        <span className="text-[10px] text-muted-foreground">Fonte: cadastro do cliente</span>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <F label="Razão social" value={client.name} />
+        <F label="SIREN" value={client.siren} />
+        <F label="SIRET" value={client.siret} />
+        <F label="TVA / VAT" value={client.tva_intracom} />
+        <F label="Identificação fiscal" value={client.tax_id} />
+        <F label="País" value={client.country} />
+        <F label="Endereço" value={client.address} />
+        <F label="Complemento" value={client.address_complement} />
+        <F label="Código postal · Cidade" value={[client.postal_code, client.city].filter(Boolean).join(" · ")} />
+        <F label="Email" value={client.email} />
+        <F label="Telefone" value={client.phone} />
+        <F label="IBAN" value={client.iban} />
+      </div>
+      <p className="text-[10px] text-muted-foreground">
+        Para alterar estes dados, edite a ficha do cliente em Faturamento › Clientes.
+      </p>
     </div>
   );
 }
@@ -1774,17 +1897,28 @@ function InvoicePreview({
             {client ? (
               <>
                 <p className="text-sm font-semibold text-zinc-900">{client.name}</p>
-                {client.address && (
-                  <p className="text-[11px] text-zinc-600 leading-snug whitespace-pre-line mt-0.5">{client.address}</p>
+                {(client.address || client.address_complement || client.postal_code || client.city || client.country) && (
+                  <p className="text-[11px] text-zinc-600 leading-snug mt-0.5">
+                    {[
+                      client.address,
+                      client.address_complement,
+                      [client.postal_code, client.city].filter(Boolean).join(" "),
+                      client.country,
+                    ].filter(Boolean).join(", ")}
+                  </p>
                 )}
                 <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-zinc-500 mt-1">
-                  {client.contact_email && <span>{client.contact_email}</span>}
-                  {client.contact_phone && <span>{client.contact_phone}</span>}
+                  {(client.email || client.contact_email) && <span>{client.email ?? client.contact_email}</span>}
+                  {(client.phone || client.contact_phone) && <span>{client.phone ?? client.contact_phone}</span>}
                 </div>
                 {(opt.show_tva || opt.show_siret_vat) && (
                   <div className="mt-2 text-[10px] text-zinc-500 space-y-0.5">
-                    {opt.show_tva && <p>TVA / IVA: <span className="text-zinc-700">—</span></p>}
-                    {opt.show_siret_vat && <p>SIRET / VAT: <span className="text-zinc-700">—</span></p>}
+                    {opt.show_tva && (
+                      <p>TVA / IVA: <span className="text-zinc-700">{client.tva_intracom || "—"}</span></p>
+                    )}
+                    {opt.show_siret_vat && (
+                      <p>SIRET / VAT: <span className="text-zinc-700">{client.siret || client.siren || client.tax_id || "—"}</span></p>
+                    )}
                   </div>
                 )}
               </>
