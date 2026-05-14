@@ -239,6 +239,18 @@ export default function InvoicesScreen() {
     },
   });
 
+  const clientsQ = useQuery({
+    queryKey: ["clients_lite_for_invoices"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id,name,contact_email,contact_phone,address,notes")
+        .order("name");
+      if (error) throw error;
+      return (data ?? []) as Client[];
+    },
+  });
+
   const supplierMap = useMemo(() => {
     const m = new Map<string, string>();
     (suppliersQ.data ?? []).forEach((s) => m.set(s.id, s.name));
