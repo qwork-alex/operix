@@ -1,13 +1,29 @@
-// Germany — structural validation only (Handelsregister has no public free API).
+// Germany — Tier B.
 // Identifiers:
-//   - USt-IdNr (DE + 9 digits) — handled via VIES at orchestrator level (vat_eu/DE).
-//   - HRB / HRA (Handelsregister) — "HRB 12345" or "HRB 12345 B".
-//   - Steuernummer — varies by Bundesland (10-13 digits). Detected loosely, validated structurally.
-import { emptyCompany, type NormalizedCompany } from "../../core.ts";
+//   - USt-IdNr (DE + 9 digits) — enrichable via VIES when ENABLE_DE_PROVIDER.
+//   - HRB / HRA (Handelsregister) — structural only (no free public API).
+//   - Steuernummer — varies by Bundesland; structural only.
+import { emptyCompany, fetchWithTimeout, type NormalizedCompany } from "../../core.ts";
+import { parseAddressIntelligent } from "../../parsers/address-parser.ts";
 import type { CountryCtx, CountryDetection, CountryModule } from "../types.ts";
+import { isProviderEnabled } from "../flags.ts";
 
 const RX_HR     = /^(HRA|HRB|GnR|PR|VR)\s*\d{1,7}([\s-][A-Z])?$/i;
 const RX_USTID  = /^DE\d{9}$/i;
+
+async function viesEnrichDe(vat: string): Promise<{ name?: string; address?: string } | null> {
+  try {
+    const number = vat.replace(/^DE/i, "");
+    const r = await fetchWithTimeout(
+      `https://ec.europa.eu/taxation_customs/vies/rest-api/ms/DE/vat/${encodeURIComponent(number)}`,
+      undefined, 6000,
+    );
+    if (!r.ok) return null;
+    const d = await r.json();
+    if (!d?.isValid) return null;
+    return { name: d.name, address: d.address };
+  } catch { return null; }
+}
 
 export const deModule: CountryModule = {
   iso2: "DE",
@@ -20,17 +36,40 @@ export const deModule: CountryModule = {
     return out;
   },
   async lookup(ctx: CountryCtx): Promise<NormalizedCompany | null> {
-    // No keyless official API. Return structural-only confirmation; VAT goes through VIES upstream.
-    if (ctx.detected_kind === "hrb_de" || ctx.detected_kind === "ustid_de") {
-      const c = emptyCompany("germany-structural");
-      c.country = "DE";
-      c.tax_id = ctx.query.trim().toUpperCase();
-      c.legal_form = ctx.detected_kind === "hrb_de" ? "Handelsregister" : "USt-IdNr";
-      c.company_status = "unknown";
-      c.confidence = "validated";
-      ctx.logs.push({ provider: "germany-structural", ms: 0, ok: true, notes: "structural validation only" });
-      return c;
+    if (ctx.detected_kind !== "hrb_de" && ctx.detected_kind !== "ustid_de") return null;
+    const c = emptyCompany("germany-structural");
+    c.country = "DE";
+    c.tax_id = ctx.query.trim().toUpperCase();
+    c.legal_form = ctx.detected_kind === "hrb_de" ? "Handelsregister" : "USt-IdNr";
+    c.company_status = "unknown";
+    c.confidence = "validated";
+
+    if (ctx.detected_kind === "ustid_de") c.vat_number = c.tax_id;
+
+    // Optional VIES enrichment for USt-IdNr.
+    if (ctx.detected_kind === "ustid_de" && isProviderEnabled("DE")) {
+      const t0 = Date.now();
+      const vies = await viesEnrichDe(c.tax_id);
+      ctx.logs.push({ provider: "germany-vies", ms: Date.now() - t0, ok: !!vies });
+      if (vies?.name) {
+        c.provider = "germany-vies";
+        c.company_name = vies.name;
+        c.legal_name = vies.name;
+        c.confidence = "partially_enriched";
+        if (vies.address) {
+          const parsed = parseAddressIntelligent(vies.address, "DE");
+          c.address = {
+            street: parsed.street, street_number: parsed.street_number,
+            postal_code: parsed.postal_code, city: parsed.city,
+            state: parsed.state, country: parsed.country ?? "Germany",
+          };
+          c.address_line = vies.address;
+        }
+        return c;
+      }
     }
-    return null;
+
+    ctx.logs.push({ provider: "germany-structural", ms: 0, ok: true, notes: "structural validation only" });
+    return c;
   },
 };
