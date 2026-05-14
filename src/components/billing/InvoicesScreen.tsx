@@ -783,15 +783,30 @@ export default function InvoicesScreen() {
 
       {/* ─── Form dialog */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="max-w-5xl max-h-[92vh] overflow-y-auto p-0">
-          <DialogHeader className="px-6 pt-5 pb-4 border-b border-border/50 sticky top-0 bg-background z-10">
-            <DialogTitle className="text-base font-semibold">
-              {editing ? "Editar fatura" : "Nova fatura"}
-            </DialogTitle>
-            <p className="text-xs text-muted-foreground">
-              {editing ? "Atualize os dados da fatura existente." : "Preencha os dados para emitir uma nova fatura."}
-            </p>
+        <DialogContent className="max-w-6xl w-[96vw] max-h-[94vh] p-0 gap-0 flex flex-col overflow-hidden">
+          <DialogHeader className="px-6 pt-5 pb-4 border-b border-border/50 bg-background z-10 flex-row items-center justify-between space-y-0">
+            <div>
+              <DialogTitle className="text-base font-semibold">
+                {editing
+                  ? "Editar fatura"
+                  : (form.options.show_doc_title ? form.options.doc_title : "Nova fatura")}
+              </DialogTitle>
+              <p className="text-xs text-muted-foreground">
+                Modo: <span className="font-medium text-foreground">{BILLING_MODES.find(m => m.value === form.options.mode)?.label}</span>
+                {" · "}Idioma: <span className="font-medium text-foreground uppercase">{form.options.lang}</span>
+              </p>
+            </div>
+            <Button
+              variant="outline" size="sm" className="h-8 mr-8"
+              onClick={() => setOptionsPanelOpen(o => !o)}
+            >
+              <Filter className="h-3.5 w-3.5 mr-1.5" />
+              {optionsPanelOpen ? "Ocultar opções" : "Opções da fatura"}
+            </Button>
           </DialogHeader>
+
+          <div className="flex-1 flex min-h-0 overflow-hidden">
+            <div className="flex-1 overflow-y-auto">
 
           <div className="px-6 py-5 space-y-6 text-xs">
             {/* SECTION 1 — Identification */}
