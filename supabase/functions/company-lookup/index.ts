@@ -13,6 +13,7 @@ import {
   indiaProvider, japanProvider, genericProvider,
 } from "./providers.ts";
 import { detectAcrossRegistry, resolveModule } from "./country-registry/registry.ts";
+import { tierFor, TIER_LABEL_PT, type SupportTier } from "./country-registry/tiers.ts";
 
 function enrichAddress(c: NormalizedCompany | null): NormalizedCompany | null {
   if (!c) return c;
@@ -39,10 +40,15 @@ function buildMessage(
   candidates: NormalizedCompany[],
   vies: any,
   conf: ConfidenceBreakdown,
+  tier: SupportTier,
 ): string {
   if (c && conf.auto_apply) return `Empresa identificada com alta confiança (${c.provider}, ${(conf.total * 100).toFixed(0)}%).`;
   if (c && conf.level === "partially_enriched") return `Empresa parcialmente enriquecida (${c.provider}) — confirme antes de aplicar.`;
-  if (c && conf.level === "validated") return `Documento ${best.kind.toUpperCase()} válido — confirme manualmente.`;
+  if (c && conf.level === "validated") {
+    if (tier === "C") return `Documento ${best.kind.toUpperCase()} válido — enriquecimento limitado para este país.`;
+    if (tier === "B") return `Documento ${best.kind.toUpperCase()} válido — enriquecimento parcial disponível.`;
+    return `Documento ${best.kind.toUpperCase()} válido — confirme manualmente.`;
+  }
   if (candidates.length) return `${candidates.length} candidatos encontrados — selecione um.`;
   if (vies && vies.valid === false) return `Número TVA inválido segundo o registro oficial.`;
   if (vies && vies.valid === true) return `TVA válido, mas sem dados adicionais.`;
@@ -177,6 +183,7 @@ Deno.serve(async (req) => {
     const conf = scoreCompany({ company: result, formatScore, countryHint });
     if (result) result.confidence = conf.level;
 
+    const tier = tierFor(result?.country ?? best.country ?? null);
     const payload: LookupResult & {
       classification: { detected_kind: string; country: string | null; score: number; candidates: ClassificationCandidate[] };
       confidence_breakdown: ConfidenceBreakdown;
@@ -184,6 +191,8 @@ Deno.serve(async (req) => {
       total_ms: number;
       provider_available: boolean;
       session_id: string;
+      support_tier: SupportTier;
+      support_tier_label: string;
     } = {
       detected_kind: best.kind,
       detected_country: best.country,
@@ -192,7 +201,7 @@ Deno.serve(async (req) => {
       vies,
       logs: ctx.logs,
       confidence: conf.level,
-      message: buildMessage(best, result, candidates, vies, conf),
+      message: buildMessage(best, result, candidates, vies, conf, tier),
       classification: {
         detected_kind: best.kind, country: best.country, score: best.score,
         candidates: classification.candidates,
@@ -200,8 +209,10 @@ Deno.serve(async (req) => {
       confidence_breakdown: conf,
       country_hint: countryHint,
       total_ms: Date.now() - t0,
-      provider_available: true, // always true now: api.gouv.fr is keyless
+      provider_available: true,
       session_id: sessionId,
+      support_tier: tier,
+      support_tier_label: TIER_LABEL_PT[tier],
     };
 
     return new Response(JSON.stringify(payload), {
