@@ -408,14 +408,14 @@ export function InvoiceDocumentA4({
         </div>
       </section>
 
-      {/* ═══════════ 3. ITEMS TABLE (sem coluna unidade) ═══════════ */}
+      {/* ═══════════ 3. ITEMS TABLE ═══════════ */}
       <section className="invoice-items-section" style={{ marginTop: "12px" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "10px", tableLayout: "fixed" }}>
           <colgroup>
             <col />
             <col style={{ width: "60px" }} />
             <col style={{ width: "90px" }} />
-            <col style={{ width: "55px" }} />
+            {!isQuick && <col style={{ width: "55px" }} />}
             <col style={{ width: "100px" }} />
           </colgroup>
           <thead>
@@ -423,14 +423,14 @@ export function InvoiceDocumentA4({
               <th style={cellTh("left")}>{t.designation}</th>
               <th style={cellTh("right")}>{t.quantity}</th>
               <th style={cellTh("right")}>{t.unitPrice}</th>
-              <th style={cellTh("right")}>{t.taxRate}</th>
+              {!isQuick && <th style={cellTh("right")}>{t.taxRate}</th>}
               <th style={cellTh("right")}>{t.totalHt}</th>
             </tr>
           </thead>
           <tbody>
             {form.items.length === 0 ? (
               <tr>
-                <td colSpan={5} style={{ padding: "16px 8px", textAlign: "center", color: "#a1a1aa", fontStyle: "italic" }}>
+                <td colSpan={isQuick ? 4 : 5} style={{ padding: "16px 8px", textAlign: "center", color: "#a1a1aa", fontStyle: "italic" }}>
                   {t.noItems}
                 </td>
               </tr>
@@ -443,7 +443,7 @@ export function InvoiceDocumentA4({
                   </td>
                   <td style={cellTd("right", "#52525b")}>{Number(it.quantity) || 0}</td>
                   <td style={cellTd("right", "#52525b")}>{fmtMoney(Number(it.unit_price) || 0)}</td>
-                  <td style={cellTd("right", "#71717a")}>{Number(it.tax_rate) || 0}%</td>
+                  {!isQuick && <td style={cellTd("right", "#71717a")}>{Number(it.tax_rate) || 0}%</td>}
                   <td style={{ ...cellTd("right", "#0a0a0a"), fontWeight: 500 }}>{fmtMoney(lineNet)}</td>
                 </tr>
               );
