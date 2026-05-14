@@ -352,6 +352,7 @@ export default function InvoicesScreen() {
   const [confirmDelete, setConfirmDelete] = useState<Invoice | null>(null);
   const [confirmDraft, setConfirmDraft] = useState(false);
   const [sendingInvoice, setSendingInvoice] = useState<Invoice | null>(null);
+  const [reminderInvoice, setReminderInvoice] = useState<Invoice | null>(null);
 
   // ── data
   const invoicesQ = useQuery({
@@ -362,7 +363,14 @@ export default function InvoicesScreen() {
         .select("*")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []) as unknown as Invoice[];
+      const today = new Date().toISOString().slice(0, 10);
+      // Auto-derive overdue: pending/partial invoices whose due_date has passed
+      return (data ?? []).map((r: any) => {
+        if ((r.status === "pending" || r.status === "partial") && r.due_date && r.due_date < today) {
+          return { ...r, status: "overdue" };
+        }
+        return r;
+      }) as unknown as Invoice[];
     },
   });
 
