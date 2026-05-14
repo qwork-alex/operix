@@ -103,6 +103,9 @@ type Totals = {
   total: number;
 };
 
+export type BillingMode = "quick" | "complete" | "electronic";
+export type ElectronicFormat = "none" | "ubl" | "facturx" | "peppol";
+
 interface InvoiceDocumentA4Props {
   form: DocForm;
   totals: Totals;
@@ -112,11 +115,98 @@ interface InvoiceDocumentA4Props {
   brandLogo: string;
   lang?: InvoiceLang | string | null;
   docType?: string | null;
+  mode?: BillingMode;
+  electronicFormat?: ElectronicFormat;
 }
+
+// Localized labels for mode-specific blocks (kept local — small surface)
+const MODE_LABELS: Record<string, {
+  electronicBlock: string;
+  electronicFormat: string;
+  documentId: string;
+  issuedAt: string;
+  schema: string;
+  buyerRef: string;
+  techNotice: string;
+  formatBadge: string;
+}> = {
+  pt: {
+    electronicBlock: "Bloco eletrónico",
+    electronicFormat: "Formato",
+    documentId: "ID documento",
+    issuedAt: "Emitido em",
+    schema: "Esquema",
+    buyerRef: "Referência comprador",
+    techNotice: "Documento conforme EN 16931 — preparado para transmissão eletrónica.",
+    formatBadge: "Formato eletrónico",
+  },
+  fr: {
+    electronicBlock: "Bloc électronique",
+    electronicFormat: "Format",
+    documentId: "ID document",
+    issuedAt: "Émis le",
+    schema: "Schéma",
+    buyerRef: "Référence acheteur",
+    techNotice: "Document conforme EN 16931 — préparé pour la transmission électronique.",
+    formatBadge: "Format électronique",
+  },
+  en: {
+    electronicBlock: "Electronic block",
+    electronicFormat: "Format",
+    documentId: "Document ID",
+    issuedAt: "Issued at",
+    schema: "Schema",
+    buyerRef: "Buyer reference",
+    techNotice: "Document compliant with EN 16931 — ready for electronic transmission.",
+    formatBadge: "Electronic format",
+  },
+  es: {
+    electronicBlock: "Bloque electrónico",
+    electronicFormat: "Formato",
+    documentId: "ID documento",
+    issuedAt: "Emitido el",
+    schema: "Esquema",
+    buyerRef: "Referencia comprador",
+    techNotice: "Documento conforme a EN 16931 — preparado para transmisión electrónica.",
+    formatBadge: "Formato electrónico",
+  },
+  it: {
+    electronicBlock: "Blocco elettronico",
+    electronicFormat: "Formato",
+    documentId: "ID documento",
+    issuedAt: "Emesso il",
+    schema: "Schema",
+    buyerRef: "Riferimento acquirente",
+    techNotice: "Documento conforme a EN 16931 — pronto per la trasmissione elettronica.",
+    formatBadge: "Formato elettronico",
+  },
+  de: {
+    electronicBlock: "Elektronischer Block",
+    electronicFormat: "Format",
+    documentId: "Dokument-ID",
+    issuedAt: "Ausgestellt am",
+    schema: "Schema",
+    buyerRef: "Käuferreferenz",
+    techNotice: "Dokument konform mit EN 16931 — bereit für elektronische Übertragung.",
+    formatBadge: "Elektronisches Format",
+  },
+};
+
+const FORMAT_META: Record<ElectronicFormat, { label: string; schema: string }> = {
+  none:    { label: "—",                      schema: "—" },
+  ubl:     { label: "UBL 2.1",                schema: "UBL Invoice 2.1 (OASIS)" },
+  facturx: { label: "Factur-X 1.0.7",         schema: "Factur-X / ZUGFeRD (CII)" },
+  peppol:  { label: "PEPPOL BIS Billing 3.0", schema: "PEPPOL BIS 3.0 (UBL)" },
+};
 
 export function InvoiceDocumentA4({
   form, totals, client, company, brandName, brandLogo, lang, docType,
+  mode = "complete", electronicFormat = "none",
 }: InvoiceDocumentA4Props) {
+  const langKey = (typeof lang === "string" ? lang : "pt").toLowerCase();
+  const mt = MODE_LABELS[langKey] ?? MODE_LABELS.pt;
+  const isQuick = mode === "quick";
+  const isElectronic = mode === "electronic";
   const t = getInvoiceDict(lang);
   const fmtMoney = (n: number) => fmtMoneyI18n(n, lang);
   const fmtDate = (d?: string | null) => fmtDateI18n(d, lang);
@@ -170,15 +260,16 @@ export function InvoiceDocumentA4({
   return (
     <div
       className="invoice-a4-doc invoice-print-page bg-white text-zinc-900 shadow-2xl print:shadow-none mx-auto"
+      data-billing-mode={mode}
       style={{
         width:    A4.width,
         minHeight: A4.height,
         padding:  A4.pad,
-        paddingBottom: "32mm",
+        paddingBottom: isQuick ? "18mm" : "32mm",
         boxSizing: "border-box",
         position: "relative",
         fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
-        fontSize: "10.5px",
+        fontSize: isQuick ? "10px" : "10.5px",
         lineHeight: 1.45,
         color: "#18181b",
       }}
@@ -220,15 +311,17 @@ export function InvoiceDocumentA4({
             <p style={{ fontSize: "13px", fontWeight: 700, letterSpacing: "-0.01em", color: "#0a0a0a" }}>
               {companyName}
             </p>
-            {companyAddr && (
+            {!isQuick && companyAddr && (
               <p style={{ fontSize: "9.5px", color: "#52525b", marginTop: "2px", whiteSpace: "pre-line" }}>
                 {companyAddr}
               </p>
             )}
-            <div style={{ marginTop: "4px", fontSize: "9.5px", color: "#52525b" }}>
-              {companyPhone && <div>{t.phoneShort}: {companyPhone}</div>}
-              {companyEmail && <div>{companyEmail}</div>}
-            </div>
+            {!isQuick && (
+              <div style={{ marginTop: "4px", fontSize: "9.5px", color: "#52525b" }}>
+                {companyPhone && <div>{t.phoneShort}: {companyPhone}</div>}
+                {companyEmail && <div>{companyEmail}</div>}
+              </div>
+            )}
           </div>
         </div>
 
@@ -246,14 +339,16 @@ export function InvoiceDocumentA4({
                 {(client.email || client.contact_email) && <div>{client.email ?? client.contact_email}</div>}
                 {(client.phone || client.contact_phone) && <div>{client.phone ?? client.contact_phone}</div>}
               </div>
-              <div style={{ fontSize: "9px", color: "#52525b", marginTop: "4px" }}>
-                {opt.show_tva !== false && client.tva_intracom && (
-                  <div>{t.vat}: <span style={{ color: "#27272a" }}>{client.tva_intracom}</span></div>
-                )}
-                {opt.show_siret_vat !== false && (client.siret || client.siren || client.tax_id) && (
-                  <div>{t.taxId}: <span style={{ color: "#27272a" }}>{client.siret || client.siren || client.tax_id}</span></div>
-                )}
-              </div>
+              {!isQuick && (
+                <div style={{ fontSize: "9px", color: "#52525b", marginTop: "4px" }}>
+                  {opt.show_tva !== false && client.tva_intracom && (
+                    <div>{t.vat}: <span style={{ color: isElectronic ? "#0a0a0a" : "#27272a", fontWeight: isElectronic ? 600 : 400 }}>{client.tva_intracom}</span></div>
+                  )}
+                  {opt.show_siret_vat !== false && (client.siret || client.siren || client.tax_id) && (
+                    <div>{t.taxId}: <span style={{ color: isElectronic ? "#0a0a0a" : "#27272a", fontWeight: isElectronic ? 600 : 400 }}>{client.siret || client.siren || client.tax_id}</span></div>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
             <p style={{ fontSize: "10px", color: "#a1a1aa", fontStyle: "italic" }}>
@@ -263,40 +358,64 @@ export function InvoiceDocumentA4({
         </div>
       </header>
 
-      {/* ═══════════ 2. TÍTULO + NÚMERO (mesmo peso visual) ═══════════ */}
-      <section className="avoid-break" style={{ marginTop: "24px", paddingBottom: "8px", borderBottom: "1px solid #e4e4e7" }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: "10px", flexWrap: "wrap" }}>
-          <h1 style={{
-            fontSize: "18px",
-            fontWeight: 600,
-            color: "#0a0a0a",
-            letterSpacing: "0.04em",
-            textTransform: "uppercase",
-            margin: 0,
-            lineHeight: 1.1,
-          }}>
-            {docTitle}
-          </h1>
-          <span style={{
-            fontSize: "18px",
-            fontWeight: 600,
-            color: "#0a0a0a",
-            letterSpacing: "0.02em",
-            lineHeight: 1.1,
-          }}>
-            {t.number} {form.invoice_number || "—"}
-          </span>
+      {/* ═══════════ 2. TÍTULO + NÚMERO ═══════════ */}
+      <section className="avoid-break" style={{
+        marginTop: isQuick ? "16px" : "24px",
+        paddingBottom: "8px",
+        borderBottom: isQuick ? "none" : "1px solid #e4e4e7",
+      }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: "10px", flexWrap: "wrap" }}>
+            <h1 style={{
+              fontSize: isQuick ? "16px" : "18px",
+              fontWeight: 600,
+              color: "#0a0a0a",
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+              margin: 0,
+              lineHeight: 1.1,
+            }}>
+              {docTitle}
+            </h1>
+            <span style={{
+              fontSize: isQuick ? "16px" : "18px",
+              fontWeight: 600,
+              color: "#0a0a0a",
+              letterSpacing: "0.02em",
+              lineHeight: 1.1,
+            }}>
+              {t.number} {form.invoice_number || "—"}
+            </span>
+          </div>
+          {isElectronic && electronicFormat !== "none" && (
+            <span
+              aria-label={mt.formatBadge}
+              style={{
+                fontSize: "8.5px",
+                fontWeight: 600,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                color: "#0a0a0a",
+                border: "1px solid #0a0a0a",
+                padding: "4px 8px",
+                borderRadius: "2px",
+                background: "#fafafa",
+              }}
+            >
+              {FORMAT_META[electronicFormat].label}
+            </span>
+          )}
         </div>
       </section>
 
-      {/* ═══════════ 3. ITEMS TABLE (sem coluna unidade) ═══════════ */}
+      {/* ═══════════ 3. ITEMS TABLE ═══════════ */}
       <section className="invoice-items-section" style={{ marginTop: "12px" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "10px", tableLayout: "fixed" }}>
           <colgroup>
             <col />
             <col style={{ width: "60px" }} />
             <col style={{ width: "90px" }} />
-            <col style={{ width: "55px" }} />
+            {!isQuick && <col style={{ width: "55px" }} />}
             <col style={{ width: "100px" }} />
           </colgroup>
           <thead>
@@ -304,14 +423,14 @@ export function InvoiceDocumentA4({
               <th style={cellTh("left")}>{t.designation}</th>
               <th style={cellTh("right")}>{t.quantity}</th>
               <th style={cellTh("right")}>{t.unitPrice}</th>
-              <th style={cellTh("right")}>{t.taxRate}</th>
+              {!isQuick && <th style={cellTh("right")}>{t.taxRate}</th>}
               <th style={cellTh("right")}>{t.totalHt}</th>
             </tr>
           </thead>
           <tbody>
             {form.items.length === 0 ? (
               <tr>
-                <td colSpan={5} style={{ padding: "16px 8px", textAlign: "center", color: "#a1a1aa", fontStyle: "italic" }}>
+                <td colSpan={isQuick ? 4 : 5} style={{ padding: "16px 8px", textAlign: "center", color: "#a1a1aa", fontStyle: "italic" }}>
                   {t.noItems}
                 </td>
               </tr>
@@ -324,7 +443,7 @@ export function InvoiceDocumentA4({
                   </td>
                   <td style={cellTd("right", "#52525b")}>{Number(it.quantity) || 0}</td>
                   <td style={cellTd("right", "#52525b")}>{fmtMoney(Number(it.unit_price) || 0)}</td>
-                  <td style={cellTd("right", "#71717a")}>{Number(it.tax_rate) || 0}%</td>
+                  {!isQuick && <td style={cellTd("right", "#71717a")}>{Number(it.tax_rate) || 0}%</td>}
                   <td style={{ ...cellTd("right", "#0a0a0a"), fontWeight: 500 }}>{fmtMoney(lineNet)}</td>
                 </tr>
               );
@@ -335,7 +454,7 @@ export function InvoiceDocumentA4({
 
       {/* ═══════════ 4. TOTALS ═══════════ */}
       <section className="avoid-break" style={{ marginTop: "18px", display: "flex", justifyContent: "flex-end", pageBreakInside: "avoid", breakInside: "avoid" }}>
-        <div style={{ width: "270px" }}>
+        <div style={{ width: isQuick ? "240px" : "270px" }}>
           <Row label={t.subtotal} value={fmtMoney(totals.subtotal)} />
           {opt.show_discount && totals.discount > 0 && (
             <Row
@@ -344,14 +463,14 @@ export function InvoiceDocumentA4({
               tone="rose"
             />
           )}
-          <Row label={t.totalNet} value={fmtMoney(totals.netSubtotal)} divider />
-          {Array.from(taxBuckets.entries()).filter(([, v]) => v > 0).map(([rate, val]) => (
+          {!isQuick && <Row label={t.totalNet} value={fmtMoney(totals.netSubtotal)} divider />}
+          {!isQuick && Array.from(taxBuckets.entries()).filter(([, v]) => v > 0).map(([rate, val]) => (
             <Row key={rate} label={t.taxRow(rate)} value={fmtMoney(val)} muted />
           ))}
-          <Row label={t.totalTax} value={fmtMoney(totals.tax)} divider />
+          {!isQuick && <Row label={t.totalTax} value={fmtMoney(totals.tax)} divider />}
           <div style={{
             display: "flex", justifyContent: "space-between", alignItems: "baseline",
-            marginTop: "16px", padding: "12px 14px", background: "#0a0a0a", color: "#fff",
+            marginTop: isQuick ? "10px" : "16px", padding: "12px 14px", background: "#0a0a0a", color: "#fff",
           }}>
             <span style={{ fontSize: "9.5px", letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 600 }}>{t.totalGross}</span>
             <span style={{ fontSize: "14px", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
@@ -361,32 +480,32 @@ export function InvoiceDocumentA4({
         </div>
       </section>
 
-      {/* ═══════════ 5. DATAS + CONDIÇÕES (centralizado) ═══════════ */}
+      {/* ═══════════ 5. DATAS + CONDIÇÕES ═══════════ */}
       <section className="avoid-break" style={{
         marginTop: "22px", paddingTop: "12px", borderTop: "1px solid #e4e4e7",
-        display: "flex", justifyContent: "center", gap: "48px", flexWrap: "wrap",
+        display: "flex", justifyContent: "center", gap: isQuick ? "32px" : "48px", flexWrap: "wrap",
         textAlign: "center",
         pageBreakInside: "avoid", breakInside: "avoid",
       }}>
         <DateBlock label={t.issueDate} value={fmtDate(form.issue_date)} />
         <DateBlock label={t.dueDate} value={fmtDate(form.due_date)} />
-        {opt.show_payment_terms !== false && (
+        {!isQuick && opt.show_payment_terms !== false && (
           <DateBlock label={t.paymentTerms} value={paymentLabel} />
         )}
-        {opt.show_client_reference && opt.client_reference && (
+        {!isQuick && opt.show_client_reference && opt.client_reference && (
           <DateBlock label={t.clientReference} value={opt.client_reference} />
         )}
       </section>
 
-      {/* ═══════════ 6. OBSERVAÇÕES / TEXTO LEGAL (centralizado) ═══════════ */}
-      {((opt.show_notes !== false && form.notes) || form.legal_text) && (
+      {/* ═══════════ 6. OBSERVAÇÕES / TEXTO LEGAL ═══════════ */}
+      {((opt.show_notes !== false && form.notes) || (!isQuick && form.legal_text)) && (
         <section style={{ marginTop: "18px", textAlign: "center", pageBreakInside: "avoid", breakInside: "avoid" }}>
           {opt.show_notes !== false && form.notes && (
             <p style={{ fontSize: "10px", color: "#3f3f46", whiteSpace: "pre-wrap", lineHeight: 1.55, maxWidth: "150mm", margin: "0 auto" }}>
               {form.notes}
             </p>
           )}
-          {form.legal_text && (
+          {!isQuick && form.legal_text && (
             <p style={{
               fontSize: "9px", color: "#71717a", fontStyle: "italic",
               marginTop: form.notes ? "8px" : "0", lineHeight: 1.5,
@@ -398,25 +517,87 @@ export function InvoiceDocumentA4({
         </section>
       )}
 
-      {/* ═══════════ 7. RODAPÉ INSTITUCIONAL FIXO ═══════════ */}
+      {/* ═══════════ 6.5 ELECTRONIC BLOCK ═══════════ */}
+      {isElectronic && (
+        <section
+          className="avoid-break"
+          aria-label={mt.electronicBlock}
+          style={{
+            marginTop: "20px",
+            padding: "10px 12px",
+            border: "1px solid #d4d4d8",
+            background: "#fafafa",
+            borderRadius: "3px",
+            pageBreakInside: "avoid", breakInside: "avoid",
+            fontFamily: "'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace",
+          }}
+        >
+          <div style={{
+            fontSize: "8px", letterSpacing: "0.18em", textTransform: "uppercase",
+            color: "#52525b", fontWeight: 700, marginBottom: "6px",
+          }}>
+            {mt.electronicBlock}
+          </div>
+          <div style={{
+            display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "4px 24px",
+            fontSize: "8.5px", color: "#27272a",
+          }}>
+            <ElecRow k={mt.electronicFormat} v={FORMAT_META[electronicFormat].label} />
+            <ElecRow k={mt.schema} v={FORMAT_META[electronicFormat].schema} />
+            <ElecRow k={mt.documentId} v={form.invoice_number || "—"} />
+            <ElecRow k={mt.issuedAt} v={form.issue_date ? new Date(form.issue_date).toISOString() : "—"} />
+            {opt.show_client_reference && opt.client_reference && (
+              <ElecRow k={mt.buyerRef} v={opt.client_reference} />
+            )}
+            {(client?.tva_intracom || client?.tax_id) && (
+              <ElecRow k={`${t.vat} (${t.taxId})`} v={(client.tva_intracom || client.tax_id) as string} />
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* ═══════════ 7. RODAPÉ ═══════════ */}
       <footer style={{
-        position: "absolute", left: 0, right: 0, bottom: "10mm",
+        position: isQuick ? "static" : "absolute",
+        left: 0, right: 0,
+        bottom: isQuick ? undefined : "10mm",
+        marginTop: isQuick ? "24px" : 0,
         textAlign: "center", fontSize: "8px", color: "#71717a", lineHeight: 1.55,
-        padding: "0 14mm",
+        padding: isQuick ? "8px 0 0" : "0 14mm",
       }} className="invoice-a4-footer">
         <div style={{ borderTop: "1px solid #e4e4e7", paddingTop: "8px" }}>
           <div style={{ color: "#27272a", fontWeight: 600, fontSize: "8.5px" }}>{companyName}</div>
-          {institutionalParts.length > 0 && (
-            <div style={{ color: "#71717a", marginTop: "2px" }}>
-              {institutionalParts.join(" · ")}
-            </div>
-          )}
-          {(companyIban || companyBic) && (
-            <div style={{ color: "#71717a", marginTop: "1px" }}>
-              {companyIban && <span>{t.iban} {companyIban}</span>}
-              {companyIban && companyBic && <span> · </span>}
-              {companyBic && <span>{t.bic} {companyBic}</span>}
-            </div>
+          {isQuick ? (
+            (companyEmail || companyPhone) && (
+              <div style={{ color: "#71717a", marginTop: "2px" }}>
+                {companyEmail && <span>{companyEmail}</span>}
+                {companyEmail && companyPhone && <span> · </span>}
+                {companyPhone && <span>{t.phoneShort} {companyPhone}</span>}
+              </div>
+            )
+          ) : (
+            <>
+              {institutionalParts.length > 0 && (
+                <div style={{ color: "#71717a", marginTop: "2px" }}>
+                  {institutionalParts.join(" · ")}
+                </div>
+              )}
+              {(companyIban || companyBic) && (
+                <div style={{ color: "#71717a", marginTop: "1px" }}>
+                  {companyIban && <span>{t.iban} {companyIban}</span>}
+                  {companyIban && companyBic && <span> · </span>}
+                  {companyBic && <span>{t.bic} {companyBic}</span>}
+                </div>
+              )}
+              {isElectronic && (
+                <div style={{
+                  color: "#0a0a0a", marginTop: "4px",
+                  fontSize: "7.5px", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600,
+                }}>
+                  {mt.techNotice}
+                </div>
+              )}
+            </>
           )}
         </div>
       </footer>
@@ -458,6 +639,15 @@ function Row({ label, value, divider, muted, tone }: {
     }}>
       <span style={{ color: tone === "rose" ? "#e11d48" : "#71717a" }}>{label}</span>
       <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: tone === "rose" ? 500 : 400 }}>{value}</span>
+    </div>
+  );
+}
+
+function ElecRow({ k, v }: { k: string; v: string }) {
+  return (
+    <div style={{ display: "flex", gap: "8px", justifyContent: "space-between" }}>
+      <span style={{ color: "#71717a" }}>{k}</span>
+      <span style={{ color: "#0a0a0a", fontWeight: 600 }}>{v}</span>
     </div>
   );
 }
