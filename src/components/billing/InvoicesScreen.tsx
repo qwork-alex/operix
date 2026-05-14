@@ -376,14 +376,21 @@ export default function InvoicesScreen() {
   });
 
   const clientsQ = useQuery({
-    queryKey: ["clients_lite_for_invoices"],
+    queryKey: ["billing_clients_lite_for_invoices"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("clients")
-        .select("id,name,contact_email,contact_phone,address,notes")
+        .from("billing_clients")
+        .select("id,name,kind,tax_id,siren,siret,tva_intracom,email,phone,address,address_complement,postal_code,city,country,iban,bic")
+        .eq("is_active", true)
         .order("name");
       if (error) throw error;
-      return (data ?? []) as Client[];
+      const list = (data ?? []) as any[];
+      // Normalize legacy shape
+      return list.map((c) => ({
+        ...c,
+        contact_email: c.email,
+        contact_phone: c.phone,
+      })) as Client[];
     },
   });
 
