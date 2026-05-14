@@ -311,15 +311,17 @@ export function InvoiceDocumentA4({
             <p style={{ fontSize: "13px", fontWeight: 700, letterSpacing: "-0.01em", color: "#0a0a0a" }}>
               {companyName}
             </p>
-            {companyAddr && (
+            {!isQuick && companyAddr && (
               <p style={{ fontSize: "9.5px", color: "#52525b", marginTop: "2px", whiteSpace: "pre-line" }}>
                 {companyAddr}
               </p>
             )}
-            <div style={{ marginTop: "4px", fontSize: "9.5px", color: "#52525b" }}>
-              {companyPhone && <div>{t.phoneShort}: {companyPhone}</div>}
-              {companyEmail && <div>{companyEmail}</div>}
-            </div>
+            {!isQuick && (
+              <div style={{ marginTop: "4px", fontSize: "9.5px", color: "#52525b" }}>
+                {companyPhone && <div>{t.phoneShort}: {companyPhone}</div>}
+                {companyEmail && <div>{companyEmail}</div>}
+              </div>
+            )}
           </div>
         </div>
 
