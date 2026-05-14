@@ -1004,8 +1004,23 @@ export default function InvoicesScreen() {
               <div className="mt-4 flex justify-end">
                 <div className="w-full md:w-80 rounded-md border border-border/60 divide-y divide-border/50 text-xs">
                   <div className="flex justify-between px-3 py-2">
-                    <span className="text-muted-foreground">Total sem imposto</span>
+                    <span className="text-muted-foreground">Subtotal</span>
                     <span className="tabular-nums">{fmtMoney(totals.subtotal)}</span>
+                  </div>
+                  {form.options.show_discount && totals.discount > 0 && (
+                    <div className="flex justify-between px-3 py-2 text-rose-400">
+                      <span>
+                        Desconto{" "}
+                        {form.options.discount_type === "percent"
+                          ? `(${form.options.discount_value || 0}%)`
+                          : ""}
+                      </span>
+                      <span className="tabular-nums">- {fmtMoney(totals.discount)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between px-3 py-2">
+                    <span className="text-muted-foreground">Total sem imposto</span>
+                    <span className="tabular-nums">{fmtMoney(totals.netSubtotal)}</span>
                   </div>
                   <div className="flex justify-between px-3 py-2">
                     <span className="text-muted-foreground">Total imposto</span>
