@@ -560,28 +560,10 @@ function ClientFormDialog({
               </button>
             </div>
 
-            {/* Pro: SIREN/SIRET search bar (placeholder for future API) */}
             {isPro && (
-              <div className="rounded-md border border-dashed border-border/60 p-3 space-y-2 bg-muted/20">
-                <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                  <Sparkles className="h-3 w-3" />
-                  Busca por SIREN/SIRET (integração API em breve)
-                </div>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Digite SIREN (9 dígitos) ou SIRET (14 dígitos)"
-                    className="h-8 text-xs font-mono"
-                    onChange={(e) => {
-                      const v = e.target.value.replace(/\D/g, "");
-                      if (v.length === 9) setForm({ ...form, siren: v });
-                      if (v.length === 14) setForm({ ...form, siret: v, siren: v.slice(0, 9) });
-                    }}
-                  />
-                  <Button type="button" size="sm" variant="outline" disabled className="h-8">
-                    Buscar
-                  </Button>
-                </div>
-              </div>
+              <CompanyLookupBar
+                onApply={(c) => setForm(mergeCompanyIntoForm(form, c))}
+              />
             )}
 
             {/* Identity */}
