@@ -1291,6 +1291,59 @@ export default function InvoicesScreen() {
         </DialogContent>
       </Dialog>
 
+// ───────────────────────────── A4 Preview Frame
+// Encolhe proporcionalmente o documento A4 (210mm) para caber na largura disponível,
+// preservando a aparência idêntica à impressão real (zoom proporcional, sem distorção).
+function InvoiceA4PreviewFrame({ children }: { children: React.ReactNode }) {
+  const wrapRef = React.useRef<HTMLDivElement | null>(null);
+  const innerRef = React.useRef<HTMLDivElement | null>(null);
+  const [scale, setScale] = React.useState(1);
+  const [innerH, setInnerH] = React.useState(0);
+
+  React.useEffect(() => {
+    const recompute = () => {
+      const wrap = wrapRef.current;
+      const inner = innerRef.current;
+      if (!wrap || !inner) return;
+      // 210mm ≈ 793.7px @96dpi
+      const A4_PX = 793.7;
+      const padded = wrap.clientWidth - 32; // breathing room
+      const s = Math.min(1, padded / A4_PX);
+      setScale(s);
+      // measured intrinsic height of A4 doc
+      setInnerH(inner.scrollHeight * s);
+    };
+    recompute();
+    const ro = new ResizeObserver(recompute);
+    if (wrapRef.current) ro.observe(wrapRef.current);
+    if (innerRef.current) ro.observe(innerRef.current);
+    window.addEventListener("resize", recompute);
+    return () => { ro.disconnect(); window.removeEventListener("resize", recompute); };
+  }, []);
+
+  return (
+    <div
+      ref={wrapRef}
+      className="invoice-a4-frame w-full flex justify-center print:p-0 print:bg-white"
+      style={{ padding: "20px 16px 32px", overflow: "auto" }}
+    >
+      <div style={{ width: `${793.7 * scale}px`, height: innerH || undefined }} className="print:!w-auto print:!h-auto">
+        <div
+          ref={innerRef}
+          style={{
+            transform: `scale(${scale})`,
+            transformOrigin: "top left",
+            width: "793.7px",
+          }}
+          className="print:!transform-none print:!w-auto"
+        >
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
       {/* ─── Delete confirm */}
       <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
