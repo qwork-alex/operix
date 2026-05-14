@@ -38,7 +38,7 @@ const SUB_NAV = [
   { slug: "pagamentos",      label: "Pagamentos",       icon: CreditCard },
   { slug: "conciliacao",     label: "Conciliação",      icon: GitMerge },
   { slug: "contas-a-vencer", label: "Contas a vencer",  icon: CalendarClock },
-  { slug: "fornecedores",    label: "Fornecedores",     icon: Building2 },
+  { slug: "clientes",        label: "Clientes",         icon: Building2 },
   { slug: "relatorios",      label: "Relatórios",       icon: BarChart3 },
 ] as const;
 
