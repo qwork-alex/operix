@@ -28,7 +28,7 @@ export async function renderPdfFirstPageToCanvas(
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas 2D context unavailable");
 
-  await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+  await page.render({ canvasContext: ctx, viewport }).promise;
   return { width: canvas.width, height: canvas.height, pageCount: pdf.numPages };
 }
 
