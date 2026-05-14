@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import maplibregl, { Map as MLMap, GeoJSONSource } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { Users, CloudRain, Zap, Radar, Wrench, FileText, Layers, X, AlertTriangle, Wind, Clock, Gauge } from "lucide-react";
+import { OperationalPanel, PanelTeam, PanelOrder } from "./OperationalPanel";
 
 /* ------------------------------------------------------------------ */
 /*  Hail severity → premium color palette                              */
@@ -649,10 +650,25 @@ export function OperationalMap() {
         />
       )}
 
-      {/* -------- Hail event detail panel -------- */}
+      {/* -------- Dynamic operational command panel -------- */}
       {selectedHail && (
-        <HailDetailPanel
+        <OperationalPanel
           event={selectedHail}
+          teams={(teamsGeo.features as any[]).map((f): PanelTeam => ({
+            lng: f.geometry.coordinates[0],
+            lat: f.geometry.coordinates[1],
+            city: f.properties?.city,
+            when: f.properties?.when,
+          }))}
+          orders={(ordersGeo.features as any[]).map((f): PanelOrder => ({
+            id: f.properties?.id,
+            city: f.properties?.city,
+            platform: f.properties?.platform,
+            plate: f.properties?.plate,
+            status: f.properties?.status,
+            lng: f.geometry.coordinates[0],
+            lat: f.geometry.coordinates[1],
+          }))}
           onClose={() => setSelectedHailId(null)}
         />
       )}
