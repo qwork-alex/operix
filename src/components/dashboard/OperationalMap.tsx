@@ -208,6 +208,38 @@ export function OperationalMap() {
     },
   });
 
+  /* -------- data: hail events (operational weather intel) ----------- */
+  const queryClient = useQueryClient();
+  const { data: hailEvents = [] } = useQuery<HailEvent[]>({
+    queryKey: ["op-map-hail"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("hail_events")
+        .select("*")
+        .neq("status", "closed")
+        .order("forecast_time", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as HailEvent[];
+    },
+    staleTime: 60_000,
+  });
+
+  // Realtime: refresh on any hail_events change
+  useEffect(() => {
+    const ch = supabase
+      .channel("op-map-hail-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "hail_events" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["op-map-hail"] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [queryClient]);
+
+  const [selectedHailId, setSelectedHailId] = useState<string | null>(null);
+  const selectedHail = useMemo(
+    () => hailEvents.find((h) => h.id === selectedHailId) ?? null,
+    [hailEvents, selectedHailId]
+  );
   /* -------- GeoJSON sources ----------------------------------------- */
   const ordersGeo = useMemo(() => {
     const features: any[] = [];
