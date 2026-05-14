@@ -186,3 +186,12 @@ export const CONFIDENCE_LABEL: Record<ConfidenceLevel, string> = {
   validated: "Documento validado",
   unverified: "Não verificado",
 };
+
+export const LOOKUP_STATUS_LABEL: Record<LookupStatus, string> = {
+  invalid_document:     "Documento inválido",
+  provider_unavailable: "Provedor indisponível",
+  valid_no_enrichment:  "Documento válido — sem enriquecimento",
+  partial_enrichment:   "Enriquecimento parcial",
+  fully_enriched:       "Enriquecimento completo",
+  no_match:             "Sem correspondência",
+};
