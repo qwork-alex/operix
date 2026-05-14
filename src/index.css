@@ -233,7 +233,20 @@
     overflow: visible !important;
     z-index: 9999 !important;
   }
-  .invoice-print-area > * {
+  /* Neutralize the on-screen fit-to-width zoom frame so the document
+     prints at native A4 size, not at the scaled preview size. */
+  .invoice-print-area .invoice-a4-frame {
+    padding: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+  .invoice-print-area .invoice-a4-frame > div,
+  .invoice-print-area .invoice-a4-frame > div > div {
+    transform: none !important;
+    width: auto !important;
+    height: auto !important;
+  }
+  .invoice-print-area .invoice-a4-doc {
     box-shadow: none !important;
     margin: 0 auto !important;
   }
