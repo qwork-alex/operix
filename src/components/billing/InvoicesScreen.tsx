@@ -5,8 +5,9 @@ import {
   Search, Plus, Filter, Download, FileText, FileSpreadsheet,
   MoreHorizontal, Eye, Pencil, Trash2, ChevronLeft, ChevronRight,
   X, History, Loader2, ArrowDownToLine, ArrowUpFromLine,
-  Printer, FileEdit,
+  Printer, FileEdit, FileUp,
 } from "lucide-react";
+import ImportInvoiceDialog from "./ImportInvoiceDialog";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { BRAND } from "@/config/brand";
 import jsPDF from "jspdf";
@@ -276,6 +277,7 @@ export default function InvoicesScreen() {
 
   // dialogs
   const [formOpen, setFormOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<Invoice | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
 
@@ -589,6 +591,10 @@ export default function InvoicesScreen() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          <Button size="sm" variant="outline" className="h-8" onClick={() => setImportOpen(true)}>
+            <FileUp className="h-3.5 w-3.5 mr-1.5" />
+            Adicionar fatura
+          </Button>
           <Button size="sm" className="h-8" onClick={openCreate}>
             <Plus className="h-3.5 w-3.5 mr-1.5" />
             Nova fatura
@@ -726,7 +732,16 @@ export default function InvoicesScreen() {
                         }}
                       />
                     </TableCell>
-                    <TableCell className="font-mono text-[11px] text-primary">{r.invoice_number}</TableCell>
+                    <TableCell className="font-mono text-[11px] text-primary">
+                      <div className="flex items-center gap-1.5">
+                        <span>{r.invoice_number}</span>
+                        {(r as any).source === "imported" && (
+                          <Badge variant="outline" className="h-4 px-1 text-[8px] gap-0.5 border-amber-500/40 text-amber-500">
+                            <FileUp className="h-2.5 w-2.5" /> IMP
+                          </Badge>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell className="font-medium">{partyName}</TableCell>
                     <TableCell>
                       <span className={cn("inline-flex items-center gap-1.5", TYPE_META[r.type].cls)}>
@@ -1194,6 +1209,8 @@ export default function InvoicesScreen() {
           )}
         </SheetContent>
       </Sheet>
+
+      <ImportInvoiceDialog open={importOpen} onOpenChange={setImportOpen} />
     </div>
   );
 }
