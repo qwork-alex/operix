@@ -935,13 +935,21 @@ export default function InvoicesScreen() {
                   <Eye className="h-3.5 w-3.5" /> Pré-visualizar
                 </button>
               </div>
-              {viewMode === "preview" ? (
-                <Button variant="outline" size="sm" className="h-8" onClick={() => window.print()}>
-                  <Printer className="h-3.5 w-3.5 mr-1.5" /> Imprimir / PDF
-                </Button>
-              ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 no-print"
+                onClick={() => {
+                  setViewMode("preview");
+                  setTimeout(() => window.print(), 250);
+                }}
+                title="Visualizar e imprimir em A4"
+              >
+                <Printer className="h-3.5 w-3.5 mr-1.5" /> Visualizar impressão
+              </Button>
+              {viewMode === "edit" && (
                 <Button
-                  variant="outline" size="sm" className="h-8"
+                  variant="outline" size="sm" className="h-8 no-print"
                   onClick={() => setOptionsPanelOpen(o => !o)}
                 >
                   <Filter className="h-3.5 w-3.5 mr-1.5" />
