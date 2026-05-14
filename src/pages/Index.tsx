@@ -2,7 +2,7 @@ import { Euro, CreditCard, CheckCircle2, TrendingUp } from "lucide-react";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { ServicePieChart } from "@/components/dashboard/ServicePieChart";
-import { ActiveMap } from "@/components/dashboard/ActiveMap";
+import { OperationalMap } from "@/components/dashboard/OperationalMap";
 import { RecentActivity } from "@/components/dashboard/RecentActivity";
 import { useDashboardStats } from "@/hooks/useDashboardData";
 import { useLanguage } from "@/hooks/useLanguage";
@@ -56,7 +56,7 @@ const Dashboard = () => {
       <RevenueChart />
 
       {/* Map - full width */}
-      <ActiveMap />
+      <OperationalMap />
 
       {/* Service Status + Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
