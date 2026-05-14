@@ -475,6 +475,18 @@ export function OperationalMap() {
         });
       });
 
+      /* ---- Hail click → open detail panel ---- */
+      const onHailClick = (e: any) => {
+        const f = e.features?.[0];
+        if (!f) return;
+        setSelectedHailId(f.properties.id);
+        map.easeTo({ center: f.geometry.coordinates, duration: 600 });
+      };
+      ["hail-core", "hail-ring", "hail-halo"].forEach((id) => {
+        map.on("click", id, onHailClick);
+        map.on("mouseenter", id, () => (map.getCanvas().style.cursor = "pointer"));
+        map.on("mouseleave", id, () => (map.getCanvas().style.cursor = ""));
+      });
       setMapReady(true);
     });
 
