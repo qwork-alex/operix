@@ -1200,6 +1200,8 @@ export default function InvoicesScreen() {
           )}
         </SheetContent>
       </Sheet>
+
+      <ImportInvoiceDialog open={importOpen} onOpenChange={setImportOpen} />
     </div>
   );
 }
