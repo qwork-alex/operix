@@ -1,188 +1,109 @@
 // Edge function: company-lookup
-// Searches French (and future EU) company registries by SIREN, SIRET, TVA or name.
-// Returns a normalized payload — never exposes raw upstream errors or keys.
+// Multi-provider orchestrator. Strategy: national → regional → global fallback.
+// Never exposes upstream errors or keys. Returns a NormalizedCompany payload.
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import {
+  detectDocument, type LookupResult, type ConfidenceLevel,
+  type NormalizedCompany, type ProviderLog,
+} from "./core.ts";
+import {
+  franceProvider, europeVatProvider, brazilProvider,
+  usaProvider, canadaProvider, mexicoProvider,
+  indiaProvider, japanProvider, genericProvider,
+} from "./providers.ts";
 
-type QueryType = "siren" | "siret" | "vat" | "name";
-
-interface NormalizedCompany {
-  company_name: string | null;
-  siren: string | null;
-  siret: string | null;
-  vat_number: string | null;
-  legal_form: string | null;
-  address: string | null;
-  postal_code: string | null;
-  city: string | null;
-  country: string | null;
-  creation_date: string | null;
-  company_status: string | null;
-  source: string;
+function pickConfidence(c: NormalizedCompany | null, fallback: ConfidenceLevel = "unverified"): ConfidenceLevel {
+  return c?.confidence ?? fallback;
 }
 
-const TIMEOUT_MS = 8000;
-
-function detectType(raw: string): QueryType {
-  const v = raw.trim();
-  const digits = v.replace(/\D/g, "");
-  if (/^FR/i.test(v) && digits.length >= 9) return "vat";
-  if (digits.length === 9 && digits === v.replace(/\s/g, "")) return "siren";
-  if (digits.length === 14 && digits === v.replace(/\s/g, "")) return "siret";
-  if (digits.length === 9) return "siren";
-  if (digits.length === 14) return "siret";
-  return "name";
-}
-
-function vatFromSiren(siren: string): string {
-  const n = BigInt(siren);
-  const key = Number((12n + 3n * (n % 97n)) % 97n);
-  return `FR${key.toString().padStart(2, "0")}${siren}`;
-}
-
-async function fetchWithTimeout(url: string, init?: RequestInit): Promise<Response> {
-  const ctrl = new AbortController();
-  const id = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
-  try {
-    return await fetch(url, { ...init, signal: ctrl.signal });
-  } finally {
-    clearTimeout(id);
-  }
-}
-
-function normalizePappers(data: any, country = "France"): NormalizedCompany {
-  const siege = data?.siege ?? {};
-  const siren: string | null = data?.siren ?? null;
-  return {
-    company_name: data?.nom_entreprise ?? data?.denomination ?? null,
-    siren,
-    siret: siege?.siret ?? data?.siret ?? null,
-    vat_number: data?.numero_tva_intracommunautaire ?? (siren ? vatFromSiren(siren) : null),
-    legal_form: data?.forme_juridique ?? null,
-    address:
-      [siege?.numero_voie, siege?.type_voie, siege?.libelle_voie]
-        .filter(Boolean)
-        .join(" ")
-        .trim() || siege?.adresse_ligne_1 || null,
-    postal_code: siege?.code_postal ?? null,
-    city: siege?.ville ?? null,
-    country,
-    creation_date: data?.date_creation ?? null,
-    company_status: data?.entreprise_cessee ? "ceased" : "active",
-    source: "pappers",
-  };
-}
-
-async function pappersByIdentifier(query: string, type: "siren" | "siret"): Promise<NormalizedCompany | null> {
-  const key = Deno.env.get("PAPPERS_API_KEY");
-  if (!key) return null;
-  const url =
-    type === "siren"
-      ? `https://api.pappers.fr/v2/entreprise?siren=${encodeURIComponent(query)}&api_token=${key}`
-      : `https://api.pappers.fr/v2/entreprise?siret=${encodeURIComponent(query)}&api_token=${key}`;
-  const r = await fetchWithTimeout(url);
-  if (!r.ok) return null;
-  const data = await r.json();
-  return normalizePappers(data);
-}
-
-async function pappersByName(query: string): Promise<NormalizedCompany[]> {
-  const key = Deno.env.get("PAPPERS_API_KEY");
-  if (!key) return [];
-  const url = `https://api.pappers.fr/v2/recherche?q=${encodeURIComponent(query)}&api_token=${key}&par_page=8`;
-  const r = await fetchWithTimeout(url);
-  if (!r.ok) return [];
-  const data = await r.json();
-  return (data?.resultats ?? []).map((x: any) => normalizePappers(x));
-}
-
-async function viesValidate(vat: string): Promise<{ valid: boolean; name?: string; address?: string } | null> {
-  const m = vat.replace(/\s/g, "").match(/^([A-Z]{2})(.+)$/i);
-  if (!m) return null;
-  const country = m[1].toUpperCase();
-  const number = m[2];
-  // VIES REST proxy — public, no key. Falls back to null on error.
-  try {
-    const r = await fetchWithTimeout(
-      `https://ec.europa.eu/taxation_customs/vies/rest-api/ms/${country}/vat/${encodeURIComponent(number)}`,
-    );
-    if (!r.ok) return null;
-    const data = await r.json();
-    return {
-      valid: !!data?.isValid,
-      name: data?.name ?? undefined,
-      address: data?.address ?? undefined,
-    };
-  } catch {
-    return null;
-  }
+function buildMessage(detected: string, c: NormalizedCompany | null, candidates: NormalizedCompany[], vies: any): string {
+  if (c?.confidence === "fully_enriched") return `Empresa encontrada (${c.provider}).`;
+  if (c?.confidence === "partially_enriched") return `Empresa parcialmente enriquecida (${c.provider}).`;
+  if (c?.confidence === "validated") return `Documento ${detected.toUpperCase()} válido — enriquecimento indisponível para esta jurisdição.`;
+  if (candidates.length) return `${candidates.length} candidatos encontrados — selecione um.`;
+  if (vies && vies.valid === false) return `Número TVA inválido segundo o registro oficial.`;
+  if (vies && vies.valid === true) return `TVA válido, mas sem dados adicionais disponíveis.`;
+  return `Sem correspondência direta. Verifique o identificador ou tente outro provedor.`;
 }
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  const t0 = Date.now();
   try {
-    const { query } = await req.json().catch(() => ({ query: "" }));
-    if (!query || typeof query !== "string" || query.trim().length < 2) {
+    const body = await req.json().catch(() => ({}));
+    const query: string = (body?.query ?? "").toString();
+
+    if (!query || query.trim().length < 2) {
       return new Response(JSON.stringify({ error: "invalid_query" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const type = detectType(query);
-    const trimmed = query.trim();
+    const detected = detectDocument(query);
+    const ctx = { query: query.trim(), kind: detected.kind, country: detected.country, logs: [] as ProviderLog[] };
 
     let result: NormalizedCompany | null = null;
     let candidates: NormalizedCompany[] = [];
-    let viesInfo: { valid: boolean; name?: string; address?: string } | null = null;
+    let vies: any = null;
 
-    if (type === "siren") {
-      result = await pappersByIdentifier(trimmed.replace(/\D/g, ""), "siren");
-    } else if (type === "siret") {
-      result = await pappersByIdentifier(trimmed.replace(/\D/g, ""), "siret");
-    } else if (type === "vat") {
-      const cleanVat = trimmed.replace(/\s/g, "").toUpperCase();
-      viesInfo = await viesValidate(cleanVat);
-      // If FR, derive SIREN and enrich via Pappers
-      if (cleanVat.startsWith("FR")) {
-        const siren = cleanVat.slice(4);
-        if (/^\d{9}$/.test(siren)) {
-          result = await pappersByIdentifier(siren, "siren");
+    // 1) National-first router
+    switch (ctx.kind) {
+      case "siren":
+      case "siret": {
+        const r = await franceProvider.lookup(ctx);
+        result = r.result; candidates = r.candidates;
+        break;
+      }
+      case "vat_eu": {
+        // Try national first if FR
+        if (ctx.country === "FR") {
+          const r = await franceProvider.lookup(ctx);
+          result = r.result;
         }
+        // Regional VIES validation always provides at least "validated"
+        const v = await europeVatProvider.validate(ctx.query, ctx);
+        vies = v.vies;
+        if (!result) result = v.company;
+        break;
       }
-      if (!result && viesInfo?.valid) {
-        result = {
-          company_name: viesInfo.name ?? null,
-          siren: null, siret: null,
-          vat_number: cleanVat,
-          legal_form: null,
-          address: viesInfo.address ?? null,
-          postal_code: null, city: null,
-          country: cleanVat.slice(0, 2),
-          creation_date: null,
-          company_status: "active",
-          source: "vies",
-        };
+      case "cnpj": result = await brazilProvider.lookup(ctx); break;
+      case "ein":  result = await usaProvider.lookup(ctx);    break;
+      case "bn_ca": result = await canadaProvider.lookup(ctx); break;
+      case "rfc_mx": result = await mexicoProvider.lookup(ctx); break;
+      case "gstin": result = await indiaProvider.lookup(ctx); break;
+      case "corp_jp": result = await japanProvider.lookup(ctx); break;
+      case "name": {
+        // Try France registry first (only enriched name source available right now)
+        const r = await franceProvider.lookup(ctx);
+        result = r.result; candidates = r.candidates;
+        // Global fallback — generic stub so the form at least has a name
+        if (!result && !candidates.length) {
+          result = genericProvider.lookup(ctx);
+        }
+        break;
       }
-    } else {
-      candidates = await pappersByName(trimmed);
-      if (candidates.length === 1) result = candidates[0];
     }
 
-    return new Response(
-      JSON.stringify({
-        type,
-        result,
-        candidates,
-        vies: viesInfo,
-        provider_available: !!Deno.env.get("PAPPERS_API_KEY"),
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
-  } catch (e) {
-    return new Response(JSON.stringify({ error: "lookup_failed", message: String(e?.message ?? e) }), {
-      status: 500,
+    const confidence = pickConfidence(result, candidates.length ? "partially_enriched" : "unverified");
+
+    const payload: LookupResult = {
+      detected_kind: detected.kind,
+      detected_country: detected.country,
+      result,
+      candidates,
+      vies,
+      logs: ctx.logs,
+      confidence,
+      message: buildMessage(detected.kind, result, candidates, vies),
+    };
+
+    return new Response(JSON.stringify({ ...payload, total_ms: Date.now() - t0, provider_available: !!Deno.env.get("PAPPERS_API_KEY") }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (e) {
+    return new Response(JSON.stringify({ error: "lookup_failed", message: String((e as any)?.message ?? e) }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
