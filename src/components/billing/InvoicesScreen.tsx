@@ -1081,18 +1081,21 @@ export default function InvoicesScreen() {
 
             {/* SECTION 5 — Bank details */}
             {form.options.show_bank_details && (
-            <FormSection title="Dados bancários" subtitle="Conta para recebimento (futuramente vinda do perfil da empresa)">
+            <FormSection title="Dados bancários" subtitle="Vindos do perfil da empresa (somente leitura)">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <Field label="IBAN">
-                  <Input value={form.bank_iban} onChange={(e) => setForm({ ...form, bank_iban: e.target.value })} className="h-9" placeholder="PT50 ..." />
+                  <Input value={(companySettings as any)?.bank_iban ?? form.bank_iban} readOnly disabled className="h-9 bg-muted/30" placeholder="Configurar no perfil da empresa" />
                 </Field>
                 <Field label="BIC / SWIFT">
-                  <Input value={form.bank_bic} onChange={(e) => setForm({ ...form, bank_bic: e.target.value })} className="h-9" />
+                  <Input value={(companySettings as any)?.bank_bic ?? form.bank_bic} readOnly disabled className="h-9 bg-muted/30" placeholder="Configurar no perfil da empresa" />
                 </Field>
                 <Field label="Banco">
-                  <Input value={form.bank_name} onChange={(e) => setForm({ ...form, bank_name: e.target.value })} className="h-9" />
+                  <Input value={(companySettings as any)?.bank_name ?? form.bank_name} readOnly disabled className="h-9 bg-muted/30" placeholder="Configurar no perfil da empresa" />
                 </Field>
               </div>
+              <p className="text-[10px] text-muted-foreground mt-2">
+                Para alterar, edite o perfil da empresa em Configurações.
+              </p>
             </FormSection>
             )}
 
