@@ -110,19 +110,16 @@ interface InvoiceDocumentA4Props {
   company: DocCompany | null;
   brandName: string;
   brandLogo: string;
+  lang?: InvoiceLang | string | null;
+  docType?: string | null;
 }
 
-const fmtMoney = (n: number) =>
-  new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" }).format(Number.isFinite(n) ? n : 0);
-
-const fmtDate = (d?: string | null) => {
-  if (!d) return "—";
-  try { return format(parseISO(d), "dd/MM/yyyy"); } catch { return d; }
-};
-
 export function InvoiceDocumentA4({
-  form, totals, client, company, brandName, brandLogo,
+  form, totals, client, company, brandName, brandLogo, lang, docType,
 }: InvoiceDocumentA4Props) {
+  const t = getInvoiceDict(lang);
+  const fmtMoney = (n: number) => fmtMoneyI18n(n, lang);
+  const fmtDate = (d?: string | null) => fmtDateI18n(d, lang);
   const opt = form.options ?? {};
   const companyName  = company?.company_name || brandName;
   const companyAddr  = company?.address || "";
