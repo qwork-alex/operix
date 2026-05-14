@@ -112,6 +112,45 @@ export function useCompanyLogo() {
     },
   });
 
+  const removeMutation = useMutation({
+    mutationFn: async () => {
+      const currentUserId = await getCurrentUserId();
+      const { data: existing } = await supabase
+        .from("company_settings")
+        .select("id, logo_url")
+        .limit(1)
+        .maybeSingle();
+      if (!existing) return;
+
+      // Best-effort: remove old file from storage if it lives in the "logos" bucket
+      if (existing.logo_url) {
+        try {
+          const marker = "/storage/v1/object/public/logos/";
+          const idx = existing.logo_url.indexOf(marker);
+          if (idx >= 0) {
+            const path = existing.logo_url.substring(idx + marker.length);
+            await supabase.storage.from("logos").remove([path]);
+          }
+        } catch { /* ignore */ }
+      }
+
+      const payload = { logo_url: null, updated_at: new Date().toISOString() };
+      logSavePayload("CompanyLogo:remove", currentUserId, payload);
+      const { error } = await (supabase as any)
+        .from("company_settings")
+        .update(payload)
+        .eq("id", existing.id);
+      if (error) {
+        logSaveError("CompanyLogo:remove", error);
+        throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["company-brand"] });
+      queryClient.invalidateQueries({ queryKey: ["company-settings"] });
+    },
+  });
+
   return {
     logoUrl: data?.logoUrl || "",
     brandConfig: data?.brandConfig || {},
@@ -120,5 +159,7 @@ export function useCompanyLogo() {
     isUploading: uploadMutation.isPending,
     saveBrandConfig: brandMutation.mutateAsync,
     isSavingBrand: brandMutation.isPending,
+    removeLogo: removeMutation.mutateAsync,
+    isRemoving: removeMutation.isPending,
   };
 }

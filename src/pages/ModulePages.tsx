@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { BrandingCard } from "@/components/settings/BrandingCard";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -1888,6 +1889,7 @@ export function SettingsPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <BrandingCard />
         <Card className="border-border/50">
           <CardHeader><CardTitle className="text-sm">{t("settings.company")}</CardTitle></CardHeader>
           <CardContent className="space-y-4">

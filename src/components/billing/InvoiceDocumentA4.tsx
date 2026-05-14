@@ -181,13 +181,34 @@ export function InvoiceDocumentA4({
       <header className="avoid-break flex items-start justify-between gap-10">
         {/* LEFT — empresa */}
         <div className="flex items-start gap-3 min-w-0" style={{ maxWidth: "55%" }}>
-          {companyLogo && (
+          {companyLogo ? (
             <img
               src={companyLogo}
               alt={companyName}
               style={{ height: "44px", width: "44px", objectFit: "contain", flexShrink: 0 }}
               onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
             />
+          ) : (
+            <div
+              aria-hidden
+              style={{
+                height: "44px",
+                width: "44px",
+                flexShrink: 0,
+                borderRadius: "8px",
+                border: "1px solid #e4e4e7",
+                background: "linear-gradient(135deg,#fafafa,#f1f1f1)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "14px",
+                fontWeight: 700,
+                color: "#71717a",
+                letterSpacing: "0.04em",
+              }}
+            >
+              {(companyName || "·").trim().charAt(0).toUpperCase()}
+            </div>
           )}
           <div className="min-w-0">
             <p style={{ fontSize: "13px", fontWeight: 700, letterSpacing: "-0.01em", color: "#0a0a0a" }}>
