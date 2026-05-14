@@ -454,7 +454,111 @@ export default function ClientsScreen() {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Chip button
+// Company Lookup Bar — SIREN / SIRET / TVA / nome
+// ─────────────────────────────────────────────────────────────
+function CompanyLookupBar({ onApply }: { onApply: (c: NormalizedCompany) => void }) {
+  const [q, setQ] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [type, setType] = useState<CompanyQueryType>("name");
+  const [result, setResult] = useState<NormalizedCompany | null>(null);
+  const [candidates, setCandidates] = useState<NormalizedCompany[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [providerAvailable, setProviderAvailable] = useState(true);
+
+  const labelByType: Record<CompanyQueryType, string> = {
+    siren: "SIREN detectado", siret: "SIRET detectado",
+    vat: "TVA detectado", name: "Buscar por nome",
+  };
+
+  const run = async () => {
+    if (!q.trim()) return;
+    setLoading(true); setError(null); setResult(null); setCandidates([]);
+    try {
+      const r = await lookupCompany(q.trim());
+      setProviderAvailable(r.provider_available);
+      if (r.result) setResult(r.result);
+      else if (r.candidates?.length) setCandidates(r.candidates);
+      else setError("Empresa não encontrada");
+    } catch (e: any) {
+      setError(e?.message ?? "Erro na busca");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="rounded-md border border-dashed border-border/60 p-3 space-y-2 bg-muted/20">
+      <div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+        <div className="flex items-center gap-1.5">
+          <Sparkles className="h-3 w-3" />
+          Buscar empresa por SIREN, SIRET, TVA ou nome (FR)
+        </div>
+        <span className="font-mono">{labelByType[type]}</span>
+      </div>
+      <div className="flex gap-2">
+        <Input
+          value={q}
+          onChange={(e) => { setQ(e.target.value); setType(detectQueryType(e.target.value)); }}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); run(); } }}
+          placeholder="Ex.: 552120222, 55212022200013, FR40552120222 ou Renault"
+          className="h-8 text-xs font-mono"
+        />
+        <Button type="button" size="sm" variant="outline" className="h-8" onClick={run} disabled={loading || !q.trim()}>
+          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Buscar"}
+        </Button>
+      </div>
+
+      {!providerAvailable && (
+        <div className="text-[10px] text-amber-400 flex items-center gap-1">
+          <AlertCircle className="h-3 w-3" />
+          Provedor Pappers não configurado — apenas validação TVA disponível.
+        </div>
+      )}
+
+      {error && (
+        <div className="text-[10px] text-destructive flex items-center gap-1">
+          <AlertCircle className="h-3 w-3" /> {error}
+        </div>
+      )}
+
+      {result && (
+        <div className="rounded border border-emerald-500/30 bg-emerald-500/5 p-2 space-y-1 text-xs">
+          <div className="flex items-center gap-1.5 text-emerald-400 text-[10px]">
+            <CheckCircle2 className="h-3 w-3" /> Empresa encontrada ({result.source})
+          </div>
+          <div className="font-medium">{result.company_name ?? "—"}</div>
+          <div className="text-[10px] text-muted-foreground font-mono">
+            {[result.siret ?? result.siren, result.vat_number].filter(Boolean).join(" · ")}
+          </div>
+          <div className="text-[10px] text-muted-foreground">
+            {[result.address, result.postal_code, result.city, result.country].filter(Boolean).join(", ")}
+          </div>
+          <Button type="button" size="sm" className="h-7 mt-1"
+            onClick={() => { onApply(result); setResult(null); setQ(""); }}>
+            Aplicar dados ao formulário
+          </Button>
+        </div>
+      )}
+
+      {candidates.length > 0 && (
+        <div className="space-y-1 max-h-48 overflow-y-auto">
+          {candidates.map((c, i) => (
+            <button key={i} type="button"
+              onClick={() => { onApply(c); setCandidates([]); setQ(""); }}
+              className="w-full text-left rounded border border-border/50 hover:border-primary/40 hover:bg-primary/5 p-2 transition-all">
+              <div className="text-xs font-medium">{c.company_name}</div>
+              <div className="text-[10px] text-muted-foreground font-mono">
+                {[c.siren, c.city, c.legal_form].filter(Boolean).join(" · ")}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 // ─────────────────────────────────────────────────────────────
 function ChipBtn({
   active, onClick, icon: Icon, label, count, tone,
