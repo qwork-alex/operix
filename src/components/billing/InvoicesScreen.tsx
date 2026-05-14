@@ -874,6 +874,7 @@ export default function InvoicesScreen() {
             </FormSection>
 
             {/* SECTION 3 — Payment terms */}
+            {form.options.show_payment_terms && (
             <FormSection title="Condições de pagamento" subtitle="Defina prazos e vencimento">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <Field label="Condição de pagamento">
@@ -906,6 +907,7 @@ export default function InvoicesScreen() {
                 </Field>
               </div>
             </FormSection>
+            )}
 
             {/* SECTION 4 — Items */}
             <FormSection title="Itens da fatura" subtitle="Designações, quantidades e impostos">
