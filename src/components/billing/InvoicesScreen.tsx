@@ -74,6 +74,46 @@ type Invoice = {
 };
 
 type Supplier = { id: string; name: string };
+type Client = {
+  id: string;
+  name: string;
+  contact_email: string | null;
+  contact_phone: string | null;
+  address: string | null;
+  notes: string | null;
+};
+
+// Payment terms presets
+type PaymentTerm = "on_receipt" | "net_15" | "net_30" | "net_45" | "net_60" | "end_of_month" | "custom";
+const PAYMENT_TERMS: { value: PaymentTerm; label: string; days: number | null }[] = [
+  { value: "on_receipt",   label: "Após recebimento", days: 0 },
+  { value: "net_15",       label: "15 dias",          days: 15 },
+  { value: "net_30",       label: "30 dias",          days: 30 },
+  { value: "net_45",       label: "45 dias",          days: 45 },
+  { value: "net_60",       label: "60 dias",          days: 60 },
+  { value: "end_of_month", label: "Final do mês",     days: null },
+  { value: "custom",       label: "Data personalizada", days: null },
+];
+
+const TAX_RATES = [0, 5.5, 8.5, 10, 20, 21] as const;
+
+type InvoiceItem = {
+  id: string;
+  designation: string;
+  quantity: number;
+  unit: string;
+  unit_price: number;
+  tax_rate: number;
+};
+
+const newItem = (): InvoiceItem => ({
+  id: crypto.randomUUID(),
+  designation: "",
+  quantity: 1,
+  unit: "un",
+  unit_price: 0,
+  tax_rate: 20,
+});
 
 const STATUS_META: Record<InvoiceStatus, { label: string; cls: string; dot: string }> = {
   draft:     { label: "Rascunho", cls: "bg-muted/40 text-muted-foreground border-border",            dot: "bg-muted-foreground" },
