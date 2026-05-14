@@ -1439,21 +1439,34 @@ function ClientPreview({ client }: { client: Client | null }) {
   if (!client) {
     return (
       <div className="rounded-md border border-dashed border-border/60 px-3 py-2.5 text-[11px] text-muted-foreground flex items-center">
-        Selecione um cliente para carregar os dados fiscais e de contacto.
+        Selecione um cliente para carregar dados fiscais, idioma, moeda e condições.
       </div>
     );
   }
+  const c: any = client;
+  const rows: { k: string; v: string }[] = [
+    { k: "VAT / TVA",      v: c.vat_number ?? c.tva_number ?? "—" },
+    { k: "SIRET",          v: c.siret ?? "—" },
+    { k: "Endereço",       v: client.address ?? "—" },
+    { k: "Idioma",         v: (c.language ?? "pt").toString().toUpperCase() },
+    { k: "Moeda",          v: c.currency ?? "EUR" },
+    { k: "Cond. pagamento",v: c.payment_terms ?? "30 dias" },
+  ];
   return (
-    <div className="rounded-md border border-border/60 bg-muted/10 px-3 py-2.5 text-[11px] space-y-0.5">
+    <div className="rounded-md border border-border/60 bg-muted/10 px-3 py-2.5 text-[11px] space-y-1">
       <p className="font-medium text-foreground text-xs">{client.name}</p>
-      {client.address && <p className="text-muted-foreground">{client.address}</p>}
       <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-muted-foreground">
         {client.contact_email && <span>{client.contact_email}</span>}
         {client.contact_phone && <span>{client.contact_phone}</span>}
       </div>
-      <p className="text-[10px] text-muted-foreground/70 italic pt-1">
-        TVA / SIRET / moeda · disponíveis após enriquecimento do cadastro.
-      </p>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 pt-1 border-t border-border/40 mt-1">
+        {rows.map((r) => (
+          <div key={r.k} className="flex justify-between gap-2">
+            <span className="text-muted-foreground/80">{r.k}</span>
+            <span className="text-foreground/90 truncate">{r.v}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
