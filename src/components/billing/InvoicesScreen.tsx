@@ -5,7 +5,10 @@ import {
   Search, Plus, Filter, Download, FileText, FileSpreadsheet,
   MoreHorizontal, Eye, Pencil, Trash2, ChevronLeft, ChevronRight,
   X, History, Loader2, ArrowDownToLine, ArrowUpFromLine,
+  Printer, FileEdit,
 } from "lucide-react";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { BRAND } from "@/config/brand";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
@@ -435,8 +438,11 @@ export default function InvoicesScreen() {
     setFormOpen(true);
   };
 
-  // ── side options panel
+  // ── side options panel & view mode
   const [optionsPanelOpen, setOptionsPanelOpen] = useState(true);
+  const [viewMode, setViewMode] = useState<"edit" | "preview">("edit");
+
+  const companySettings = useCompanySettings().settings;
 
   // ── totals (applies global discount proportionally before tax)
   const totals = useMemo(() => {
@@ -796,18 +802,58 @@ export default function InvoicesScreen() {
                 {" · "}Idioma: <span className="font-medium text-foreground uppercase">{form.options.lang}</span>
               </p>
             </div>
-            <Button
-              variant="outline" size="sm" className="h-8 mr-8"
-              onClick={() => setOptionsPanelOpen(o => !o)}
-            >
-              <Filter className="h-3.5 w-3.5 mr-1.5" />
-              {optionsPanelOpen ? "Ocultar opções" : "Opções da fatura"}
-            </Button>
+            <div className="flex items-center gap-2 mr-8">
+              <div className="inline-flex rounded-md border border-border/60 bg-muted/30 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("edit")}
+                  className={cn(
+                    "h-7 px-3 rounded text-xs font-medium inline-flex items-center gap-1.5 transition-colors",
+                    viewMode === "edit" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <FileEdit className="h-3.5 w-3.5" /> Editar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("preview")}
+                  className={cn(
+                    "h-7 px-3 rounded text-xs font-medium inline-flex items-center gap-1.5 transition-colors",
+                    viewMode === "preview" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <Eye className="h-3.5 w-3.5" /> Pré-visualizar
+                </button>
+              </div>
+              {viewMode === "preview" ? (
+                <Button variant="outline" size="sm" className="h-8" onClick={() => window.print()}>
+                  <Printer className="h-3.5 w-3.5 mr-1.5" /> Imprimir / PDF
+                </Button>
+              ) : (
+                <Button
+                  variant="outline" size="sm" className="h-8"
+                  onClick={() => setOptionsPanelOpen(o => !o)}
+                >
+                  <Filter className="h-3.5 w-3.5 mr-1.5" />
+                  {optionsPanelOpen ? "Ocultar opções" : "Opções da fatura"}
+                </Button>
+              )}
+            </div>
           </DialogHeader>
 
           <div className="flex-1 flex min-h-0 overflow-hidden">
             <div className="flex-1 overflow-y-auto">
 
+          {viewMode === "preview" ? (
+            <div className="p-6 bg-muted/20 min-h-full print:p-0 print:bg-white">
+              <InvoicePreview
+                form={form}
+                totals={totals}
+                client={(clientsQ.data ?? []).find((c) => c.id === form.client_id) || null}
+                company={companySettings}
+              />
+            </div>
+          ) : (
           <div className="px-6 py-5 space-y-6 text-xs">
             {/* SECTION 1 — Identification */}
             <FormSection title="Identificação" subtitle="Dados gerais da fatura">
@@ -1078,10 +1124,11 @@ export default function InvoicesScreen() {
             </FormSection>
             )}
               </div>
+          )}
             </div>
 
             {/* ─── Right side options panel */}
-            {optionsPanelOpen && (
+            {viewMode === "edit" && optionsPanelOpen && (
               <aside className="hidden md:flex w-72 lg:w-80 shrink-0 flex-col border-l border-border/50 bg-muted/10 overflow-y-auto">
                 <InvoiceOptionsPanel
                   options={form.options}
@@ -1542,6 +1589,249 @@ function Row({ k, v }: { k: string; v: string }) {
     <div className="flex items-center justify-between gap-3 py-1 border-b border-border/30 last:border-0">
       <span className="text-muted-foreground">{k}</span>
       <span className="font-medium text-right">{v}</span>
+    </div>
+  );
+}
+
+// ───────────────────────────── Invoice Preview (professional document)
+function InvoicePreview({
+  form, totals, client, company,
+}: {
+  form: FormState;
+  totals: { subtotal: number; discount: number; netSubtotal: number; tax: number; total: number };
+  client: Client | null;
+  company: any;
+}) {
+  const opt = form.options;
+  const companyName = company?.company_name || BRAND.name;
+  const companyAddr = company?.address || "";
+  const companySiret = company?.siret || "";
+  const companyTva = company?.tva_number || "";
+  const companyLogo = company?.logo_url || BRAND.logo;
+
+  const docTitle = opt.show_doc_title ? (opt.doc_title || "Fatura") : "Fatura";
+  const paymentLabel = PAYMENT_TERMS.find((p) => p.value === form.payment_term)?.label ?? "—";
+
+  // Group items by tax rate for VAT summary
+  const taxBuckets = new Map<number, number>();
+  const ratio = totals.subtotal > 0 ? totals.netSubtotal / totals.subtotal : 1;
+  form.items.forEach((it) => {
+    const net = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0) * ratio;
+    const t = Number(it.tax_rate) || 0;
+    taxBuckets.set(t, (taxBuckets.get(t) || 0) + net * (t / 100));
+  });
+
+  return (
+    <div
+      className="mx-auto bg-white text-zinc-900 shadow-2xl print:shadow-none"
+      style={{ width: "210mm", minHeight: "297mm", padding: "18mm 16mm" }}
+    >
+      {/* HEADER */}
+      <header className="flex items-start justify-between gap-8 pb-6 border-b-2 border-zinc-900">
+        {/* Company - left */}
+        <div className="flex items-start gap-3 min-w-0 flex-1">
+          {companyLogo && (
+            <img
+              src={companyLogo}
+              alt={companyName}
+              className="h-14 w-14 object-contain shrink-0"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+            />
+          )}
+          <div className="min-w-0">
+            <p className="text-lg font-bold tracking-tight text-zinc-900">{companyName}</p>
+            {companyAddr && (
+              <p className="text-[11px] text-zinc-600 leading-snug whitespace-pre-line mt-1">{companyAddr}</p>
+            )}
+            <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-zinc-500 mt-1.5">
+              {companySiret && <span>SIRET {companySiret}</span>}
+              {companyTva && <span>TVA {companyTva}</span>}
+            </div>
+          </div>
+        </div>
+
+        {/* Document title + numbers - right */}
+        <div className="text-right shrink-0">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 font-medium">{docTitle}</p>
+          <p className="text-2xl font-bold font-mono text-zinc-900 mt-1 leading-none">
+            {form.invoice_number || "—"}
+          </p>
+          <div className="mt-3 text-[11px] text-zinc-700 space-y-0.5">
+            <div className="flex justify-end gap-2">
+              <span className="text-zinc-500">Emissão:</span>
+              <span className="font-medium tabular-nums">{fmtDate(form.issue_date)}</span>
+            </div>
+            <div className="flex justify-end gap-2">
+              <span className="text-zinc-500">Vencimento:</span>
+              <span className="font-medium tabular-nums">{fmtDate(form.due_date)}</span>
+            </div>
+            {opt.show_payment_terms && (
+              <div className="flex justify-end gap-2">
+                <span className="text-zinc-500">Condição:</span>
+                <span className="font-medium">{paymentLabel}</span>
+              </div>
+            )}
+            {opt.show_client_reference && opt.client_reference && (
+              <div className="flex justify-end gap-2">
+                <span className="text-zinc-500">Ref. cliente:</span>
+                <span className="font-medium">{opt.client_reference}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* BILL TO */}
+      <section className="mt-6 grid grid-cols-2 gap-6">
+        <div>
+          <p className="text-[9px] uppercase tracking-[0.18em] text-zinc-400 font-semibold">Faturado a</p>
+          <div className="mt-2">
+            {client ? (
+              <>
+                <p className="text-sm font-semibold text-zinc-900">{client.name}</p>
+                {client.address && (
+                  <p className="text-[11px] text-zinc-600 leading-snug whitespace-pre-line mt-0.5">{client.address}</p>
+                )}
+                <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-zinc-500 mt-1">
+                  {client.contact_email && <span>{client.contact_email}</span>}
+                  {client.contact_phone && <span>{client.contact_phone}</span>}
+                </div>
+                {(opt.show_tva || opt.show_siret_vat) && (
+                  <div className="mt-2 text-[10px] text-zinc-500 space-y-0.5">
+                    {opt.show_tva && <p>TVA / IVA: <span className="text-zinc-700">—</span></p>}
+                    {opt.show_siret_vat && <p>SIRET / VAT: <span className="text-zinc-700">—</span></p>}
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-[11px] text-zinc-400 italic">Cliente não selecionado</p>
+            )}
+          </div>
+        </div>
+
+        {opt.show_delivery_address && (
+          <div>
+            <p className="text-[9px] uppercase tracking-[0.18em] text-zinc-400 font-semibold">Endereço de entrega</p>
+            <p className="text-[11px] text-zinc-500 italic mt-2">A definir</p>
+          </div>
+        )}
+      </section>
+
+      {/* ITEMS TABLE */}
+      <section className="mt-8">
+        <table className="w-full text-[11px]" style={{ borderCollapse: "collapse" }}>
+          <thead>
+            <tr className="bg-zinc-900 text-white">
+              <th className="text-left py-2.5 px-3 font-semibold uppercase text-[10px] tracking-wider">Designação</th>
+              <th className="text-right py-2.5 px-3 font-semibold uppercase text-[10px] tracking-wider w-16">Qtd</th>
+              <th className="text-right py-2.5 px-3 font-semibold uppercase text-[10px] tracking-wider w-24">Preço unit.</th>
+              <th className="text-right py-2.5 px-3 font-semibold uppercase text-[10px] tracking-wider w-16">Imp.</th>
+              <th className="text-right py-2.5 px-3 font-semibold uppercase text-[10px] tracking-wider w-28">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {form.items.map((it, i) => {
+              const lineNet = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0);
+              return (
+                <tr key={it.id} className={i % 2 === 0 ? "bg-white" : "bg-zinc-50"}>
+                  <td className="py-2.5 px-3 align-top text-zinc-800">
+                    {it.designation || <span className="text-zinc-400 italic">Sem descrição</span>}
+                  </td>
+                  <td className="py-2.5 px-3 text-right tabular-nums text-zinc-700">
+                    {Number(it.quantity) || 0} <span className="text-zinc-400 text-[9px]">{it.unit}</span>
+                  </td>
+                  <td className="py-2.5 px-3 text-right tabular-nums text-zinc-700">{fmtMoney(Number(it.unit_price) || 0)}</td>
+                  <td className="py-2.5 px-3 text-right tabular-nums text-zinc-500">{Number(it.tax_rate) || 0}%</td>
+                  <td className="py-2.5 px-3 text-right tabular-nums font-medium text-zinc-900">{fmtMoney(lineNet)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </section>
+
+      {/* TOTALS */}
+      <section className="mt-6 flex justify-end">
+        <div className="w-72">
+          <div className="flex justify-between py-1.5 text-[11px]">
+            <span className="text-zinc-500">Subtotal</span>
+            <span className="tabular-nums text-zinc-800">{fmtMoney(totals.subtotal)}</span>
+          </div>
+          {opt.show_discount && totals.discount > 0 && (
+            <div className="flex justify-between py-1.5 text-[11px] text-rose-600">
+              <span>
+                Desconto {opt.discount_type === "percent" ? `(${opt.discount_value || 0}%)` : ""}
+              </span>
+              <span className="tabular-nums">- {fmtMoney(totals.discount)}</span>
+            </div>
+          )}
+          <div className="flex justify-between py-1.5 text-[11px] border-t border-zinc-200">
+            <span className="text-zinc-500">Total sem imposto</span>
+            <span className="tabular-nums text-zinc-800">{fmtMoney(totals.netSubtotal)}</span>
+          </div>
+          {Array.from(taxBuckets.entries()).filter(([, v]) => v > 0).map(([rate, val]) => (
+            <div key={rate} className="flex justify-between py-1 text-[11px] text-zinc-500">
+              <span>Imposto ({rate}%)</span>
+              <span className="tabular-nums">{fmtMoney(val)}</span>
+            </div>
+          ))}
+          <div className="flex justify-between py-1.5 text-[11px] border-t border-zinc-200">
+            <span className="text-zinc-500">Total imposto</span>
+            <span className="tabular-nums text-zinc-800">{fmtMoney(totals.tax)}</span>
+          </div>
+          <div className="flex justify-between mt-2 py-3 px-3 bg-zinc-900 text-white rounded-sm">
+            <span className="text-[11px] uppercase tracking-wider font-semibold">Total a pagar</span>
+            <span className="tabular-nums text-base font-bold">{fmtMoney(totals.total)}</span>
+          </div>
+        </div>
+      </section>
+
+      {/* BANK DETAILS */}
+      {opt.show_bank_details && (form.bank_iban || form.bank_bic || form.bank_name) && (
+        <section className="mt-8 rounded-sm border border-zinc-200 bg-zinc-50/60 p-4">
+          <p className="text-[9px] uppercase tracking-[0.18em] text-zinc-500 font-semibold">Dados bancários</p>
+          <div className="grid grid-cols-3 gap-4 mt-2 text-[11px]">
+            {form.bank_name && (
+              <div>
+                <p className="text-zinc-400 text-[9px] uppercase">Banco</p>
+                <p className="text-zinc-800 font-medium">{form.bank_name}</p>
+              </div>
+            )}
+            {form.bank_iban && (
+              <div>
+                <p className="text-zinc-400 text-[9px] uppercase">IBAN</p>
+                <p className="text-zinc-800 font-mono tracking-wide">{form.bank_iban}</p>
+              </div>
+            )}
+            {form.bank_bic && (
+              <div>
+                <p className="text-zinc-400 text-[9px] uppercase">BIC / SWIFT</p>
+                <p className="text-zinc-800 font-mono tracking-wide">{form.bank_bic}</p>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* NOTES */}
+      {opt.show_notes && form.notes && (
+        <section className="mt-6">
+          <p className="text-[9px] uppercase tracking-[0.18em] text-zinc-500 font-semibold">Observações</p>
+          <p className="text-[11px] text-zinc-700 whitespace-pre-wrap mt-2 leading-relaxed">{form.notes}</p>
+        </section>
+      )}
+
+      {/* LEGAL FOOTER */}
+      <footer className="mt-12 pt-4 border-t border-zinc-200 text-[9px] text-zinc-500 leading-relaxed">
+        {form.legal_text && <p className="mb-2 italic">{form.legal_text}</p>}
+        <div className="flex flex-wrap justify-center gap-x-3 gap-y-0.5">
+          <span className="font-medium text-zinc-700">{companyName}</span>
+          {companyAddr && <span>· {companyAddr.split("\n")[0]}</span>}
+          {companySiret && <span>· SIRET {companySiret}</span>}
+          {companyTva && <span>· TVA {companyTva}</span>}
+        </div>
+        <p className="text-center mt-1 text-zinc-400">Documento gerado eletronicamente — válido sem assinatura.</p>
+      </footer>
     </div>
   );
 }
