@@ -11,6 +11,7 @@ import ImportInvoiceDialog from "./ImportInvoiceDialog";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { BRAND } from "@/config/brand";
 import { InvoiceDocumentA4 } from "./InvoiceDocumentA4";
+import { getPaymentTermLabel } from "@/i18n/invoices";
 import { SendInvoiceDialog } from "./SendInvoiceDialog";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -1045,13 +1046,15 @@ export default function InvoicesScreen() {
                 <InvoiceDocumentA4
                   form={{
                     ...form,
-                    payment_term_label: PAYMENT_TERMS.find((p) => p.value === form.payment_term)?.label ?? "—",
+                    payment_term_label: getPaymentTermLabel(form.payment_term, form.options.lang),
                   }}
                   totals={totals}
                   client={(clientsQ.data ?? []).find((c) => c.id === form.client_id) || null}
                   company={companySettings}
                   brandName={BRAND.name}
                   brandLogo={BRAND.logo}
+                  lang={form.options.lang}
+                  docType={form.type}
                 />
               </InvoiceA4PreviewFrame>
             </div>
