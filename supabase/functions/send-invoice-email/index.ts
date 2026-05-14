@@ -100,6 +100,7 @@ Deno.serve(async (req) => {
       pdfBase64?: string;       // optional inline PDF
       pdfFileName?: string;
       idempotencyKey?: string;
+      kind?: "initial" | "reminder";
     };
 
     if (!body.invoiceId || !body.recipient || !body.subject) {
