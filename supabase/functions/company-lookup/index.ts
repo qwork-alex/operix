@@ -128,7 +128,13 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (!result) {
+    // If detection points to a country OWNED by the modular registry (GB/US/CH/CN/IN/DE/ES),
+    // we MUST NOT cascade to the legacy/EU-generic stack — even when the registry lookup
+    // produced no enrichment. Document is structurally validated; that is the answer.
+    const ownedDetection = ordered.find((c) => c.country && COUNTRY_OWNED.has(c.country));
+    let ownedCountryLock: string | null = ownedDetection?.country ?? (result?.country && COUNTRY_OWNED.has(result.country) ? result.country : null);
+
+    if (!result && !ownedCountryLock) {
       for (const cand of ordered) {
         ctx.kind = cand.kind; ctx.country = cand.country;
 
