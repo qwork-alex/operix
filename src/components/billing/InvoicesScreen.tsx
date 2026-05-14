@@ -1597,34 +1597,72 @@ function ClientPreview({ client }: { client: Client | null }) {
   if (!client) {
     return (
       <div className="rounded-md border border-dashed border-border/60 px-3 py-2.5 text-[11px] text-muted-foreground flex items-center">
-        Selecione um cliente para carregar dados fiscais, idioma, moeda e condições.
+        Selecione um cliente para carregar dados fiscais, endereço e contactos.
       </div>
     );
   }
-  const c: any = client;
-  const rows: { k: string; v: string }[] = [
-    { k: "VAT / TVA",      v: c.vat_number ?? c.tva_number ?? "—" },
-    { k: "SIRET",          v: c.siret ?? "—" },
-    { k: "Endereço",       v: client.address ?? "—" },
-    { k: "Idioma",         v: (c.language ?? "pt").toString().toUpperCase() },
-    { k: "Moeda",          v: c.currency ?? "EUR" },
-    { k: "Cond. pagamento",v: c.payment_terms ?? "30 dias" },
-  ];
+  const fiscal = client.tva_intracom || client.siret || client.siren || client.tax_id || "—";
+  const fullAddr = [
+    client.address,
+    client.address_complement,
+    [client.postal_code, client.city].filter(Boolean).join(" "),
+    client.country,
+  ].filter(Boolean).join(" · ");
   return (
     <div className="rounded-md border border-border/60 bg-muted/10 px-3 py-2.5 text-[11px] space-y-1">
       <p className="font-medium text-foreground text-xs">{client.name}</p>
       <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-muted-foreground">
-        {client.contact_email && <span>{client.contact_email}</span>}
-        {client.contact_phone && <span>{client.contact_phone}</span>}
+        {client.email && <span>{client.email}</span>}
+        {client.phone && <span>{client.phone}</span>}
       </div>
-      <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 pt-1 border-t border-border/40 mt-1">
-        {rows.map((r) => (
-          <div key={r.k} className="flex justify-between gap-2">
-            <span className="text-muted-foreground/80">{r.k}</span>
-            <span className="text-foreground/90 truncate">{r.v}</span>
+      <div className="pt-1 border-t border-border/40 mt-1 space-y-0.5">
+        <div className="flex justify-between gap-2">
+          <span className="text-muted-foreground/80">Identificação fiscal</span>
+          <span className="text-foreground/90 font-mono truncate">{fiscal}</span>
+        </div>
+        {fullAddr && (
+          <div className="flex justify-between gap-2">
+            <span className="text-muted-foreground/80">Endereço</span>
+            <span className="text-foreground/90 truncate text-right">{fullAddr}</span>
           </div>
-        ))}
+        )}
       </div>
+    </div>
+  );
+}
+
+function ClientFiscalReadonly({ client }: { client: Client | null }) {
+  if (!client) return null;
+  const F = ({ label, value }: { label: string; value?: string | null }) => (
+    <Field label={label}>
+      <Input value={value ?? ""} readOnly disabled className="h-9 bg-muted/30" placeholder="—" />
+    </Field>
+  );
+  return (
+    <div className="mt-3 rounded-md border border-border/60 bg-muted/5 p-3 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
+          Bloco fiscal (somente leitura)
+        </p>
+        <span className="text-[10px] text-muted-foreground">Fonte: cadastro do cliente</span>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <F label="Razão social" value={client.name} />
+        <F label="SIREN" value={client.siren} />
+        <F label="SIRET" value={client.siret} />
+        <F label="TVA / VAT" value={client.tva_intracom} />
+        <F label="Identificação fiscal" value={client.tax_id} />
+        <F label="País" value={client.country} />
+        <F label="Endereço" value={client.address} />
+        <F label="Complemento" value={client.address_complement} />
+        <F label="Código postal · Cidade" value={[client.postal_code, client.city].filter(Boolean).join(" · ")} />
+        <F label="Email" value={client.email} />
+        <F label="Telefone" value={client.phone} />
+        <F label="IBAN" value={client.iban} />
+      </div>
+      <p className="text-[10px] text-muted-foreground">
+        Para alterar estes dados, edite a ficha do cliente em Faturamento › Clientes.
+      </p>
     </div>
   );
 }
