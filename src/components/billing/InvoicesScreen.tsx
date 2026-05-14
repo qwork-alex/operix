@@ -5,7 +5,7 @@ import {
   Search, Plus, Filter, FileText, FileSpreadsheet,
   MoreHorizontal, Eye, Pencil, Trash2, ChevronLeft, ChevronRight,
   X, History, Loader2, ArrowDownToLine, ArrowUpFromLine,
-  Printer, FileEdit, FileUp,
+  Printer, FileEdit, FileUp, Send,
 } from "lucide-react";
 import ImportInvoiceDialog from "./ImportInvoiceDialog";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
