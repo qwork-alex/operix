@@ -624,7 +624,7 @@ export function OperationalMap() {
         setSelectedHailId(f.properties.id);
         map.easeTo({ center: f.geometry.coordinates, duration: 600 });
       };
-      ["hail-core", "hail-ring", "hail-halo"].forEach((id) => {
+      ["hail-core", "hail-ring", "hail-halo", "pdr-points"].forEach((id) => {
         map.on("click", id, onHailClick);
         map.on("mouseenter", id, () => (map.getCanvas().style.cursor = "pointer"));
         map.on("mouseleave", id, () => (map.getCanvas().style.cursor = ""));
