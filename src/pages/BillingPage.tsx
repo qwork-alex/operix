@@ -28,6 +28,7 @@ import PaymentsScreen from "@/components/billing/PaymentsScreen";
 import ReconciliationScreen from "@/components/billing/ReconciliationScreen";
 import UpcomingBillsScreen from "@/components/billing/UpcomingBillsScreen";
 import SuppliersScreen from "@/components/billing/SuppliersScreen";
+import ReportsScreen from "@/components/billing/ReportsScreen";
 
 // ─────────────────────────────────────────────────────────────
 // Sub-nav definition
@@ -360,13 +361,8 @@ export default function BillingPage() {
         <Route path="conciliacao" element={<ReconciliationScreen />} />
         <Route path="contas-a-vencer" element={<UpcomingBillsScreen />} />
         <Route path="fornecedores" element={<SuppliersScreen />} />
-        {SUB_NAV.filter((i) => !["faturas", "pagamentos", "conciliacao", "contas-a-vencer", "fornecedores"].includes(i.slug)).map((item) => (
-          <Route
-            key={item.slug}
-            path={item.slug}
-            element={<SubPage slug={item.slug} />}
-          />
-        ))}
+        <Route path="relatorios" element={<ReportsScreen />} />
+
         <Route path="*" element={<Navigate to="faturas" replace />} />
       </Routes>
     </BillingLayout>
