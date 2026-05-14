@@ -137,6 +137,68 @@ const fmtDate = (d?: string | null) => {
   try { return format(parseISO(d), "dd/MM/yyyy"); } catch { return d; }
 };
 
+// ───────────────────────────── invoice options panel
+type BillingMode = "quick" | "complete" | "electronic";
+type InvoiceLang = "pt" | "fr" | "en" | "es" | "de" | "it";
+type DiscountType = "percent" | "fixed";
+
+const BILLING_MODES: { value: BillingMode; label: string; hint: string }[] = [
+  { value: "quick",       label: "Rápido",     hint: "Apenas o essencial" },
+  { value: "complete",    label: "Completo",   hint: "Todos os campos" },
+  { value: "electronic",  label: "Eletrônico", hint: "Preparado para emissão fiscal" },
+];
+
+const INVOICE_LANGS: { value: InvoiceLang; label: string }[] = [
+  { value: "pt", label: "Português" },
+  { value: "fr", label: "Francês" },
+  { value: "en", label: "Inglês" },
+  { value: "es", label: "Espanhol" },
+  { value: "de", label: "Alemão" },
+  { value: "it", label: "Italiano" },
+];
+
+type InvoiceOptions = {
+  mode: BillingMode;
+  lang: InvoiceLang;
+  // Client display
+  show_delivery_address: boolean;
+  show_tva: boolean;
+  show_siret_vat: boolean;
+  show_client_reference: boolean;
+  client_reference: string;
+  // Document sections
+  show_bank_details: boolean;
+  show_payment_terms: boolean;
+  show_doc_title: boolean;
+  doc_title: string;
+  show_notes: boolean;
+  // Global discount
+  show_discount: boolean;
+  discount_type: DiscountType;
+  discount_value: number;
+  // Electronic mode (architecture-only)
+  electronic_format: "none" | "ubl" | "facturx" | "peppol";
+};
+
+const defaultOptions = (): InvoiceOptions => ({
+  mode: "complete",
+  lang: "pt",
+  show_delivery_address: false,
+  show_tva: true,
+  show_siret_vat: true,
+  show_client_reference: false,
+  client_reference: "",
+  show_bank_details: true,
+  show_payment_terms: true,
+  show_doc_title: true,
+  doc_title: "Fatura",
+  show_notes: true,
+  show_discount: false,
+  discount_type: "percent",
+  discount_value: 0,
+  electronic_format: "none",
+});
+
 // ───────────────────────────── form
 type FormState = {
   invoice_number: string;
@@ -153,6 +215,8 @@ type FormState = {
   bank_name: string;
   // Legal footer
   legal_text: string;
+  // Side panel options
+  options: InvoiceOptions;
 };
 
 const DEFAULT_LEGAL =
@@ -171,6 +235,7 @@ const emptyForm = (): FormState => ({
   bank_bic: "",
   bank_name: "",
   legal_text: DEFAULT_LEGAL,
+  options: defaultOptions(),
 });
 
 // Compute due_date from issue_date + payment term
@@ -365,19 +430,32 @@ export default function InvoicesScreen() {
       bank_bic: "",
       bank_name: "",
       legal_text: DEFAULT_LEGAL,
+      options: defaultOptions(),
     });
     setFormOpen(true);
   };
 
-  // ── totals
+  // ── side options panel
+  const [optionsPanelOpen, setOptionsPanelOpen] = useState(true);
+
+  // ── totals (applies global discount proportionally before tax)
   const totals = useMemo(() => {
     const subtotal = form.items.reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0);
+    const opt = form.options;
+    let discount = 0;
+    if (opt.show_discount && subtotal > 0) {
+      discount = opt.discount_type === "percent"
+        ? subtotal * ((Number(opt.discount_value) || 0) / 100)
+        : Math.min(Number(opt.discount_value) || 0, subtotal);
+    }
+    const netSubtotal = Math.max(0, subtotal - discount);
+    const ratio = subtotal > 0 ? netSubtotal / subtotal : 1;
     const tax = form.items.reduce((s, it) => {
-      const line = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0);
+      const line = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0) * ratio;
       return s + line * ((Number(it.tax_rate) || 0) / 100);
     }, 0);
-    return { subtotal, tax, total: subtotal + tax };
-  }, [form.items]);
+    return { subtotal, discount, netSubtotal, tax, total: netSubtotal + tax };
+  }, [form.items, form.options]);
 
   const submitForm = () => {
     if (!form.invoice_number.trim()) {
@@ -705,15 +783,30 @@ export default function InvoicesScreen() {
 
       {/* ─── Form dialog */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="max-w-5xl max-h-[92vh] overflow-y-auto p-0">
-          <DialogHeader className="px-6 pt-5 pb-4 border-b border-border/50 sticky top-0 bg-background z-10">
-            <DialogTitle className="text-base font-semibold">
-              {editing ? "Editar fatura" : "Nova fatura"}
-            </DialogTitle>
-            <p className="text-xs text-muted-foreground">
-              {editing ? "Atualize os dados da fatura existente." : "Preencha os dados para emitir uma nova fatura."}
-            </p>
+        <DialogContent className="max-w-6xl w-[96vw] max-h-[94vh] p-0 gap-0 flex flex-col overflow-hidden">
+          <DialogHeader className="px-6 pt-5 pb-4 border-b border-border/50 bg-background z-10 flex-row items-center justify-between space-y-0">
+            <div>
+              <DialogTitle className="text-base font-semibold">
+                {editing
+                  ? "Editar fatura"
+                  : (form.options.show_doc_title ? form.options.doc_title : "Nova fatura")}
+              </DialogTitle>
+              <p className="text-xs text-muted-foreground">
+                Modo: <span className="font-medium text-foreground">{BILLING_MODES.find(m => m.value === form.options.mode)?.label}</span>
+                {" · "}Idioma: <span className="font-medium text-foreground uppercase">{form.options.lang}</span>
+              </p>
+            </div>
+            <Button
+              variant="outline" size="sm" className="h-8 mr-8"
+              onClick={() => setOptionsPanelOpen(o => !o)}
+            >
+              <Filter className="h-3.5 w-3.5 mr-1.5" />
+              {optionsPanelOpen ? "Ocultar opções" : "Opções da fatura"}
+            </Button>
           </DialogHeader>
+
+          <div className="flex-1 flex min-h-0 overflow-hidden">
+            <div className="flex-1 overflow-y-auto">
 
           <div className="px-6 py-5 space-y-6 text-xs">
             {/* SECTION 1 — Identification */}
@@ -781,6 +874,7 @@ export default function InvoicesScreen() {
             </FormSection>
 
             {/* SECTION 3 — Payment terms */}
+            {form.options.show_payment_terms && (
             <FormSection title="Condições de pagamento" subtitle="Defina prazos e vencimento">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <Field label="Condição de pagamento">
@@ -813,6 +907,7 @@ export default function InvoicesScreen() {
                 </Field>
               </div>
             </FormSection>
+            )}
 
             {/* SECTION 4 — Items */}
             <FormSection title="Itens da fatura" subtitle="Designações, quantidades e impostos">
@@ -911,8 +1006,23 @@ export default function InvoicesScreen() {
               <div className="mt-4 flex justify-end">
                 <div className="w-full md:w-80 rounded-md border border-border/60 divide-y divide-border/50 text-xs">
                   <div className="flex justify-between px-3 py-2">
-                    <span className="text-muted-foreground">Total sem imposto</span>
+                    <span className="text-muted-foreground">Subtotal</span>
                     <span className="tabular-nums">{fmtMoney(totals.subtotal)}</span>
+                  </div>
+                  {form.options.show_discount && totals.discount > 0 && (
+                    <div className="flex justify-between px-3 py-2 text-rose-400">
+                      <span>
+                        Desconto{" "}
+                        {form.options.discount_type === "percent"
+                          ? `(${form.options.discount_value || 0}%)`
+                          : ""}
+                      </span>
+                      <span className="tabular-nums">- {fmtMoney(totals.discount)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between px-3 py-2">
+                    <span className="text-muted-foreground">Total sem imposto</span>
+                    <span className="tabular-nums">{fmtMoney(totals.netSubtotal)}</span>
                   </div>
                   <div className="flex justify-between px-3 py-2">
                     <span className="text-muted-foreground">Total imposto</span>
@@ -927,6 +1037,7 @@ export default function InvoicesScreen() {
             </FormSection>
 
             {/* SECTION 5 — Bank details */}
+            {form.options.show_bank_details && (
             <FormSection title="Dados bancários" subtitle="Conta para recebimento (futuramente vinda do perfil da empresa)">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <Field label="IBAN">
@@ -940,8 +1051,10 @@ export default function InvoicesScreen() {
                 </Field>
               </div>
             </FormSection>
+            )}
 
             {/* SECTION 6 — Notes & Legal */}
+            {form.options.show_notes && (
             <FormSection title="Observações e nota legal" subtitle="Informações adicionais ao cliente">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <Field label="Observações">
@@ -963,9 +1076,22 @@ export default function InvoicesScreen() {
                 </Field>
               </div>
             </FormSection>
+            )}
+              </div>
+            </div>
+
+            {/* ─── Right side options panel */}
+            {optionsPanelOpen && (
+              <aside className="hidden md:flex w-72 lg:w-80 shrink-0 flex-col border-l border-border/50 bg-muted/10 overflow-y-auto">
+                <InvoiceOptionsPanel
+                  options={form.options}
+                  onChange={(next) => setForm({ ...form, options: next })}
+                />
+              </aside>
+            )}
           </div>
 
-          <DialogFooter className="px-6 py-4 border-t border-border/50 sticky bottom-0 bg-background">
+          <DialogFooter className="px-6 py-4 border-t border-border/50 bg-background">
             <div className="flex-1 text-xs text-muted-foreground">
               {!editing && "Estado inicial: "}
               {!editing && <Badge variant="outline" className={cn("text-[10px] gap-1.5", STATUS_META["pending"].cls)}>
@@ -1034,6 +1160,216 @@ function KpiCard({ label, value, accent }: { label: string; value: string; accen
         <p className={cn("text-lg font-semibold tabular-nums", accent)}>{value}</p>
       </CardContent>
     </Card>
+  );
+}
+
+function InvoiceOptionsPanel({
+  options, onChange,
+}: { options: InvoiceOptions; onChange: (o: InvoiceOptions) => void }) {
+  const set = <K extends keyof InvoiceOptions>(k: K, v: InvoiceOptions[K]) =>
+    onChange({ ...options, [k]: v });
+
+  // When mode changes, pre-toggle relevant sections (user can override after).
+  const setMode = (mode: BillingMode) => {
+    if (mode === "quick") {
+      onChange({
+        ...options, mode,
+        show_bank_details: false,
+        show_payment_terms: false,
+        show_notes: false,
+        show_doc_title: true,
+        show_discount: false,
+        electronic_format: "none",
+      });
+    } else if (mode === "complete") {
+      onChange({
+        ...options, mode,
+        show_bank_details: true,
+        show_payment_terms: true,
+        show_notes: true,
+        show_doc_title: true,
+        electronic_format: "none",
+      });
+    } else {
+      onChange({
+        ...options, mode,
+        show_bank_details: true,
+        show_payment_terms: true,
+        show_notes: true,
+        show_doc_title: true,
+        electronic_format: options.electronic_format === "none" ? "facturx" : options.electronic_format,
+      });
+    }
+  };
+
+  return (
+    <div className="p-4 space-y-5 text-xs">
+      <div>
+        <h3 className="text-xs font-semibold uppercase tracking-wider">Opções da fatura</h3>
+        <p className="text-[11px] text-muted-foreground mt-0.5">
+          Personalize layout, secções e idioma.
+        </p>
+      </div>
+
+      {/* Billing mode */}
+      <PanelBlock title="Tipo de faturamento">
+        <div className="grid grid-cols-1 gap-1.5">
+          {BILLING_MODES.map((m) => {
+            const active = options.mode === m.value;
+            return (
+              <button
+                key={m.value}
+                type="button"
+                onClick={() => setMode(m.value)}
+                className={cn(
+                  "text-left rounded-md border px-2.5 py-1.5 transition-colors",
+                  active
+                    ? "border-primary/60 bg-primary/10 text-foreground"
+                    : "border-border/60 hover:bg-accent/40 text-muted-foreground"
+                )}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium">{m.label}</span>
+                  {active && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{m.hint}</p>
+              </button>
+            );
+          })}
+        </div>
+      </PanelBlock>
+
+      {/* Language */}
+      <PanelBlock title="Idioma da fatura">
+        <Select value={options.lang} onValueChange={(v) => set("lang", v as InvoiceLang)}>
+          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {INVOICE_LANGS.map((l) => (
+              <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </PanelBlock>
+
+      {/* Client display options */}
+      <PanelBlock title="Configurações do cliente">
+        <CheckRow label="Endereço de entrega"
+          checked={options.show_delivery_address}
+          onChange={(v) => set("show_delivery_address", v)} />
+        <CheckRow label="Número TVA / IVA"
+          checked={options.show_tva}
+          onChange={(v) => set("show_tva", v)} />
+        <CheckRow label="SIRET / VAT"
+          checked={options.show_siret_vat}
+          onChange={(v) => set("show_siret_vat", v)} />
+        <CheckRow label="Referência do cliente"
+          checked={options.show_client_reference}
+          onChange={(v) => set("show_client_reference", v)} />
+        {options.show_client_reference && (
+          <Input
+            value={options.client_reference}
+            onChange={(e) => set("client_reference", e.target.value)}
+            placeholder="Referência..."
+            className="h-7 text-xs mt-1"
+          />
+        )}
+      </PanelBlock>
+
+      {/* Document sections */}
+      <PanelBlock title="Informações adicionais">
+        <CheckRow label="Dados bancários"
+          checked={options.show_bank_details}
+          onChange={(v) => set("show_bank_details", v)} />
+        <CheckRow label="Condição de pagamento"
+          checked={options.show_payment_terms}
+          onChange={(v) => set("show_payment_terms", v)} />
+        <CheckRow label="Título do documento"
+          checked={options.show_doc_title}
+          onChange={(v) => set("show_doc_title", v)} />
+        {options.show_doc_title && (
+          <Input
+            value={options.doc_title}
+            onChange={(e) => set("doc_title", e.target.value)}
+            className="h-7 text-xs mt-1"
+          />
+        )}
+        <CheckRow label="Campo de observações"
+          checked={options.show_notes}
+          onChange={(v) => set("show_notes", v)} />
+        <CheckRow label="Desconto global"
+          checked={options.show_discount}
+          onChange={(v) => set("show_discount", v)} />
+      </PanelBlock>
+
+      {/* Discount */}
+      {options.show_discount && (
+        <PanelBlock title="Desconto global">
+          <div className="grid grid-cols-2 gap-1.5">
+            <button
+              type="button"
+              onClick={() => set("discount_type", "percent")}
+              className={cn("rounded-md border px-2 py-1 text-[11px]",
+                options.discount_type === "percent" ? "border-primary/60 bg-primary/10" : "border-border/60")}
+            >Percentual %</button>
+            <button
+              type="button"
+              onClick={() => set("discount_type", "fixed")}
+              className={cn("rounded-md border px-2 py-1 text-[11px]",
+                options.discount_type === "fixed" ? "border-primary/60 bg-primary/10" : "border-border/60")}
+            >Valor fixo €</button>
+          </div>
+          <Input
+            type="number" step="0.01" min={0}
+            value={options.discount_value}
+            onChange={(e) => set("discount_value", Number(e.target.value) || 0)}
+            className="h-7 text-xs mt-2 tabular-nums"
+            placeholder={options.discount_type === "percent" ? "0%" : "0,00 €"}
+          />
+        </PanelBlock>
+      )}
+
+      {/* Electronic mode */}
+      {options.mode === "electronic" && (
+        <PanelBlock title="Modo eletrônico" hint="Estrutura preparada — emissão fiscal não ativa.">
+          <Select
+            value={options.electronic_format}
+            onValueChange={(v) => set("electronic_format", v as InvoiceOptions["electronic_format"])}
+          >
+            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="facturx">Factur-X (FR/DE)</SelectItem>
+              <SelectItem value="ubl">UBL 2.1</SelectItem>
+              <SelectItem value="peppol">PEPPOL BIS</SelectItem>
+              <SelectItem value="none">Nenhum</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-[10px] text-muted-foreground mt-2 leading-relaxed">
+            Será usado quando o motor fiscal eletrônico for ativado.
+          </p>
+        </PanelBlock>
+      )}
+    </div>
+  );
+}
+
+function PanelBlock({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-2">
+      <div>
+        <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">{title}</p>
+        {hint && <p className="text-[10px] text-muted-foreground/80 mt-0.5">{hint}</p>}
+      </div>
+      <div className="space-y-1">{children}</div>
+    </div>
+  );
+}
+
+function CheckRow({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="flex items-center gap-2 py-0.5 cursor-pointer hover:text-foreground text-muted-foreground transition-colors">
+      <Checkbox checked={checked} onCheckedChange={(c) => onChange(!!c)} className="h-3.5 w-3.5" />
+      <span className="text-xs">{label}</span>
+    </label>
   );
 }
 
