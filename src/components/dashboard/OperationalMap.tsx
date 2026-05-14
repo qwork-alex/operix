@@ -7,6 +7,14 @@ import maplibregl, { Map as MLMap, GeoJSONSource } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { Users, CloudRain, Zap, Radar, Wrench, FileText, Layers, X, AlertTriangle, Wind, Clock, Gauge, Filter, Play, Pause, RotateCcw } from "lucide-react";
 import { OperationalPanel, PanelTeam, PanelOrder } from "./OperationalPanel";
+import {
+  OperationalOpportunities,
+  computeOpportunities,
+  opportunitiesToHeatmapGeoJSON,
+  type OppHailEvent,
+  type OppOrder,
+  type OppTeam,
+} from "./OperationalOpportunities";
 
 /* ------------------------------------------------------------------ */
 /*  Hail severity → premium color palette                              */
