@@ -14,6 +14,10 @@ import {
 } from "./providers.ts";
 import { detectAcrossRegistry, resolveModule } from "./country-registry/registry.ts";
 import { tierFor, TIER_LABEL_PT, type SupportTier } from "./country-registry/tiers.ts";
+import {
+  capabilityFor, COUNTRY_OWNED, LOOKUP_STATUS_LABEL_PT,
+  type CountryCapability, type LookupStatus,
+} from "./country-registry/capability.ts";
 
 function enrichAddress(c: NormalizedCompany | null): NormalizedCompany | null {
   if (!c) return c;
