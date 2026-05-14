@@ -842,7 +842,7 @@ export default function InvoicesScreen() {
             <div className="flex-1 overflow-y-auto">
 
           {viewMode === "preview" ? (
-            <div className="p-6 bg-muted/20 min-h-full print:p-0 print:bg-white">
+            <div className="p-6 bg-muted/20 min-h-full print:p-0 print:bg-white invoice-print-area">
               <InvoicePreview
                 form={form}
                 totals={totals}
