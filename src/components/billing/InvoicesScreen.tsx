@@ -277,6 +277,7 @@ export default function InvoicesScreen() {
 
   // dialogs
   const [formOpen, setFormOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<Invoice | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
 
