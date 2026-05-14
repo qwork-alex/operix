@@ -552,13 +552,28 @@ export default function InvoicesScreen() {
     };
   }, [formOpen, viewMode]);
 
+  const waitForInvoicePrintAssets = async () => {
+    await document.fonts?.ready.catch(() => undefined);
+    const images = Array.from(document.querySelectorAll<HTMLImageElement>(".invoice-print-area img"));
+    await Promise.all(images.map((img) => {
+      if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+      return new Promise<void>((resolve) => {
+        const done = () => resolve();
+        img.addEventListener("load", done, { once: true });
+        img.addEventListener("error", done, { once: true });
+      });
+    }));
+  };
+
   const printCurrentInvoice = () => {
     setViewMode("preview");
     setInvoicePrintMode(true);
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        window.print();
-        window.setTimeout(() => setInvoicePrintMode(false), 800);
+        void waitForInvoicePrintAssets().finally(() => {
+          window.print();
+          window.setTimeout(() => setInvoicePrintMode(false), 800);
+        });
       });
     });
   };
@@ -1013,7 +1028,7 @@ export default function InvoicesScreen() {
             </div>
           </DialogHeader>
 
-          <div className="flex-1 flex min-h-0 overflow-hidden">
+          <div className="invoice-print-dialog-body flex-1 flex min-h-0 overflow-hidden">
             <div className="flex-1 overflow-y-auto">
 
           {viewMode === "preview" ? (
