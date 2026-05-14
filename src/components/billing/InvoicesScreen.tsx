@@ -1897,17 +1897,28 @@ function InvoicePreview({
             {client ? (
               <>
                 <p className="text-sm font-semibold text-zinc-900">{client.name}</p>
-                {client.address && (
-                  <p className="text-[11px] text-zinc-600 leading-snug whitespace-pre-line mt-0.5">{client.address}</p>
+                {(client.address || client.address_complement || client.postal_code || client.city || client.country) && (
+                  <p className="text-[11px] text-zinc-600 leading-snug mt-0.5">
+                    {[
+                      client.address,
+                      client.address_complement,
+                      [client.postal_code, client.city].filter(Boolean).join(" "),
+                      client.country,
+                    ].filter(Boolean).join(", ")}
+                  </p>
                 )}
                 <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-zinc-500 mt-1">
-                  {client.contact_email && <span>{client.contact_email}</span>}
-                  {client.contact_phone && <span>{client.contact_phone}</span>}
+                  {(client.email || client.contact_email) && <span>{client.email ?? client.contact_email}</span>}
+                  {(client.phone || client.contact_phone) && <span>{client.phone ?? client.contact_phone}</span>}
                 </div>
                 {(opt.show_tva || opt.show_siret_vat) && (
                   <div className="mt-2 text-[10px] text-zinc-500 space-y-0.5">
-                    {opt.show_tva && <p>TVA / IVA: <span className="text-zinc-700">—</span></p>}
-                    {opt.show_siret_vat && <p>SIRET / VAT: <span className="text-zinc-700">—</span></p>}
+                    {opt.show_tva && (
+                      <p>TVA / IVA: <span className="text-zinc-700">{client.tva_intracom || "—"}</span></p>
+                    )}
+                    {opt.show_siret_vat && (
+                      <p>SIRET / VAT: <span className="text-zinc-700">{client.siret || client.siren || client.tax_id || "—"}</span></p>
+                    )}
                   </div>
                 )}
               </>
