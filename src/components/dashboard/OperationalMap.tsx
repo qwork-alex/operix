@@ -5,7 +5,7 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { Skeleton } from "@/components/ui/skeleton";
 import maplibregl, { Map as MLMap, GeoJSONSource } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { Users, CloudRain, Zap, Radar, Wrench, FileText, Layers, X, AlertTriangle, Wind, Clock, Gauge } from "lucide-react";
+import { Users, CloudRain, Zap, Radar, Wrench, FileText, Layers, X, AlertTriangle, Wind, Clock, Gauge, Filter, Play, Pause, RotateCcw } from "lucide-react";
 import { OperationalPanel, PanelTeam, PanelOrder } from "./OperationalPanel";
 
 /* ------------------------------------------------------------------ */
@@ -214,10 +214,12 @@ export function OperationalMap() {
   const { data: hailEvents = [] } = useQuery<HailEvent[]>({
     queryKey: ["op-map-hail"],
     queryFn: async () => {
+      // last 24h window keeps replay meaningful and bounded
+      const since = new Date(Date.now() - 24 * 3600_000).toISOString();
       const { data, error } = await supabase
         .from("hail_events")
         .select("*")
-        .neq("status", "closed")
+        .or(`forecast_time.gte.${since},observed_time.gte.${since},created_at.gte.${since}`)
         .order("forecast_time", { ascending: true });
       if (error) throw error;
       return (data ?? []) as HailEvent[];
@@ -235,6 +237,57 @@ export function OperationalMap() {
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [queryClient]);
+
+  /* -------- Hail filters & timeline replay -------------------------- */
+  type StatusFilter = "all" | "forecast" | "ongoing" | "confirmed";
+  const [hailStatusFilter, setHailStatusFilter] = useState<StatusFilter>("all");
+  const [hailSeverityFilter, setHailSeverityFilter] = useState<Record<HailSeverity, boolean>>({
+    low: true, moderate: true, severe: true, extreme: true,
+  });
+  const [hailMinSizeMm, setHailMinSizeMm] = useState<number>(0);
+  const [hailWindowHours, setHailWindowHours] = useState<number>(6); // last N hours
+  const [replayCursor, setReplayCursor] = useState<number>(0); // 0..1 (1 = now)
+  const [replayPlaying, setReplayPlaying] = useState(false);
+
+  // auto-advance replay
+  useEffect(() => {
+    if (!replayPlaying) return;
+    const id = window.setInterval(() => {
+      setReplayCursor((c) => {
+        const next = c + 0.02;
+        if (next >= 1) { setReplayPlaying(false); return 1; }
+        return next;
+      });
+    }, 200);
+    return () => window.clearInterval(id);
+  }, [replayPlaying]);
+
+  const replayTimeMs = useMemo(() => {
+    const windowMs = hailWindowHours * 3600_000;
+    const start = Date.now() - windowMs;
+    return start + windowMs * replayCursor;
+  }, [hailWindowHours, replayCursor]);
+
+  const visibleHailEvents = useMemo(() => {
+    return hailEvents.filter((h) => {
+      if (!hailSeverityFilter[h.severity]) return false;
+      if (hailMinSizeMm > 0 && (h.hail_size_mm ?? 0) < hailMinSizeMm) return false;
+
+      if (hailStatusFilter !== "all") {
+        if (hailStatusFilter === "ongoing") {
+          if (h.status !== "ongoing" && h.status !== "confirmed") return false;
+        } else if (h.status !== hailStatusFilter) return false;
+      }
+
+      // Time window + replay scrubbing
+      const ref = new Date(h.observed_time ?? h.forecast_time ?? h.expires_at ?? Date.now()).getTime();
+      const windowStart = Date.now() - hailWindowHours * 3600_000;
+      if (ref < windowStart) return false;
+      // Hide events that have not yet "happened" at the replay cursor
+      if (ref > replayTimeMs && replayCursor < 1) return false;
+      return true;
+    });
+  }, [hailEvents, hailStatusFilter, hailSeverityFilter, hailMinSizeMm, hailWindowHours, replayTimeMs, replayCursor]);
 
   const [selectedHailId, setSelectedHailId] = useState<string | null>(null);
   const selectedHail = useMemo(
@@ -290,24 +343,36 @@ export function OperationalMap() {
   }, [ordersGeo]);
 
   const hailGeo = useMemo(() => {
-    const features = hailEvents.map((h) => ({
-      type: "Feature",
-      geometry: { type: "Point", coordinates: [h.lng, h.lat] },
-      properties: {
-        id: h.id,
-        severity: h.severity,
-        status: h.status,
-        radius_km: h.radius_km,
-        color: HAIL_COLORS[h.severity] ?? HAIL_COLORS.low,
-        // pixel radius scales softly with severity; kept modest for performance
-        size_factor:
-          h.severity === "extreme" ? 28 :
-          h.severity === "severe" ? 22 :
-          h.severity === "moderate" ? 16 : 12,
-      },
-    }));
+    const features = visibleHailEvents.map((h) => {
+      const isForecast = h.status === "forecast";
+      const isConfirmed = h.status === "confirmed" || h.status === "ongoing";
+      const isClosed = h.status === "closed";
+      const sizeMm = h.hail_size_mm ?? 0;
+      // Hail size adds extra weight on top of severity bucket
+      const size_factor =
+        (h.severity === "extreme" ? 28 :
+         h.severity === "severe" ? 22 :
+         h.severity === "moderate" ? 16 : 12)
+        + Math.min(12, sizeMm / 4);
+      return {
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [h.lng, h.lat] },
+        properties: {
+          id: h.id,
+          severity: h.severity,
+          status: h.status,
+          radius_km: h.radius_km,
+          hail_size_mm: sizeMm,
+          color: HAIL_COLORS[h.severity] ?? HAIL_COLORS.low,
+          size_factor,
+          is_forecast: isForecast ? 1 : 0,
+          is_confirmed: isConfirmed ? 1 : 0,
+          is_closed: isClosed ? 1 : 0,
+        },
+      };
+    });
     return { type: "FeatureCollection", features };
-  }, [hailEvents]);
+  }, [visibleHailEvents]);
 
   /* -------- Init map ------------------------------------------------ */
   useEffect(() => {
@@ -410,19 +475,25 @@ export function OperationalMap() {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] } as any,
       });
-      // Outer pulse halo
+      // Outer pulse halo — wider for confirmed, dim for forecast/closed
       map.addLayer({
         id: "hail-halo",
         type: "circle",
         source: "hail",
         paint: {
           "circle-color": ["get", "color"],
-          "circle-radius": ["*", ["get", "size_factor"], 1.6],
-          "circle-opacity": 0.18,
+          "circle-radius": ["*", ["get", "size_factor"],
+            ["case", ["==", ["get", "is_confirmed"], 1], 2.0, 1.4]],
+          "circle-opacity": [
+            "case",
+            ["==", ["get", "is_closed"], 1], 0.05,
+            ["==", ["get", "is_forecast"], 1], 0.12,
+            0.22,
+          ],
           "circle-blur": 1,
         },
       });
-      // Mid ring
+      // Mid ring — solid for confirmed, lighter for forecast, gray for closed
       map.addLayer({
         id: "hail-ring",
         type: "circle",
@@ -430,12 +501,26 @@ export function OperationalMap() {
         paint: {
           "circle-color": "transparent",
           "circle-radius": ["get", "size_factor"],
-          "circle-stroke-color": ["get", "color"],
-          "circle-stroke-width": 2,
-          "circle-stroke-opacity": 0.85,
+          "circle-stroke-color": [
+            "case",
+            ["==", ["get", "is_closed"], 1], "#64748b",
+            ["get", "color"],
+          ],
+          "circle-stroke-width": [
+            "case",
+            ["==", ["get", "is_confirmed"], 1], 2.5,
+            ["==", ["get", "is_forecast"], 1], 1.2,
+            1.6,
+          ],
+          "circle-stroke-opacity": [
+            "case",
+            ["==", ["get", "is_closed"], 1], 0.4,
+            ["==", ["get", "is_forecast"], 1], 0.55,
+            0.95,
+          ],
         },
       });
-      // Core
+      // Core — bright for confirmed, hollow-feel for forecast
       map.addLayer({
         id: "hail-core",
         type: "circle",
@@ -444,8 +529,17 @@ export function OperationalMap() {
           "circle-color": ["get", "color"],
           "circle-radius": ["max", 5, ["/", ["get", "size_factor"], 3]],
           "circle-stroke-color": "rgba(255,255,255,0.9)",
-          "circle-stroke-width": 1.5,
-          "circle-opacity": 0.9,
+          "circle-stroke-width": [
+            "case",
+            ["==", ["get", "is_forecast"], 1], 1,
+            1.5,
+          ],
+          "circle-opacity": [
+            "case",
+            ["==", ["get", "is_closed"], 1], 0.35,
+            ["==", ["get", "is_forecast"], 1], 0.55,
+            0.95,
+          ],
         },
       });
 
@@ -515,6 +609,29 @@ export function OperationalMap() {
     if (!mapReady || !mapRef.current) return;
     (mapRef.current.getSource("hail") as GeoJSONSource | undefined)?.setData(hailGeo as any);
   }, [mapReady, hailGeo]);
+
+  // Soft pulse animation for confirmed/ongoing hail halos (cheap; modulates opacity only)
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const map = mapRef.current;
+    let raf = 0;
+    let t0 = performance.now();
+    const tick = (now: number) => {
+      const phase = ((now - t0) % 1800) / 1800; // 0..1 over 1.8s
+      const pulse = 0.18 + 0.18 * Math.sin(phase * Math.PI * 2); // 0..0.36
+      if (map.getLayer("hail-halo")) {
+        map.setPaintProperty("hail-halo", "circle-opacity", [
+          "case",
+          ["==", ["get", "is_closed"], 1], 0.05,
+          ["==", ["get", "is_forecast"], 1], 0.12,
+          0.18 + pulse,
+        ] as any);
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [mapReady]);
 
   /* -------- Toggle layer visibility -------------------------------- */
   useEffect(() => {
@@ -640,14 +757,42 @@ export function OperationalMap() {
         </div>
       </div>
 
+      {/* -------- Hail filters + timeline replay (only when hail layer on) -------- */}
+      {layers.hail && (
+        <HailControls
+          statusFilter={hailStatusFilter}
+          onStatusFilter={setHailStatusFilter}
+          severityFilter={hailSeverityFilter}
+          onSeverityFilter={setHailSeverityFilter}
+          minSizeMm={hailMinSizeMm}
+          onMinSizeMm={setHailMinSizeMm}
+          windowHours={hailWindowHours}
+          onWindowHours={setHailWindowHours}
+          replayCursor={replayCursor}
+          onReplayCursor={setReplayCursor}
+          replayPlaying={replayPlaying}
+          onReplayToggle={() => {
+            if (replayCursor >= 1) setReplayCursor(0);
+            setReplayPlaying((p) => !p);
+          }}
+          replayTimeMs={replayTimeMs}
+          eventCount={visibleHailEvents.length}
+          totalCount={hailEvents.length}
+        />
+      )}
+
       {isLoading && !mapReady ? (
         <Skeleton className="h-[400px] rounded-lg" />
       ) : (
-        <div
-          ref={containerRef}
-          className="h-[420px] rounded-lg overflow-hidden relative"
-          style={{ background: "#0a1628" }}
-        />
+        <div className="relative">
+          <div
+            ref={containerRef}
+            className="h-[420px] rounded-lg overflow-hidden relative"
+            style={{ background: "#0a1628" }}
+          />
+          {/* -------- Elegant operational legend overlay -------- */}
+          {layers.hail && <HailLegend />}
+        </div>
       )}
 
       {/* -------- Dynamic operational command panel -------- */}
@@ -672,6 +817,212 @@ export function OperationalMap() {
           onClose={() => setSelectedHailId(null)}
         />
       )}
+    </div>
+  );
+}
+
+/* ====================================================================== */
+/*  Hail filter + timeline replay controls                                 */
+/* ====================================================================== */
+type StatusFilterOpt = "all" | "forecast" | "ongoing" | "confirmed";
+const STATUS_OPTS: { key: StatusFilterOpt; label: string; color: string }[] = [
+  { key: "all", label: "Todos", color: "#94a3b8" },
+  { key: "forecast", label: "Previsão", color: "#eab308" },
+  { key: "ongoing", label: "Ativo", color: "#f97316" },
+  { key: "confirmed", label: "Confirmado", color: "#ef4444" },
+];
+
+function HailControls({
+  statusFilter, onStatusFilter,
+  severityFilter, onSeverityFilter,
+  minSizeMm, onMinSizeMm,
+  windowHours, onWindowHours,
+  replayCursor, onReplayCursor,
+  replayPlaying, onReplayToggle,
+  replayTimeMs, eventCount, totalCount,
+}: {
+  statusFilter: StatusFilterOpt;
+  onStatusFilter: (v: StatusFilterOpt) => void;
+  severityFilter: Record<HailSeverity, boolean>;
+  onSeverityFilter: (v: Record<HailSeverity, boolean>) => void;
+  minSizeMm: number;
+  onMinSizeMm: (v: number) => void;
+  windowHours: number;
+  onWindowHours: (v: number) => void;
+  replayCursor: number;
+  onReplayCursor: (v: number) => void;
+  replayPlaying: boolean;
+  onReplayToggle: () => void;
+  replayTimeMs: number;
+  eventCount: number;
+  totalCount: number;
+}) {
+  const SEVS: HailSeverity[] = ["low", "moderate", "severe", "extreme"];
+  const SEV_LABEL: Record<HailSeverity, string> = {
+    low: "Baixo", moderate: "Mod.", severe: "Severo", extreme: "Extremo",
+  };
+  const isLive = replayCursor >= 0.999;
+  return (
+    <div
+      className="mb-3 rounded-lg border p-2.5 animate-fade-in"
+      style={{
+        background: "linear-gradient(135deg, rgba(15,23,42,0.7), rgba(15,23,42,0.45))",
+        borderColor: "rgba(255,255,255,0.08)",
+      }}
+    >
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+          <Filter className="h-3 w-3" /> Granizo
+        </span>
+        <div className="flex gap-1">
+          {STATUS_OPTS.map((opt) => {
+            const active = statusFilter === opt.key;
+            return (
+              <button
+                key={opt.key}
+                onClick={() => onStatusFilter(opt.key)}
+                className="text-[10px] px-2 py-1 rounded-md border transition"
+                style={{
+                  borderColor: active ? opt.color : "rgba(255,255,255,0.1)",
+                  background: active ? `${opt.color}22` : "transparent",
+                  color: active ? opt.color : "hsl(var(--muted-foreground))",
+                  boxShadow: active ? `0 0 8px ${opt.color}55` : "none",
+                }}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex gap-1">
+          {SEVS.map((s) => {
+            const active = severityFilter[s];
+            const c = HAIL_COLORS[s];
+            return (
+              <button
+                key={s}
+                onClick={() => onSeverityFilter({ ...severityFilter, [s]: !active })}
+                className="text-[10px] px-2 py-1 rounded-md border transition flex items-center gap-1"
+                style={{
+                  borderColor: active ? c : "rgba(255,255,255,0.08)",
+                  background: active ? `${c}22` : "transparent",
+                  color: active ? c : "hsl(var(--muted-foreground))",
+                  opacity: active ? 1 : 0.6,
+                }}
+                title={SEV_LABEL[s]}
+              >
+                <span className="h-1.5 w-1.5 rounded-full" style={{ background: c }} />
+                {SEV_LABEL[s]}
+              </button>
+            );
+          })}
+        </div>
+        <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+          <Gauge className="h-3 w-3" />
+          ≥
+          <input
+            type="number" min={0} max={100} step={1}
+            value={minSizeMm}
+            onChange={(e) => onMinSizeMm(Math.max(0, Number(e.target.value) || 0))}
+            className="w-12 bg-white/5 border border-white/10 rounded px-1.5 py-0.5 text-foreground tabular-nums"
+          />
+          mm
+        </label>
+        <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+          <Clock className="h-3 w-3" />
+          <select
+            value={windowHours}
+            onChange={(e) => { onWindowHours(Number(e.target.value)); onReplayCursor(1); }}
+            className="bg-white/5 border border-white/10 rounded px-1.5 py-0.5 text-foreground"
+          >
+            {[1, 3, 6, 12, 24].map((h) => <option key={h} value={h}>{h}h</option>)}
+          </select>
+        </label>
+        <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">
+          {eventCount}/{totalCount} eventos
+        </span>
+      </div>
+
+      <div className="mt-2 flex items-center gap-2">
+        <button
+          onClick={onReplayToggle}
+          className="p-1.5 rounded-md border border-white/10 bg-white/5 hover:bg-white/10 transition text-foreground"
+          title={replayPlaying ? "Pausar" : "Reproduzir"}
+        >
+          {replayPlaying ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
+        </button>
+        <button
+          onClick={() => onReplayCursor(1)}
+          className="p-1.5 rounded-md border border-white/10 bg-white/5 hover:bg-white/10 transition text-muted-foreground"
+          title="Voltar ao tempo real"
+        >
+          <RotateCcw className="h-3 w-3" />
+        </button>
+        <input
+          type="range" min={0} max={1} step={0.01}
+          value={replayCursor}
+          onChange={(e) => onReplayCursor(Number(e.target.value))}
+          className="flex-1 accent-cyan-400"
+        />
+        <span className="text-[10px] tabular-nums text-muted-foreground w-28 text-right">
+          {isLive ? (
+            <span className="text-cyan-400 flex items-center gap-1 justify-end">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse" />
+              AO VIVO
+            </span>
+          ) : (
+            new Date(replayTimeMs).toLocaleTimeString(undefined, {
+              hour: "2-digit", minute: "2-digit",
+            })
+          )}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/* ====================================================================== */
+/*  Elegant operational legend overlay                                     */
+/* ====================================================================== */
+function HailLegend() {
+  return (
+    <div
+      className="absolute bottom-3 left-3 rounded-lg p-2.5 text-[10px] border animate-fade-in pointer-events-none"
+      style={{
+        background: "linear-gradient(135deg, rgba(10,16,28,0.85), rgba(10,16,28,0.65))",
+        borderColor: "rgba(255,255,255,0.08)",
+        backdropFilter: "blur(8px)",
+        minWidth: 140,
+      }}
+    >
+      <div className="text-[9px] uppercase tracking-wider text-muted-foreground mb-1.5">Severidade</div>
+      <div className="space-y-1">
+        {(["low", "moderate", "severe", "extreme"] as HailSeverity[]).map((s) => {
+          const c = HAIL_COLORS[s];
+          const label = { low: "Baixo", moderate: "Moderado", severe: "Severo", extreme: "Extremo" }[s];
+          return (
+            <div key={s} className="flex items-center gap-1.5 text-foreground">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ background: c, boxShadow: `0 0 6px ${c}88` }} />
+              {label}
+            </div>
+          );
+        })}
+      </div>
+      <div className="text-[9px] uppercase tracking-wider text-muted-foreground mt-2 mb-1">Estado</div>
+      <div className="space-y-1 text-foreground">
+        <div className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full border opacity-70" style={{ borderColor: "#eab308" }} />
+          Previsão
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full" style={{ background: "#ef4444", boxShadow: "0 0 6px #ef444488" }} />
+          Confirmado
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full" style={{ background: "#64748b", opacity: 0.5 }} />
+          Encerrado
+        </div>
+      </div>
     </div>
   );
 }
