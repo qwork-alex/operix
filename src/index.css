@@ -199,7 +199,29 @@
 
 /* ───────────── Print rules: invoice preview only ───────────── */
 @media print {
+  /* Page setup — A4 portrait with professional margins */
+  @page {
+    size: A4 portrait;
+    margin: 12mm 10mm;
+  }
+
+  /* Hide everything by default */
+  html, body { background: #fff !important; }
   body * { visibility: hidden !important; }
+
+  /* Hide app chrome explicitly (defensive) */
+  [data-sidebar],
+  aside,
+  nav,
+  header.app-topbar,
+  .app-topbar,
+  [role="tablist"],
+  [data-radix-dialog-overlay],
+  [data-radix-popper-content-wrapper],
+  [data-sonner-toaster],
+  .no-print { display: none !important; }
+
+  /* Show only the invoice sheet */
   .invoice-print-area, .invoice-print-area * { visibility: visible !important; }
   .invoice-print-area {
     position: fixed !important;
@@ -208,8 +230,31 @@
     padding: 0 !important;
     background: #fff !important;
     box-shadow: none !important;
+    overflow: visible !important;
     z-index: 9999 !important;
   }
-  [data-radix-dialog-overlay] { background: transparent !important; }
-  @page { size: A4; margin: 0; }
+  .invoice-print-area > * {
+    box-shadow: none !important;
+    margin: 0 auto !important;
+  }
+
+  /* Page-break safety — keep tables, rows, totals, footer intact */
+  .invoice-print-area table { page-break-inside: auto; }
+  .invoice-print-area thead { display: table-header-group; }
+  .invoice-print-area tfoot { display: table-footer-group; }
+  .invoice-print-area tr,
+  .invoice-print-area td,
+  .invoice-print-area th { page-break-inside: avoid !important; break-inside: avoid !important; }
+  .invoice-print-area section,
+  .invoice-print-area header,
+  .invoice-print-area footer { break-inside: avoid; page-break-inside: avoid; }
+  .invoice-print-area .page-break-before { page-break-before: always; }
+  .invoice-print-area .avoid-break { break-inside: avoid; page-break-inside: avoid; }
+
+  /* Force print colors / backgrounds */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
 }
