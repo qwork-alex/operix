@@ -358,29 +358,53 @@ export function InvoiceDocumentA4({
         </div>
       </header>
 
-      {/* ═══════════ 2. TÍTULO + NÚMERO (mesmo peso visual) ═══════════ */}
-      <section className="avoid-break" style={{ marginTop: "24px", paddingBottom: "8px", borderBottom: "1px solid #e4e4e7" }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: "10px", flexWrap: "wrap" }}>
-          <h1 style={{
-            fontSize: "18px",
-            fontWeight: 600,
-            color: "#0a0a0a",
-            letterSpacing: "0.04em",
-            textTransform: "uppercase",
-            margin: 0,
-            lineHeight: 1.1,
-          }}>
-            {docTitle}
-          </h1>
-          <span style={{
-            fontSize: "18px",
-            fontWeight: 600,
-            color: "#0a0a0a",
-            letterSpacing: "0.02em",
-            lineHeight: 1.1,
-          }}>
-            {t.number} {form.invoice_number || "—"}
-          </span>
+      {/* ═══════════ 2. TÍTULO + NÚMERO ═══════════ */}
+      <section className="avoid-break" style={{
+        marginTop: isQuick ? "16px" : "24px",
+        paddingBottom: "8px",
+        borderBottom: isQuick ? "none" : "1px solid #e4e4e7",
+      }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: "10px", flexWrap: "wrap" }}>
+            <h1 style={{
+              fontSize: isQuick ? "16px" : "18px",
+              fontWeight: 600,
+              color: "#0a0a0a",
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+              margin: 0,
+              lineHeight: 1.1,
+            }}>
+              {docTitle}
+            </h1>
+            <span style={{
+              fontSize: isQuick ? "16px" : "18px",
+              fontWeight: 600,
+              color: "#0a0a0a",
+              letterSpacing: "0.02em",
+              lineHeight: 1.1,
+            }}>
+              {t.number} {form.invoice_number || "—"}
+            </span>
+          </div>
+          {isElectronic && electronicFormat !== "none" && (
+            <span
+              aria-label={mt.formatBadge}
+              style={{
+                fontSize: "8.5px",
+                fontWeight: 600,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                color: "#0a0a0a",
+                border: "1px solid #0a0a0a",
+                padding: "4px 8px",
+                borderRadius: "2px",
+                background: "#fafafa",
+              }}
+            >
+              {FORMAT_META[electronicFormat].label}
+            </span>
+          )}
         </div>
       </section>
 
