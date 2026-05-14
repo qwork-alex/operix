@@ -657,6 +657,48 @@ export function OperationalMap() {
     (mapRef.current.getSource("hail") as GeoJSONSource | undefined)?.setData(hailGeo as any);
   }, [mapReady, hailGeo]);
 
+  /* -------- PDR Operational Opportunities (intelligence layer) ----- */
+  const oppOrders: OppOrder[] = useMemo(
+    () => (ordersGeo.features as any[]).map((f) => ({
+      id: f.properties?.id,
+      city: f.properties?.city,
+      platform: f.properties?.platform,
+      plate: f.properties?.plate,
+      status: f.properties?.status,
+      lng: f.geometry.coordinates[0],
+      lat: f.geometry.coordinates[1],
+    })),
+    [ordersGeo],
+  );
+  const oppTeams: OppTeam[] = useMemo(
+    () => (teamsGeo.features as any[]).map((f) => ({
+      lng: f.geometry.coordinates[0],
+      lat: f.geometry.coordinates[1],
+      city: f.properties?.city,
+      when: f.properties?.when,
+    })),
+    [teamsGeo],
+  );
+  const oppHail: OppHailEvent[] = useMemo(
+    () => visibleHailEvents.map((h) => ({
+      id: h.id, city: h.city, region: h.region, country: h.country,
+      lat: h.lat, lng: h.lng, radius_km: h.radius_km, severity: h.severity,
+      status: h.status, hail_size_mm: h.hail_size_mm, probability: h.probability,
+    })),
+    [visibleHailEvents],
+  );
+  const opportunities = useMemo(
+    () => computeOpportunities(oppHail, oppOrders, oppTeams),
+    [oppHail, oppOrders, oppTeams],
+  );
+  const pdrHeatGeo = useMemo(() => opportunitiesToHeatmapGeoJSON(opportunities), [opportunities]);
+
+  // Push PDR heatmap data
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    (mapRef.current.getSource("pdr-heat") as GeoJSONSource | undefined)?.setData(pdrHeatGeo as any);
+  }, [mapReady, pdrHeatGeo]);
+
   // Soft pulse animation for confirmed/ongoing hail halos (cheap; modulates opacity only)
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
