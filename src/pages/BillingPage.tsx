@@ -27,7 +27,7 @@ import InvoicesScreen from "@/components/billing/InvoicesScreen";
 import PaymentsScreen from "@/components/billing/PaymentsScreen";
 import ReconciliationScreen from "@/components/billing/ReconciliationScreen";
 import UpcomingBillsScreen from "@/components/billing/UpcomingBillsScreen";
-import SuppliersScreen from "@/components/billing/SuppliersScreen";
+import ClientsScreen from "@/components/billing/ClientsScreen";
 import ReportsScreen from "@/components/billing/ReportsScreen";
 
 // ─────────────────────────────────────────────────────────────
@@ -38,7 +38,7 @@ const SUB_NAV = [
   { slug: "pagamentos",      label: "Pagamentos",       icon: CreditCard },
   { slug: "conciliacao",     label: "Conciliação",      icon: GitMerge },
   { slug: "contas-a-vencer", label: "Contas a vencer",  icon: CalendarClock },
-  { slug: "fornecedores",    label: "Fornecedores",     icon: Building2 },
+  { slug: "clientes",        label: "Clientes",         icon: Building2 },
   { slug: "relatorios",      label: "Relatórios",       icon: BarChart3 },
 ] as const;
 
@@ -81,7 +81,7 @@ const DATASETS: Record<Slug, Row[]> = {
   "pagamentos":      seed("PAG", 24),
   "conciliacao":     seed("CON", 18),
   "contas-a-vencer": seed("VEN", 22),
-  "fornecedores":    seed("FRN", 14, { status: "ativo" }),
+  "clientes":        seed("CLI", 14, { status: "ativo" }),
   "relatorios":      seed("REL", 9),
 };
 
@@ -90,7 +90,7 @@ const TITLES: Record<Slug, { title: string; subtitle: string; primaryLabel: stri
   "pagamentos":      { title: "Pagamentos",       subtitle: "Histórico e processamento de pagamentos", primaryLabel: "Registrar pagamento" },
   "conciliacao":     { title: "Conciliação",      subtitle: "Cruzamento entre faturas e pagamentos",   primaryLabel: "Nova conciliação" },
   "contas-a-vencer": { title: "Contas a vencer",  subtitle: "Faturas em aberto com vencimento próximo", primaryLabel: "Adicionar conta" },
-  "fornecedores":    { title: "Fornecedores",     subtitle: "Cadastro e gestão de fornecedores",         primaryLabel: "Novo fornecedor" },
+  "clientes":        { title: "Clientes",         subtitle: "Cadastro geral de clientes empresariais e particulares", primaryLabel: "Novo cliente" },
   "relatorios":      { title: "Relatórios",       subtitle: "Exportação e análise de faturamento",       primaryLabel: "Gerar relatório" },
 };
 
@@ -360,7 +360,8 @@ export default function BillingPage() {
         <Route path="pagamentos" element={<PaymentsScreen />} />
         <Route path="conciliacao" element={<ReconciliationScreen />} />
         <Route path="contas-a-vencer" element={<UpcomingBillsScreen />} />
-        <Route path="fornecedores" element={<SuppliersScreen />} />
+        <Route path="clientes" element={<ClientsScreen />} />
+        <Route path="fornecedores" element={<Navigate to="/billing/clientes" replace />} />
         <Route path="relatorios" element={<ReportsScreen />} />
 
         <Route path="*" element={<Navigate to="faturas" replace />} />
