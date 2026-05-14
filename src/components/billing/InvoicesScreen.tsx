@@ -591,6 +591,10 @@ export default function InvoicesScreen() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          <Button size="sm" variant="outline" className="h-8" onClick={() => setImportOpen(true)}>
+            <FileUp className="h-3.5 w-3.5 mr-1.5" />
+            Adicionar fatura
+          </Button>
           <Button size="sm" className="h-8" onClick={openCreate}>
             <Plus className="h-3.5 w-3.5 mr-1.5" />
             Nova fatura
