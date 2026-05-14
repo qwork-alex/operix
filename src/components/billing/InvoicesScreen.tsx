@@ -1075,6 +1075,8 @@ function ClientPreview({ client }: { client: Client | null }) {
     </div>
   );
 }
+
+function Field({ label, children, full }: { label: string; children: React.ReactNode; full?: boolean }) {
   return (
     <div className={cn("space-y-1", full && "sm:col-span-2")}>
       <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</Label>
