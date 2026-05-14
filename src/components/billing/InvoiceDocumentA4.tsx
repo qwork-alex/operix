@@ -103,6 +103,9 @@ type Totals = {
   total: number;
 };
 
+export type BillingMode = "quick" | "complete" | "electronic";
+export type ElectronicFormat = "none" | "ubl" | "facturx" | "peppol";
+
 interface InvoiceDocumentA4Props {
   form: DocForm;
   totals: Totals;
@@ -112,11 +115,98 @@ interface InvoiceDocumentA4Props {
   brandLogo: string;
   lang?: InvoiceLang | string | null;
   docType?: string | null;
+  mode?: BillingMode;
+  electronicFormat?: ElectronicFormat;
 }
+
+// Localized labels for mode-specific blocks (kept local — small surface)
+const MODE_LABELS: Record<string, {
+  electronicBlock: string;
+  electronicFormat: string;
+  documentId: string;
+  issuedAt: string;
+  schema: string;
+  buyerRef: string;
+  techNotice: string;
+  formatBadge: string;
+}> = {
+  pt: {
+    electronicBlock: "Bloco eletrónico",
+    electronicFormat: "Formato",
+    documentId: "ID documento",
+    issuedAt: "Emitido em",
+    schema: "Esquema",
+    buyerRef: "Referência comprador",
+    techNotice: "Documento conforme EN 16931 — preparado para transmissão eletrónica.",
+    formatBadge: "Formato eletrónico",
+  },
+  fr: {
+    electronicBlock: "Bloc électronique",
+    electronicFormat: "Format",
+    documentId: "ID document",
+    issuedAt: "Émis le",
+    schema: "Schéma",
+    buyerRef: "Référence acheteur",
+    techNotice: "Document conforme EN 16931 — préparé pour la transmission électronique.",
+    formatBadge: "Format électronique",
+  },
+  en: {
+    electronicBlock: "Electronic block",
+    electronicFormat: "Format",
+    documentId: "Document ID",
+    issuedAt: "Issued at",
+    schema: "Schema",
+    buyerRef: "Buyer reference",
+    techNotice: "Document compliant with EN 16931 — ready for electronic transmission.",
+    formatBadge: "Electronic format",
+  },
+  es: {
+    electronicBlock: "Bloque electrónico",
+    electronicFormat: "Formato",
+    documentId: "ID documento",
+    issuedAt: "Emitido el",
+    schema: "Esquema",
+    buyerRef: "Referencia comprador",
+    techNotice: "Documento conforme a EN 16931 — preparado para transmisión electrónica.",
+    formatBadge: "Formato electrónico",
+  },
+  it: {
+    electronicBlock: "Blocco elettronico",
+    electronicFormat: "Formato",
+    documentId: "ID documento",
+    issuedAt: "Emesso il",
+    schema: "Schema",
+    buyerRef: "Riferimento acquirente",
+    techNotice: "Documento conforme a EN 16931 — pronto per la trasmissione elettronica.",
+    formatBadge: "Formato elettronico",
+  },
+  de: {
+    electronicBlock: "Elektronischer Block",
+    electronicFormat: "Format",
+    documentId: "Dokument-ID",
+    issuedAt: "Ausgestellt am",
+    schema: "Schema",
+    buyerRef: "Käuferreferenz",
+    techNotice: "Dokument konform mit EN 16931 — bereit für elektronische Übertragung.",
+    formatBadge: "Elektronisches Format",
+  },
+};
+
+const FORMAT_META: Record<ElectronicFormat, { label: string; schema: string }> = {
+  none:    { label: "—",                      schema: "—" },
+  ubl:     { label: "UBL 2.1",                schema: "UBL Invoice 2.1 (OASIS)" },
+  facturx: { label: "Factur-X 1.0.7",         schema: "Factur-X / ZUGFeRD (CII)" },
+  peppol:  { label: "PEPPOL BIS Billing 3.0", schema: "PEPPOL BIS 3.0 (UBL)" },
+};
 
 export function InvoiceDocumentA4({
   form, totals, client, company, brandName, brandLogo, lang, docType,
+  mode = "complete", electronicFormat = "none",
 }: InvoiceDocumentA4Props) {
+  const langKey = (typeof lang === "string" ? lang : "pt").toLowerCase();
+  const mt = MODE_LABELS[langKey] ?? MODE_LABELS.pt;
+  const isQuick = mode === "quick";
+  const isElectronic = mode === "electronic";
   const t = getInvoiceDict(lang);
   const fmtMoney = (n: number) => fmtMoneyI18n(n, lang);
   const fmtDate = (d?: string | null) => fmtDateI18n(d, lang);
