@@ -573,24 +573,6 @@ export default function InvoicesScreen() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="h-8">
-                <Download className="h-3.5 w-3.5 mr-1.5" />
-                Exportar
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="text-xs">
-              <DropdownMenuItem onClick={exportExcel}>
-                <FileSpreadsheet className="h-3.5 w-3.5 mr-2 text-emerald-400" />
-                Exportar Excel
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={exportPDF}>
-                <FileText className="h-3.5 w-3.5 mr-2 text-rose-400" />
-                Exportar PDF
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
           <Button size="sm" variant="outline" className="h-8" onClick={() => setImportOpen(true)}>
             <FileUp className="h-3.5 w-3.5 mr-1.5" />
             Adicionar fatura
