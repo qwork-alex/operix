@@ -332,39 +332,65 @@ export default function InvoicesScreen() {
   };
   const openEdit = (inv: Invoice) => {
     setEditing(inv);
+    const total = Number(inv.total_amount ?? 0);
     setForm({
       invoice_number: inv.invoice_number,
       type: inv.type,
-      supplier_id: inv.supplier_id,
-      customer_name: inv.customer_name ?? "",
+      client_id: null,
       issue_date: inv.issue_date,
       due_date: inv.due_date ?? "",
-      total_amount: String(inv.total_amount ?? 0),
-      paid_amount: String(inv.paid_amount ?? 0),
-      status: inv.status,
+      payment_term: "custom",
+      items: [{
+        id: crypto.randomUUID(),
+        designation: inv.notes?.split("\n")[0]?.slice(0, 80) || "Fatura",
+        quantity: 1,
+        unit: "un",
+        unit_price: total,
+        tax_rate: 0,
+      }],
       notes: inv.notes ?? "",
+      bank_iban: "",
+      bank_bic: "",
+      bank_name: "",
+      legal_text: DEFAULT_LEGAL,
     });
     setFormOpen(true);
   };
+
+  // ── totals
+  const totals = useMemo(() => {
+    const subtotal = form.items.reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0);
+    const tax = form.items.reduce((s, it) => {
+      const line = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0);
+      return s + line * ((Number(it.tax_rate) || 0) / 100);
+    }, 0);
+    return { subtotal, tax, total: subtotal + tax };
+  }, [form.items]);
 
   const submitForm = () => {
     if (!form.invoice_number.trim()) {
       toast.error("Número da fatura é obrigatório");
       return;
     }
+    if (!editing && !form.client_id) {
+      toast.error("Selecione um cliente");
+      return;
+    }
+    const client = (clientsQ.data ?? []).find((c) => c.id === form.client_id) || null;
     upsertMut.mutate({
       id: editing?.id,
       invoice_number: form.invoice_number.trim(),
       type: form.type,
-      supplier_id: form.supplier_id || null,
-      customer_name: form.customer_name.trim() || null,
+      // Keep supplier_id untouched on edit (legacy). On create with new flow, leave null.
+      supplier_id: editing?.supplier_id ?? null,
+      customer_name: client?.name ?? editing?.customer_name ?? null,
       issue_date: form.issue_date,
       due_date: form.due_date || null,
-      total_amount: Number(form.total_amount) || 0,
-      paid_amount: Number(form.paid_amount) || 0,
-      status: form.status,
+      total_amount: totals.total,
+      paid_amount: editing?.paid_amount ?? 0,
+      status: editing?.status ?? "pending",
       notes: form.notes.trim() || null,
-    });
+    } as any);
   };
 
   // ── export
