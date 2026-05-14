@@ -39,8 +39,9 @@ import { toast } from "@/hooks/use-toast";
 import { getCurrentUserId } from "@/lib/authUser";
 import {
   lookupCompany, detectQueryType, mergeCompanyIntoForm, AUTO_APPLY_THRESHOLD,
-  TIER_LABEL,
-  type NormalizedCompany, type CompanyQueryType, type ConfidenceBreakdown, type SupportTier,
+  TIER_LABEL, LOOKUP_STATUS_LABEL,
+  type NormalizedCompany, type CompanyQueryType, type ConfidenceBreakdown,
+  type SupportTier, type CountryCapability, type LookupStatus,
 } from "@/lib/companySearch";
 import { CheckCircle2, AlertCircle, ShieldCheck, ShieldAlert } from "lucide-react";
 
