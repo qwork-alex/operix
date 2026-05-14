@@ -648,6 +648,117 @@ export function OperationalMap() {
           style={{ background: "#0a1628" }}
         />
       )}
+
+      {/* -------- Hail event detail panel -------- */}
+      {selectedHail && (
+        <HailDetailPanel
+          event={selectedHail}
+          onClose={() => setSelectedHailId(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ====================================================================== */
+/*  Detail Panel — opens below the map when a hail cell is clicked         */
+/* ====================================================================== */
+const STATUS_LABEL: Record<HailStatus, string> = {
+  forecast: "Previsto",
+  ongoing: "Em andamento",
+  confirmed: "Confirmado",
+  closed: "Encerrado",
+};
+const SEVERITY_LABEL: Record<HailSeverity, string> = {
+  low: "Baixo risco",
+  moderate: "Moderado",
+  severe: "Severo",
+  extreme: "Extremo",
+};
+const STATUS_DOT: Record<HailStatus, string> = {
+  forecast: "bg-amber-400",
+  ongoing: "bg-orange-500 animate-pulse",
+  confirmed: "bg-red-500 animate-pulse",
+  closed: "bg-zinc-500",
+};
+
+function fmtTime(iso: string | null) {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+    });
+  } catch { return "—"; }
+}
+
+function HailDetailPanel({ event, onClose }: { event: HailEvent; onClose: () => void }) {
+  const color = HAIL_COLORS[event.severity];
+  return (
+    <div
+      className="mt-4 rounded-xl p-4 animate-fade-in border relative"
+      style={{
+        background: "linear-gradient(135deg, rgba(15,23,42,0.85), rgba(15,23,42,0.6))",
+        borderColor: `${color}55`,
+        boxShadow: `0 0 24px ${color}22, inset 0 0 1px ${color}55`,
+      }}
+    >
+      <button
+        onClick={onClose}
+        className="absolute top-2 right-2 p-1 rounded-md hover:bg-white/10 text-muted-foreground"
+        aria-label="Fechar"
+      >
+        <X className="h-4 w-4" />
+      </button>
+
+      <div className="flex items-start gap-3 mb-3">
+        <div
+          className="h-9 w-9 rounded-lg flex items-center justify-center"
+          style={{ background: `${color}22`, border: `1px solid ${color}66` }}
+        >
+          <AlertTriangle className="h-5 w-5" style={{ color }} />
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h4 className="text-sm font-semibold text-foreground truncate">
+              {event.city || "—"}{event.region ? `, ${event.region}` : ""}{event.country ? ` · ${event.country}` : ""}
+            </h4>
+            {event.is_demo && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-700/60 text-zinc-300">DEMO</span>
+            )}
+          </div>
+          <div className="flex items-center gap-3 mt-1 text-[11px] flex-wrap">
+            <span className="flex items-center gap-1.5" style={{ color }}>
+              <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: color }} />
+              {SEVERITY_LABEL[event.severity]}
+            </span>
+            <span className="flex items-center gap-1.5 text-muted-foreground">
+              <span className={`inline-block h-1.5 w-1.5 rounded-full ${STATUS_DOT[event.status]}`} />
+              {STATUS_LABEL[event.status]}
+            </span>
+            <span className="text-muted-foreground/70">fonte: {event.source}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <Metric icon={<Gauge className="h-3 w-3" />} label="Tamanho est." value={event.hail_size_mm ? `${event.hail_size_mm} mm` : "—"} />
+        <Metric icon={<AlertTriangle className="h-3 w-3" />} label="Probabilidade" value={event.probability != null ? `${Math.round(event.probability * 100)}%` : "—"} />
+        <Metric icon={<Zap className="h-3 w-3" />} label="Intensidade" value={event.intensity != null ? `${Math.round(event.intensity)}/100` : "—"} />
+        <Metric icon={<Wind className="h-3 w-3" />} label="Velocidade" value={event.storm_speed_kmh ? `${event.storm_speed_kmh} km/h` : "—"} />
+        <Metric icon={<Clock className="h-3 w-3" />} label="Previsto" value={fmtTime(event.forecast_time)} />
+        <Metric icon={<Clock className="h-3 w-3" />} label="Observado" value={fmtTime(event.observed_time)} />
+        <Metric icon={<Clock className="h-3 w-3" />} label="Expira" value={fmtTime(event.expires_at)} />
+        <Metric icon={<Radar className="h-3 w-3" />} label="Raio" value={`${event.radius_km} km`} />
+      </div>
+    </div>
+  );
+}
+
+function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div className="rounded-lg px-2.5 py-1.5 bg-white/[0.03] border border-white/5">
+      <div className="text-[10px] text-muted-foreground flex items-center gap-1">{icon}{label}</div>
+      <div className="text-xs font-medium text-foreground mt-0.5">{value}</div>
     </div>
   );
 }
