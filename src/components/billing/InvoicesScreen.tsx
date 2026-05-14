@@ -2049,7 +2049,7 @@ function InvoicePreview({
       )}
 
       {/* LEGAL FOOTER */}
-      <footer className="mt-12 pt-4 border-t border-zinc-200 text-[9px] text-zinc-500 leading-relaxed">
+      <footer className="mt-12 pt-4 border-t border-zinc-200 text-[9px] text-zinc-500 leading-relaxed avoid-break">
         {form.legal_text && <p className="mb-2 italic">{form.legal_text}</p>}
         <div className="flex flex-wrap justify-center gap-x-3 gap-y-0.5">
           <span className="font-medium text-zinc-700">{companyName}</span>
