@@ -163,7 +163,7 @@ export function InvoiceDocumentA4({
 
   return (
     <div
-      className="invoice-a4-doc bg-white text-zinc-900 shadow-2xl print:shadow-none mx-auto"
+      className="invoice-a4-doc invoice-print-page bg-white text-zinc-900 shadow-2xl print:shadow-none mx-auto"
       style={{
         width:    A4.width,
         minHeight: A4.height,
@@ -178,7 +178,7 @@ export function InvoiceDocumentA4({
       }}
     >
       {/* ═══════════ 1. HEADER ═══════════ */}
-      <header className="flex items-start justify-between gap-10">
+      <header className="avoid-break flex items-start justify-between gap-10">
         {/* LEFT — empresa */}
         <div className="flex items-start gap-3 min-w-0" style={{ maxWidth: "55%" }}>
           {companyLogo && (
@@ -237,7 +237,7 @@ export function InvoiceDocumentA4({
       </header>
 
       {/* ═══════════ 2. TÍTULO + NÚMERO (mesmo peso visual) ═══════════ */}
-      <section style={{ marginTop: "24px", paddingBottom: "8px", borderBottom: "1px solid #e4e4e7" }}>
+      <section className="avoid-break" style={{ marginTop: "24px", paddingBottom: "8px", borderBottom: "1px solid #e4e4e7" }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: "10px", flexWrap: "wrap" }}>
           <h1 style={{
             fontSize: "18px",
@@ -263,7 +263,7 @@ export function InvoiceDocumentA4({
       </section>
 
       {/* ═══════════ 3. ITEMS TABLE (sem coluna unidade) ═══════════ */}
-      <section style={{ marginTop: "12px" }}>
+      <section className="invoice-items-section" style={{ marginTop: "12px" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "10px", tableLayout: "fixed" }}>
           <colgroup>
             <col />
@@ -307,7 +307,7 @@ export function InvoiceDocumentA4({
       </section>
 
       {/* ═══════════ 4. TOTALS ═══════════ */}
-      <section style={{ marginTop: "18px", display: "flex", justifyContent: "flex-end", pageBreakInside: "avoid", breakInside: "avoid" }}>
+      <section className="avoid-break" style={{ marginTop: "18px", display: "flex", justifyContent: "flex-end", pageBreakInside: "avoid", breakInside: "avoid" }}>
         <div style={{ width: "270px" }}>
           <Row label="Subtotal" value={fmtMoney(totals.subtotal)} />
           {opt.show_discount && totals.discount > 0 && (
@@ -335,7 +335,7 @@ export function InvoiceDocumentA4({
       </section>
 
       {/* ═══════════ 5. DATAS + CONDIÇÕES (centralizado) ═══════════ */}
-      <section style={{
+      <section className="avoid-break" style={{
         marginTop: "22px", paddingTop: "12px", borderTop: "1px solid #e4e4e7",
         display: "flex", justifyContent: "center", gap: "48px", flexWrap: "wrap",
         textAlign: "center",
