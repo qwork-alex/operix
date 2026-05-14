@@ -475,19 +475,25 @@ export function OperationalMap() {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] } as any,
       });
-      // Outer pulse halo
+      // Outer pulse halo — wider for confirmed, dim for forecast/closed
       map.addLayer({
         id: "hail-halo",
         type: "circle",
         source: "hail",
         paint: {
           "circle-color": ["get", "color"],
-          "circle-radius": ["*", ["get", "size_factor"], 1.6],
-          "circle-opacity": 0.18,
+          "circle-radius": ["*", ["get", "size_factor"],
+            ["case", ["==", ["get", "is_confirmed"], 1], 2.0, 1.4]],
+          "circle-opacity": [
+            "case",
+            ["==", ["get", "is_closed"], 1], 0.05,
+            ["==", ["get", "is_forecast"], 1], 0.12,
+            0.22,
+          ],
           "circle-blur": 1,
         },
       });
-      // Mid ring
+      // Mid ring — solid for confirmed, lighter for forecast, gray for closed
       map.addLayer({
         id: "hail-ring",
         type: "circle",
@@ -495,12 +501,26 @@ export function OperationalMap() {
         paint: {
           "circle-color": "transparent",
           "circle-radius": ["get", "size_factor"],
-          "circle-stroke-color": ["get", "color"],
-          "circle-stroke-width": 2,
-          "circle-stroke-opacity": 0.85,
+          "circle-stroke-color": [
+            "case",
+            ["==", ["get", "is_closed"], 1], "#64748b",
+            ["get", "color"],
+          ],
+          "circle-stroke-width": [
+            "case",
+            ["==", ["get", "is_confirmed"], 1], 2.5,
+            ["==", ["get", "is_forecast"], 1], 1.2,
+            1.6,
+          ],
+          "circle-stroke-opacity": [
+            "case",
+            ["==", ["get", "is_closed"], 1], 0.4,
+            ["==", ["get", "is_forecast"], 1], 0.55,
+            0.95,
+          ],
         },
       });
-      // Core
+      // Core — bright for confirmed, hollow-feel for forecast
       map.addLayer({
         id: "hail-core",
         type: "circle",
@@ -509,8 +529,17 @@ export function OperationalMap() {
           "circle-color": ["get", "color"],
           "circle-radius": ["max", 5, ["/", ["get", "size_factor"], 3]],
           "circle-stroke-color": "rgba(255,255,255,0.9)",
-          "circle-stroke-width": 1.5,
-          "circle-opacity": 0.9,
+          "circle-stroke-width": [
+            "case",
+            ["==", ["get", "is_forecast"], 1], 1,
+            1.5,
+          ],
+          "circle-opacity": [
+            "case",
+            ["==", ["get", "is_closed"], 1], 0.35,
+            ["==", ["get", "is_forecast"], 1], 0.55,
+            0.95,
+          ],
         },
       });
 
