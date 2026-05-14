@@ -1,98 +1,102 @@
-// Service layer for company registry lookups (FR first, EU-ready).
-// All network calls go through the `company-lookup` Edge Function — never call
-// third-party APIs directly from the browser.
+// Service layer for global business registry lookups (multi-provider).
+// All network calls go through the `company-lookup` Edge Function.
 import { supabase } from "@/integrations/supabase/client";
 
-export type CompanyQueryType = "siren" | "siret" | "vat" | "name";
+export type ConfidenceLevel = "validated" | "partially_enriched" | "fully_enriched" | "unverified";
 
-export interface NormalizedCompany {
-  company_name: string | null;
-  siren: string | null;
-  siret: string | null;
-  vat_number: string | null;
-  legal_form: string | null;
-  address: string | null;
+export type DocumentKind =
+  | "siren" | "siret" | "vat_eu"
+  | "cnpj" | "ein" | "gstin" | "bn_ca" | "rfc_mx" | "corp_jp"
+  | "name" | "unknown";
+
+export type CompanyQueryType = DocumentKind; // backward-compat alias
+
+export interface NormalizedAddress {
+  street: string | null;
+  street_number: string | null;
   postal_code: string | null;
   city: string | null;
+  state: string | null;
   country: string | null;
-  creation_date: string | null;
-  company_status: string | null;
-  source: string;
 }
 
+export interface NormalizedCompany {
+  country: string | null;
+  tax_id: string | null;
+  vat_number: string | null;
+  company_name: string | null;
+  legal_name: string | null;
+  company_status: string | null;
+  legal_form: string | null;
+  creation_date: string | null;
+  siren: string | null;
+  siret: string | null;
+  address: NormalizedAddress;
+  address_line: string | null;
+  provider: string;
+  confidence: ConfidenceLevel;
+}
+
+export interface ProviderLog { provider: string; ms: number; ok: boolean; notes?: string }
+
 export interface LookupResponse {
-  type: CompanyQueryType;
+  detected_kind: DocumentKind;
+  detected_country: string | null;
   result: NormalizedCompany | null;
   candidates: NormalizedCompany[];
   vies: { valid: boolean; name?: string; address?: string } | null;
+  logs: ProviderLog[];
+  confidence: ConfidenceLevel;
+  message: string;
+  total_ms: number;
   provider_available: boolean;
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// ── Identifier detection (mirror of edge core, used by UI hints) ──────────
 
-export function detectQueryType(raw: string): CompanyQueryType {
+export function detectQueryType(raw: string): DocumentKind {
   const v = (raw ?? "").trim();
-  if (!v) return "name";
+  if (!v) return "unknown";
+  const upper = v.toUpperCase();
   const digits = v.replace(/\D/g, "");
-  if (/^FR/i.test(v) && digits.length >= 9) return "vat";
-  if (/^[A-Z]{2}/i.test(v) && digits.length >= 8) return "vat";
+
+  if (/^[A-Z]{2}/.test(upper) && digits.length >= 7) return "vat_eu";
+  if (/[\.\/-]/.test(v) && digits.length === 14) return "cnpj";
+  if (/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(upper)) return "gstin";
+  if (/^\d{2}-\d{7}$/.test(v)) return "ein";
+  if (/^\d{9}\s?(RT|RC|RP)?\s?\d{0,4}$/i.test(v)) return "bn_ca";
+  if (/^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/.test(upper)) return "rfc_mx";
+  if (digits.length === 13 && digits === v.replace(/\s/g, "")) return "corp_jp";
   if (digits.length === 9 && digits === v.replace(/\s/g, "")) return "siren";
   if (digits.length === 14 && digits === v.replace(/\s/g, "")) return "siret";
-  if (/^\d+$/.test(digits) && digits.length === 9) return "siren";
-  if (/^\d+$/.test(digits) && digits.length === 14) return "siret";
   return "name";
 }
 
+// Validators / formatters retained for UI helpers
 export function isValidSiren(v: string): boolean {
-  const s = v.replace(/\D/g, "");
-  if (s.length !== 9) return false;
-  // Luhn
+  const s = v.replace(/\D/g, ""); if (s.length !== 9) return false;
   let sum = 0;
-  for (let i = 0; i < 9; i++) {
-    let d = parseInt(s[i], 10);
-    if (i % 2 === 1) { d *= 2; if (d > 9) d -= 9; }
-    sum += d;
-  }
+  for (let i = 0; i < 9; i++) { let d = parseInt(s[i], 10); if (i % 2 === 1) { d *= 2; if (d > 9) d -= 9; } sum += d; }
   return sum % 10 === 0;
 }
-
 export function isValidSiret(v: string): boolean {
-  const s = v.replace(/\D/g, "");
-  if (s.length !== 14) return false;
+  const s = v.replace(/\D/g, ""); if (s.length !== 14) return false;
   let sum = 0;
-  for (let i = 0; i < 14; i++) {
-    let d = parseInt(s[i], 10);
-    if (i % 2 === 0) { d *= 2; if (d > 9) d -= 9; }
-    sum += d;
-  }
+  for (let i = 0; i < 14; i++) { let d = parseInt(s[i], 10); if (i % 2 === 0) { d *= 2; if (d > 9) d -= 9; } sum += d; }
   return sum % 10 === 0;
 }
-
-export function formatSiren(v: string): string {
-  const s = v.replace(/\D/g, "").slice(0, 9);
-  return s.replace(/(\d{3})(\d{3})(\d{0,3})/, "$1 $2 $3").trim();
-}
-
-export function formatSiret(v: string): string {
-  const s = v.replace(/\D/g, "").slice(0, 14);
-  return s.replace(/(\d{3})(\d{3})(\d{3})(\d{0,5})/, "$1 $2 $3 $4").trim();
-}
-
-export function formatVat(v: string): string {
-  return v.replace(/\s/g, "").toUpperCase();
-}
+export function formatSiren(v: string): string { return v.replace(/\D/g, "").slice(0, 9).replace(/(\d{3})(\d{3})(\d{0,3})/, "$1 $2 $3").trim(); }
+export function formatSiret(v: string): string { return v.replace(/\D/g, "").slice(0, 14).replace(/(\d{3})(\d{3})(\d{3})(\d{0,5})/, "$1 $2 $3 $4").trim(); }
+export function formatVat(v: string): string { return v.replace(/\s/g, "").toUpperCase(); }
 
 // ── Main API ───────────────────────────────────────────────────────────────
 
 export async function lookupCompany(query: string): Promise<LookupResponse> {
-  const { data, error } = await supabase.functions.invoke("company-lookup", {
-    body: { query },
-  });
+  const { data, error } = await supabase.functions.invoke("company-lookup", { body: { query } });
   if (error) throw error;
   return data as LookupResponse;
 }
 
-// Debounce helper — UI uses this to throttle keystroke lookups.
 export function debounce<T extends (...args: any[]) => any>(fn: T, ms = 400) {
   let t: ReturnType<typeof setTimeout> | null = null;
   return (...args: Parameters<T>) => {
@@ -104,23 +108,34 @@ export function debounce<T extends (...args: any[]) => any>(fn: T, ms = 400) {
 // Maps a normalized record onto the client form, never overwriting
 // user-controlled fields (email, phone, IBAN, BIC, contacts).
 export function mergeCompanyIntoForm<F extends Record<string, any>>(form: F, c: NormalizedCompany): F {
+  const addr = c.address ?? ({} as NormalizedAddress);
+  const flatAddress = [addr.street_number, addr.street].filter(Boolean).join(" ").trim()
+    || c.address_line || form.address;
   return {
     ...form,
-    name: c.company_name || form.name,
+    name: c.company_name || c.legal_name || form.name,
     siren: c.siren || form.siren,
     siret: c.siret || form.siret,
     tva_intracom: c.vat_number || form.tva_intracom,
-    address: c.address || form.address,
-    postal_code: c.postal_code || form.postal_code,
-    city: c.city || form.city,
-    country: c.country || form.country,
-    notes: appendImportNote(form.notes ?? "", c.source),
+    tax_id: c.tax_id || form.tax_id,
+    address: flatAddress,
+    postal_code: addr.postal_code || form.postal_code,
+    city: addr.city || form.city,
+    country: addr.country || c.country || form.country,
+    notes: appendImportNote(form.notes ?? "", c.provider, c.confidence),
   };
 }
 
-function appendImportNote(existing: string, source: string): string {
+function appendImportNote(existing: string, provider: string, confidence: ConfidenceLevel): string {
   const stamp = new Date().toLocaleString("pt-PT");
-  const note = `[${stamp}] Dados importados automaticamente via registro empresarial francês (${source}).`;
-  if (existing.includes("Dados importados automaticamente")) return existing;
+  const note = `[${stamp}] Dados importados do registro empresarial (${provider}, confiança: ${confidence}).`;
+  if (existing.includes("Dados importados")) return existing;
   return existing ? `${existing}\n${note}` : note;
 }
+
+export const CONFIDENCE_LABEL: Record<ConfidenceLevel, string> = {
+  fully_enriched: "Totalmente enriquecido",
+  partially_enriched: "Parcialmente enriquecido",
+  validated: "Documento validado",
+  unverified: "Não verificado",
+};
