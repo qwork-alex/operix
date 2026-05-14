@@ -1029,7 +1029,7 @@ export default function InvoicesScreen() {
           </DialogHeader>
 
           <div className="invoice-print-dialog-body flex-1 flex min-h-0 overflow-hidden">
-            <div className="flex-1 overflow-y-auto">
+            <div className="invoice-print-scroll-container flex-1 overflow-y-auto">
 
           {viewMode === "preview" ? (
             <div className={cn("bg-muted/30 print:bg-white invoice-print-area", invoicePrintMode && "invoice-print-mode")}>
