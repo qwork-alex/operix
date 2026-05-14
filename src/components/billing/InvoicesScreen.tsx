@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import {
-  Search, Plus, Filter, Download, FileText, FileSpreadsheet,
+  Search, Plus, Filter, FileText, FileSpreadsheet,
   MoreHorizontal, Eye, Pencil, Trash2, ChevronLeft, ChevronRight,
   X, History, Loader2, ArrowDownToLine, ArrowUpFromLine,
   Printer, FileEdit, FileUp,
@@ -283,6 +283,7 @@ export default function InvoicesScreen() {
 
   const [detail, setDetail] = useState<Invoice | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Invoice | null>(null);
+  const [confirmDraft, setConfirmDraft] = useState(false);
 
   // ── data
   const invoicesQ = useQuery({
@@ -491,6 +492,41 @@ export default function InvoicesScreen() {
     } as any);
   };
 
+  // Save current form as draft (no validation beyond minimum)
+  const saveDraft = () => {
+    const number = form.invoice_number.trim() || `RASCUNHO-${Date.now().toString().slice(-6)}`;
+    const client = (clientsQ.data ?? []).find((c) => c.id === form.client_id) || null;
+    upsertMut.mutate({
+      id: editing?.id,
+      invoice_number: number,
+      type: form.type,
+      supplier_id: editing?.supplier_id ?? null,
+      customer_name: client?.name ?? editing?.customer_name ?? null,
+      issue_date: form.issue_date,
+      due_date: form.due_date || null,
+      total_amount: totals.total,
+      paid_amount: editing?.paid_amount ?? 0,
+      status: "draft",
+      notes: form.notes.trim() || null,
+    } as any);
+  };
+
+  // Detect if user has entered anything worth saving
+  const isDirty = () => {
+    if (editing) return false; // edits already persist via explicit Save
+    if (form.invoice_number.trim()) return true;
+    if (form.client_id) return true;
+    if (form.notes.trim()) return true;
+    if (form.items.some((it) => it.designation.trim() || it.unit_price > 0)) return true;
+    return false;
+  };
+
+  const requestCloseForm = (open: boolean) => {
+    if (open) { setFormOpen(true); return; }
+    if (isDirty()) { setConfirmDraft(true); return; }
+    setFormOpen(false);
+  };
+
   // ── export
   const exportRows = () => (selected.size > 0
     ? filtered.filter((r) => selected.has(r.id))
@@ -573,24 +609,6 @@ export default function InvoicesScreen() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="h-8">
-                <Download className="h-3.5 w-3.5 mr-1.5" />
-                Exportar
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="text-xs">
-              <DropdownMenuItem onClick={exportExcel}>
-                <FileSpreadsheet className="h-3.5 w-3.5 mr-2 text-emerald-400" />
-                Exportar Excel
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={exportPDF}>
-                <FileText className="h-3.5 w-3.5 mr-2 text-rose-400" />
-                Exportar PDF
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
           <Button size="sm" variant="outline" className="h-8" onClick={() => setImportOpen(true)}>
             <FileUp className="h-3.5 w-3.5 mr-1.5" />
             Adicionar fatura
@@ -803,7 +821,7 @@ export default function InvoicesScreen() {
       </Card>
 
       {/* ─── Form dialog */}
-      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+      <Dialog open={formOpen} onOpenChange={requestCloseForm}>
         <DialogContent className="max-w-6xl w-[96vw] max-h-[94vh] p-0 gap-0 flex flex-col overflow-hidden">
           <DialogHeader className="px-6 pt-5 pb-4 border-b border-border/50 bg-background z-10 flex-row items-center justify-between space-y-0">
             <div>
@@ -860,7 +878,7 @@ export default function InvoicesScreen() {
             <div className="flex-1 overflow-y-auto">
 
           {viewMode === "preview" ? (
-            <div className="p-6 bg-muted/20 min-h-full print:p-0 print:bg-white">
+            <div className="p-6 bg-muted/20 min-h-full print:p-0 print:bg-white invoice-print-area">
               <InvoicePreview
                 form={form}
                 totals={totals}
@@ -1099,18 +1117,21 @@ export default function InvoicesScreen() {
 
             {/* SECTION 5 — Bank details */}
             {form.options.show_bank_details && (
-            <FormSection title="Dados bancários" subtitle="Conta para recebimento (futuramente vinda do perfil da empresa)">
+            <FormSection title="Dados bancários" subtitle="Vindos do perfil da empresa (somente leitura)">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <Field label="IBAN">
-                  <Input value={form.bank_iban} onChange={(e) => setForm({ ...form, bank_iban: e.target.value })} className="h-9" placeholder="PT50 ..." />
+                  <Input value={(companySettings as any)?.bank_iban ?? form.bank_iban} readOnly disabled className="h-9 bg-muted/30" placeholder="Configurar no perfil da empresa" />
                 </Field>
                 <Field label="BIC / SWIFT">
-                  <Input value={form.bank_bic} onChange={(e) => setForm({ ...form, bank_bic: e.target.value })} className="h-9" />
+                  <Input value={(companySettings as any)?.bank_bic ?? form.bank_bic} readOnly disabled className="h-9 bg-muted/30" placeholder="Configurar no perfil da empresa" />
                 </Field>
                 <Field label="Banco">
-                  <Input value={form.bank_name} onChange={(e) => setForm({ ...form, bank_name: e.target.value })} className="h-9" />
+                  <Input value={(companySettings as any)?.bank_name ?? form.bank_name} readOnly disabled className="h-9 bg-muted/30" placeholder="Configurar no perfil da empresa" />
                 </Field>
               </div>
+              <p className="text-[10px] text-muted-foreground mt-2">
+                Para alterar, edite o perfil da empresa em Configurações.
+              </p>
             </FormSection>
             )}
 
@@ -1160,7 +1181,7 @@ export default function InvoicesScreen() {
                 <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_META["pending"].dot)} /> Pendente
               </Badge>}
             </div>
-            <Button variant="outline" onClick={() => setFormOpen(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => requestCloseForm(false)}>Cancelar</Button>
             <Button onClick={submitForm} disabled={upsertMut.isPending}>
               {upsertMut.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
               {editing ? "Atualizar fatura" : "Emitir fatura"}
@@ -1211,6 +1232,40 @@ export default function InvoicesScreen() {
       </Sheet>
 
       <ImportInvoiceDialog open={importOpen} onOpenChange={setImportOpen} />
+
+      {/* ─── Save draft confirmation */}
+      <AlertDialog open={confirmDraft} onOpenChange={setConfirmDraft}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Salvar rascunho?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Há dados não gravados. Deseja salvar como rascunho para continuar mais tarde?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setConfirmDraft(false);
+                setFormOpen(false);
+                setForm(emptyForm());
+                setEditing(null);
+              }}
+            >
+              Descartar
+            </Button>
+            <AlertDialogCancel>Continuar editando</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmDraft(false);
+                saveDraft();
+              }}
+            >
+              Salvar rascunho
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -1457,21 +1512,34 @@ function ClientPreview({ client }: { client: Client | null }) {
   if (!client) {
     return (
       <div className="rounded-md border border-dashed border-border/60 px-3 py-2.5 text-[11px] text-muted-foreground flex items-center">
-        Selecione um cliente para carregar os dados fiscais e de contacto.
+        Selecione um cliente para carregar dados fiscais, idioma, moeda e condições.
       </div>
     );
   }
+  const c: any = client;
+  const rows: { k: string; v: string }[] = [
+    { k: "VAT / TVA",      v: c.vat_number ?? c.tva_number ?? "—" },
+    { k: "SIRET",          v: c.siret ?? "—" },
+    { k: "Endereço",       v: client.address ?? "—" },
+    { k: "Idioma",         v: (c.language ?? "pt").toString().toUpperCase() },
+    { k: "Moeda",          v: c.currency ?? "EUR" },
+    { k: "Cond. pagamento",v: c.payment_terms ?? "30 dias" },
+  ];
   return (
-    <div className="rounded-md border border-border/60 bg-muted/10 px-3 py-2.5 text-[11px] space-y-0.5">
+    <div className="rounded-md border border-border/60 bg-muted/10 px-3 py-2.5 text-[11px] space-y-1">
       <p className="font-medium text-foreground text-xs">{client.name}</p>
-      {client.address && <p className="text-muted-foreground">{client.address}</p>}
       <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-muted-foreground">
         {client.contact_email && <span>{client.contact_email}</span>}
         {client.contact_phone && <span>{client.contact_phone}</span>}
       </div>
-      <p className="text-[10px] text-muted-foreground/70 italic pt-1">
-        TVA / SIRET / moeda · disponíveis após enriquecimento do cadastro.
-      </p>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 pt-1 border-t border-border/40 mt-1">
+        {rows.map((r) => (
+          <div key={r.k} className="flex justify-between gap-2">
+            <span className="text-muted-foreground/80">{r.k}</span>
+            <span className="text-foreground/90 truncate">{r.v}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
