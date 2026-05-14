@@ -2074,7 +2074,6 @@ function InvoicePreview({
 // ───────────────────────────── A4 Preview Frame
 // Encolhe proporcionalmente o documento A4 (210mm) para caber na largura disponível,
 // preservando a aparência idêntica à impressão real (zoom proporcional, sem distorção).
-import React from "react";
 function InvoiceA4PreviewFrame({ children }: { children: React.ReactNode }) {
   const wrapRef = React.useRef<HTMLDivElement | null>(null);
   const innerRef = React.useRef<HTMLDivElement | null>(null);
