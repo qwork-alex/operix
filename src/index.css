@@ -197,77 +197,148 @@
   }
 }
 
-/* ───────────── Print rules: invoice preview only ───────────── */
+/* ───────────── Print-safe invoice document engine ───────────── */
 @media print {
-  /* Page setup — A4 portrait with professional margins */
-  @page {
-    size: A4 portrait;
-    margin: 12mm 10mm;
-  }
+  @page { size: A4 portrait; margin: 0; }
 
-  /* Hide everything by default */
-  html, body { background: #fff !important; }
-  body * { visibility: hidden !important; }
-
-  /* Hide app chrome explicitly (defensive) */
-  [data-sidebar],
-  aside,
-  nav,
-  header.app-topbar,
-  .app-topbar,
-  [role="tablist"],
-  [data-radix-dialog-overlay],
-  [data-radix-popper-content-wrapper],
-  [data-sonner-toaster],
-  .no-print { display: none !important; }
-
-  /* Show only the invoice sheet */
-  .invoice-print-area, .invoice-print-area * { visibility: visible !important; }
-  .invoice-print-area {
-    position: fixed !important;
-    inset: 0 !important;
+  html,
+  body {
+    width: 210mm !important;
+    min-height: 297mm !important;
     margin: 0 !important;
     padding: 0 !important;
     background: #fff !important;
-    box-shadow: none !important;
     overflow: visible !important;
-    z-index: 9999 !important;
+    font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif !important;
   }
-  /* Neutralize the on-screen fit-to-width zoom frame so the document
-     prints at native A4 size, not at the scaled preview size. */
-  .invoice-print-area .invoice-a4-frame {
-    padding: 0 !important;
-    overflow: visible !important;
-    display: block !important;
-  }
-  .invoice-print-area .invoice-a4-frame > div,
-  .invoice-print-area .invoice-a4-frame > div > div {
+
+  html.invoice-print-mode *,
+  body.invoice-print-mode * {
+    transition: none !important;
+    animation: none !important;
     transform: none !important;
-    width: auto !important;
-    height: auto !important;
-  }
-  .invoice-print-area .invoice-a4-doc {
-    box-shadow: none !important;
-    margin: 0 auto !important;
-  }
-
-  /* Page-break safety — keep tables, rows, totals, footer intact */
-  .invoice-print-area table { page-break-inside: auto; }
-  .invoice-print-area thead { display: table-header-group; }
-  .invoice-print-area tfoot { display: table-footer-group; }
-  .invoice-print-area tr,
-  .invoice-print-area td,
-  .invoice-print-area th { page-break-inside: avoid !important; break-inside: avoid !important; }
-  .invoice-print-area section,
-  .invoice-print-area header,
-  .invoice-print-area footer { break-inside: avoid; page-break-inside: avoid; }
-  .invoice-print-area .page-break-before { page-break-before: always; }
-  .invoice-print-area .avoid-break { break-inside: avoid; page-break-inside: avoid; }
-
-  /* Force print colors / backgrounds */
-  * {
+    scale: 1 !important;
+    zoom: 1 !important;
+    filter: none !important;
+    text-shadow: none !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     color-adjust: exact !important;
+  }
+
+  body.invoice-print-mode * { visibility: hidden !important; }
+
+  body.invoice-print-mode > *:not(.invoice-print-dialog-content) {
+    display: none !important;
+  }
+
+  body.invoice-print-mode [data-sidebar],
+  body.invoice-print-mode aside,
+  body.invoice-print-mode nav,
+  body.invoice-print-mode header.app-topbar,
+  body.invoice-print-mode .app-topbar,
+  body.invoice-print-mode [role="tablist"],
+  body.invoice-print-mode [data-radix-dialog-overlay],
+  body.invoice-print-mode [data-radix-popper-content-wrapper],
+  body.invoice-print-mode [data-sonner-toaster],
+  body.invoice-print-mode .no-print {
+    display: none !important;
+  }
+
+  body.invoice-print-mode .invoice-print-dialog-content,
+  body.invoice-print-mode .invoice-print-dialog-body,
+  body.invoice-print-mode .invoice-print-scroll-container,
+  body.invoice-print-mode .invoice-print-area,
+  body.invoice-print-mode .invoice-a4-frame {
+    position: static !important;
+    inset: auto !important;
+    display: block !important;
+    width: 210mm !important;
+    min-width: 210mm !important;
+    max-width: 210mm !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+
+  body.invoice-print-mode .invoice-print-area,
+  body.invoice-print-mode .invoice-print-area * {
+    visibility: visible !important;
+  }
+
+  body.invoice-print-mode .invoice-a4-frame > div,
+  body.invoice-print-mode .invoice-a4-frame > div > div {
+    display: block !important;
+    width: 210mm !important;
+    min-width: 210mm !important;
+    max-width: 210mm !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  body.invoice-print-mode .invoice-a4-doc,
+  body.invoice-print-mode .invoice-print-page {
+    display: block !important;
+    position: relative !important;
+    width: 210mm !important;
+    min-width: 210mm !important;
+    max-width: 210mm !important;
+    min-height: 297mm !important;
+    margin: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    color: #18181b !important;
+    overflow: visible !important;
+    page-break-after: avoid !important;
+    break-after: avoid-page !important;
+  }
+
+  body.invoice-print-mode img {
+    display: inline-block !important;
+    max-width: 100% !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  body.invoice-print-mode table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto !important;
+  }
+  body.invoice-print-mode thead { display: table-header-group !important; }
+  body.invoice-print-mode tfoot { display: table-footer-group !important; }
+  body.invoice-print-mode tr,
+  body.invoice-print-mode td,
+  body.invoice-print-mode th {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+  body.invoice-print-mode section,
+  body.invoice-print-mode header,
+  body.invoice-print-mode footer,
+  body.invoice-print-mode .avoid-break {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+  body.invoice-print-mode .invoice-items-section {
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+  }
+  body.invoice-print-mode .page-break-before {
+    break-before: page !important;
+    page-break-before: always !important;
   }
 }

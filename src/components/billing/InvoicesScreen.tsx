@@ -527,6 +527,64 @@ export default function InvoicesScreen() {
   // ── side options panel & view mode
   const [optionsPanelOpen, setOptionsPanelOpen] = useState(true);
   const [viewMode, setViewMode] = useState<"edit" | "preview">("edit");
+  const [invoicePrintMode, setInvoicePrintMode] = useState(false);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    document.body.classList.toggle("invoice-print-mode", invoicePrintMode);
+    root.classList.toggle("invoice-print-mode", invoicePrintMode);
+    return () => {
+      document.body.classList.remove("invoice-print-mode");
+      root.classList.remove("invoice-print-mode");
+    };
+  }, [invoicePrintMode]);
+
+  useEffect(() => {
+    const enableBeforePrint = () => {
+      if (formOpen && viewMode === "preview") {
+        document.documentElement.classList.add("invoice-print-mode");
+        document.body.classList.add("invoice-print-mode");
+        setInvoicePrintMode(true);
+      }
+    };
+    const disableAfterPrint = () => {
+      document.documentElement.classList.remove("invoice-print-mode");
+      document.body.classList.remove("invoice-print-mode");
+      setInvoicePrintMode(false);
+    };
+    window.addEventListener("beforeprint", enableBeforePrint);
+    window.addEventListener("afterprint", disableAfterPrint);
+    return () => {
+      window.removeEventListener("beforeprint", enableBeforePrint);
+      window.removeEventListener("afterprint", disableAfterPrint);
+    };
+  }, [formOpen, viewMode]);
+
+  const waitForInvoicePrintAssets = async () => {
+    await document.fonts?.ready.catch(() => undefined);
+    const images = Array.from(document.querySelectorAll<HTMLImageElement>(".invoice-print-area img"));
+    await Promise.all(images.map((img) => {
+      if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+      return new Promise<void>((resolve) => {
+        const done = () => resolve();
+        img.addEventListener("load", done, { once: true });
+        img.addEventListener("error", done, { once: true });
+      });
+    }));
+  };
+
+  const printCurrentInvoice = () => {
+    setViewMode("preview");
+    setInvoicePrintMode(true);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        void waitForInvoicePrintAssets().finally(() => {
+          window.print();
+          window.setTimeout(() => setInvoicePrintMode(false), 800);
+        });
+      });
+    });
+  };
 
   const companySettings = useCompanySettings().settings;
 
@@ -921,8 +979,8 @@ export default function InvoicesScreen() {
 
       {/* ─── Form dialog */}
       <Dialog open={formOpen} onOpenChange={requestCloseForm}>
-        <DialogContent className="max-w-6xl w-[96vw] max-h-[94vh] p-0 gap-0 flex flex-col overflow-hidden">
-          <DialogHeader className="px-6 pt-5 pb-4 border-b border-border/50 bg-background z-10 flex-row items-center justify-between space-y-0">
+        <DialogContent className="invoice-print-dialog-content max-w-6xl w-[96vw] max-h-[94vh] p-0 gap-0 flex flex-col overflow-hidden">
+          <DialogHeader className="no-print px-6 pt-5 pb-4 border-b border-border/50 bg-background z-10 flex-row items-center justify-between space-y-0">
             <div>
               <DialogTitle className="text-base font-semibold">
                 {editing
@@ -961,10 +1019,7 @@ export default function InvoicesScreen() {
                 variant="outline"
                 size="sm"
                 className="h-8 no-print"
-                onClick={() => {
-                  setViewMode("preview");
-                  setTimeout(() => window.print(), 250);
-                }}
+                onClick={printCurrentInvoice}
                 title="Visualizar e imprimir em A4"
               >
                 <Printer className="h-3.5 w-3.5 mr-1.5" /> Visualizar impressão
@@ -981,11 +1036,11 @@ export default function InvoicesScreen() {
             </div>
           </DialogHeader>
 
-          <div className="flex-1 flex min-h-0 overflow-hidden">
-            <div className="flex-1 overflow-y-auto">
+          <div className="invoice-print-dialog-body flex-1 flex min-h-0 overflow-hidden">
+            <div className="invoice-print-scroll-container flex-1 overflow-y-auto">
 
           {viewMode === "preview" ? (
-            <div className="bg-muted/30 print:bg-white invoice-print-area" style={{ minHeight: "100%" }}>
+            <div className={cn("bg-muted/30 print:bg-white invoice-print-area", invoicePrintMode && "invoice-print-mode")}>
               <InvoiceA4PreviewFrame>
                 <InvoiceDocumentA4
                   form={{
@@ -1296,7 +1351,7 @@ export default function InvoicesScreen() {
             )}
           </div>
 
-          <DialogFooter className="px-6 py-4 border-t border-border/50 bg-background">
+          <DialogFooter className="no-print px-6 py-4 border-t border-border/50 bg-background">
             <div className="flex-1 text-xs text-muted-foreground">
               {!editing && "Estado inicial: "}
               {!editing && <Badge variant="outline" className={cn("text-[10px] gap-1.5", STATUS_META["pending"].cls)}>
