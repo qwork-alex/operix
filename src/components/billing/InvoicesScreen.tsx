@@ -1181,7 +1181,7 @@ export default function InvoicesScreen() {
                 <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_META["pending"].dot)} /> Pendente
               </Badge>}
             </div>
-            <Button variant="outline" onClick={() => setFormOpen(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => requestCloseForm(false)}>Cancelar</Button>
             <Button onClick={submitForm} disabled={upsertMut.isPending}>
               {upsertMut.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
               {editing ? "Atualizar fatura" : "Emitir fatura"}
