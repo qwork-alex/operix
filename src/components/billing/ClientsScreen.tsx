@@ -465,20 +465,25 @@ function CompanyLookupBar({ onApply }: { onApply: (c: NormalizedCompany) => void
   const [error, setError] = useState<string | null>(null);
   const [providerAvailable, setProviderAvailable] = useState(true);
 
-  const labelByType: Record<CompanyQueryType, string> = {
-    siren: "SIREN detectado", siret: "SIRET detectado",
-    vat: "TVA detectado", name: "Buscar por nome",
+  const [message, setMessage] = useState<string | null>(null);
+
+  const labelByType: Partial<Record<CompanyQueryType, string>> = {
+    siren: "SIREN (FR)", siret: "SIRET (FR)", vat_eu: "TVA / VAT EU",
+    cnpj: "CNPJ (BR)", ein: "EIN (US)", gstin: "GSTIN (IN)",
+    bn_ca: "BN (CA)", rfc_mx: "RFC (MX)", corp_jp: "法人番号 (JP)",
+    name: "Buscar por nome", unknown: "—",
   };
 
   const run = async () => {
     if (!q.trim()) return;
-    setLoading(true); setError(null); setResult(null); setCandidates([]);
+    setLoading(true); setError(null); setResult(null); setCandidates([]); setMessage(null);
     try {
       const r = await lookupCompany(q.trim());
       setProviderAvailable(r.provider_available);
+      setMessage(r.message ?? null);
       if (r.result) setResult(r.result);
       else if (r.candidates?.length) setCandidates(r.candidates);
-      else setError("Empresa não encontrada");
+      else setError(r.message || "Sem correspondência");
     } catch (e: any) {
       setError(e?.message ?? "Erro na busca");
     } finally {
@@ -500,7 +505,7 @@ function CompanyLookupBar({ onApply }: { onApply: (c: NormalizedCompany) => void
           value={q}
           onChange={(e) => { setQ(e.target.value); setType(detectQueryType(e.target.value)); }}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); run(); } }}
-          placeholder="Ex.: 552120222, 55212022200013, FR40552120222 ou Renault"
+          placeholder="SIREN, SIRET, TVA, CNPJ, EIN, GSTIN, RFC, BN, 法人番号 ou nome"
           className="h-8 text-xs font-mono"
         />
         <Button type="button" size="sm" variant="outline" className="h-8" onClick={run} disabled={loading || !q.trim()}>
@@ -521,24 +526,37 @@ function CompanyLookupBar({ onApply }: { onApply: (c: NormalizedCompany) => void
         </div>
       )}
 
-      {result && (
-        <div className="rounded border border-emerald-500/30 bg-emerald-500/5 p-2 space-y-1 text-xs">
-          <div className="flex items-center gap-1.5 text-emerald-400 text-[10px]">
-            <CheckCircle2 className="h-3 w-3" /> Empresa encontrada ({result.source})
+      {result && (() => {
+        const tone = result.confidence === "fully_enriched" ? "emerald"
+          : result.confidence === "partially_enriched" ? "sky"
+          : result.confidence === "validated" ? "amber" : "muted";
+        const toneCls =
+          tone === "emerald" ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-400" :
+          tone === "sky"     ? "border-sky-500/30 bg-sky-500/5 text-sky-400" :
+          tone === "amber"   ? "border-amber-500/30 bg-amber-500/5 text-amber-400" :
+                               "border-border/50 bg-muted/20 text-muted-foreground";
+        return (
+          <div className={cn("rounded border p-2 space-y-1 text-xs", toneCls.split(" ").slice(0, 2).join(" "))}>
+            <div className={cn("flex items-center gap-1.5 text-[10px]", toneCls.split(" ").slice(2).join(" "))}>
+              <CheckCircle2 className="h-3 w-3" />
+              {message ?? "Resultado"} · <span className="font-mono">{result.provider}</span>
+            </div>
+            <div className="font-medium text-foreground">{result.company_name ?? "—"}</div>
+            <div className="text-[10px] text-muted-foreground font-mono">
+              {[result.tax_id ?? result.siret ?? result.siren, result.vat_number].filter(Boolean).join(" · ")}
+            </div>
+            <div className="text-[10px] text-muted-foreground">
+              {result.address_line ??
+                [result.address?.street, result.address?.postal_code, result.address?.city, result.address?.country]
+                  .filter(Boolean).join(", ")}
+            </div>
+            <Button type="button" size="sm" className="h-7 mt-1"
+              onClick={() => { onApply(result); setResult(null); setQ(""); }}>
+              Aplicar dados ao formulário
+            </Button>
           </div>
-          <div className="font-medium">{result.company_name ?? "—"}</div>
-          <div className="text-[10px] text-muted-foreground font-mono">
-            {[result.siret ?? result.siren, result.vat_number].filter(Boolean).join(" · ")}
-          </div>
-          <div className="text-[10px] text-muted-foreground">
-            {[result.address, result.postal_code, result.city, result.country].filter(Boolean).join(", ")}
-          </div>
-          <Button type="button" size="sm" className="h-7 mt-1"
-            onClick={() => { onApply(result); setResult(null); setQ(""); }}>
-            Aplicar dados ao formulário
-          </Button>
-        </div>
-      )}
+        );
+      })()}
 
       {candidates.length > 0 && (
         <div className="space-y-1 max-h-48 overflow-y-auto">
@@ -548,7 +566,7 @@ function CompanyLookupBar({ onApply }: { onApply: (c: NormalizedCompany) => void
               className="w-full text-left rounded border border-border/50 hover:border-primary/40 hover:bg-primary/5 p-2 transition-all">
               <div className="text-xs font-medium">{c.company_name}</div>
               <div className="text-[10px] text-muted-foreground font-mono">
-                {[c.siren, c.city, c.legal_form].filter(Boolean).join(" · ")}
+                {[c.tax_id ?? c.siren, c.address?.city, c.legal_form].filter(Boolean).join(" · ")}
               </div>
             </button>
           ))}
