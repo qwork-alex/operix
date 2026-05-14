@@ -2227,6 +2227,10 @@ export type Database = {
         }[]
       }
       assert_active: { Args: { _uid: string }; Returns: undefined }
+      billing_recalc_invoice: {
+        Args: { _invoice_id: string }
+        Returns: undefined
+      }
       can_access_client: {
         Args: { _client_id: string; _user_id: string }
         Returns: boolean
