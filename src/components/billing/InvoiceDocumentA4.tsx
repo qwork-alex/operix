@@ -260,15 +260,16 @@ export function InvoiceDocumentA4({
   return (
     <div
       className="invoice-a4-doc invoice-print-page bg-white text-zinc-900 shadow-2xl print:shadow-none mx-auto"
+      data-billing-mode={mode}
       style={{
         width:    A4.width,
         minHeight: A4.height,
         padding:  A4.pad,
-        paddingBottom: "32mm",
+        paddingBottom: isQuick ? "18mm" : "32mm",
         boxSizing: "border-box",
         position: "relative",
         fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
-        fontSize: "10.5px",
+        fontSize: isQuick ? "10px" : "10.5px",
         lineHeight: 1.45,
         color: "#18181b",
       }}
