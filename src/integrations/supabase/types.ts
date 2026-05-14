@@ -2403,6 +2403,141 @@ export type Database = {
           },
         ]
       }
+      weather_cache: {
+        Row: {
+          cache_key: string
+          capability: string
+          created_at: string
+          expires_at: string
+          payload: Json
+          provider: string
+          region_key: string
+        }
+        Insert: {
+          cache_key: string
+          capability: string
+          created_at?: string
+          expires_at: string
+          payload: Json
+          provider: string
+          region_key: string
+        }
+        Update: {
+          cache_key?: string
+          capability?: string
+          created_at?: string
+          expires_at?: string
+          payload?: Json
+          provider?: string
+          region_key?: string
+        }
+        Relationships: []
+      }
+      weather_providers: {
+        Row: {
+          api_key_secret_name: string | null
+          base_url: string | null
+          capabilities: Json
+          created_at: string
+          enabled: boolean
+          id: string
+          key: string
+          last_called_at: string | null
+          last_error: string | null
+          last_event_count: number | null
+          last_status: string | null
+          name: string
+          priority: number
+          rate_limit_per_min: number
+          regions: Json
+          request_count_window: number
+          requires_api_key: boolean
+          updated_at: string
+          window_started_at: string | null
+        }
+        Insert: {
+          api_key_secret_name?: string | null
+          base_url?: string | null
+          capabilities?: Json
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          key: string
+          last_called_at?: string | null
+          last_error?: string | null
+          last_event_count?: number | null
+          last_status?: string | null
+          name: string
+          priority?: number
+          rate_limit_per_min?: number
+          regions?: Json
+          request_count_window?: number
+          requires_api_key?: boolean
+          updated_at?: string
+          window_started_at?: string | null
+        }
+        Update: {
+          api_key_secret_name?: string | null
+          base_url?: string | null
+          capabilities?: Json
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          key?: string
+          last_called_at?: string | null
+          last_error?: string | null
+          last_event_count?: number | null
+          last_status?: string | null
+          name?: string
+          priority?: number
+          rate_limit_per_min?: number
+          regions?: Json
+          request_count_window?: number
+          requires_api_key?: boolean
+          updated_at?: string
+          window_started_at?: string | null
+        }
+        Relationships: []
+      }
+      weather_sync_runs: {
+        Row: {
+          capability: string | null
+          created_at: string
+          duration_ms: number | null
+          error: string | null
+          events_upserted: number
+          id: string
+          metadata: Json
+          ok: boolean
+          provider: string
+          region_key: string | null
+        }
+        Insert: {
+          capability?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          error?: string | null
+          events_upserted?: number
+          id?: string
+          metadata?: Json
+          ok: boolean
+          provider: string
+          region_key?: string | null
+        }
+        Update: {
+          capability?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          error?: string | null
+          events_upserted?: number
+          id?: string
+          metadata?: Json
+          ok?: boolean
+          provider?: string
+          region_key?: string | null
+        }
+        Relationships: []
+      }
       workspaces: {
         Row: {
           created_at: string
