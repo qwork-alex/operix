@@ -2319,6 +2319,8 @@ export type Database = {
         | "matched"
         | "partial"
         | "rejected"
+        | "divergent"
+        | "analyzing"
       membership_role: "admin" | "tecnico" | "cliente" | "socio"
       membership_status: "active" | "pending"
       permission_scope: "own" | "team" | "all"
@@ -2465,6 +2467,8 @@ export const Constants = {
         "matched",
         "partial",
         "rejected",
+        "divergent",
+        "analyzing",
       ],
       membership_role: ["admin", "tecnico", "cliente", "socio"],
       membership_status: ["active", "pending"],
