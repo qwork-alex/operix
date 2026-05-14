@@ -802,13 +802,43 @@ export default function InvoicesScreen() {
                 {" · "}Idioma: <span className="font-medium text-foreground uppercase">{form.options.lang}</span>
               </p>
             </div>
-            <Button
-              variant="outline" size="sm" className="h-8 mr-8"
-              onClick={() => setOptionsPanelOpen(o => !o)}
-            >
-              <Filter className="h-3.5 w-3.5 mr-1.5" />
-              {optionsPanelOpen ? "Ocultar opções" : "Opções da fatura"}
-            </Button>
+            <div className="flex items-center gap-2 mr-8">
+              <div className="inline-flex rounded-md border border-border/60 bg-muted/30 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("edit")}
+                  className={cn(
+                    "h-7 px-3 rounded text-xs font-medium inline-flex items-center gap-1.5 transition-colors",
+                    viewMode === "edit" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <FileEdit className="h-3.5 w-3.5" /> Editar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("preview")}
+                  className={cn(
+                    "h-7 px-3 rounded text-xs font-medium inline-flex items-center gap-1.5 transition-colors",
+                    viewMode === "preview" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <Eye className="h-3.5 w-3.5" /> Pré-visualizar
+                </button>
+              </div>
+              {viewMode === "preview" ? (
+                <Button variant="outline" size="sm" className="h-8" onClick={() => window.print()}>
+                  <Printer className="h-3.5 w-3.5 mr-1.5" /> Imprimir / PDF
+                </Button>
+              ) : (
+                <Button
+                  variant="outline" size="sm" className="h-8"
+                  onClick={() => setOptionsPanelOpen(o => !o)}
+                >
+                  <Filter className="h-3.5 w-3.5 mr-1.5" />
+                  {optionsPanelOpen ? "Ocultar opções" : "Opções da fatura"}
+                </Button>
+              )}
+            </div>
           </DialogHeader>
 
           <div className="flex-1 flex min-h-0 overflow-hidden">
