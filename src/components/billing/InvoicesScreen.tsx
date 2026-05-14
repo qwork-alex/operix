@@ -1232,6 +1232,40 @@ export default function InvoicesScreen() {
       </Sheet>
 
       <ImportInvoiceDialog open={importOpen} onOpenChange={setImportOpen} />
+
+      {/* ─── Save draft confirmation */}
+      <AlertDialog open={confirmDraft} onOpenChange={setConfirmDraft}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Salvar rascunho?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Há dados não gravados. Deseja salvar como rascunho para continuar mais tarde?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setConfirmDraft(false);
+                setFormOpen(false);
+                setForm(emptyForm());
+                setEditing(null);
+              }}
+            >
+              Descartar
+            </Button>
+            <AlertDialogCancel>Continuar editando</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmDraft(false);
+                saveDraft();
+              }}
+            >
+              Salvar rascunho
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
