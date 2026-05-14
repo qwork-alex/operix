@@ -737,6 +737,8 @@ export function OperationalMap() {
     });
     // Hail layers
     ["hail-halo", "hail-ring", "hail-core"].forEach((id) => setVis(id, layers.hail));
+    // PDR Intel layers
+    ["pdr-heatmap", "pdr-points"].forEach((id) => setVis(id, layers.pdr));
   }, [layers, mapReady]);
 
   /* -------- RainViewer radar layer --------------------------------- */
