@@ -1142,6 +1142,216 @@ function KpiCard({ label, value, accent }: { label: string; value: string; accen
   );
 }
 
+function InvoiceOptionsPanel({
+  options, onChange,
+}: { options: InvoiceOptions; onChange: (o: InvoiceOptions) => void }) {
+  const set = <K extends keyof InvoiceOptions>(k: K, v: InvoiceOptions[K]) =>
+    onChange({ ...options, [k]: v });
+
+  // When mode changes, pre-toggle relevant sections (user can override after).
+  const setMode = (mode: BillingMode) => {
+    if (mode === "quick") {
+      onChange({
+        ...options, mode,
+        show_bank_details: false,
+        show_payment_terms: false,
+        show_notes: false,
+        show_doc_title: true,
+        show_discount: false,
+        electronic_format: "none",
+      });
+    } else if (mode === "complete") {
+      onChange({
+        ...options, mode,
+        show_bank_details: true,
+        show_payment_terms: true,
+        show_notes: true,
+        show_doc_title: true,
+        electronic_format: "none",
+      });
+    } else {
+      onChange({
+        ...options, mode,
+        show_bank_details: true,
+        show_payment_terms: true,
+        show_notes: true,
+        show_doc_title: true,
+        electronic_format: options.electronic_format === "none" ? "facturx" : options.electronic_format,
+      });
+    }
+  };
+
+  return (
+    <div className="p-4 space-y-5 text-xs">
+      <div>
+        <h3 className="text-xs font-semibold uppercase tracking-wider">Opções da fatura</h3>
+        <p className="text-[11px] text-muted-foreground mt-0.5">
+          Personalize layout, secções e idioma.
+        </p>
+      </div>
+
+      {/* Billing mode */}
+      <PanelBlock title="Tipo de faturamento">
+        <div className="grid grid-cols-1 gap-1.5">
+          {BILLING_MODES.map((m) => {
+            const active = options.mode === m.value;
+            return (
+              <button
+                key={m.value}
+                type="button"
+                onClick={() => setMode(m.value)}
+                className={cn(
+                  "text-left rounded-md border px-2.5 py-1.5 transition-colors",
+                  active
+                    ? "border-primary/60 bg-primary/10 text-foreground"
+                    : "border-border/60 hover:bg-accent/40 text-muted-foreground"
+                )}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium">{m.label}</span>
+                  {active && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{m.hint}</p>
+              </button>
+            );
+          })}
+        </div>
+      </PanelBlock>
+
+      {/* Language */}
+      <PanelBlock title="Idioma da fatura">
+        <Select value={options.lang} onValueChange={(v) => set("lang", v as InvoiceLang)}>
+          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {INVOICE_LANGS.map((l) => (
+              <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </PanelBlock>
+
+      {/* Client display options */}
+      <PanelBlock title="Configurações do cliente">
+        <CheckRow label="Endereço de entrega"
+          checked={options.show_delivery_address}
+          onChange={(v) => set("show_delivery_address", v)} />
+        <CheckRow label="Número TVA / IVA"
+          checked={options.show_tva}
+          onChange={(v) => set("show_tva", v)} />
+        <CheckRow label="SIRET / VAT"
+          checked={options.show_siret_vat}
+          onChange={(v) => set("show_siret_vat", v)} />
+        <CheckRow label="Referência do cliente"
+          checked={options.show_client_reference}
+          onChange={(v) => set("show_client_reference", v)} />
+        {options.show_client_reference && (
+          <Input
+            value={options.client_reference}
+            onChange={(e) => set("client_reference", e.target.value)}
+            placeholder="Referência..."
+            className="h-7 text-xs mt-1"
+          />
+        )}
+      </PanelBlock>
+
+      {/* Document sections */}
+      <PanelBlock title="Informações adicionais">
+        <CheckRow label="Dados bancários"
+          checked={options.show_bank_details}
+          onChange={(v) => set("show_bank_details", v)} />
+        <CheckRow label="Condição de pagamento"
+          checked={options.show_payment_terms}
+          onChange={(v) => set("show_payment_terms", v)} />
+        <CheckRow label="Título do documento"
+          checked={options.show_doc_title}
+          onChange={(v) => set("show_doc_title", v)} />
+        {options.show_doc_title && (
+          <Input
+            value={options.doc_title}
+            onChange={(e) => set("doc_title", e.target.value)}
+            className="h-7 text-xs mt-1"
+          />
+        )}
+        <CheckRow label="Campo de observações"
+          checked={options.show_notes}
+          onChange={(v) => set("show_notes", v)} />
+        <CheckRow label="Desconto global"
+          checked={options.show_discount}
+          onChange={(v) => set("show_discount", v)} />
+      </PanelBlock>
+
+      {/* Discount */}
+      {options.show_discount && (
+        <PanelBlock title="Desconto global">
+          <div className="grid grid-cols-2 gap-1.5">
+            <button
+              type="button"
+              onClick={() => set("discount_type", "percent")}
+              className={cn("rounded-md border px-2 py-1 text-[11px]",
+                options.discount_type === "percent" ? "border-primary/60 bg-primary/10" : "border-border/60")}
+            >Percentual %</button>
+            <button
+              type="button"
+              onClick={() => set("discount_type", "fixed")}
+              className={cn("rounded-md border px-2 py-1 text-[11px]",
+                options.discount_type === "fixed" ? "border-primary/60 bg-primary/10" : "border-border/60")}
+            >Valor fixo €</button>
+          </div>
+          <Input
+            type="number" step="0.01" min={0}
+            value={options.discount_value}
+            onChange={(e) => set("discount_value", Number(e.target.value) || 0)}
+            className="h-7 text-xs mt-2 tabular-nums"
+            placeholder={options.discount_type === "percent" ? "0%" : "0,00 €"}
+          />
+        </PanelBlock>
+      )}
+
+      {/* Electronic mode */}
+      {options.mode === "electronic" && (
+        <PanelBlock title="Modo eletrônico" hint="Estrutura preparada — emissão fiscal não ativa.">
+          <Select
+            value={options.electronic_format}
+            onValueChange={(v) => set("electronic_format", v as InvoiceOptions["electronic_format"])}
+          >
+            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="facturx">Factur-X (FR/DE)</SelectItem>
+              <SelectItem value="ubl">UBL 2.1</SelectItem>
+              <SelectItem value="peppol">PEPPOL BIS</SelectItem>
+              <SelectItem value="none">Nenhum</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-[10px] text-muted-foreground mt-2 leading-relaxed">
+            Será usado quando o motor fiscal eletrônico for ativado.
+          </p>
+        </PanelBlock>
+      )}
+    </div>
+  );
+}
+
+function PanelBlock({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-2">
+      <div>
+        <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">{title}</p>
+        {hint && <p className="text-[10px] text-muted-foreground/80 mt-0.5">{hint}</p>}
+      </div>
+      <div className="space-y-1">{children}</div>
+    </div>
+  );
+}
+
+function CheckRow({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="flex items-center gap-2 py-0.5 cursor-pointer hover:text-foreground text-muted-foreground transition-colors">
+      <Checkbox checked={checked} onCheckedChange={(c) => onChange(!!c)} className="h-3.5 w-3.5" />
+      <span className="text-xs">{label}</span>
+    </label>
+  );
+}
+
 function FormSection({
   title, subtitle, children,
 }: { title: string; subtitle?: string; children: React.ReactNode }) {
