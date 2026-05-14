@@ -1339,6 +1339,13 @@ export default function InvoicesScreen() {
 
       <ImportInvoiceDialog open={importOpen} onOpenChange={setImportOpen} />
 
+      <SendInvoiceDialog
+        open={!!sendingInvoice}
+        onOpenChange={(o) => !o && setSendingInvoice(null)}
+        invoice={sendingInvoice}
+        companyName={(companySettings as any)?.legal_name ?? (companySettings as any)?.name ?? BRAND.name}
+      />
+
       {/* ─── Save draft confirmation */}
       <AlertDialog open={confirmDraft} onOpenChange={setConfirmDraft}>
         <AlertDialogContent>
