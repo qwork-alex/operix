@@ -56,7 +56,7 @@ const Dashboard = () => {
       <RevenueChart />
 
       {/* Map - full width */}
-      <ActiveMap />
+      <OperationalMap />
 
       {/* Service Status + Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
