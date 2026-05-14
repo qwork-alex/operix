@@ -963,13 +963,20 @@ export default function InvoicesScreen() {
             <div className="flex-1 overflow-y-auto">
 
           {viewMode === "preview" ? (
-            <div className="p-6 bg-muted/20 min-h-full print:p-0 print:bg-white invoice-print-area">
-              <InvoicePreview
-                form={form}
-                totals={totals}
-                client={(clientsQ.data ?? []).find((c) => c.id === form.client_id) || null}
-                company={companySettings}
-              />
+            <div className="bg-muted/30 print:bg-white invoice-print-area" style={{ minHeight: "100%" }}>
+              <InvoiceA4PreviewFrame>
+                <InvoiceDocumentA4
+                  form={{
+                    ...form,
+                    payment_term_label: PAYMENT_TERMS.find((p) => p.value === form.payment_term)?.label ?? "—",
+                  }}
+                  totals={totals}
+                  client={(clientsQ.data ?? []).find((c) => c.id === form.client_id) || null}
+                  company={companySettings}
+                  brandName={BRAND.name}
+                  brandLogo={BRAND.logo}
+                />
+              </InvoiceA4PreviewFrame>
             </div>
           ) : (
           <div className="px-6 py-5 space-y-6 text-xs">
