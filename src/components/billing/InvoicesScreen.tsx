@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import {
@@ -10,6 +10,7 @@ import {
 import ImportInvoiceDialog from "./ImportInvoiceDialog";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { BRAND } from "@/config/brand";
+import { InvoiceDocumentA4 } from "./InvoiceDocumentA4";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
@@ -963,13 +964,20 @@ export default function InvoicesScreen() {
             <div className="flex-1 overflow-y-auto">
 
           {viewMode === "preview" ? (
-            <div className="p-6 bg-muted/20 min-h-full print:p-0 print:bg-white invoice-print-area">
-              <InvoicePreview
-                form={form}
-                totals={totals}
-                client={(clientsQ.data ?? []).find((c) => c.id === form.client_id) || null}
-                company={companySettings}
-              />
+            <div className="bg-muted/30 print:bg-white invoice-print-area" style={{ minHeight: "100%" }}>
+              <InvoiceA4PreviewFrame>
+                <InvoiceDocumentA4
+                  form={{
+                    ...form,
+                    payment_term_label: PAYMENT_TERMS.find((p) => p.value === form.payment_term)?.label ?? "—",
+                  }}
+                  totals={totals}
+                  client={(clientsQ.data ?? []).find((c) => c.id === form.client_id) || null}
+                  company={companySettings}
+                  brandName={BRAND.name}
+                  brandLogo={BRAND.logo}
+                />
+              </InvoiceA4PreviewFrame>
             </div>
           ) : (
           <div className="px-6 py-5 space-y-6 text-xs">
@@ -2059,6 +2067,56 @@ function InvoicePreview({
         </div>
         <p className="text-center mt-1 text-zinc-400">Documento gerado eletronicamente — válido sem assinatura.</p>
       </footer>
+    </div>
+  );
+}
+
+// ───────────────────────────── A4 Preview Frame
+// Encolhe proporcionalmente o documento A4 (210mm) para caber na largura disponível,
+// preservando a aparência idêntica à impressão real (zoom proporcional, sem distorção).
+function InvoiceA4PreviewFrame({ children }: { children: React.ReactNode }) {
+  const wrapRef = React.useRef<HTMLDivElement | null>(null);
+  const innerRef = React.useRef<HTMLDivElement | null>(null);
+  const [scale, setScale] = React.useState(1);
+  const [innerH, setInnerH] = React.useState(0);
+
+  React.useEffect(() => {
+    const recompute = () => {
+      const wrap = wrapRef.current;
+      const inner = innerRef.current;
+      if (!wrap || !inner) return;
+      const A4_PX = 793.7; // 210mm @ 96dpi
+      const padded = wrap.clientWidth - 32;
+      const s = Math.min(1, padded / A4_PX);
+      setScale(s);
+      setInnerH(inner.scrollHeight * s);
+    };
+    recompute();
+    const ro = new ResizeObserver(recompute);
+    if (wrapRef.current) ro.observe(wrapRef.current);
+    if (innerRef.current) ro.observe(innerRef.current);
+    window.addEventListener("resize", recompute);
+    return () => { ro.disconnect(); window.removeEventListener("resize", recompute); };
+  }, []);
+
+  return (
+    <div
+      ref={wrapRef}
+      className="invoice-a4-frame w-full flex justify-center print:p-0 print:bg-white"
+      style={{ padding: "20px 16px 32px", overflow: "auto" }}
+    >
+      <div
+        style={{ width: `${793.7 * scale}px`, height: innerH || undefined }}
+        className="print:!w-auto print:!h-auto"
+      >
+        <div
+          ref={innerRef}
+          style={{ transform: `scale(${scale})`, transformOrigin: "top left", width: "793.7px" }}
+          className="print:!transform-none print:!w-auto"
+        >
+          {children}
+        </div>
+      </div>
     </div>
   );
 }
