@@ -438,10 +438,11 @@ export default function InvoicesScreen() {
     setFormOpen(true);
   };
 
-  // ── side options panel
+  // ── side options panel & view mode
   const [optionsPanelOpen, setOptionsPanelOpen] = useState(true);
+  const [viewMode, setViewMode] = useState<"edit" | "preview">("edit");
 
-  // ── totals (applies global discount proportionally before tax)
+  const companySettings = useCompanySettings().settings;
   const totals = useMemo(() => {
     const subtotal = form.items.reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0);
     const opt = form.options;
