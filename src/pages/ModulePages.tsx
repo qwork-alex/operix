@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { BrandingCard } from "@/components/settings/BrandingCard";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
