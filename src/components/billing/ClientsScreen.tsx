@@ -519,7 +519,22 @@ function CompanyLookupBar({ onApply }: { onApply: (c: NormalizedCompany) => void
           <Sparkles className="h-3 w-3" />
           Identificação inteligente — SIREN, SIRET, TVA, CNPJ, EIN, GSTIN ou nome
         </div>
-        <span className="font-mono">{labelByType[type]}{detectedCountry ? ` · ${detectedCountry}` : ""}</span>
+        <div className="flex items-center gap-1.5 font-mono">
+          {supportTier && supportTier !== "unknown" && (
+            <span
+              className={cn(
+                "px-1.5 py-0.5 rounded border text-[9px] uppercase tracking-wide",
+                supportTier === "A" && "border-emerald-500/40 text-emerald-400 bg-emerald-500/10",
+                supportTier === "B" && "border-sky-500/40 text-sky-400 bg-sky-500/10",
+                supportTier === "C" && "border-amber-500/40 text-amber-400 bg-amber-500/10",
+              )}
+              title={TIER_LABEL[supportTier]}
+            >
+              Tier {supportTier}
+            </span>
+          )}
+          <span>{labelByType[type]}{detectedCountry ? ` · ${detectedCountry}` : ""}</span>
+        </div>
       </div>
       <div className="flex gap-2">
         <Input
