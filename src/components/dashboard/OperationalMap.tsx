@@ -5,8 +5,16 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { Skeleton } from "@/components/ui/skeleton";
 import maplibregl, { Map as MLMap, GeoJSONSource } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { Users, CloudRain, Zap, Radar, Wrench, FileText, Layers, X, AlertTriangle, Wind, Clock, Gauge, Filter, Play, Pause, RotateCcw } from "lucide-react";
+import { Users, CloudRain, Zap, Radar, Wrench, FileText, Layers, X, AlertTriangle, Wind, Clock, Gauge, Filter, Play, Pause, RotateCcw, Target } from "lucide-react";
 import { OperationalPanel, PanelTeam, PanelOrder } from "./OperationalPanel";
+import {
+  OperationalOpportunities,
+  computeOpportunities,
+  opportunitiesToHeatmapGeoJSON,
+  type OppHailEvent,
+  type OppOrder,
+  type OppTeam,
+} from "./OperationalOpportunities";
 
 /* ------------------------------------------------------------------ */
 /*  Hail severity → premium color palette                              */
@@ -116,7 +124,7 @@ const DARK_STYLE: maplibregl.StyleSpecification = {
 /* ------------------------------------------------------------------ */
 /*  Layer config                                                       */
 /* ------------------------------------------------------------------ */
-type LayerKey = "teams" | "orders" | "operations" | "radar" | "storms" | "hail";
+type LayerKey = "teams" | "orders" | "operations" | "radar" | "storms" | "hail" | "pdr";
 
 const LAYER_DEFS: { key: LayerKey; label: string; icon: any; color: string }[] = [
   { key: "teams", label: "Equipes", icon: Users, color: "#22d3ee" },
@@ -125,6 +133,7 @@ const LAYER_DEFS: { key: LayerKey; label: string; icon: any; color: string }[] =
   { key: "radar", label: "Radar", icon: Radar, color: "#3b82f6" },
   { key: "storms", label: "Tempestades", icon: Zap, color: "#eab308" },
   { key: "hail", label: "Granizo", icon: CloudRain, color: "#ef4444" },
+  { key: "pdr", label: "PDR Intel", icon: Target, color: "#fb923c" },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -177,6 +186,7 @@ export function OperationalMap() {
     radar: true,
     storms: false,
     hail: false,
+    pdr: false,
   });
 
   /* -------- data: service orders (orders + operations inferred) ----- */
@@ -470,6 +480,43 @@ export function OperationalMap() {
       addClusterLayer("teams", "#22d3ee");
       addClusterLayer("operations", "#f59e0b");
 
+      /* ---- PDR Intel heatmap (operational opportunities) ---- */
+      map.addSource("pdr-heat", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] } as any,
+      });
+      map.addLayer({
+        id: "pdr-heatmap",
+        type: "heatmap",
+        source: "pdr-heat",
+        paint: {
+          "heatmap-weight": ["coalesce", ["get", "weight"], 0.3],
+          "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 3, 0.6, 9, 2],
+          "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 3, 22, 9, 60],
+          "heatmap-opacity": 0.55,
+          "heatmap-color": [
+            "interpolate", ["linear"], ["heatmap-density"],
+            0,    "rgba(0,0,0,0)",
+            0.2,  "rgba(34,211,238,0.55)",
+            0.45, "rgba(234,179,8,0.7)",
+            0.7,  "rgba(249,115,22,0.85)",
+            1,    "rgba(239,68,68,1)",
+          ],
+        },
+      });
+      map.addLayer({
+        id: "pdr-points",
+        type: "circle",
+        source: "pdr-heat",
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["get", "potential"], 0, 4, 100, 16],
+          "circle-color": ["get", "color"],
+          "circle-opacity": 0.85,
+          "circle-stroke-color": "rgba(255,255,255,0.95)",
+          "circle-stroke-width": 1.5,
+        },
+      });
+
       /* ---- Hail cells (real data, severity-colored, not clustered) ---- */
       map.addSource("hail", {
         type: "geojson",
@@ -577,7 +624,7 @@ export function OperationalMap() {
         setSelectedHailId(f.properties.id);
         map.easeTo({ center: f.geometry.coordinates, duration: 600 });
       };
-      ["hail-core", "hail-ring", "hail-halo"].forEach((id) => {
+      ["hail-core", "hail-ring", "hail-halo", "pdr-points"].forEach((id) => {
         map.on("click", id, onHailClick);
         map.on("mouseenter", id, () => (map.getCanvas().style.cursor = "pointer"));
         map.on("mouseleave", id, () => (map.getCanvas().style.cursor = ""));
@@ -609,6 +656,48 @@ export function OperationalMap() {
     if (!mapReady || !mapRef.current) return;
     (mapRef.current.getSource("hail") as GeoJSONSource | undefined)?.setData(hailGeo as any);
   }, [mapReady, hailGeo]);
+
+  /* -------- PDR Operational Opportunities (intelligence layer) ----- */
+  const oppOrders: OppOrder[] = useMemo(
+    () => (ordersGeo.features as any[]).map((f) => ({
+      id: f.properties?.id,
+      city: f.properties?.city,
+      platform: f.properties?.platform,
+      plate: f.properties?.plate,
+      status: f.properties?.status,
+      lng: f.geometry.coordinates[0],
+      lat: f.geometry.coordinates[1],
+    })),
+    [ordersGeo],
+  );
+  const oppTeams: OppTeam[] = useMemo(
+    () => (teamsGeo.features as any[]).map((f) => ({
+      lng: f.geometry.coordinates[0],
+      lat: f.geometry.coordinates[1],
+      city: f.properties?.city,
+      when: f.properties?.when,
+    })),
+    [teamsGeo],
+  );
+  const oppHail: OppHailEvent[] = useMemo(
+    () => visibleHailEvents.map((h) => ({
+      id: h.id, city: h.city, region: h.region, country: h.country,
+      lat: h.lat, lng: h.lng, radius_km: h.radius_km, severity: h.severity,
+      status: h.status, hail_size_mm: h.hail_size_mm, probability: h.probability,
+    })),
+    [visibleHailEvents],
+  );
+  const opportunities = useMemo(
+    () => computeOpportunities(oppHail, oppOrders, oppTeams),
+    [oppHail, oppOrders, oppTeams],
+  );
+  const pdrHeatGeo = useMemo(() => opportunitiesToHeatmapGeoJSON(opportunities), [opportunities]);
+
+  // Push PDR heatmap data
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    (mapRef.current.getSource("pdr-heat") as GeoJSONSource | undefined)?.setData(pdrHeatGeo as any);
+  }, [mapReady, pdrHeatGeo]);
 
   // Soft pulse animation for confirmed/ongoing hail halos (cheap; modulates opacity only)
   useEffect(() => {
@@ -648,6 +737,8 @@ export function OperationalMap() {
     });
     // Hail layers
     ["hail-halo", "hail-ring", "hail-core"].forEach((id) => setVis(id, layers.hail));
+    // PDR Intel layers
+    ["pdr-heatmap", "pdr-points"].forEach((id) => setVis(id, layers.pdr));
   }, [layers, mapReady]);
 
   /* -------- RainViewer radar layer --------------------------------- */
@@ -815,6 +906,17 @@ export function OperationalMap() {
             lat: f.geometry.coordinates[1],
           }))}
           onClose={() => setSelectedHailId(null)}
+        />
+      )}
+
+      {/* -------- PDR Operational Opportunities (intelligence panel) -------- */}
+      {layers.pdr && (
+        <OperationalOpportunities
+          opportunities={opportunities}
+          onSelect={(opp) => {
+            setSelectedHailId(opp.id);
+            mapRef.current?.easeTo({ center: [opp.hail.lng, opp.hail.lat], zoom: 7, duration: 700 });
+          }}
         />
       )}
     </div>
