@@ -454,7 +454,7 @@ export function InvoiceDocumentA4({
 
       {/* ═══════════ 4. TOTALS ═══════════ */}
       <section className="avoid-break" style={{ marginTop: "18px", display: "flex", justifyContent: "flex-end", pageBreakInside: "avoid", breakInside: "avoid" }}>
-        <div style={{ width: "270px" }}>
+        <div style={{ width: isQuick ? "240px" : "270px" }}>
           <Row label={t.subtotal} value={fmtMoney(totals.subtotal)} />
           {opt.show_discount && totals.discount > 0 && (
             <Row
@@ -463,14 +463,14 @@ export function InvoiceDocumentA4({
               tone="rose"
             />
           )}
-          <Row label={t.totalNet} value={fmtMoney(totals.netSubtotal)} divider />
-          {Array.from(taxBuckets.entries()).filter(([, v]) => v > 0).map(([rate, val]) => (
+          {!isQuick && <Row label={t.totalNet} value={fmtMoney(totals.netSubtotal)} divider />}
+          {!isQuick && Array.from(taxBuckets.entries()).filter(([, v]) => v > 0).map(([rate, val]) => (
             <Row key={rate} label={t.taxRow(rate)} value={fmtMoney(val)} muted />
           ))}
-          <Row label={t.totalTax} value={fmtMoney(totals.tax)} divider />
+          {!isQuick && <Row label={t.totalTax} value={fmtMoney(totals.tax)} divider />}
           <div style={{
             display: "flex", justifyContent: "space-between", alignItems: "baseline",
-            marginTop: "16px", padding: "12px 14px", background: "#0a0a0a", color: "#fff",
+            marginTop: isQuick ? "10px" : "16px", padding: "12px 14px", background: "#0a0a0a", color: "#fff",
           }}>
             <span style={{ fontSize: "9.5px", letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 600 }}>{t.totalGross}</span>
             <span style={{ fontSize: "14px", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
@@ -480,32 +480,32 @@ export function InvoiceDocumentA4({
         </div>
       </section>
 
-      {/* ═══════════ 5. DATAS + CONDIÇÕES (centralizado) ═══════════ */}
+      {/* ═══════════ 5. DATAS + CONDIÇÕES ═══════════ */}
       <section className="avoid-break" style={{
         marginTop: "22px", paddingTop: "12px", borderTop: "1px solid #e4e4e7",
-        display: "flex", justifyContent: "center", gap: "48px", flexWrap: "wrap",
+        display: "flex", justifyContent: "center", gap: isQuick ? "32px" : "48px", flexWrap: "wrap",
         textAlign: "center",
         pageBreakInside: "avoid", breakInside: "avoid",
       }}>
         <DateBlock label={t.issueDate} value={fmtDate(form.issue_date)} />
         <DateBlock label={t.dueDate} value={fmtDate(form.due_date)} />
-        {opt.show_payment_terms !== false && (
+        {!isQuick && opt.show_payment_terms !== false && (
           <DateBlock label={t.paymentTerms} value={paymentLabel} />
         )}
-        {opt.show_client_reference && opt.client_reference && (
+        {!isQuick && opt.show_client_reference && opt.client_reference && (
           <DateBlock label={t.clientReference} value={opt.client_reference} />
         )}
       </section>
 
-      {/* ═══════════ 6. OBSERVAÇÕES / TEXTO LEGAL (centralizado) ═══════════ */}
-      {((opt.show_notes !== false && form.notes) || form.legal_text) && (
+      {/* ═══════════ 6. OBSERVAÇÕES / TEXTO LEGAL ═══════════ */}
+      {((opt.show_notes !== false && form.notes) || (!isQuick && form.legal_text)) && (
         <section style={{ marginTop: "18px", textAlign: "center", pageBreakInside: "avoid", breakInside: "avoid" }}>
           {opt.show_notes !== false && form.notes && (
             <p style={{ fontSize: "10px", color: "#3f3f46", whiteSpace: "pre-wrap", lineHeight: 1.55, maxWidth: "150mm", margin: "0 auto" }}>
               {form.notes}
             </p>
           )}
-          {form.legal_text && (
+          {!isQuick && form.legal_text && (
             <p style={{
               fontSize: "9px", color: "#71717a", fontStyle: "italic",
               marginTop: form.notes ? "8px" : "0", lineHeight: 1.5,
@@ -517,25 +517,87 @@ export function InvoiceDocumentA4({
         </section>
       )}
 
-      {/* ═══════════ 7. RODAPÉ INSTITUCIONAL FIXO ═══════════ */}
+      {/* ═══════════ 6.5 ELECTRONIC BLOCK ═══════════ */}
+      {isElectronic && (
+        <section
+          className="avoid-break"
+          aria-label={mt.electronicBlock}
+          style={{
+            marginTop: "20px",
+            padding: "10px 12px",
+            border: "1px solid #d4d4d8",
+            background: "#fafafa",
+            borderRadius: "3px",
+            pageBreakInside: "avoid", breakInside: "avoid",
+            fontFamily: "'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace",
+          }}
+        >
+          <div style={{
+            fontSize: "8px", letterSpacing: "0.18em", textTransform: "uppercase",
+            color: "#52525b", fontWeight: 700, marginBottom: "6px",
+          }}>
+            {mt.electronicBlock}
+          </div>
+          <div style={{
+            display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "4px 24px",
+            fontSize: "8.5px", color: "#27272a",
+          }}>
+            <ElecRow k={mt.electronicFormat} v={FORMAT_META[electronicFormat].label} />
+            <ElecRow k={mt.schema} v={FORMAT_META[electronicFormat].schema} />
+            <ElecRow k={mt.documentId} v={form.invoice_number || "—"} />
+            <ElecRow k={mt.issuedAt} v={form.issue_date ? new Date(form.issue_date).toISOString() : "—"} />
+            {opt.show_client_reference && opt.client_reference && (
+              <ElecRow k={mt.buyerRef} v={opt.client_reference} />
+            )}
+            {(client?.tva_intracom || client?.tax_id) && (
+              <ElecRow k={`${t.vat} (${t.taxId})`} v={(client.tva_intracom || client.tax_id) as string} />
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* ═══════════ 7. RODAPÉ ═══════════ */}
       <footer style={{
-        position: "absolute", left: 0, right: 0, bottom: "10mm",
+        position: isQuick ? "static" : "absolute",
+        left: 0, right: 0,
+        bottom: isQuick ? undefined : "10mm",
+        marginTop: isQuick ? "24px" : 0,
         textAlign: "center", fontSize: "8px", color: "#71717a", lineHeight: 1.55,
-        padding: "0 14mm",
+        padding: isQuick ? "8px 0 0" : "0 14mm",
       }} className="invoice-a4-footer">
         <div style={{ borderTop: "1px solid #e4e4e7", paddingTop: "8px" }}>
           <div style={{ color: "#27272a", fontWeight: 600, fontSize: "8.5px" }}>{companyName}</div>
-          {institutionalParts.length > 0 && (
-            <div style={{ color: "#71717a", marginTop: "2px" }}>
-              {institutionalParts.join(" · ")}
-            </div>
-          )}
-          {(companyIban || companyBic) && (
-            <div style={{ color: "#71717a", marginTop: "1px" }}>
-              {companyIban && <span>{t.iban} {companyIban}</span>}
-              {companyIban && companyBic && <span> · </span>}
-              {companyBic && <span>{t.bic} {companyBic}</span>}
-            </div>
+          {isQuick ? (
+            (companyEmail || companyPhone) && (
+              <div style={{ color: "#71717a", marginTop: "2px" }}>
+                {companyEmail && <span>{companyEmail}</span>}
+                {companyEmail && companyPhone && <span> · </span>}
+                {companyPhone && <span>{t.phoneShort} {companyPhone}</span>}
+              </div>
+            )
+          ) : (
+            <>
+              {institutionalParts.length > 0 && (
+                <div style={{ color: "#71717a", marginTop: "2px" }}>
+                  {institutionalParts.join(" · ")}
+                </div>
+              )}
+              {(companyIban || companyBic) && (
+                <div style={{ color: "#71717a", marginTop: "1px" }}>
+                  {companyIban && <span>{t.iban} {companyIban}</span>}
+                  {companyIban && companyBic && <span> · </span>}
+                  {companyBic && <span>{t.bic} {companyBic}</span>}
+                </div>
+              )}
+              {isElectronic && (
+                <div style={{
+                  color: "#0a0a0a", marginTop: "4px",
+                  fontSize: "7.5px", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600,
+                }}>
+                  {mt.techNotice}
+                </div>
+              )}
+            </>
           )}
         </div>
       </footer>
