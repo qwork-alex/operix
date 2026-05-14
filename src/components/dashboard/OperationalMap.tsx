@@ -214,10 +214,12 @@ export function OperationalMap() {
   const { data: hailEvents = [] } = useQuery<HailEvent[]>({
     queryKey: ["op-map-hail"],
     queryFn: async () => {
+      // last 24h window keeps replay meaningful and bounded
+      const since = new Date(Date.now() - 24 * 3600_000).toISOString();
       const { data, error } = await supabase
         .from("hail_events")
         .select("*")
-        .neq("status", "closed")
+        .or(`forecast_time.gte.${since},observed_time.gte.${since},created_at.gte.${since}`)
         .order("forecast_time", { ascending: true });
       if (error) throw error;
       return (data ?? []) as HailEvent[];
@@ -235,6 +237,57 @@ export function OperationalMap() {
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [queryClient]);
+
+  /* -------- Hail filters & timeline replay -------------------------- */
+  type StatusFilter = "all" | "forecast" | "ongoing" | "confirmed";
+  const [hailStatusFilter, setHailStatusFilter] = useState<StatusFilter>("all");
+  const [hailSeverityFilter, setHailSeverityFilter] = useState<Record<HailSeverity, boolean>>({
+    low: true, moderate: true, severe: true, extreme: true,
+  });
+  const [hailMinSizeMm, setHailMinSizeMm] = useState<number>(0);
+  const [hailWindowHours, setHailWindowHours] = useState<number>(6); // last N hours
+  const [replayCursor, setReplayCursor] = useState<number>(0); // 0..1 (1 = now)
+  const [replayPlaying, setReplayPlaying] = useState(false);
+
+  // auto-advance replay
+  useEffect(() => {
+    if (!replayPlaying) return;
+    const id = window.setInterval(() => {
+      setReplayCursor((c) => {
+        const next = c + 0.02;
+        if (next >= 1) { setReplayPlaying(false); return 1; }
+        return next;
+      });
+    }, 200);
+    return () => window.clearInterval(id);
+  }, [replayPlaying]);
+
+  const replayTimeMs = useMemo(() => {
+    const windowMs = hailWindowHours * 3600_000;
+    const start = Date.now() - windowMs;
+    return start + windowMs * replayCursor;
+  }, [hailWindowHours, replayCursor]);
+
+  const visibleHailEvents = useMemo(() => {
+    return hailEvents.filter((h) => {
+      if (!hailSeverityFilter[h.severity]) return false;
+      if (hailMinSizeMm > 0 && (h.hail_size_mm ?? 0) < hailMinSizeMm) return false;
+
+      if (hailStatusFilter !== "all") {
+        if (hailStatusFilter === "ongoing") {
+          if (h.status !== "ongoing" && h.status !== "confirmed") return false;
+        } else if (h.status !== hailStatusFilter) return false;
+      }
+
+      // Time window + replay scrubbing
+      const ref = new Date(h.observed_time ?? h.forecast_time ?? h.expires_at ?? Date.now()).getTime();
+      const windowStart = Date.now() - hailWindowHours * 3600_000;
+      if (ref < windowStart) return false;
+      // Hide events that have not yet "happened" at the replay cursor
+      if (ref > replayTimeMs && replayCursor < 1) return false;
+      return true;
+    });
+  }, [hailEvents, hailStatusFilter, hailSeverityFilter, hailMinSizeMm, hailWindowHours, replayTimeMs, replayCursor]);
 
   const [selectedHailId, setSelectedHailId] = useState<string | null>(null);
   const selectedHail = useMemo(
