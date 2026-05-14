@@ -1037,7 +1037,44 @@ function KpiCard({ label, value, accent }: { label: string; value: string; accen
   );
 }
 
-function Field({ label, children, full }: { label: string; children: React.ReactNode; full?: boolean }) {
+function FormSection({
+  title, subtitle, children,
+}: { title: string; subtitle?: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-3">
+      <div className="flex items-baseline justify-between border-b border-border/40 pb-1.5">
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground">{title}</h3>
+          {subtitle && <p className="text-[11px] text-muted-foreground mt-0.5">{subtitle}</p>}
+        </div>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function ClientPreview({ client }: { client: Client | null }) {
+  if (!client) {
+    return (
+      <div className="rounded-md border border-dashed border-border/60 px-3 py-2.5 text-[11px] text-muted-foreground flex items-center">
+        Selecione um cliente para carregar os dados fiscais e de contacto.
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-md border border-border/60 bg-muted/10 px-3 py-2.5 text-[11px] space-y-0.5">
+      <p className="font-medium text-foreground text-xs">{client.name}</p>
+      {client.address && <p className="text-muted-foreground">{client.address}</p>}
+      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-muted-foreground">
+        {client.contact_email && <span>{client.contact_email}</span>}
+        {client.contact_phone && <span>{client.contact_phone}</span>}
+      </div>
+      <p className="text-[10px] text-muted-foreground/70 italic pt-1">
+        TVA / SIRET / moeda · disponíveis após enriquecimento do cadastro.
+      </p>
+    </div>
+  );
+}
   return (
     <div className={cn("space-y-1", full && "sm:col-span-2")}>
       <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</Label>
