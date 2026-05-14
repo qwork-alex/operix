@@ -1188,6 +1188,7 @@ export type Database = {
           id: string
           idempotency_key: string | null
           invoice_id: string
+          kind: string
           pdf_path: string | null
           provider: string
           recipient: string
@@ -1204,6 +1205,7 @@ export type Database = {
           id?: string
           idempotency_key?: string | null
           invoice_id: string
+          kind?: string
           pdf_path?: string | null
           provider?: string
           recipient: string
@@ -1220,6 +1222,7 @@ export type Database = {
           id?: string
           idempotency_key?: string | null
           invoice_id?: string
+          kind?: string
           pdf_path?: string | null
           provider?: string
           recipient?: string

@@ -352,6 +352,7 @@ export default function InvoicesScreen() {
   const [confirmDelete, setConfirmDelete] = useState<Invoice | null>(null);
   const [confirmDraft, setConfirmDraft] = useState(false);
   const [sendingInvoice, setSendingInvoice] = useState<Invoice | null>(null);
+  const [reminderInvoice, setReminderInvoice] = useState<Invoice | null>(null);
 
   // ── data
   const invoicesQ = useQuery({
@@ -362,7 +363,14 @@ export default function InvoicesScreen() {
         .select("*")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []) as unknown as Invoice[];
+      const today = new Date().toISOString().slice(0, 10);
+      // Auto-derive overdue: pending/partial invoices whose due_date has passed
+      return (data ?? []).map((r: any) => {
+        if ((r.status === "pending" || r.status === "partial") && r.due_date && r.due_date < today) {
+          return { ...r, status: "overdue" };
+        }
+        return r;
+      }) as unknown as Invoice[];
     },
   });
 
@@ -875,6 +883,14 @@ export default function InvoicesScreen() {
                           <DropdownMenuItem onClick={() => setSendingInvoice(r)}>
                             <Send className="h-3.5 w-3.5 mr-2" /> Enviar por email
                           </DropdownMenuItem>
+                          {r.status === "overdue" && (
+                            <DropdownMenuItem
+                              onClick={() => setReminderInvoice(r)}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Send className="h-3.5 w-3.5 mr-2" /> Enviar cobrança
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuSeparator />
                           <DropdownMenuItem className="text-destructive" onClick={() => setConfirmDelete(r)}>
                             <Trash2 className="h-3.5 w-3.5 mr-2" /> Eliminar
@@ -1345,6 +1361,14 @@ export default function InvoicesScreen() {
         onOpenChange={(o) => !o && setSendingInvoice(null)}
         invoice={sendingInvoice}
         companyName={(companySettings as any)?.legal_name ?? (companySettings as any)?.name ?? BRAND.name}
+      />
+
+      <SendInvoiceDialog
+        open={!!reminderInvoice}
+        onOpenChange={(o) => !o && setReminderInvoice(null)}
+        invoice={reminderInvoice}
+        companyName={(companySettings as any)?.legal_name ?? (companySettings as any)?.name ?? BRAND.name}
+        mode="reminder"
       />
 
       {/* ─── Save draft confirmation */}

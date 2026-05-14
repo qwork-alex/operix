@@ -100,6 +100,7 @@ Deno.serve(async (req) => {
       pdfBase64?: string;       // optional inline PDF
       pdfFileName?: string;
       idempotencyKey?: string;
+      kind?: "initial" | "reminder";
     };
 
     if (!body.invoiceId || !body.recipient || !body.subject) {
@@ -137,6 +138,26 @@ Deno.serve(async (req) => {
       }
     }
 
+    const kind = body.kind === "reminder" ? "reminder" : "initial";
+
+    // Anti-spam: prevent reminder if one was sent in the last 24h
+    if (kind === "reminder") {
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { data: recent } = await admin
+        .from("invoice_send_log")
+        .select("id,created_at")
+        .eq("invoice_id", body.invoiceId)
+        .eq("kind", "reminder")
+        .gte("created_at", since)
+        .limit(1);
+      if (recent && recent.length > 0) {
+        return new Response(JSON.stringify({
+          ok: false, throttled: true,
+          error: "Uma cobrança já foi enviada nas últimas 24h.",
+        }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+    }
+
     // Insert pending log
     const { data: logRow, error: insErr } = await admin
       .from("invoice_send_log")
@@ -151,6 +172,7 @@ Deno.serve(async (req) => {
         status: "pending",
         idempotency_key: body.idempotencyKey ?? null,
         sent_by: user.id,
+        kind,
       })
       .select()
       .single();
