@@ -538,18 +538,18 @@ export function OperationalMap() {
     const map = mapRef.current;
     let cancelled = false;
 
-    const cleanupRadar = () => {
-      ["radar-layer", "storms-layer", "hail-layer"].forEach((id) => {
+    const cleanupRaster = () => {
+      ["radar-layer", "storms-layer"].forEach((id) => {
         if (map.getLayer(id)) map.removeLayer(id);
       });
-      ["radar-src", "storms-src", "hail-src"].forEach((id) => {
+      ["radar-src", "storms-src"].forEach((id) => {
         if (map.getSource(id)) map.removeSource(id);
       });
     };
 
-    const wantsRadar = layers.radar || layers.storms || layers.hail;
-    if (!wantsRadar) {
-      cleanupRadar();
+    const wantsRaster = layers.radar || layers.storms;
+    if (!wantsRaster) {
+      cleanupRaster();
       return;
     }
 
@@ -562,7 +562,6 @@ export function OperationalMap() {
         const last = frames[frames.length - 1];
         if (!last) return;
         const host = json.host as string;
-        // Radar (color scheme 2 = universal blue)
         if (layers.radar && !map.getSource("radar-src")) {
           map.addSource("radar-src", {
             type: "raster",
@@ -574,9 +573,8 @@ export function OperationalMap() {
             type: "raster",
             source: "radar-src",
             paint: { "raster-opacity": 0.55 },
-          });
+          }, "hail-halo");
         }
-        // Storms (color scheme 7 = lightning red/yellow), threshold via opacity
         if (layers.storms && !map.getSource("storms-src")) {
           map.addSource("storms-src", {
             type: "raster",
@@ -588,21 +586,7 @@ export function OperationalMap() {
             type: "raster",
             source: "storms-src",
             paint: { "raster-opacity": 0.65 },
-          });
-        }
-        // Hail proxy (high-intensity radar, color scheme 4 + reddish tint)
-        if (layers.hail && !map.getSource("hail-src")) {
-          map.addSource("hail-src", {
-            type: "raster",
-            tiles: [`${host}${last.path}/256/{z}/{x}/{y}/4/1_1.png`],
-            tileSize: 256,
-          });
-          map.addLayer({
-            id: "hail-layer",
-            type: "raster",
-            source: "hail-src",
-            paint: { "raster-opacity": 0.6 },
-          });
+          }, "hail-halo");
         }
       } catch (e) {
         console.warn("[OperationalMap] radar fetch failed", e);
@@ -612,7 +596,7 @@ export function OperationalMap() {
     return () => {
       cancelled = true;
     };
-  }, [layers.radar, layers.storms, layers.hail, mapReady]);
+  }, [layers.radar, layers.storms, mapReady]);
 
   const toggleLayer = useCallback((k: LayerKey) => {
     setLayers((prev) => ({ ...prev, [k]: !prev[k] }));
