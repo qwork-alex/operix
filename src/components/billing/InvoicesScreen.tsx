@@ -5,7 +5,10 @@ import {
   Search, Plus, Filter, Download, FileText, FileSpreadsheet,
   MoreHorizontal, Eye, Pencil, Trash2, ChevronLeft, ChevronRight,
   X, History, Loader2, ArrowDownToLine, ArrowUpFromLine,
+  Printer, FileEdit,
 } from "lucide-react";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { BRAND } from "@/config/brand";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
