@@ -10,6 +10,7 @@ import {
 import ImportInvoiceDialog from "./ImportInvoiceDialog";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { BRAND } from "@/config/brand";
+import { InvoiceDocumentA4 } from "./InvoiceDocumentA4";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
