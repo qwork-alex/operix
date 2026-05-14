@@ -1124,10 +1124,11 @@ export default function InvoicesScreen() {
             </FormSection>
             )}
               </div>
+          )}
             </div>
 
             {/* ─── Right side options panel */}
-            {optionsPanelOpen && (
+            {viewMode === "edit" && optionsPanelOpen && (
               <aside className="hidden md:flex w-72 lg:w-80 shrink-0 flex-col border-l border-border/50 bg-muted/10 overflow-y-auto">
                 <InvoiceOptionsPanel
                   options={form.options}
