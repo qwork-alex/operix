@@ -1978,7 +1978,7 @@ function InvoicePreview({
       </section>
 
       {/* TOTALS */}
-      <section className="mt-6 flex justify-end">
+      <section className="mt-6 flex justify-end avoid-break">
         <div className="w-72">
           <div className="flex justify-between py-1.5 text-[11px]">
             <span className="text-zinc-500">Subtotal</span>
