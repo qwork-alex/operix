@@ -844,6 +844,16 @@ export default function InvoicesScreen() {
           <div className="flex-1 flex min-h-0 overflow-hidden">
             <div className="flex-1 overflow-y-auto">
 
+          {viewMode === "preview" ? (
+            <div className="p-6 bg-muted/20 min-h-full print:p-0 print:bg-white">
+              <InvoicePreview
+                form={form}
+                totals={totals}
+                client={(clientsQ.data ?? []).find((c) => c.id === form.client_id) || null}
+                company={companySettings}
+              />
+            </div>
+          ) : (
           <div className="px-6 py-5 space-y-6 text-xs">
             {/* SECTION 1 — Identification */}
             <FormSection title="Identificação" subtitle="Dados gerais da fatura">
