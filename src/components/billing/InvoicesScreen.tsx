@@ -435,15 +435,27 @@ export default function InvoicesScreen() {
     setFormOpen(true);
   };
 
-  // ── totals
+  // ── side options panel
+  const [optionsPanelOpen, setOptionsPanelOpen] = useState(true);
+
+  // ── totals (applies global discount proportionally before tax)
   const totals = useMemo(() => {
     const subtotal = form.items.reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0);
+    const opt = form.options;
+    let discount = 0;
+    if (opt.show_discount && subtotal > 0) {
+      discount = opt.discount_type === "percent"
+        ? subtotal * ((Number(opt.discount_value) || 0) / 100)
+        : Math.min(Number(opt.discount_value) || 0, subtotal);
+    }
+    const netSubtotal = Math.max(0, subtotal - discount);
+    const ratio = subtotal > 0 ? netSubtotal / subtotal : 1;
     const tax = form.items.reduce((s, it) => {
-      const line = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0);
+      const line = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0) * ratio;
       return s + line * ((Number(it.tax_rate) || 0) / 100);
     }, 0);
-    return { subtotal, tax, total: subtotal + tax };
-  }, [form.items]);
+    return { subtotal, discount, netSubtotal, tax, total: netSubtotal + tax };
+  }, [form.items, form.options]);
 
   const submitForm = () => {
     if (!form.invoice_number.trim()) {
