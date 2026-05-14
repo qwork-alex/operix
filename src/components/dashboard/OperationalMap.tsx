@@ -509,6 +509,12 @@ export function OperationalMap() {
     (map.getSource("operations") as GeoJSONSource | undefined)?.setData(operationsGeo as any);
   }, [mapReady, ordersGeo, teamsGeo, operationsGeo]);
 
+  // Push hail data
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    (mapRef.current.getSource("hail") as GeoJSONSource | undefined)?.setData(hailGeo as any);
+  }, [mapReady, hailGeo]);
+
   /* -------- Toggle layer visibility -------------------------------- */
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
@@ -522,6 +528,8 @@ export function OperationalMap() {
       setVis(`${k}-points`, layers[k]);
       setVis(`${k}-glow`, layers[k]);
     });
+    // Hail layers
+    ["hail-halo", "hail-ring", "hail-core"].forEach((id) => setVis(id, layers.hail));
   }, [layers, mapReady]);
 
   /* -------- RainViewer radar layer --------------------------------- */
