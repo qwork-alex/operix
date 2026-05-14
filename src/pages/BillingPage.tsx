@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import InvoicesScreen from "@/components/billing/InvoicesScreen";
 import PaymentsScreen from "@/components/billing/PaymentsScreen";
 import ReconciliationScreen from "@/components/billing/ReconciliationScreen";
+import UpcomingBillsScreen from "@/components/billing/UpcomingBillsScreen";
 
 // ─────────────────────────────────────────────────────────────
 // Sub-nav definition
@@ -356,7 +357,8 @@ export default function BillingPage() {
         <Route path="faturas" element={<InvoicesScreen />} />
         <Route path="pagamentos" element={<PaymentsScreen />} />
         <Route path="conciliacao" element={<ReconciliationScreen />} />
-        {SUB_NAV.filter((i) => !["faturas", "pagamentos", "conciliacao"].includes(i.slug)).map((item) => (
+        <Route path="contas-a-vencer" element={<UpcomingBillsScreen />} />
+        {SUB_NAV.filter((i) => !["faturas", "pagamentos", "conciliacao", "contas-a-vencer"].includes(i.slug)).map((item) => (
           <Route
             key={item.slug}
             path={item.slug}
