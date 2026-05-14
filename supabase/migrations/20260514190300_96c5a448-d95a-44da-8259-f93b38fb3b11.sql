@@ -1,0 +1,1 @@
+ALTER TABLE public.billing_invoices ADD COLUMN IF NOT EXISTS customer_snapshot jsonb;
