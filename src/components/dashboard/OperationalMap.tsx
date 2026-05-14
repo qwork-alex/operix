@@ -288,6 +288,26 @@ export function OperationalMap() {
     return { type: "FeatureCollection", features };
   }, [ordersGeo]);
 
+  const hailGeo = useMemo(() => {
+    const features = hailEvents.map((h) => ({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [h.lng, h.lat] },
+      properties: {
+        id: h.id,
+        severity: h.severity,
+        status: h.status,
+        radius_km: h.radius_km,
+        color: HAIL_COLORS[h.severity] ?? HAIL_COLORS.low,
+        // pixel radius scales softly with severity; kept modest for performance
+        size_factor:
+          h.severity === "extreme" ? 28 :
+          h.severity === "severe" ? 22 :
+          h.severity === "moderate" ? 16 : 12,
+      },
+    }));
+    return { type: "FeatureCollection", features };
+  }, [hailEvents]);
+
   /* -------- Init map ------------------------------------------------ */
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
