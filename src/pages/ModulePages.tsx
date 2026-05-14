@@ -1889,6 +1889,7 @@ export function SettingsPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <BrandingCard />
         <Card className="border-border/50">
           <CardHeader><CardTitle className="text-sm">{t("settings.company")}</CardTitle></CardHeader>
           <CardContent className="space-y-4">
