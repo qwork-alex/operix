@@ -124,7 +124,7 @@ const DARK_STYLE: maplibregl.StyleSpecification = {
 /* ------------------------------------------------------------------ */
 /*  Layer config                                                       */
 /* ------------------------------------------------------------------ */
-type LayerKey = "teams" | "orders" | "operations" | "radar" | "storms" | "hail";
+type LayerKey = "teams" | "orders" | "operations" | "radar" | "storms" | "hail" | "pdr";
 
 const LAYER_DEFS: { key: LayerKey; label: string; icon: any; color: string }[] = [
   { key: "teams", label: "Equipes", icon: Users, color: "#22d3ee" },
@@ -133,6 +133,7 @@ const LAYER_DEFS: { key: LayerKey; label: string; icon: any; color: string }[] =
   { key: "radar", label: "Radar", icon: Radar, color: "#3b82f6" },
   { key: "storms", label: "Tempestades", icon: Zap, color: "#eab308" },
   { key: "hail", label: "Granizo", icon: CloudRain, color: "#ef4444" },
+  { key: "pdr", label: "PDR Intel", icon: Target, color: "#fb923c" },
 ];
 
 /* ------------------------------------------------------------------ */
