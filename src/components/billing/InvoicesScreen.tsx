@@ -883,6 +883,14 @@ export default function InvoicesScreen() {
                           <DropdownMenuItem onClick={() => setSendingInvoice(r)}>
                             <Send className="h-3.5 w-3.5 mr-2" /> Enviar por email
                           </DropdownMenuItem>
+                          {r.status === "overdue" && (
+                            <DropdownMenuItem
+                              onClick={() => setReminderInvoice(r)}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Send className="h-3.5 w-3.5 mr-2" /> Enviar cobrança
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuSeparator />
                           <DropdownMenuItem className="text-destructive" onClick={() => setConfirmDelete(r)}>
                             <Trash2 className="h-3.5 w-3.5 mr-2" /> Eliminar
