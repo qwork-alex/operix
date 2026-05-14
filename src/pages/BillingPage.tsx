@@ -357,7 +357,8 @@ export default function BillingPage() {
         <Route path="faturas" element={<InvoicesScreen />} />
         <Route path="pagamentos" element={<PaymentsScreen />} />
         <Route path="conciliacao" element={<ReconciliationScreen />} />
-        {SUB_NAV.filter((i) => !["faturas", "pagamentos", "conciliacao"].includes(i.slug)).map((item) => (
+        <Route path="contas-a-vencer" element={<UpcomingBillsScreen />} />
+        {SUB_NAV.filter((i) => !["faturas", "pagamentos", "conciliacao", "contas-a-vencer"].includes(i.slug)).map((item) => (
           <Route
             key={item.slug}
             path={item.slug}
