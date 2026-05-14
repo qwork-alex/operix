@@ -2015,7 +2015,7 @@ function InvoicePreview({
 
       {/* BANK DETAILS */}
       {opt.show_bank_details && (form.bank_iban || form.bank_bic || form.bank_name) && (
-        <section className="mt-8 rounded-sm border border-zinc-200 bg-zinc-50/60 p-4">
+        <section className="mt-8 rounded-sm border border-zinc-200 bg-zinc-50/60 p-4 avoid-break">
           <p className="text-[9px] uppercase tracking-[0.18em] text-zinc-500 font-semibold">Dados bancários</p>
           <div className="grid grid-cols-3 gap-4 mt-2 text-[11px]">
             {form.bank_name && (
