@@ -11,6 +11,7 @@ import ImportInvoiceDialog from "./ImportInvoiceDialog";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { BRAND } from "@/config/brand";
 import { InvoiceDocumentA4 } from "./InvoiceDocumentA4";
+import { getPaymentTermLabel } from "@/i18n/invoices";
 import { SendInvoiceDialog } from "./SendInvoiceDialog";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
