@@ -38,10 +38,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { getCurrentUserId } from "@/lib/authUser";
 import {
-  lookupCompany, detectQueryType, mergeCompanyIntoForm,
-  type NormalizedCompany, type CompanyQueryType,
+  lookupCompany, detectQueryType, mergeCompanyIntoForm, AUTO_APPLY_THRESHOLD,
+  type NormalizedCompany, type CompanyQueryType, type ConfidenceBreakdown,
 } from "@/lib/companySearch";
-import { CheckCircle2, AlertCircle } from "lucide-react";
+import { CheckCircle2, AlertCircle, ShieldCheck, ShieldAlert } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -464,8 +464,10 @@ function CompanyLookupBar({ onApply }: { onApply: (c: NormalizedCompany) => void
   const [candidates, setCandidates] = useState<NormalizedCompany[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [providerAvailable, setProviderAvailable] = useState(true);
-
   const [message, setMessage] = useState<string | null>(null);
+  const [breakdown, setBreakdown] = useState<ConfidenceBreakdown | null>(null);
+  const [detectedCountry, setDetectedCountry] = useState<string | null>(null);
+  const [confirmLow, setConfirmLow] = useState(false);
 
   const labelByType: Partial<Record<CompanyQueryType, string>> = {
     siren: "SIREN (FR)", siret: "SIRET (FR)", vat_eu: "TVA / VAT EU",
@@ -476,11 +478,14 @@ function CompanyLookupBar({ onApply }: { onApply: (c: NormalizedCompany) => void
 
   const run = async () => {
     if (!q.trim()) return;
-    setLoading(true); setError(null); setResult(null); setCandidates([]); setMessage(null);
+    setLoading(true); setError(null); setResult(null); setCandidates([]);
+    setMessage(null); setBreakdown(null); setConfirmLow(false);
     try {
-      const r = await lookupCompany(q.trim());
+      const r = await lookupCompany(q.trim(), "FR");
       setProviderAvailable(r.provider_available);
       setMessage(r.message ?? null);
+      setBreakdown(r.confidence_breakdown ?? null);
+      setDetectedCountry(r.detected_country ?? null);
       if (r.result) setResult(r.result);
       else if (r.candidates?.length) setCandidates(r.candidates);
       else setError(r.message || "Sem correspondência");
@@ -491,21 +496,34 @@ function CompanyLookupBar({ onApply }: { onApply: (c: NormalizedCompany) => void
     }
   };
 
+  const canAutoApply = breakdown?.auto_apply ?? false;
+  const totalPct = breakdown ? Math.round(breakdown.total * 100) : 0;
+
+  const tone = !breakdown ? "muted"
+    : breakdown.level === "fully_enriched" ? "emerald"
+    : breakdown.level === "partially_enriched" ? "sky"
+    : breakdown.level === "validated" ? "amber" : "muted";
+  const toneCls =
+    tone === "emerald" ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-400" :
+    tone === "sky"     ? "border-sky-500/30 bg-sky-500/5 text-sky-400" :
+    tone === "amber"   ? "border-amber-500/30 bg-amber-500/5 text-amber-400" :
+                         "border-border/50 bg-muted/20 text-muted-foreground";
+
   return (
     <div className="rounded-md border border-dashed border-border/60 p-3 space-y-2 bg-muted/20">
       <div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
         <div className="flex items-center gap-1.5">
           <Sparkles className="h-3 w-3" />
-          Buscar empresa por SIREN, SIRET, TVA ou nome (FR)
+          Identificação inteligente — SIREN, SIRET, TVA, CNPJ, EIN, GSTIN ou nome
         </div>
-        <span className="font-mono">{labelByType[type]}</span>
+        <span className="font-mono">{labelByType[type]}{detectedCountry ? ` · ${detectedCountry}` : ""}</span>
       </div>
       <div className="flex gap-2">
         <Input
           value={q}
           onChange={(e) => { setQ(e.target.value); setType(detectQueryType(e.target.value)); }}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); run(); } }}
-          placeholder="SIREN, SIRET, TVA, CNPJ, EIN, GSTIN, RFC, BN, 法人番号 ou nome"
+          placeholder="Identificador fiscal ou nome da empresa"
           className="h-8 text-xs font-mono"
         />
         <Button type="button" size="sm" variant="outline" className="h-8" onClick={run} disabled={loading || !q.trim()}>
@@ -526,47 +544,73 @@ function CompanyLookupBar({ onApply }: { onApply: (c: NormalizedCompany) => void
         </div>
       )}
 
-      {result && (() => {
-        const tone = result.confidence === "fully_enriched" ? "emerald"
-          : result.confidence === "partially_enriched" ? "sky"
-          : result.confidence === "validated" ? "amber" : "muted";
-        const toneCls =
-          tone === "emerald" ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-400" :
-          tone === "sky"     ? "border-sky-500/30 bg-sky-500/5 text-sky-400" :
-          tone === "amber"   ? "border-amber-500/30 bg-amber-500/5 text-amber-400" :
-                               "border-border/50 bg-muted/20 text-muted-foreground";
-        return (
-          <div className={cn("rounded border p-2 space-y-1 text-xs", toneCls.split(" ").slice(0, 2).join(" "))}>
-            <div className={cn("flex items-center gap-1.5 text-[10px]", toneCls.split(" ").slice(2).join(" "))}>
-              <CheckCircle2 className="h-3 w-3" />
-              {message ?? "Resultado"} · <span className="font-mono">{result.provider}</span>
+      {result && (
+        <div className={cn("rounded border p-2 space-y-1.5 text-xs", toneCls.split(" ").slice(0, 2).join(" "))}>
+          <div className={cn("flex items-center justify-between text-[10px]", toneCls.split(" ").slice(2).join(" "))}>
+            <div className="flex items-center gap-1.5">
+              {canAutoApply ? <ShieldCheck className="h-3 w-3" /> : <ShieldAlert className="h-3 w-3" />}
+              <span>{message ?? "Resultado"}</span>
             </div>
-            <div className="font-medium text-foreground">{result.company_name ?? "—"}</div>
-            <div className="text-[10px] text-muted-foreground font-mono">
-              {[result.tax_id ?? result.siret ?? result.siren, result.vat_number].filter(Boolean).join(" · ")}
+            <span className="font-mono">{result.provider} · {totalPct}%</span>
+          </div>
+          <div className="font-medium text-foreground">{result.company_name ?? "—"}</div>
+          <div className="text-[10px] text-muted-foreground font-mono">
+            {[result.tax_id ?? result.siret ?? result.siren, result.vat_number].filter(Boolean).join(" · ")}
+          </div>
+          <div className="text-[10px] text-muted-foreground">
+            {result.address_line ??
+              [result.address?.street, result.address?.postal_code, result.address?.city, result.address?.country]
+                .filter(Boolean).join(", ")}
+          </div>
+          {breakdown && (
+            <div className="grid grid-cols-4 gap-1 text-[9px] text-muted-foreground/80 font-mono pt-1 border-t border-border/40">
+              <div>fmt {(breakdown.format * 100).toFixed(0)}%</div>
+              <div>prov {(breakdown.provider * 100).toFixed(0)}%</div>
+              <div>país {(breakdown.contextual * 100).toFixed(0)}%</div>
+              <div>campos {(breakdown.field_completeness * 100).toFixed(0)}%</div>
             </div>
-            <div className="text-[10px] text-muted-foreground">
-              {result.address_line ??
-                [result.address?.street, result.address?.postal_code, result.address?.city, result.address?.country]
-                  .filter(Boolean).join(", ")}
-            </div>
+          )}
+          {canAutoApply ? (
             <Button type="button" size="sm" className="h-7 mt-1"
-              onClick={() => { onApply(result); setResult(null); setQ(""); }}>
+              onClick={() => { onApply(result); setResult(null); setBreakdown(null); setQ(""); }}>
               Aplicar dados ao formulário
             </Button>
-          </div>
-        );
-      })()}
+          ) : (
+            <div className="space-y-1 pt-1">
+              <div className="text-[10px] text-amber-400 flex items-center gap-1">
+                <AlertCircle className="h-3 w-3" />
+                Confiança baixa ({totalPct}% &lt; {Math.round(AUTO_APPLY_THRESHOLD * 100)}%) — confirme antes de aplicar.
+              </div>
+              {confirmLow ? (
+                <div className="flex gap-1">
+                  <Button type="button" size="sm" variant="destructive" className="h-7 text-[10px]"
+                    onClick={() => { onApply(result); setResult(null); setBreakdown(null); setQ(""); setConfirmLow(false); }}>
+                    Confirmar e aplicar
+                  </Button>
+                  <Button type="button" size="sm" variant="ghost" className="h-7 text-[10px]"
+                    onClick={() => setConfirmLow(false)}>Cancelar</Button>
+                </div>
+              ) : (
+                <Button type="button" size="sm" variant="outline" className="h-7 text-[10px]"
+                  onClick={() => setConfirmLow(true)}>
+                  Aplicar mesmo assim
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {candidates.length > 0 && (
         <div className="space-y-1 max-h-48 overflow-y-auto">
+          <div className="text-[10px] text-muted-foreground">{candidates.length} candidatos — clique para selecionar:</div>
           {candidates.map((c, i) => (
             <button key={i} type="button"
               onClick={() => { onApply(c); setCandidates([]); setQ(""); }}
               className="w-full text-left rounded border border-border/50 hover:border-primary/40 hover:bg-primary/5 p-2 transition-all">
               <div className="text-xs font-medium">{c.company_name}</div>
               <div className="text-[10px] text-muted-foreground font-mono">
-                {[c.tax_id ?? c.siren, c.address?.city, c.legal_form].filter(Boolean).join(" · ")}
+                {[c.tax_id ?? c.siren, c.address?.city, c.country, c.legal_form].filter(Boolean).join(" · ")}
               </div>
             </button>
           ))}
