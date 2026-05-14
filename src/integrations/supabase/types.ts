@@ -76,6 +76,7 @@ export type Database = {
       }
       billing_attachments: {
         Row: {
+          billing_client_id: string | null
           created_at: string
           file_name: string
           id: string
@@ -88,6 +89,7 @@ export type Database = {
           uploaded_by: string | null
         }
         Insert: {
+          billing_client_id?: string | null
           created_at?: string
           file_name: string
           id?: string
@@ -100,6 +102,7 @@ export type Database = {
           uploaded_by?: string | null
         }
         Update: {
+          billing_client_id?: string | null
           created_at?: string
           file_name?: string
           id?: string
@@ -134,6 +137,81 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      billing_clients: {
+        Row: {
+          address: string | null
+          address_complement: string | null
+          bic: string | null
+          city: string | null
+          contacts: Json
+          country: string | null
+          created_at: string
+          created_by: string | null
+          email: string | null
+          iban: string | null
+          id: string
+          is_active: boolean
+          kind: string
+          name: string
+          notes: string | null
+          phone: string | null
+          postal_code: string | null
+          siren: string | null
+          siret: string | null
+          tax_id: string | null
+          tva_intracom: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          address_complement?: string | null
+          bic?: string | null
+          city?: string | null
+          contacts?: Json
+          country?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          iban?: string | null
+          id?: string
+          is_active?: boolean
+          kind?: string
+          name: string
+          notes?: string | null
+          phone?: string | null
+          postal_code?: string | null
+          siren?: string | null
+          siret?: string | null
+          tax_id?: string | null
+          tva_intracom?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          address_complement?: string | null
+          bic?: string | null
+          city?: string | null
+          contacts?: Json
+          country?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          iban?: string | null
+          id?: string
+          is_active?: boolean
+          kind?: string
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          postal_code?: string | null
+          siren?: string | null
+          siret?: string | null
+          tax_id?: string | null
+          tva_intracom?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       billing_invoice_items: {
         Row: {
@@ -181,6 +259,7 @@ export type Database = {
       }
       billing_invoices: {
         Row: {
+          billing_client_id: string | null
           created_at: string
           created_by: string | null
           customer_name: string | null
@@ -202,6 +281,7 @@ export type Database = {
           vehicle_id: string | null
         }
         Insert: {
+          billing_client_id?: string | null
           created_at?: string
           created_by?: string | null
           customer_name?: string | null
@@ -223,6 +303,7 @@ export type Database = {
           vehicle_id?: string | null
         }
         Update: {
+          billing_client_id?: string | null
           created_at?: string
           created_by?: string | null
           customer_name?: string | null
