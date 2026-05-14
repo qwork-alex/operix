@@ -170,7 +170,7 @@ Deno.serve(async (req) => {
     candidates = candidates.map((c) => enrichAddress(c)!).filter(Boolean);
 
     // Identifier-validity boost: exact Luhn pass adds to format score.
-    let formatScore = best.score;
+    let formatScore = Math.max(best.score, registryFormatBoost);
     if (best.kind === "siren" && isValidSiren(query)) formatScore = Math.min(1, formatScore + 0.1);
     if (best.kind === "siret" && isValidSiret(query)) formatScore = Math.min(1, formatScore + 0.1);
 
