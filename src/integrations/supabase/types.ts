@@ -1126,6 +1126,87 @@ export type Database = {
           },
         ]
       }
+      hail_events: {
+        Row: {
+          city: string | null
+          country: string | null
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          external_id: string | null
+          forecast_time: string | null
+          hail_size_mm: number | null
+          id: string
+          intensity: number | null
+          is_demo: boolean
+          lat: number
+          lng: number
+          metadata: Json
+          observed_time: string | null
+          probability: number | null
+          radius_km: number
+          region: string | null
+          severity: string
+          source: string
+          status: string
+          storm_direction_deg: number | null
+          storm_speed_kmh: number | null
+          updated_at: string
+        }
+        Insert: {
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          external_id?: string | null
+          forecast_time?: string | null
+          hail_size_mm?: number | null
+          id?: string
+          intensity?: number | null
+          is_demo?: boolean
+          lat: number
+          lng: number
+          metadata?: Json
+          observed_time?: string | null
+          probability?: number | null
+          radius_km?: number
+          region?: string | null
+          severity?: string
+          source?: string
+          status?: string
+          storm_direction_deg?: number | null
+          storm_speed_kmh?: number | null
+          updated_at?: string
+        }
+        Update: {
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          external_id?: string | null
+          forecast_time?: string | null
+          hail_size_mm?: number | null
+          id?: string
+          intensity?: number | null
+          is_demo?: boolean
+          lat?: number
+          lng?: number
+          metadata?: Json
+          observed_time?: string | null
+          probability?: number | null
+          radius_km?: number
+          region?: string | null
+          severity?: string
+          source?: string
+          status?: string
+          storm_direction_deg?: number | null
+          storm_speed_kmh?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       invites: {
         Row: {
           accepted_at: string | null

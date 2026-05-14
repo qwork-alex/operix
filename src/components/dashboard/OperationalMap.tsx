@@ -1,11 +1,45 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/hooks/useLanguage";
 import { Skeleton } from "@/components/ui/skeleton";
 import maplibregl, { Map as MLMap, GeoJSONSource } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { Users, CloudRain, Zap, Radar, Wrench, FileText, Layers } from "lucide-react";
+import { Users, CloudRain, Zap, Radar, Wrench, FileText, Layers, X, AlertTriangle, Wind, Clock, Gauge } from "lucide-react";
+
+/* ------------------------------------------------------------------ */
+/*  Hail severity → premium color palette                              */
+/* ------------------------------------------------------------------ */
+const HAIL_COLORS = {
+  low: "#eab308",       // yellow
+  moderate: "#f97316",  // orange
+  severe: "#ef4444",    // red
+  extreme: "#a855f7",   // purple — extreme
+} as const;
+type HailSeverity = keyof typeof HAIL_COLORS;
+type HailStatus = "forecast" | "ongoing" | "confirmed" | "closed";
+
+interface HailEvent {
+  id: string;
+  source: string;
+  city: string | null;
+  region: string | null;
+  country: string | null;
+  lat: number;
+  lng: number;
+  radius_km: number;
+  severity: HailSeverity;
+  status: HailStatus;
+  hail_size_mm: number | null;
+  probability: number | null;
+  intensity: number | null;
+  storm_speed_kmh: number | null;
+  storm_direction_deg: number | null;
+  forecast_time: string | null;
+  observed_time: string | null;
+  expires_at: string | null;
+  is_demo: boolean;
+}
 
 /* ------------------------------------------------------------------ */
 /*  City heuristic (kept from previous map for fallback inference)     */
@@ -174,6 +208,38 @@ export function OperationalMap() {
     },
   });
 
+  /* -------- data: hail events (operational weather intel) ----------- */
+  const queryClient = useQueryClient();
+  const { data: hailEvents = [] } = useQuery<HailEvent[]>({
+    queryKey: ["op-map-hail"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("hail_events")
+        .select("*")
+        .neq("status", "closed")
+        .order("forecast_time", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as HailEvent[];
+    },
+    staleTime: 60_000,
+  });
+
+  // Realtime: refresh on any hail_events change
+  useEffect(() => {
+    const ch = supabase
+      .channel("op-map-hail-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "hail_events" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["op-map-hail"] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [queryClient]);
+
+  const [selectedHailId, setSelectedHailId] = useState<string | null>(null);
+  const selectedHail = useMemo(
+    () => hailEvents.find((h) => h.id === selectedHailId) ?? null,
+    [hailEvents, selectedHailId]
+  );
   /* -------- GeoJSON sources ----------------------------------------- */
   const ordersGeo = useMemo(() => {
     const features: any[] = [];
@@ -221,6 +287,26 @@ export function OperationalMap() {
     );
     return { type: "FeatureCollection", features };
   }, [ordersGeo]);
+
+  const hailGeo = useMemo(() => {
+    const features = hailEvents.map((h) => ({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [h.lng, h.lat] },
+      properties: {
+        id: h.id,
+        severity: h.severity,
+        status: h.status,
+        radius_km: h.radius_km,
+        color: HAIL_COLORS[h.severity] ?? HAIL_COLORS.low,
+        // pixel radius scales softly with severity; kept modest for performance
+        size_factor:
+          h.severity === "extreme" ? 28 :
+          h.severity === "severe" ? 22 :
+          h.severity === "moderate" ? 16 : 12,
+      },
+    }));
+    return { type: "FeatureCollection", features };
+  }, [hailEvents]);
 
   /* -------- Init map ------------------------------------------------ */
   useEffect(() => {
@@ -318,6 +404,50 @@ export function OperationalMap() {
       addClusterLayer("teams", "#22d3ee");
       addClusterLayer("operations", "#f59e0b");
 
+      /* ---- Hail cells (real data, severity-colored, not clustered) ---- */
+      map.addSource("hail", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] } as any,
+      });
+      // Outer pulse halo
+      map.addLayer({
+        id: "hail-halo",
+        type: "circle",
+        source: "hail",
+        paint: {
+          "circle-color": ["get", "color"],
+          "circle-radius": ["*", ["get", "size_factor"], 1.6],
+          "circle-opacity": 0.18,
+          "circle-blur": 1,
+        },
+      });
+      // Mid ring
+      map.addLayer({
+        id: "hail-ring",
+        type: "circle",
+        source: "hail",
+        paint: {
+          "circle-color": "transparent",
+          "circle-radius": ["get", "size_factor"],
+          "circle-stroke-color": ["get", "color"],
+          "circle-stroke-width": 2,
+          "circle-stroke-opacity": 0.85,
+        },
+      });
+      // Core
+      map.addLayer({
+        id: "hail-core",
+        type: "circle",
+        source: "hail",
+        paint: {
+          "circle-color": ["get", "color"],
+          "circle-radius": ["max", 5, ["/", ["get", "size_factor"], 3]],
+          "circle-stroke-color": "rgba(255,255,255,0.9)",
+          "circle-stroke-width": 1.5,
+          "circle-opacity": 0.9,
+        },
+      });
+
       /* ---- Click popup ---- */
       const popupHandler = (sourceId: string) => (e: any) => {
         const f = e.features?.[0];
@@ -345,6 +475,18 @@ export function OperationalMap() {
         });
       });
 
+      /* ---- Hail click → open detail panel ---- */
+      const onHailClick = (e: any) => {
+        const f = e.features?.[0];
+        if (!f) return;
+        setSelectedHailId(f.properties.id);
+        map.easeTo({ center: f.geometry.coordinates, duration: 600 });
+      };
+      ["hail-core", "hail-ring", "hail-halo"].forEach((id) => {
+        map.on("click", id, onHailClick);
+        map.on("mouseenter", id, () => (map.getCanvas().style.cursor = "pointer"));
+        map.on("mouseleave", id, () => (map.getCanvas().style.cursor = ""));
+      });
       setMapReady(true);
     });
 
@@ -367,6 +509,12 @@ export function OperationalMap() {
     (map.getSource("operations") as GeoJSONSource | undefined)?.setData(operationsGeo as any);
   }, [mapReady, ordersGeo, teamsGeo, operationsGeo]);
 
+  // Push hail data
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    (mapRef.current.getSource("hail") as GeoJSONSource | undefined)?.setData(hailGeo as any);
+  }, [mapReady, hailGeo]);
+
   /* -------- Toggle layer visibility -------------------------------- */
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
@@ -380,6 +528,8 @@ export function OperationalMap() {
       setVis(`${k}-points`, layers[k]);
       setVis(`${k}-glow`, layers[k]);
     });
+    // Hail layers
+    ["hail-halo", "hail-ring", "hail-core"].forEach((id) => setVis(id, layers.hail));
   }, [layers, mapReady]);
 
   /* -------- RainViewer radar layer --------------------------------- */
@@ -388,18 +538,18 @@ export function OperationalMap() {
     const map = mapRef.current;
     let cancelled = false;
 
-    const cleanupRadar = () => {
-      ["radar-layer", "storms-layer", "hail-layer"].forEach((id) => {
+    const cleanupRaster = () => {
+      ["radar-layer", "storms-layer"].forEach((id) => {
         if (map.getLayer(id)) map.removeLayer(id);
       });
-      ["radar-src", "storms-src", "hail-src"].forEach((id) => {
+      ["radar-src", "storms-src"].forEach((id) => {
         if (map.getSource(id)) map.removeSource(id);
       });
     };
 
-    const wantsRadar = layers.radar || layers.storms || layers.hail;
-    if (!wantsRadar) {
-      cleanupRadar();
+    const wantsRaster = layers.radar || layers.storms;
+    if (!wantsRaster) {
+      cleanupRaster();
       return;
     }
 
@@ -412,7 +562,6 @@ export function OperationalMap() {
         const last = frames[frames.length - 1];
         if (!last) return;
         const host = json.host as string;
-        // Radar (color scheme 2 = universal blue)
         if (layers.radar && !map.getSource("radar-src")) {
           map.addSource("radar-src", {
             type: "raster",
@@ -424,9 +573,8 @@ export function OperationalMap() {
             type: "raster",
             source: "radar-src",
             paint: { "raster-opacity": 0.55 },
-          });
+          }, "hail-halo");
         }
-        // Storms (color scheme 7 = lightning red/yellow), threshold via opacity
         if (layers.storms && !map.getSource("storms-src")) {
           map.addSource("storms-src", {
             type: "raster",
@@ -438,21 +586,7 @@ export function OperationalMap() {
             type: "raster",
             source: "storms-src",
             paint: { "raster-opacity": 0.65 },
-          });
-        }
-        // Hail proxy (high-intensity radar, color scheme 4 + reddish tint)
-        if (layers.hail && !map.getSource("hail-src")) {
-          map.addSource("hail-src", {
-            type: "raster",
-            tiles: [`${host}${last.path}/256/{z}/{x}/{y}/4/1_1.png`],
-            tileSize: 256,
-          });
-          map.addLayer({
-            id: "hail-layer",
-            type: "raster",
-            source: "hail-src",
-            paint: { "raster-opacity": 0.6 },
-          });
+          }, "hail-halo");
         }
       } catch (e) {
         console.warn("[OperationalMap] radar fetch failed", e);
@@ -462,7 +596,7 @@ export function OperationalMap() {
     return () => {
       cancelled = true;
     };
-  }, [layers.radar, layers.storms, layers.hail, mapReady]);
+  }, [layers.radar, layers.storms, mapReady]);
 
   const toggleLayer = useCallback((k: LayerKey) => {
     setLayers((prev) => ({ ...prev, [k]: !prev[k] }));
@@ -514,6 +648,117 @@ export function OperationalMap() {
           style={{ background: "#0a1628" }}
         />
       )}
+
+      {/* -------- Hail event detail panel -------- */}
+      {selectedHail && (
+        <HailDetailPanel
+          event={selectedHail}
+          onClose={() => setSelectedHailId(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ====================================================================== */
+/*  Detail Panel — opens below the map when a hail cell is clicked         */
+/* ====================================================================== */
+const STATUS_LABEL: Record<HailStatus, string> = {
+  forecast: "Previsto",
+  ongoing: "Em andamento",
+  confirmed: "Confirmado",
+  closed: "Encerrado",
+};
+const SEVERITY_LABEL: Record<HailSeverity, string> = {
+  low: "Baixo risco",
+  moderate: "Moderado",
+  severe: "Severo",
+  extreme: "Extremo",
+};
+const STATUS_DOT: Record<HailStatus, string> = {
+  forecast: "bg-amber-400",
+  ongoing: "bg-orange-500 animate-pulse",
+  confirmed: "bg-red-500 animate-pulse",
+  closed: "bg-zinc-500",
+};
+
+function fmtTime(iso: string | null) {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+    });
+  } catch { return "—"; }
+}
+
+function HailDetailPanel({ event, onClose }: { event: HailEvent; onClose: () => void }) {
+  const color = HAIL_COLORS[event.severity];
+  return (
+    <div
+      className="mt-4 rounded-xl p-4 animate-fade-in border relative"
+      style={{
+        background: "linear-gradient(135deg, rgba(15,23,42,0.85), rgba(15,23,42,0.6))",
+        borderColor: `${color}55`,
+        boxShadow: `0 0 24px ${color}22, inset 0 0 1px ${color}55`,
+      }}
+    >
+      <button
+        onClick={onClose}
+        className="absolute top-2 right-2 p-1 rounded-md hover:bg-white/10 text-muted-foreground"
+        aria-label="Fechar"
+      >
+        <X className="h-4 w-4" />
+      </button>
+
+      <div className="flex items-start gap-3 mb-3">
+        <div
+          className="h-9 w-9 rounded-lg flex items-center justify-center"
+          style={{ background: `${color}22`, border: `1px solid ${color}66` }}
+        >
+          <AlertTriangle className="h-5 w-5" style={{ color }} />
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h4 className="text-sm font-semibold text-foreground truncate">
+              {event.city || "—"}{event.region ? `, ${event.region}` : ""}{event.country ? ` · ${event.country}` : ""}
+            </h4>
+            {event.is_demo && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-700/60 text-zinc-300">DEMO</span>
+            )}
+          </div>
+          <div className="flex items-center gap-3 mt-1 text-[11px] flex-wrap">
+            <span className="flex items-center gap-1.5" style={{ color }}>
+              <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: color }} />
+              {SEVERITY_LABEL[event.severity]}
+            </span>
+            <span className="flex items-center gap-1.5 text-muted-foreground">
+              <span className={`inline-block h-1.5 w-1.5 rounded-full ${STATUS_DOT[event.status]}`} />
+              {STATUS_LABEL[event.status]}
+            </span>
+            <span className="text-muted-foreground/70">fonte: {event.source}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <Metric icon={<Gauge className="h-3 w-3" />} label="Tamanho est." value={event.hail_size_mm ? `${event.hail_size_mm} mm` : "—"} />
+        <Metric icon={<AlertTriangle className="h-3 w-3" />} label="Probabilidade" value={event.probability != null ? `${Math.round(event.probability * 100)}%` : "—"} />
+        <Metric icon={<Zap className="h-3 w-3" />} label="Intensidade" value={event.intensity != null ? `${Math.round(event.intensity)}/100` : "—"} />
+        <Metric icon={<Wind className="h-3 w-3" />} label="Velocidade" value={event.storm_speed_kmh ? `${event.storm_speed_kmh} km/h` : "—"} />
+        <Metric icon={<Clock className="h-3 w-3" />} label="Previsto" value={fmtTime(event.forecast_time)} />
+        <Metric icon={<Clock className="h-3 w-3" />} label="Observado" value={fmtTime(event.observed_time)} />
+        <Metric icon={<Clock className="h-3 w-3" />} label="Expira" value={fmtTime(event.expires_at)} />
+        <Metric icon={<Radar className="h-3 w-3" />} label="Raio" value={`${event.radius_km} km`} />
+      </div>
+    </div>
+  );
+}
+
+function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div className="rounded-lg px-2.5 py-1.5 bg-white/[0.03] border border-white/5">
+      <div className="text-[10px] text-muted-foreground flex items-center gap-1">{icon}{label}</div>
+      <div className="text-xs font-medium text-foreground mt-0.5">{value}</div>
     </div>
   );
 }
