@@ -935,13 +935,21 @@ export default function InvoicesScreen() {
                   <Eye className="h-3.5 w-3.5" /> Pré-visualizar
                 </button>
               </div>
-              {viewMode === "preview" ? (
-                <Button variant="outline" size="sm" className="h-8" onClick={() => window.print()}>
-                  <Printer className="h-3.5 w-3.5 mr-1.5" /> Imprimir / PDF
-                </Button>
-              ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 no-print"
+                onClick={() => {
+                  setViewMode("preview");
+                  setTimeout(() => window.print(), 250);
+                }}
+                title="Visualizar e imprimir em A4"
+              >
+                <Printer className="h-3.5 w-3.5 mr-1.5" /> Visualizar impressão
+              </Button>
+              {viewMode === "edit" && (
                 <Button
-                  variant="outline" size="sm" className="h-8"
+                  variant="outline" size="sm" className="h-8 no-print"
                   onClick={() => setOptionsPanelOpen(o => !o)}
                 >
                   <Filter className="h-3.5 w-3.5 mr-1.5" />
@@ -1970,7 +1978,7 @@ function InvoicePreview({
       </section>
 
       {/* TOTALS */}
-      <section className="mt-6 flex justify-end">
+      <section className="mt-6 flex justify-end avoid-break">
         <div className="w-72">
           <div className="flex justify-between py-1.5 text-[11px]">
             <span className="text-zinc-500">Subtotal</span>
@@ -2007,7 +2015,7 @@ function InvoicePreview({
 
       {/* BANK DETAILS */}
       {opt.show_bank_details && (form.bank_iban || form.bank_bic || form.bank_name) && (
-        <section className="mt-8 rounded-sm border border-zinc-200 bg-zinc-50/60 p-4">
+        <section className="mt-8 rounded-sm border border-zinc-200 bg-zinc-50/60 p-4 avoid-break">
           <p className="text-[9px] uppercase tracking-[0.18em] text-zinc-500 font-semibold">Dados bancários</p>
           <div className="grid grid-cols-3 gap-4 mt-2 text-[11px]">
             {form.bank_name && (
@@ -2041,7 +2049,7 @@ function InvoicePreview({
       )}
 
       {/* LEGAL FOOTER */}
-      <footer className="mt-12 pt-4 border-t border-zinc-200 text-[9px] text-zinc-500 leading-relaxed">
+      <footer className="mt-12 pt-4 border-t border-zinc-200 text-[9px] text-zinc-500 leading-relaxed avoid-break">
         {form.legal_text && <p className="mb-2 italic">{form.legal_text}</p>}
         <div className="flex flex-wrap justify-center gap-x-3 gap-y-0.5">
           <span className="font-medium text-zinc-700">{companyName}</span>
