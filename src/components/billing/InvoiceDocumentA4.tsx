@@ -74,7 +74,7 @@ type DocOptions = {
   show_tva?: boolean;
   show_siret_vat?: boolean;
   show_discount?: boolean;
-  discount_type?: "percent" | "amount";
+  discount_type?: string;
   discount_value?: number;
   show_bank_details?: boolean;
   show_notes?: boolean;
