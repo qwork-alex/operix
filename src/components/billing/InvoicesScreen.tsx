@@ -1332,6 +1332,7 @@ export default function InvoicesScreen() {
               supplierName={supplierMap.get(detail.supplier_id ?? "") ?? null}
               onEdit={() => { openEdit(detail); setDetail(null); }}
               onDelete={() => { setConfirmDelete(detail); setDetail(null); }}
+              onSend={() => { setSendingInvoice(detail); }}
             />
           )}
         </SheetContent>
