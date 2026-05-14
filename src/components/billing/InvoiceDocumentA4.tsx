@@ -135,7 +135,10 @@ export function InvoiceDocumentA4({
   const apeCode      = (company as any)?.ape_code || "";
   const rcs          = (company as any)?.rcs || "";
 
-  const docTitle = (opt.show_doc_title === false ? "Fatura" : (opt.doc_title || "Fatura")).toUpperCase();
+  const baseTitle = opt.show_doc_title === false
+    ? getDocTitle(docType, lang)
+    : (opt.doc_title || getDocTitle(docType, lang));
+  const docTitle = baseTitle.toUpperCase();
   const paymentLabel = form.payment_term_label ?? "—";
 
   // Group items by tax rate for the VAT summary
@@ -143,8 +146,8 @@ export function InvoiceDocumentA4({
   const ratio = totals.subtotal > 0 ? totals.netSubtotal / totals.subtotal : 1;
   form.items.forEach((it) => {
     const net = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0) * ratio;
-    const t = Number(it.tax_rate) || 0;
-    taxBuckets.set(t, (taxBuckets.get(t) || 0) + net * (t / 100));
+    const rate = Number(it.tax_rate) || 0;
+    taxBuckets.set(rate, (taxBuckets.get(rate) || 0) + net * (rate / 100));
   });
 
   // Client display lines
@@ -158,11 +161,11 @@ export function InvoiceDocumentA4({
   // Build institutional footer (SIRET, TVA, juridical form, capital, APE)
   const institutionalParts: string[] = [];
   if (legalForm) institutionalParts.push(legalForm);
-  if (shareCapital) institutionalParts.push(`Capital ${shareCapital}`);
-  if (companySiret) institutionalParts.push(`SIRET ${companySiret}`);
-  if (rcs) institutionalParts.push(`RCS ${rcs}`);
-  if (apeCode) institutionalParts.push(`APE ${apeCode}`);
-  if (companyTva) institutionalParts.push(`TVA ${companyTva}`);
+  if (shareCapital) institutionalParts.push(`${t.capital} ${shareCapital}`);
+  if (companySiret) institutionalParts.push(`${t.siret} ${companySiret}`);
+  if (rcs) institutionalParts.push(`${t.rcs} ${rcs}`);
+  if (apeCode) institutionalParts.push(`${t.ape} ${apeCode}`);
+  if (companyTva) institutionalParts.push(`${t.vat} ${companyTva}`);
 
   return (
     <div
