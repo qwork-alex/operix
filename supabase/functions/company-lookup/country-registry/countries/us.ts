@@ -2,7 +2,9 @@
 import { emptyCompany, isValidEin, type NormalizedCompany } from "../../core.ts";
 import type { CountryCtx, CountryDetection, CountryModule } from "../types.ts";
 
-const RX_EIN = /^\d{2}-?\d{7}$/;
+// Strict EIN: require the canonical "##-#######" formatting, otherwise plain 9-digit
+// strings collide with FR SIREN. Plain 9-digit only when context_hint=US.
+const RX_EIN = /^\d{2}-\d{7}$/;
 
 export const usModule: CountryModule = {
   iso2: "US",
