@@ -111,43 +111,45 @@ Deno.serve(async (req) => {
       }
     }
 
-    for (const cand of ordered) {
-      ctx.kind = cand.kind; ctx.country = cand.country;
+    if (!result) {
+      for (const cand of ordered) {
+        ctx.kind = cand.kind; ctx.country = cand.country;
 
-      switch (cand.kind) {
-        case "siren":
-        case "siret": {
-          const r = await franceProvider.lookup(ctx);
-          result = r.result; candidates = r.candidates; break;
-        }
-        case "vat_eu": {
-          if (ctx.country === "FR") {
+        switch (cand.kind) {
+          case "siren":
+          case "siret": {
             const r = await franceProvider.lookup(ctx);
-            result = r.result;
+            result = r.result; candidates = r.candidates; break;
           }
-          // VIES validates regardless, but only enrich with VIES when no FR result.
-          const v = await europeVatProvider.validate(ctx.query, ctx);
-          vies = v.vies;
-          if (!result && v.company && (ctx.country == null || v.company.country === ctx.country)) {
-            result = v.company;
+          case "vat_eu": {
+            if (ctx.country === "FR") {
+              const r = await franceProvider.lookup(ctx);
+              result = r.result;
+            }
+            // VIES validates regardless, but only enrich with VIES when no FR result.
+            const v = await europeVatProvider.validate(ctx.query, ctx);
+            vies = v.vies;
+            if (!result && v.company && (ctx.country == null || v.company.country === ctx.country)) {
+              result = v.company;
+            }
+            break;
           }
-          break;
+          case "cnpj":   if (countryHint === "BR" || classification.candidates.find((x) => x.kind === "cnpj" && x.score >= 0.8)) result = await brazilProvider.lookup(ctx); break;
+          case "ein":    result = await usaProvider.lookup(ctx);    break;
+          case "bn_ca":  result = await canadaProvider.lookup(ctx); break;
+          case "rfc_mx": result = await mexicoProvider.lookup(ctx); break;
+          case "gstin":  result = await indiaProvider.lookup(ctx);  break;
+          case "corp_jp":result = await japanProvider.lookup(ctx);  break;
+          case "name": {
+            const r = await franceProvider.lookup(ctx);
+            result = r.result; candidates = r.candidates;
+            if (!result && !candidates.length) result = genericProvider.lookup(ctx);
+            break;
+          }
         }
-        case "cnpj":   if (countryHint === "BR" || classification.candidates.find((x) => x.kind === "cnpj" && x.score >= 0.8)) result = await brazilProvider.lookup(ctx); break;
-        case "ein":    result = await usaProvider.lookup(ctx);    break;
-        case "bn_ca":  result = await canadaProvider.lookup(ctx); break;
-        case "rfc_mx": result = await mexicoProvider.lookup(ctx); break;
-        case "gstin":  result = await indiaProvider.lookup(ctx);  break;
-        case "corp_jp":result = await japanProvider.lookup(ctx);  break;
-        case "name": {
-          const r = await franceProvider.lookup(ctx);
-          result = r.result; candidates = r.candidates;
-          if (!result && !candidates.length) result = genericProvider.lookup(ctx);
-          break;
-        }
-      }
 
-      if (result || candidates.length) break;
+        if (result || candidates.length) break;
+      }
     }
 
     // Strict country isolation: if user is in FR context and a non-FR result slipped through
