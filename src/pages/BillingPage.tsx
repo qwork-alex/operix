@@ -355,7 +355,8 @@ export default function BillingPage() {
         <Route index element={<Navigate to="faturas" replace />} />
         <Route path="faturas" element={<InvoicesScreen />} />
         <Route path="pagamentos" element={<PaymentsScreen />} />
-        {SUB_NAV.filter((i) => i.slug !== "faturas" && i.slug !== "pagamentos").map((item) => (
+        <Route path="conciliacao" element={<ReconciliationScreen />} />
+        {SUB_NAV.filter((i) => !["faturas", "pagamentos", "conciliacao"].includes(i.slug)).map((item) => (
           <Route
             key={item.slug}
             path={item.slug}
