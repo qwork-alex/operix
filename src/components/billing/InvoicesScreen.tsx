@@ -1037,6 +1037,7 @@ export default function InvoicesScreen() {
             </FormSection>
 
             {/* SECTION 5 — Bank details */}
+            {form.options.show_bank_details && (
             <FormSection title="Dados bancários" subtitle="Conta para recebimento (futuramente vinda do perfil da empresa)">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <Field label="IBAN">
@@ -1050,8 +1051,10 @@ export default function InvoicesScreen() {
                 </Field>
               </div>
             </FormSection>
+            )}
 
             {/* SECTION 6 — Notes & Legal */}
+            {form.options.show_notes && (
             <FormSection title="Observações e nota legal" subtitle="Informações adicionais ao cliente">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <Field label="Observações">
@@ -1073,6 +1076,7 @@ export default function InvoicesScreen() {
                 </Field>
               </div>
             </FormSection>
+            )}
               </div>
             </div>
 
