@@ -491,7 +491,7 @@ export default function InvoicesScreen() {
     setForm({
       invoice_number: inv.invoice_number,
       type: inv.type,
-      client_id: null,
+      client_id: inv.billing_client_id ?? inv.customer_snapshot?.billing_client_id ?? null,
       issue_date: inv.issue_date,
       due_date: inv.due_date ?? "",
       payment_term: "custom",
@@ -548,13 +548,15 @@ export default function InvoicesScreen() {
       return;
     }
     const client = (clientsQ.data ?? []).find((c) => c.id === form.client_id) || null;
+    const snapshot = client ? buildSnapshot(client) : (editing?.customer_snapshot ?? null);
     upsertMut.mutate({
       id: editing?.id,
       invoice_number: form.invoice_number.trim(),
       type: form.type,
-      // Keep supplier_id untouched on edit (legacy). On create with new flow, leave null.
       supplier_id: editing?.supplier_id ?? null,
+      billing_client_id: client?.id ?? editing?.billing_client_id ?? null,
       customer_name: client?.name ?? editing?.customer_name ?? null,
+      customer_snapshot: snapshot as any,
       issue_date: form.issue_date,
       due_date: form.due_date || null,
       total_amount: totals.total,
@@ -568,12 +570,15 @@ export default function InvoicesScreen() {
   const saveDraft = () => {
     const number = form.invoice_number.trim() || `RASCUNHO-${Date.now().toString().slice(-6)}`;
     const client = (clientsQ.data ?? []).find((c) => c.id === form.client_id) || null;
+    const snapshot = client ? buildSnapshot(client) : (editing?.customer_snapshot ?? null);
     upsertMut.mutate({
       id: editing?.id,
       invoice_number: number,
       type: form.type,
       supplier_id: editing?.supplier_id ?? null,
+      billing_client_id: client?.id ?? editing?.billing_client_id ?? null,
       customer_name: client?.name ?? editing?.customer_name ?? null,
+      customer_snapshot: snapshot as any,
       issue_date: form.issue_date,
       due_date: form.due_date || null,
       total_amount: totals.total,
