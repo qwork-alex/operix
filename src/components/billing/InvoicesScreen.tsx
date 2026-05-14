@@ -1805,6 +1805,9 @@ function DetailContent({
         <Button variant="outline" size="sm" className="h-8 flex-1" onClick={onEdit}>
           <Pencil className="h-3.5 w-3.5 mr-1.5" /> Editar
         </Button>
+        <Button variant="default" size="sm" className="h-8" onClick={onSend}>
+          <Send className="h-3.5 w-3.5 mr-1.5" /> Enviar
+        </Button>
         <Button variant="destructive" size="sm" className="h-8" onClick={onDelete}>
           <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Eliminar
         </Button>
