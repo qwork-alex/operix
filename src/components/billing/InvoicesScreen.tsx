@@ -137,6 +137,68 @@ const fmtDate = (d?: string | null) => {
   try { return format(parseISO(d), "dd/MM/yyyy"); } catch { return d; }
 };
 
+// ───────────────────────────── invoice options panel
+type BillingMode = "quick" | "complete" | "electronic";
+type InvoiceLang = "pt" | "fr" | "en" | "es" | "de" | "it";
+type DiscountType = "percent" | "fixed";
+
+const BILLING_MODES: { value: BillingMode; label: string; hint: string }[] = [
+  { value: "quick",       label: "Rápido",     hint: "Apenas o essencial" },
+  { value: "complete",    label: "Completo",   hint: "Todos os campos" },
+  { value: "electronic",  label: "Eletrônico", hint: "Preparado para emissão fiscal" },
+];
+
+const INVOICE_LANGS: { value: InvoiceLang; label: string }[] = [
+  { value: "pt", label: "Português" },
+  { value: "fr", label: "Francês" },
+  { value: "en", label: "Inglês" },
+  { value: "es", label: "Espanhol" },
+  { value: "de", label: "Alemão" },
+  { value: "it", label: "Italiano" },
+];
+
+type InvoiceOptions = {
+  mode: BillingMode;
+  lang: InvoiceLang;
+  // Client display
+  show_delivery_address: boolean;
+  show_tva: boolean;
+  show_siret_vat: boolean;
+  show_client_reference: boolean;
+  client_reference: string;
+  // Document sections
+  show_bank_details: boolean;
+  show_payment_terms: boolean;
+  show_doc_title: boolean;
+  doc_title: string;
+  show_notes: boolean;
+  // Global discount
+  show_discount: boolean;
+  discount_type: DiscountType;
+  discount_value: number;
+  // Electronic mode (architecture-only)
+  electronic_format: "none" | "ubl" | "facturx" | "peppol";
+};
+
+const defaultOptions = (): InvoiceOptions => ({
+  mode: "complete",
+  lang: "pt",
+  show_delivery_address: false,
+  show_tva: true,
+  show_siret_vat: true,
+  show_client_reference: false,
+  client_reference: "",
+  show_bank_details: true,
+  show_payment_terms: true,
+  show_doc_title: true,
+  doc_title: "Fatura",
+  show_notes: true,
+  show_discount: false,
+  discount_type: "percent",
+  discount_value: 0,
+  electronic_format: "none",
+});
+
 // ───────────────────────────── form
 type FormState = {
   invoice_number: string;
@@ -153,6 +215,8 @@ type FormState = {
   bank_name: string;
   // Legal footer
   legal_text: string;
+  // Side panel options
+  options: InvoiceOptions;
 };
 
 const DEFAULT_LEGAL =
@@ -171,6 +235,7 @@ const emptyForm = (): FormState => ({
   bank_bic: "",
   bank_name: "",
   legal_text: DEFAULT_LEGAL,
+  options: defaultOptions(),
 });
 
 // Compute due_date from issue_date + payment term
