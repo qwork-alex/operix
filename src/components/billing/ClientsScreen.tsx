@@ -37,6 +37,11 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { getCurrentUserId } from "@/lib/authUser";
+import {
+  lookupCompany, detectQueryType, mergeCompanyIntoForm,
+  type NormalizedCompany, type CompanyQueryType,
+} from "@/lib/companySearch";
+import { CheckCircle2, AlertCircle } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────
 // Types
