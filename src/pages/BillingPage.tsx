@@ -81,7 +81,7 @@ const DATASETS: Record<Slug, Row[]> = {
   "pagamentos":      seed("PAG", 24),
   "conciliacao":     seed("CON", 18),
   "contas-a-vencer": seed("VEN", 22),
-  "fornecedores":    seed("FRN", 14, { status: "ativo" }),
+  "clientes":        seed("CLI", 14, { status: "ativo" }),
   "relatorios":      seed("REL", 9),
 };
 
