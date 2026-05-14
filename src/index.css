@@ -243,6 +243,7 @@
 
   body.invoice-print-mode .invoice-print-dialog-content,
   body.invoice-print-mode .invoice-print-dialog-body,
+  body.invoice-print-mode .invoice-print-scroll-container,
   body.invoice-print-mode .invoice-print-area,
   body.invoice-print-mode .invoice-a4-frame {
     position: static !important;
