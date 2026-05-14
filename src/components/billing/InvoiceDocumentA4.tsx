@@ -339,14 +339,16 @@ export function InvoiceDocumentA4({
                 {(client.email || client.contact_email) && <div>{client.email ?? client.contact_email}</div>}
                 {(client.phone || client.contact_phone) && <div>{client.phone ?? client.contact_phone}</div>}
               </div>
-              <div style={{ fontSize: "9px", color: "#52525b", marginTop: "4px" }}>
-                {opt.show_tva !== false && client.tva_intracom && (
-                  <div>{t.vat}: <span style={{ color: "#27272a" }}>{client.tva_intracom}</span></div>
-                )}
-                {opt.show_siret_vat !== false && (client.siret || client.siren || client.tax_id) && (
-                  <div>{t.taxId}: <span style={{ color: "#27272a" }}>{client.siret || client.siren || client.tax_id}</span></div>
-                )}
-              </div>
+              {!isQuick && (
+                <div style={{ fontSize: "9px", color: "#52525b", marginTop: "4px" }}>
+                  {opt.show_tva !== false && client.tva_intracom && (
+                    <div>{t.vat}: <span style={{ color: isElectronic ? "#0a0a0a" : "#27272a", fontWeight: isElectronic ? 600 : 400 }}>{client.tva_intracom}</span></div>
+                  )}
+                  {opt.show_siret_vat !== false && (client.siret || client.siren || client.tax_id) && (
+                    <div>{t.taxId}: <span style={{ color: isElectronic ? "#0a0a0a" : "#27272a", fontWeight: isElectronic ? 600 : 400 }}>{client.siret || client.siren || client.tax_id}</span></div>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
             <p style={{ fontSize: "10px", color: "#a1a1aa", fontStyle: "italic" }}>
