@@ -186,6 +186,7 @@ export function OperationalMap() {
     radar: true,
     storms: false,
     hail: false,
+    pdr: false,
   });
 
   /* -------- data: service orders (orders + operations inferred) ----- */
