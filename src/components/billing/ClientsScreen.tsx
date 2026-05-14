@@ -39,8 +39,9 @@ import { toast } from "@/hooks/use-toast";
 import { getCurrentUserId } from "@/lib/authUser";
 import {
   lookupCompany, detectQueryType, mergeCompanyIntoForm, AUTO_APPLY_THRESHOLD,
-  TIER_LABEL,
-  type NormalizedCompany, type CompanyQueryType, type ConfidenceBreakdown, type SupportTier,
+  TIER_LABEL, LOOKUP_STATUS_LABEL,
+  type NormalizedCompany, type CompanyQueryType, type ConfidenceBreakdown,
+  type SupportTier, type CountryCapability, type LookupStatus,
 } from "@/lib/companySearch";
 import { CheckCircle2, AlertCircle, ShieldCheck, ShieldAlert } from "lucide-react";
 
@@ -469,6 +470,8 @@ function CompanyLookupBar({ onApply }: { onApply: (c: NormalizedCompany) => void
   const [breakdown, setBreakdown] = useState<ConfidenceBreakdown | null>(null);
   const [detectedCountry, setDetectedCountry] = useState<string | null>(null);
   const [supportTier, setSupportTier] = useState<SupportTier | null>(null);
+  const [capability, setCapability] = useState<CountryCapability | null>(null);
+  const [lookupStatus, setLookupStatus] = useState<LookupStatus | null>(null);
   const [confirmLow, setConfirmLow] = useState(false);
 
   const labelByType: Partial<Record<CompanyQueryType, string>> = {
@@ -481,7 +484,8 @@ function CompanyLookupBar({ onApply }: { onApply: (c: NormalizedCompany) => void
   const run = async () => {
     if (!q.trim()) return;
     setLoading(true); setError(null); setResult(null); setCandidates([]);
-    setMessage(null); setBreakdown(null); setConfirmLow(false); setSupportTier(null);
+    setMessage(null); setBreakdown(null); setConfirmLow(false);
+    setSupportTier(null); setCapability(null); setLookupStatus(null);
     try {
       const r = await lookupCompany(q.trim(), "FR");
       setProviderAvailable(r.provider_available);
@@ -489,6 +493,8 @@ function CompanyLookupBar({ onApply }: { onApply: (c: NormalizedCompany) => void
       setBreakdown(r.confidence_breakdown ?? null);
       setDetectedCountry(r.detected_country ?? null);
       setSupportTier((r.support_tier as SupportTier) ?? null);
+      setCapability(r.capability ?? null);
+      setLookupStatus((r.lookup_status as LookupStatus) ?? null);
       if (r.result) setResult(r.result);
       else if (r.candidates?.length) setCandidates(r.candidates);
       else setError(r.message || "Sem correspondência");
@@ -548,6 +554,50 @@ function CompanyLookupBar({ onApply }: { onApply: (c: NormalizedCompany) => void
           {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Buscar"}
         </Button>
       </div>
+
+      {(capability || lookupStatus) && (
+        <div className="flex flex-wrap items-center gap-1.5 text-[9px] font-mono">
+          {capability && (
+            <>
+              <span className="px-1.5 py-0.5 rounded border border-border/60 bg-muted/30 text-muted-foreground uppercase tracking-wide">
+                Modelo {capability.model}
+              </span>
+              <span
+                className={cn(
+                  "px-1.5 py-0.5 rounded border uppercase tracking-wide",
+                  capability.enrichment === "full"    && "border-emerald-500/40 text-emerald-400 bg-emerald-500/10",
+                  capability.enrichment === "partial" && "border-sky-500/40 text-sky-400 bg-sky-500/10",
+                  capability.enrichment === "none"    && "border-amber-500/40 text-amber-400 bg-amber-500/10",
+                )}
+                title={capability.notes ?? ""}
+              >
+                Enriq.: {capability.enrichment}
+              </span>
+              <span className="px-1.5 py-0.5 rounded border border-border/60 bg-muted/30 text-muted-foreground uppercase tracking-wide">
+                Provedor: {capability.provider}
+              </span>
+              <span className="px-1.5 py-0.5 rounded border border-border/60 bg-muted/30 text-muted-foreground">
+                {capability.searchByTaxId ? "ID ✓" : "ID ✗"} · {capability.searchByName ? "Nome ✓" : "Nome ✗"}
+              </span>
+            </>
+          )}
+          {lookupStatus && (
+            <span
+              className={cn(
+                "px-1.5 py-0.5 rounded border uppercase tracking-wide ml-auto",
+                lookupStatus === "fully_enriched"       && "border-emerald-500/40 text-emerald-400 bg-emerald-500/10",
+                lookupStatus === "partial_enrichment"   && "border-sky-500/40 text-sky-400 bg-sky-500/10",
+                lookupStatus === "valid_no_enrichment"  && "border-amber-500/40 text-amber-400 bg-amber-500/10",
+                lookupStatus === "provider_unavailable" && "border-orange-500/40 text-orange-400 bg-orange-500/10",
+                lookupStatus === "invalid_document"     && "border-rose-500/40 text-rose-400 bg-rose-500/10",
+                lookupStatus === "no_match"             && "border-border/60 text-muted-foreground bg-muted/30",
+              )}
+            >
+              {LOOKUP_STATUS_LABEL[lookupStatus]}
+            </span>
+          )}
+        </div>
+      )}
 
       {!providerAvailable && (
         <div className="text-[10px] text-amber-400 flex items-center gap-1">

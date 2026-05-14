@@ -52,6 +52,23 @@ export const AUTO_APPLY_THRESHOLD = 0.85;
 
 export type SupportTier = "A" | "B" | "C" | "unknown";
 
+export type ResolutionModel = "A" | "B" | "C" | "unknown";
+
+export type LookupStatus =
+  | "invalid_document" | "provider_unavailable" | "valid_no_enrichment"
+  | "partial_enrichment" | "fully_enriched" | "no_match";
+
+export interface CountryCapability {
+  iso2: string;
+  model: ResolutionModel;
+  enrichment: "full" | "partial" | "none";
+  validation: boolean;
+  provider: "available" | "limited" | "manual";
+  searchByName: boolean;
+  searchByTaxId: boolean;
+  notes?: string;
+}
+
 export interface LookupResponse {
   detected_kind: DocumentKind;
   detected_country: string | null;
@@ -68,6 +85,9 @@ export interface LookupResponse {
   country_hint?: string;
   support_tier?: SupportTier;
   support_tier_label?: string;
+  capability?: CountryCapability | null;
+  lookup_status?: LookupStatus;
+  lookup_status_label?: string;
 }
 
 export const TIER_LABEL: Record<SupportTier, string> = {
@@ -165,4 +185,13 @@ export const CONFIDENCE_LABEL: Record<ConfidenceLevel, string> = {
   partially_enriched: "Parcialmente enriquecido",
   validated: "Documento validado",
   unverified: "Não verificado",
+};
+
+export const LOOKUP_STATUS_LABEL: Record<LookupStatus, string> = {
+  invalid_document:     "Documento inválido",
+  provider_unavailable: "Provedor indisponível",
+  valid_no_enrichment:  "Documento válido — sem enriquecimento",
+  partial_enrichment:   "Enriquecimento parcial",
+  fully_enriched:       "Enriquecimento completo",
+  no_match:             "Sem correspondência",
 };
