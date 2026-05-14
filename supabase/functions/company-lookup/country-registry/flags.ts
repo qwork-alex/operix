@@ -21,7 +21,7 @@ function flag(name: string, fallback: boolean): boolean {
 export const COUNTRY_ENABLED: Record<CountryISO2, boolean> = {
   // Frozen — never disabled here.
   FR: true, PT: true, BE: true, NL: true, IT: true, BR: true,
-  // New jurisdictions — toggleable.
+  // New jurisdictions — toggleable detection.
   DE: flag("COUNTRY_DE_ENABLED", true),
   ES: flag("COUNTRY_ES_ENABLED", true),
   CH: flag("COUNTRY_CH_ENABLED", true),
@@ -33,4 +33,20 @@ export const COUNTRY_ENABLED: Record<CountryISO2, boolean> = {
 
 export function isEnabled(iso2: string): boolean {
   return COUNTRY_ENABLED[iso2 as CountryISO2] === true;
+}
+
+// Provider-level feature flags (network calls). Default OFF — safe by default.
+// Frozen countries are NEVER gated by these flags.
+export const PROVIDER_FLAGS = {
+  ES: flag("ENABLE_ES_PROVIDER", true),  // VIES VAT enrichment from CIF/NIF
+  DE: flag("ENABLE_DE_PROVIDER", true),  // VIES VAT enrichment from USt-IdNr
+  CH: flag("ENABLE_CH_PROVIDER", false), // ZEFIX (placeholder)
+  GB: flag("ENABLE_GB_PROVIDER", true),  // Companies House (key required)
+  US: flag("ENABLE_US_PROVIDER", false), // OpenCorporates / SEC (placeholder)
+  IN: flag("ENABLE_IN_PROVIDER", false), // GST / MCA (placeholder)
+  CN: flag("ENABLE_CN_PROVIDER", false), // placeholder
+};
+
+export function isProviderEnabled(iso2: string): boolean {
+  return (PROVIDER_FLAGS as any)[iso2] === true;
 }

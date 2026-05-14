@@ -39,7 +39,8 @@ import { toast } from "@/hooks/use-toast";
 import { getCurrentUserId } from "@/lib/authUser";
 import {
   lookupCompany, detectQueryType, mergeCompanyIntoForm, AUTO_APPLY_THRESHOLD,
-  type NormalizedCompany, type CompanyQueryType, type ConfidenceBreakdown,
+  TIER_LABEL,
+  type NormalizedCompany, type CompanyQueryType, type ConfidenceBreakdown, type SupportTier,
 } from "@/lib/companySearch";
 import { CheckCircle2, AlertCircle, ShieldCheck, ShieldAlert } from "lucide-react";
 
@@ -467,6 +468,7 @@ function CompanyLookupBar({ onApply }: { onApply: (c: NormalizedCompany) => void
   const [message, setMessage] = useState<string | null>(null);
   const [breakdown, setBreakdown] = useState<ConfidenceBreakdown | null>(null);
   const [detectedCountry, setDetectedCountry] = useState<string | null>(null);
+  const [supportTier, setSupportTier] = useState<SupportTier | null>(null);
   const [confirmLow, setConfirmLow] = useState(false);
 
   const labelByType: Partial<Record<CompanyQueryType, string>> = {
@@ -479,13 +481,14 @@ function CompanyLookupBar({ onApply }: { onApply: (c: NormalizedCompany) => void
   const run = async () => {
     if (!q.trim()) return;
     setLoading(true); setError(null); setResult(null); setCandidates([]);
-    setMessage(null); setBreakdown(null); setConfirmLow(false);
+    setMessage(null); setBreakdown(null); setConfirmLow(false); setSupportTier(null);
     try {
       const r = await lookupCompany(q.trim(), "FR");
       setProviderAvailable(r.provider_available);
       setMessage(r.message ?? null);
       setBreakdown(r.confidence_breakdown ?? null);
       setDetectedCountry(r.detected_country ?? null);
+      setSupportTier((r.support_tier as SupportTier) ?? null);
       if (r.result) setResult(r.result);
       else if (r.candidates?.length) setCandidates(r.candidates);
       else setError(r.message || "Sem correspondência");
@@ -516,7 +519,22 @@ function CompanyLookupBar({ onApply }: { onApply: (c: NormalizedCompany) => void
           <Sparkles className="h-3 w-3" />
           Identificação inteligente — SIREN, SIRET, TVA, CNPJ, EIN, GSTIN ou nome
         </div>
-        <span className="font-mono">{labelByType[type]}{detectedCountry ? ` · ${detectedCountry}` : ""}</span>
+        <div className="flex items-center gap-1.5 font-mono">
+          {supportTier && supportTier !== "unknown" && (
+            <span
+              className={cn(
+                "px-1.5 py-0.5 rounded border text-[9px] uppercase tracking-wide",
+                supportTier === "A" && "border-emerald-500/40 text-emerald-400 bg-emerald-500/10",
+                supportTier === "B" && "border-sky-500/40 text-sky-400 bg-sky-500/10",
+                supportTier === "C" && "border-amber-500/40 text-amber-400 bg-amber-500/10",
+              )}
+              title={TIER_LABEL[supportTier]}
+            >
+              Tier {supportTier}
+            </span>
+          )}
+          <span>{labelByType[type]}{detectedCountry ? ` · ${detectedCountry}` : ""}</span>
+        </div>
       </div>
       <div className="flex gap-2">
         <Input

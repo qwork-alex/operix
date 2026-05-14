@@ -50,6 +50,8 @@ export interface ConfidenceBreakdown {
 
 export const AUTO_APPLY_THRESHOLD = 0.85;
 
+export type SupportTier = "A" | "B" | "C" | "unknown";
+
 export interface LookupResponse {
   detected_kind: DocumentKind;
   detected_country: string | null;
@@ -64,7 +66,16 @@ export interface LookupResponse {
   classification?: { detected_kind: DocumentKind; country: string | null; score: number; candidates: ClassificationCandidate[] };
   confidence_breakdown?: ConfidenceBreakdown;
   country_hint?: string;
+  support_tier?: SupportTier;
+  support_tier_label?: string;
 }
+
+export const TIER_LABEL: Record<SupportTier, string> = {
+  A: "Enriquecimento completo",
+  B: "Enriquecimento parcial",
+  C: "Validação estrutural",
+  unknown: "Suporte limitado",
+};
 
 // ── Identifier detection (mirror of edge core, used by UI hints) ──────────
 
