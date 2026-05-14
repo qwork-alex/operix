@@ -141,28 +141,54 @@ const fmtDate = (d?: string | null) => {
 type FormState = {
   invoice_number: string;
   type: InvoiceType;
-  supplier_id: string | null;
-  customer_name: string;
+  client_id: string | null;
   issue_date: string;
   due_date: string;
-  total_amount: string;
-  paid_amount: string;
-  status: InvoiceStatus;
+  payment_term: PaymentTerm;
+  items: InvoiceItem[];
   notes: string;
+  // Bank details (editable, future: come from company profile)
+  bank_iban: string;
+  bank_bic: string;
+  bank_name: string;
+  // Legal footer
+  legal_text: string;
 };
+
+const DEFAULT_LEGAL =
+  "Em caso de atraso no pagamento, poderá ser aplicada penalidade conforme legislação vigente.";
 
 const emptyForm = (): FormState => ({
   invoice_number: "",
-  type: "incoming",
-  supplier_id: null,
-  customer_name: "",
+  type: "outgoing",
+  client_id: null,
   issue_date: new Date().toISOString().slice(0, 10),
   due_date: "",
-  total_amount: "0",
-  paid_amount: "0",
-  status: "draft",
+  payment_term: "net_30",
+  items: [newItem()],
   notes: "",
+  bank_iban: "",
+  bank_bic: "",
+  bank_name: "",
+  legal_text: DEFAULT_LEGAL,
 });
+
+// Compute due_date from issue_date + payment term
+function computeDueDate(issue: string, term: PaymentTerm, current: string): string {
+  if (term === "custom") return current;
+  if (!issue) return current;
+  const d = new Date(issue + "T00:00:00");
+  const preset = PAYMENT_TERMS.find((p) => p.value === term);
+  if (term === "end_of_month") {
+    const eom = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    return eom.toISOString().slice(0, 10);
+  }
+  if (preset?.days != null) {
+    d.setDate(d.getDate() + preset.days);
+    return d.toISOString().slice(0, 10);
+  }
+  return current;
+}
 
 // ───────────────────────────── component
 export default function InvoicesScreen() {
