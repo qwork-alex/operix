@@ -393,9 +393,13 @@ export type Database = {
       billing_suppliers: {
         Row: {
           address: string | null
+          bank: string | null
+          category: string | null
           created_at: string
           created_by: string | null
+          document_number: string | null
           email: string | null
+          iban: string | null
           id: string
           is_active: boolean
           name: string
@@ -406,9 +410,13 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          bank?: string | null
+          category?: string | null
           created_at?: string
           created_by?: string | null
+          document_number?: string | null
           email?: string | null
+          iban?: string | null
           id?: string
           is_active?: boolean
           name: string
@@ -419,9 +427,13 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          bank?: string | null
+          category?: string | null
           created_at?: string
           created_by?: string | null
+          document_number?: string | null
           email?: string | null
+          iban?: string | null
           id?: string
           is_active?: boolean
           name?: string
