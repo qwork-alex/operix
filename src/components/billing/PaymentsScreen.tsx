@@ -48,14 +48,14 @@ type Attachment = Database["public"]["Tables"]["billing_attachments"]["Row"];
 
 const STATUS_STYLES: Record<PaymentStatus, string> = {
   pending: "bg-amber-500/10 text-amber-400 border-amber-500/30",
-  completed: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
+  confirmed: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
   failed: "bg-destructive/10 text-destructive border-destructive/30",
   refunded: "bg-muted/40 text-muted-foreground border-border",
 };
 
 const STATUS_LABEL: Record<PaymentStatus, string> = {
   pending: "Pendente",
-  completed: "Concluído",
+  confirmed: "Confirmado",
   failed: "Falhado",
   refunded: "Reembolsado",
 };
@@ -89,7 +89,7 @@ const blankForm = (): FormState => ({
   payment_date: new Date().toISOString().slice(0, 10),
   reference: "",
   notes: "",
-  status: "completed",
+  status: "confirmed",
   account: "",
 });
 
@@ -197,7 +197,7 @@ export default function PaymentsScreen() {
   const pageData = filtered.slice((current - 1) * pageSize, current * pageSize);
 
   const totalAmount = filtered.reduce((s, p) => s + Number(p.amount || 0), 0);
-  const completedCount = filtered.filter((p) => p.status === "completed").length;
+  const completedCount = filtered.filter((p) => p.status === "confirmed").length;
   const pendingCount = filtered.filter((p) => p.status === "pending").length;
 
   // Open form
@@ -417,7 +417,7 @@ export default function PaymentsScreen() {
         </Card>
         <Card className="border-border/50">
           <CardContent className="pt-4 pb-3">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Concluídos</p>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Confirmados</p>
             <p className="text-lg font-semibold text-emerald-400 tabular-nums">{completedCount}</p>
           </CardContent>
         </Card>
@@ -448,7 +448,7 @@ export default function PaymentsScreen() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos os estados</SelectItem>
-              <SelectItem value="completed">Concluído</SelectItem>
+              <SelectItem value="confirmed">Confirmado</SelectItem>
               <SelectItem value="pending">Pendente</SelectItem>
               <SelectItem value="failed">Falhado</SelectItem>
               <SelectItem value="refunded">Reembolsado</SelectItem>
@@ -650,7 +650,7 @@ export default function PaymentsScreen() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="completed">Concluído</SelectItem>
+                  <SelectItem value="confirmed">Confirmado</SelectItem>
                   <SelectItem value="pending">Pendente</SelectItem>
                   <SelectItem value="failed">Falhado</SelectItem>
                   <SelectItem value="refunded">Reembolsado</SelectItem>
