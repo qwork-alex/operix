@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import {
-  Search, Plus, Filter, Download, FileText, FileSpreadsheet,
+  Search, Plus, Filter, FileText, FileSpreadsheet,
   MoreHorizontal, Eye, Pencil, Trash2, ChevronLeft, ChevronRight,
   X, History, Loader2, ArrowDownToLine, ArrowUpFromLine,
   Printer, FileEdit, FileUp,
