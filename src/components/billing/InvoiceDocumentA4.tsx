@@ -7,7 +7,13 @@
  * Inspiração visual: Pennylane, Qonto, Indy, Axonaut.
  */
 
-import { format, parseISO } from "date-fns";
+import {
+  getInvoiceDict,
+  fmtMoney as fmtMoneyI18n,
+  fmtDate as fmtDateI18n,
+  getDocTitle,
+  type InvoiceLang,
+} from "@/i18n/invoices";
 
 // ── A4 dimensions (mm) — fixos, não responsivos
 export const A4 = {
