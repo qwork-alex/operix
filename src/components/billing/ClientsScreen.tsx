@@ -470,6 +470,8 @@ function CompanyLookupBar({ onApply }: { onApply: (c: NormalizedCompany) => void
   const [breakdown, setBreakdown] = useState<ConfidenceBreakdown | null>(null);
   const [detectedCountry, setDetectedCountry] = useState<string | null>(null);
   const [supportTier, setSupportTier] = useState<SupportTier | null>(null);
+  const [capability, setCapability] = useState<CountryCapability | null>(null);
+  const [lookupStatus, setLookupStatus] = useState<LookupStatus | null>(null);
   const [confirmLow, setConfirmLow] = useState(false);
 
   const labelByType: Partial<Record<CompanyQueryType, string>> = {
@@ -482,7 +484,8 @@ function CompanyLookupBar({ onApply }: { onApply: (c: NormalizedCompany) => void
   const run = async () => {
     if (!q.trim()) return;
     setLoading(true); setError(null); setResult(null); setCandidates([]);
-    setMessage(null); setBreakdown(null); setConfirmLow(false); setSupportTier(null);
+    setMessage(null); setBreakdown(null); setConfirmLow(false);
+    setSupportTier(null); setCapability(null); setLookupStatus(null);
     try {
       const r = await lookupCompany(q.trim(), "FR");
       setProviderAvailable(r.provider_available);
@@ -490,6 +493,8 @@ function CompanyLookupBar({ onApply }: { onApply: (c: NormalizedCompany) => void
       setBreakdown(r.confidence_breakdown ?? null);
       setDetectedCountry(r.detected_country ?? null);
       setSupportTier((r.support_tier as SupportTier) ?? null);
+      setCapability(r.capability ?? null);
+      setLookupStatus((r.lookup_status as LookupStatus) ?? null);
       if (r.result) setResult(r.result);
       else if (r.candidates?.length) setCandidates(r.candidates);
       else setError(r.message || "Sem correspondência");
