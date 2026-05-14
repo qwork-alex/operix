@@ -643,6 +643,15 @@ function Row({ label, value, divider, muted, tone }: {
   );
 }
 
+function ElecRow({ k, v }: { k: string; v: string }) {
+  return (
+    <div style={{ display: "flex", gap: "8px", justifyContent: "space-between" }}>
+      <span style={{ color: "#71717a" }}>{k}</span>
+      <span style={{ color: "#0a0a0a", fontWeight: 600 }}>{v}</span>
+    </div>
+  );
+}
+
 function DateBlock({ label, value }: { label: string; value: string }) {
   return (
     <div>
