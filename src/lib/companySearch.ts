@@ -39,6 +39,17 @@ export interface NormalizedCompany {
 
 export interface ProviderLog { provider: string; ms: number; ok: boolean; notes?: string }
 
+export interface ClassificationCandidate {
+  kind: DocumentKind; country: string | null; score: number; reasons: string[];
+}
+
+export interface ConfidenceBreakdown {
+  format: number; provider: number; country: number; contextual: number;
+  field_completeness: number; total: number; level: ConfidenceLevel; auto_apply: boolean;
+}
+
+export const AUTO_APPLY_THRESHOLD = 0.78;
+
 export interface LookupResponse {
   detected_kind: DocumentKind;
   detected_country: string | null;
@@ -50,6 +61,9 @@ export interface LookupResponse {
   message: string;
   total_ms: number;
   provider_available: boolean;
+  classification?: { detected_kind: DocumentKind; country: string | null; score: number; candidates: ClassificationCandidate[] };
+  confidence_breakdown?: ConfidenceBreakdown;
+  country_hint?: string;
 }
 
 // ── Identifier detection (mirror of edge core, used by UI hints) ──────────
@@ -91,8 +105,10 @@ export function formatVat(v: string): string { return v.replace(/\s/g, "").toUpp
 
 // ── Main API ───────────────────────────────────────────────────────────────
 
-export async function lookupCompany(query: string): Promise<LookupResponse> {
-  const { data, error } = await supabase.functions.invoke("company-lookup", { body: { query } });
+export async function lookupCompany(query: string, countryHint: string = "FR"): Promise<LookupResponse> {
+  const { data, error } = await supabase.functions.invoke("company-lookup", {
+    body: { query, country_hint: countryHint },
+  });
   if (error) throw error;
   return data as LookupResponse;
 }
