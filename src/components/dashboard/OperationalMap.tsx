@@ -822,6 +822,212 @@ export function OperationalMap() {
 }
 
 /* ====================================================================== */
+/*  Hail filter + timeline replay controls                                 */
+/* ====================================================================== */
+type StatusFilterOpt = "all" | "forecast" | "ongoing" | "confirmed";
+const STATUS_OPTS: { key: StatusFilterOpt; label: string; color: string }[] = [
+  { key: "all", label: "Todos", color: "#94a3b8" },
+  { key: "forecast", label: "Previsão", color: "#eab308" },
+  { key: "ongoing", label: "Ativo", color: "#f97316" },
+  { key: "confirmed", label: "Confirmado", color: "#ef4444" },
+];
+
+function HailControls({
+  statusFilter, onStatusFilter,
+  severityFilter, onSeverityFilter,
+  minSizeMm, onMinSizeMm,
+  windowHours, onWindowHours,
+  replayCursor, onReplayCursor,
+  replayPlaying, onReplayToggle,
+  replayTimeMs, eventCount, totalCount,
+}: {
+  statusFilter: StatusFilterOpt;
+  onStatusFilter: (v: StatusFilterOpt) => void;
+  severityFilter: Record<HailSeverity, boolean>;
+  onSeverityFilter: (v: Record<HailSeverity, boolean>) => void;
+  minSizeMm: number;
+  onMinSizeMm: (v: number) => void;
+  windowHours: number;
+  onWindowHours: (v: number) => void;
+  replayCursor: number;
+  onReplayCursor: (v: number) => void;
+  replayPlaying: boolean;
+  onReplayToggle: () => void;
+  replayTimeMs: number;
+  eventCount: number;
+  totalCount: number;
+}) {
+  const SEVS: HailSeverity[] = ["low", "moderate", "severe", "extreme"];
+  const SEV_LABEL: Record<HailSeverity, string> = {
+    low: "Baixo", moderate: "Mod.", severe: "Severo", extreme: "Extremo",
+  };
+  const isLive = replayCursor >= 0.999;
+  return (
+    <div
+      className="mb-3 rounded-lg border p-2.5 animate-fade-in"
+      style={{
+        background: "linear-gradient(135deg, rgba(15,23,42,0.7), rgba(15,23,42,0.45))",
+        borderColor: "rgba(255,255,255,0.08)",
+      }}
+    >
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+          <Filter className="h-3 w-3" /> Granizo
+        </span>
+        <div className="flex gap-1">
+          {STATUS_OPTS.map((opt) => {
+            const active = statusFilter === opt.key;
+            return (
+              <button
+                key={opt.key}
+                onClick={() => onStatusFilter(opt.key)}
+                className="text-[10px] px-2 py-1 rounded-md border transition"
+                style={{
+                  borderColor: active ? opt.color : "rgba(255,255,255,0.1)",
+                  background: active ? `${opt.color}22` : "transparent",
+                  color: active ? opt.color : "hsl(var(--muted-foreground))",
+                  boxShadow: active ? `0 0 8px ${opt.color}55` : "none",
+                }}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex gap-1">
+          {SEVS.map((s) => {
+            const active = severityFilter[s];
+            const c = HAIL_COLORS[s];
+            return (
+              <button
+                key={s}
+                onClick={() => onSeverityFilter({ ...severityFilter, [s]: !active })}
+                className="text-[10px] px-2 py-1 rounded-md border transition flex items-center gap-1"
+                style={{
+                  borderColor: active ? c : "rgba(255,255,255,0.08)",
+                  background: active ? `${c}22` : "transparent",
+                  color: active ? c : "hsl(var(--muted-foreground))",
+                  opacity: active ? 1 : 0.6,
+                }}
+                title={SEV_LABEL[s]}
+              >
+                <span className="h-1.5 w-1.5 rounded-full" style={{ background: c }} />
+                {SEV_LABEL[s]}
+              </button>
+            );
+          })}
+        </div>
+        <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+          <Gauge className="h-3 w-3" />
+          ≥
+          <input
+            type="number" min={0} max={100} step={1}
+            value={minSizeMm}
+            onChange={(e) => onMinSizeMm(Math.max(0, Number(e.target.value) || 0))}
+            className="w-12 bg-white/5 border border-white/10 rounded px-1.5 py-0.5 text-foreground tabular-nums"
+          />
+          mm
+        </label>
+        <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+          <Clock className="h-3 w-3" />
+          <select
+            value={windowHours}
+            onChange={(e) => { onWindowHours(Number(e.target.value)); onReplayCursor(1); }}
+            className="bg-white/5 border border-white/10 rounded px-1.5 py-0.5 text-foreground"
+          >
+            {[1, 3, 6, 12, 24].map((h) => <option key={h} value={h}>{h}h</option>)}
+          </select>
+        </label>
+        <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">
+          {eventCount}/{totalCount} eventos
+        </span>
+      </div>
+
+      <div className="mt-2 flex items-center gap-2">
+        <button
+          onClick={onReplayToggle}
+          className="p-1.5 rounded-md border border-white/10 bg-white/5 hover:bg-white/10 transition text-foreground"
+          title={replayPlaying ? "Pausar" : "Reproduzir"}
+        >
+          {replayPlaying ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
+        </button>
+        <button
+          onClick={() => onReplayCursor(1)}
+          className="p-1.5 rounded-md border border-white/10 bg-white/5 hover:bg-white/10 transition text-muted-foreground"
+          title="Voltar ao tempo real"
+        >
+          <RotateCcw className="h-3 w-3" />
+        </button>
+        <input
+          type="range" min={0} max={1} step={0.01}
+          value={replayCursor}
+          onChange={(e) => onReplayCursor(Number(e.target.value))}
+          className="flex-1 accent-cyan-400"
+        />
+        <span className="text-[10px] tabular-nums text-muted-foreground w-28 text-right">
+          {isLive ? (
+            <span className="text-cyan-400 flex items-center gap-1 justify-end">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse" />
+              AO VIVO
+            </span>
+          ) : (
+            new Date(replayTimeMs).toLocaleTimeString(undefined, {
+              hour: "2-digit", minute: "2-digit",
+            })
+          )}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/* ====================================================================== */
+/*  Elegant operational legend overlay                                     */
+/* ====================================================================== */
+function HailLegend() {
+  return (
+    <div
+      className="absolute bottom-3 left-3 rounded-lg p-2.5 text-[10px] border animate-fade-in pointer-events-none"
+      style={{
+        background: "linear-gradient(135deg, rgba(10,16,28,0.85), rgba(10,16,28,0.65))",
+        borderColor: "rgba(255,255,255,0.08)",
+        backdropFilter: "blur(8px)",
+        minWidth: 140,
+      }}
+    >
+      <div className="text-[9px] uppercase tracking-wider text-muted-foreground mb-1.5">Severidade</div>
+      <div className="space-y-1">
+        {(["low", "moderate", "severe", "extreme"] as HailSeverity[]).map((s) => {
+          const c = HAIL_COLORS[s];
+          const label = { low: "Baixo", moderate: "Moderado", severe: "Severo", extreme: "Extremo" }[s];
+          return (
+            <div key={s} className="flex items-center gap-1.5 text-foreground">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ background: c, boxShadow: `0 0 6px ${c}88` }} />
+              {label}
+            </div>
+          );
+        })}
+      </div>
+      <div className="text-[9px] uppercase tracking-wider text-muted-foreground mt-2 mb-1">Estado</div>
+      <div className="space-y-1 text-foreground">
+        <div className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full border opacity-70" style={{ borderColor: "#eab308" }} />
+          Previsão
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full" style={{ background: "#ef4444", boxShadow: "0 0 6px #ef444488" }} />
+          Confirmado
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full" style={{ background: "#64748b", opacity: 0.5 }} />
+          Encerrado
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ====================================================================== */
 /*  Detail Panel — opens below the map when a hail cell is clicked         */
 /* ====================================================================== */
 const STATUS_LABEL: Record<HailStatus, string> = {
