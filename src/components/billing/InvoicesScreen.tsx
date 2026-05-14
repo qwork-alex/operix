@@ -1707,12 +1707,13 @@ function Field({ label, children, full }: { label: string; children: React.React
 
 // ───────────────────────────── side panel content
 function DetailContent({
-  invoice, supplierName, onEdit, onDelete,
+  invoice, supplierName, onEdit, onDelete, onSend,
 }: {
   invoice: Invoice;
   supplierName: string | null;
   onEdit: () => void;
   onDelete: () => void;
+  onSend: () => void;
 }) {
   const auditQ = useQuery({
     queryKey: ["invoice_audit", invoice.id],
