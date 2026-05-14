@@ -194,6 +194,24 @@ Deno.serve(async (req) => {
     if (result) result.confidence = conf.level;
 
     const tier = tierFor(result?.country ?? best.country ?? null);
+    const capability: CountryCapability | null = capabilityFor(result?.country ?? best.country ?? null);
+
+    // Compute lookup_status with strict differentiation between
+    // invalid / valid-no-enrichment / partial / full / no-match / provider-down.
+    const formatLooksValid = best.score >= 0.6 || registryFormatBoost >= 0.6;
+    const isStructuralOnly = !!result && /(structural)$/i.test(result.provider);
+    const hasEnrichmentFields = !!result && !!(result.company_name || result.address?.city || result.address?.postal_code);
+    const providerErrored = !result && ctx.logs.some((l) => !l.ok && /api|http|fetch/i.test(l.notes ?? ""));
+
+    let lookup_status: LookupStatus;
+    if (!formatLooksValid && !result && !candidates.length) lookup_status = "invalid_document";
+    else if (providerErrored && capability && capability.provider !== "manual") lookup_status = "provider_unavailable";
+    else if (result && conf.level === "fully_enriched")     lookup_status = "fully_enriched";
+    else if (result && conf.level === "partially_enriched") lookup_status = "partial_enrichment";
+    else if (result && (isStructuralOnly || !hasEnrichmentFields)) lookup_status = "valid_no_enrichment";
+    else if (!result && candidates.length === 0)            lookup_status = "no_match";
+    else                                                     lookup_status = "partial_enrichment";
+
     const payload: LookupResult & {
       classification: { detected_kind: string; country: string | null; score: number; candidates: ClassificationCandidate[] };
       confidence_breakdown: ConfidenceBreakdown;
@@ -203,6 +221,9 @@ Deno.serve(async (req) => {
       session_id: string;
       support_tier: SupportTier;
       support_tier_label: string;
+      capability: CountryCapability | null;
+      lookup_status: LookupStatus;
+      lookup_status_label: string;
     } = {
       detected_kind: best.kind,
       detected_country: best.country,
@@ -223,6 +244,9 @@ Deno.serve(async (req) => {
       session_id: sessionId,
       support_tier: tier,
       support_tier_label: TIER_LABEL_PT[tier],
+      capability,
+      lookup_status,
+      lookup_status_label: LOOKUP_STATUS_LABEL_PT[lookup_status],
     };
 
     return new Response(JSON.stringify(payload), {
