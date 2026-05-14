@@ -12,6 +12,7 @@ import {
   usaProvider, canadaProvider, mexicoProvider,
   indiaProvider, japanProvider, genericProvider,
 } from "./providers.ts";
+import { detectAcrossRegistry, resolveModule } from "./country-registry/registry.ts";
 
 function enrichAddress(c: NormalizedCompany | null): NormalizedCompany | null {
   if (!c) return c;
@@ -88,43 +89,74 @@ Deno.serve(async (req) => {
     let candidates: NormalizedCompany[] = [];
     let vies: any = null;
 
-    for (const cand of ordered) {
-      ctx.kind = cand.kind; ctx.country = cand.country;
-
-      switch (cand.kind) {
-        case "siren":
-        case "siret": {
-          const r = await franceProvider.lookup(ctx);
-          result = r.result; candidates = r.candidates; break;
-        }
-        case "vat_eu": {
-          if (ctx.country === "FR") {
-            const r = await franceProvider.lookup(ctx);
-            result = r.result;
+    // ── Country Registry pass (NEW countries only: DE/ES/CH/GB/US/IN/CN). ──
+    // Frozen jurisdictions (FR/PT/BE/NL/IT/BR) are intentionally NOT routed here.
+    // Runs BEFORE the legacy switch so high-confidence registry detections win,
+    // but only when the detected country belongs to the modular set.
+    // Skip registry entirely if the legacy classifier already produced a strong frozen-country match.
+    const FROZEN = new Set(["FR","PT","BE","NL","IT","BR"]);
+    const frozenStrong = ordered.find((c) => c.country && FROZEN.has(c.country) && c.score >= 0.7);
+    let registryFormatBoost = 0;
+    if (!frozenStrong) {
+      const registryHits = detectAcrossRegistry(query);
+      const topRegistry = registryHits.find((d) => !FROZEN.has(d.country));
+      if (topRegistry) {
+        const mod = resolveModule(topRegistry.country);
+        if (mod) {
+          const cctx = {
+            query: query.trim(), detected_kind: topRegistry.kind,
+            country: topRegistry.country, logs: ctx.logs, session_id: sessionId,
+          };
+          const r = await mod.lookup(cctx);
+          if (r) {
+            result = r;
+            ctx.kind = topRegistry.kind as any;
+            ctx.country = topRegistry.country;
+            registryFormatBoost = topRegistry.score; // feed into confidence engine below
           }
-          // VIES validates regardless, but only enrich with VIES when no FR result.
-          const v = await europeVatProvider.validate(ctx.query, ctx);
-          vies = v.vies;
-          if (!result && v.company && (ctx.country == null || v.company.country === ctx.country)) {
-            result = v.company;
-          }
-          break;
-        }
-        case "cnpj":   if (countryHint === "BR" || classification.candidates.find((x) => x.kind === "cnpj" && x.score >= 0.8)) result = await brazilProvider.lookup(ctx); break;
-        case "ein":    result = await usaProvider.lookup(ctx);    break;
-        case "bn_ca":  result = await canadaProvider.lookup(ctx); break;
-        case "rfc_mx": result = await mexicoProvider.lookup(ctx); break;
-        case "gstin":  result = await indiaProvider.lookup(ctx);  break;
-        case "corp_jp":result = await japanProvider.lookup(ctx);  break;
-        case "name": {
-          const r = await franceProvider.lookup(ctx);
-          result = r.result; candidates = r.candidates;
-          if (!result && !candidates.length) result = genericProvider.lookup(ctx);
-          break;
         }
       }
+    }
 
-      if (result || candidates.length) break;
+    if (!result) {
+      for (const cand of ordered) {
+        ctx.kind = cand.kind; ctx.country = cand.country;
+
+        switch (cand.kind) {
+          case "siren":
+          case "siret": {
+            const r = await franceProvider.lookup(ctx);
+            result = r.result; candidates = r.candidates; break;
+          }
+          case "vat_eu": {
+            if (ctx.country === "FR") {
+              const r = await franceProvider.lookup(ctx);
+              result = r.result;
+            }
+            // VIES validates regardless, but only enrich with VIES when no FR result.
+            const v = await europeVatProvider.validate(ctx.query, ctx);
+            vies = v.vies;
+            if (!result && v.company && (ctx.country == null || v.company.country === ctx.country)) {
+              result = v.company;
+            }
+            break;
+          }
+          case "cnpj":   if (countryHint === "BR" || classification.candidates.find((x) => x.kind === "cnpj" && x.score >= 0.8)) result = await brazilProvider.lookup(ctx); break;
+          case "ein":    result = await usaProvider.lookup(ctx);    break;
+          case "bn_ca":  result = await canadaProvider.lookup(ctx); break;
+          case "rfc_mx": result = await mexicoProvider.lookup(ctx); break;
+          case "gstin":  result = await indiaProvider.lookup(ctx);  break;
+          case "corp_jp":result = await japanProvider.lookup(ctx);  break;
+          case "name": {
+            const r = await franceProvider.lookup(ctx);
+            result = r.result; candidates = r.candidates;
+            if (!result && !candidates.length) result = genericProvider.lookup(ctx);
+            break;
+          }
+        }
+
+        if (result || candidates.length) break;
+      }
     }
 
     // Strict country isolation: if user is in FR context and a non-FR result slipped through
@@ -138,7 +170,7 @@ Deno.serve(async (req) => {
     candidates = candidates.map((c) => enrichAddress(c)!).filter(Boolean);
 
     // Identifier-validity boost: exact Luhn pass adds to format score.
-    let formatScore = best.score;
+    let formatScore = Math.max(best.score, registryFormatBoost);
     if (best.kind === "siren" && isValidSiren(query)) formatScore = Math.min(1, formatScore + 0.1);
     if (best.kind === "siret" && isValidSiret(query)) formatScore = Math.min(1, formatScore + 0.1);
 
