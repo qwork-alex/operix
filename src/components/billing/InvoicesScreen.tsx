@@ -732,7 +732,16 @@ export default function InvoicesScreen() {
                         }}
                       />
                     </TableCell>
-                    <TableCell className="font-mono text-[11px] text-primary">{r.invoice_number}</TableCell>
+                    <TableCell className="font-mono text-[11px] text-primary">
+                      <div className="flex items-center gap-1.5">
+                        <span>{r.invoice_number}</span>
+                        {(r as any).source === "imported" && (
+                          <Badge variant="outline" className="h-4 px-1 text-[8px] gap-0.5 border-amber-500/40 text-amber-500">
+                            <FileUp className="h-2.5 w-2.5" /> IMP
+                          </Badge>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell className="font-medium">{partyName}</TableCell>
                     <TableCell>
                       <span className={cn("inline-flex items-center gap-1.5", TYPE_META[r.type].cls)}>
