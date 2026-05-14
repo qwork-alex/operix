@@ -443,6 +443,8 @@ export default function InvoicesScreen() {
   const [viewMode, setViewMode] = useState<"edit" | "preview">("edit");
 
   const companySettings = useCompanySettings().settings;
+
+  // ── totals (applies global discount proportionally before tax)
   const totals = useMemo(() => {
     const subtotal = form.items.reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0);
     const opt = form.options;
