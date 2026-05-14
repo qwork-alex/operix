@@ -1363,6 +1363,14 @@ export default function InvoicesScreen() {
         companyName={(companySettings as any)?.legal_name ?? (companySettings as any)?.name ?? BRAND.name}
       />
 
+      <SendInvoiceDialog
+        open={!!reminderInvoice}
+        onOpenChange={(o) => !o && setReminderInvoice(null)}
+        invoice={reminderInvoice}
+        companyName={(companySettings as any)?.legal_name ?? (companySettings as any)?.name ?? BRAND.name}
+        mode="reminder"
+      />
+
       {/* ─── Save draft confirmation */}
       <AlertDialog open={confirmDraft} onOpenChange={setConfirmDraft}>
         <AlertDialogContent>
