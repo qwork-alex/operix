@@ -360,7 +360,8 @@ export default function BillingPage() {
         <Route path="pagamentos" element={<PaymentsScreen />} />
         <Route path="conciliacao" element={<ReconciliationScreen />} />
         <Route path="contas-a-vencer" element={<UpcomingBillsScreen />} />
-        <Route path="fornecedores" element={<SuppliersScreen />} />
+        <Route path="clientes" element={<ClientsScreen />} />
+        <Route path="fornecedores" element={<Navigate to="/billing/clientes" replace />} />
         <Route path="relatorios" element={<ReportsScreen />} />
 
         <Route path="*" element={<Navigate to="faturas" replace />} />
