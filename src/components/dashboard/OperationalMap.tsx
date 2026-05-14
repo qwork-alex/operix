@@ -757,14 +757,42 @@ export function OperationalMap() {
         </div>
       </div>
 
+      {/* -------- Hail filters + timeline replay (only when hail layer on) -------- */}
+      {layers.hail && (
+        <HailControls
+          statusFilter={hailStatusFilter}
+          onStatusFilter={setHailStatusFilter}
+          severityFilter={hailSeverityFilter}
+          onSeverityFilter={setHailSeverityFilter}
+          minSizeMm={hailMinSizeMm}
+          onMinSizeMm={setHailMinSizeMm}
+          windowHours={hailWindowHours}
+          onWindowHours={setHailWindowHours}
+          replayCursor={replayCursor}
+          onReplayCursor={setReplayCursor}
+          replayPlaying={replayPlaying}
+          onReplayToggle={() => {
+            if (replayCursor >= 1) setReplayCursor(0);
+            setReplayPlaying((p) => !p);
+          }}
+          replayTimeMs={replayTimeMs}
+          eventCount={visibleHailEvents.length}
+          totalCount={hailEvents.length}
+        />
+      )}
+
       {isLoading && !mapReady ? (
         <Skeleton className="h-[400px] rounded-lg" />
       ) : (
-        <div
-          ref={containerRef}
-          className="h-[420px] rounded-lg overflow-hidden relative"
-          style={{ background: "#0a1628" }}
-        />
+        <div className="relative">
+          <div
+            ref={containerRef}
+            className="h-[420px] rounded-lg overflow-hidden relative"
+            style={{ background: "#0a1628" }}
+          />
+          {/* -------- Elegant operational legend overlay -------- */}
+          {layers.hail && <HailLegend />}
+        </div>
       )}
 
       {/* -------- Dynamic operational command panel -------- */}
