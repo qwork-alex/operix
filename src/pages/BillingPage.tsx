@@ -27,7 +27,7 @@ import InvoicesScreen from "@/components/billing/InvoicesScreen";
 import PaymentsScreen from "@/components/billing/PaymentsScreen";
 import ReconciliationScreen from "@/components/billing/ReconciliationScreen";
 import UpcomingBillsScreen from "@/components/billing/UpcomingBillsScreen";
-import SuppliersScreen from "@/components/billing/SuppliersScreen";
+import ClientsScreen from "@/components/billing/ClientsScreen";
 import ReportsScreen from "@/components/billing/ReportsScreen";
 
 // ─────────────────────────────────────────────────────────────
