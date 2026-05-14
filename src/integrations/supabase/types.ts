@@ -193,6 +193,7 @@ export type Database = {
           paid_amount: number
           remaining_amount: number | null
           service_order_id: string | null
+          source: string
           status: Database["public"]["Enums"]["billing_invoice_status"]
           supplier_id: string | null
           total_amount: number
@@ -213,6 +214,7 @@ export type Database = {
           paid_amount?: number
           remaining_amount?: number | null
           service_order_id?: string | null
+          source?: string
           status?: Database["public"]["Enums"]["billing_invoice_status"]
           supplier_id?: string | null
           total_amount?: number
@@ -233,6 +235,7 @@ export type Database = {
           paid_amount?: number
           remaining_amount?: number | null
           service_order_id?: string | null
+          source?: string
           status?: Database["public"]["Enums"]["billing_invoice_status"]
           supplier_id?: string | null
           total_amount?: number
