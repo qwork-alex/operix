@@ -56,12 +56,37 @@ import {
 type InvoiceStatus = "draft" | "pending" | "partial" | "paid" | "overdue" | "cancelled";
 type InvoiceType = "incoming" | "outgoing";
 
+type CustomerSnapshot = {
+  billing_client_id: string | null;
+  name: string;
+  kind?: string | null;
+  tax_id?: string | null;
+  siren?: string | null;
+  siret?: string | null;
+  tva_intracom?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  address_complement?: string | null;
+  postal_code?: string | null;
+  city?: string | null;
+  country?: string | null;
+  iban?: string | null;
+  bic?: string | null;
+  language?: string | null;
+  currency?: string | null;
+  payment_terms?: string | null;
+  captured_at: string;
+};
+
 type Invoice = {
   id: string;
   invoice_number: string;
   type: InvoiceType;
   supplier_id: string | null;
+  billing_client_id: string | null;
   customer_name: string | null;
+  customer_snapshot: CustomerSnapshot | null;
   vehicle_id: string | null;
   fleet_id: string | null;
   service_order_id: string | null;
@@ -81,11 +106,51 @@ type Supplier = { id: string; name: string };
 type Client = {
   id: string;
   name: string;
-  contact_email: string | null;
-  contact_phone: string | null;
+  kind: string | null;
+  tax_id: string | null;
+  siren: string | null;
+  siret: string | null;
+  tva_intracom: string | null;
+  email: string | null;
+  phone: string | null;
   address: string | null;
-  notes: string | null;
+  address_complement: string | null;
+  postal_code: string | null;
+  city: string | null;
+  country: string | null;
+  iban: string | null;
+  bic: string | null;
+  // Compatibility with previous shape
+  contact_email?: string | null;
+  contact_phone?: string | null;
+  notes?: string | null;
 };
+
+function buildSnapshot(c: Client | null): CustomerSnapshot | null {
+  if (!c) return null;
+  return {
+    billing_client_id: c.id,
+    name: c.name,
+    kind: c.kind ?? null,
+    tax_id: c.tax_id ?? null,
+    siren: c.siren ?? null,
+    siret: c.siret ?? null,
+    tva_intracom: c.tva_intracom ?? null,
+    email: c.email ?? null,
+    phone: c.phone ?? null,
+    address: c.address ?? null,
+    address_complement: c.address_complement ?? null,
+    postal_code: c.postal_code ?? null,
+    city: c.city ?? null,
+    country: c.country ?? null,
+    iban: c.iban ?? null,
+    bic: c.bic ?? null,
+    language: null,
+    currency: "EUR",
+    payment_terms: null,
+    captured_at: new Date().toISOString(),
+  };
+}
 
 // Payment terms presets
 type PaymentTerm = "on_receipt" | "net_15" | "net_30" | "net_45" | "net_60" | "end_of_month" | "custom";
