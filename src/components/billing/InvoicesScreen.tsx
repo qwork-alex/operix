@@ -705,75 +705,282 @@ export default function InvoicesScreen() {
 
       {/* ─── Form dialog */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{editing ? "Editar fatura" : "Nova fatura"}</DialogTitle>
+        <DialogContent className="max-w-5xl max-h-[92vh] overflow-y-auto p-0">
+          <DialogHeader className="px-6 pt-5 pb-4 border-b border-border/50 sticky top-0 bg-background z-10">
+            <DialogTitle className="text-base font-semibold">
+              {editing ? "Editar fatura" : "Nova fatura"}
+            </DialogTitle>
+            <p className="text-xs text-muted-foreground">
+              {editing ? "Atualize os dados da fatura existente." : "Preencha os dados para emitir uma nova fatura."}
+            </p>
           </DialogHeader>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-            <Field label="Número *">
-              <Input value={form.invoice_number} onChange={(e) => setForm({ ...form, invoice_number: e.target.value })} className="h-8" />
-            </Field>
-            <Field label="Tipo">
-              <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v as InvoiceType })}>
-                <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="incoming">Entrada</SelectItem>
-                  <SelectItem value="outgoing">Saída</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label="Fornecedor">
-              <Select
-                value={form.supplier_id ?? "__none"}
-                onValueChange={(v) => setForm({ ...form, supplier_id: v === "__none" ? null : v })}
-              >
-                <SelectTrigger className="h-8"><SelectValue placeholder="—" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none">— Nenhum —</SelectItem>
-                  {(suppliersQ.data ?? []).map((s) => (
-                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label="Cliente (texto livre)">
-              <Input value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} className="h-8" />
-            </Field>
-            <Field label="Data emissão">
-              <Input type="date" value={form.issue_date} onChange={(e) => setForm({ ...form, issue_date: e.target.value })} className="h-8" />
-            </Field>
-            <Field label="Vencimento">
-              <Input type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} className="h-8" />
-            </Field>
-            <Field label="Valor total (€)">
-              <Input type="number" step="0.01" value={form.total_amount} onChange={(e) => setForm({ ...form, total_amount: e.target.value })} className="h-8" />
-            </Field>
-            <Field label="Valor pago (€)">
-              <Input type="number" step="0.01" value={form.paid_amount} onChange={(e) => setForm({ ...form, paid_amount: e.target.value })} className="h-8" />
-            </Field>
-            <Field label="Estado">
-              <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as InvoiceStatus })}>
-                <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {Object.entries(STATUS_META).map(([k, v]) => (
-                    <SelectItem key={k} value={k}>{v.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label="Observações" full>
-              <Textarea rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="text-xs" />
-            </Field>
+
+          <div className="px-6 py-5 space-y-6 text-xs">
+            {/* SECTION 1 — Identification */}
+            <FormSection title="Identificação" subtitle="Dados gerais da fatura">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <Field label="Número *">
+                  <Input
+                    value={form.invoice_number}
+                    onChange={(e) => setForm({ ...form, invoice_number: e.target.value })}
+                    placeholder="Ex: FAT-2026-0001"
+                    className="h-9"
+                  />
+                </Field>
+                <Field label="Tipo">
+                  <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v as InvoiceType })}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="incoming">Entrada</SelectItem>
+                      <SelectItem value="outgoing">Saída</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label="Data emissão">
+                  <Input
+                    type="date"
+                    value={form.issue_date}
+                    onChange={(e) => {
+                      const issue = e.target.value;
+                      setForm({
+                        ...form,
+                        issue_date: issue,
+                        due_date: computeDueDate(issue, form.payment_term, form.due_date),
+                      });
+                    }}
+                    className="h-9"
+                  />
+                </Field>
+              </div>
+            </FormSection>
+
+            {/* SECTION 2 — Client */}
+            <FormSection title="Cliente" subtitle="Selecione um cliente já cadastrado">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Field label="Cliente *">
+                  <Select
+                    value={form.client_id ?? ""}
+                    onValueChange={(v) => setForm({ ...form, client_id: v || null })}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Selecionar cliente..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(clientsQ.data ?? []).length === 0 ? (
+                        <div className="px-3 py-2 text-xs text-muted-foreground">Nenhum cliente cadastrado</div>
+                      ) : (
+                        (clientsQ.data ?? []).map((c) => (
+                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <ClientPreview client={(clientsQ.data ?? []).find((c) => c.id === form.client_id) || null} />
+              </div>
+            </FormSection>
+
+            {/* SECTION 3 — Payment terms */}
+            <FormSection title="Condições de pagamento" subtitle="Defina prazos e vencimento">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <Field label="Condição de pagamento">
+                  <Select
+                    value={form.payment_term}
+                    onValueChange={(v) => {
+                      const term = v as PaymentTerm;
+                      setForm({
+                        ...form,
+                        payment_term: term,
+                        due_date: computeDueDate(form.issue_date, term, form.due_date),
+                      });
+                    }}
+                  >
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {PAYMENT_TERMS.map((t) => (
+                        <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label="Data de vencimento">
+                  <Input
+                    type="date"
+                    value={form.due_date}
+                    onChange={(e) => setForm({ ...form, due_date: e.target.value, payment_term: "custom" })}
+                    className="h-9"
+                  />
+                </Field>
+              </div>
+            </FormSection>
+
+            {/* SECTION 4 — Items */}
+            <FormSection title="Itens da fatura" subtitle="Designações, quantidades e impostos">
+              <div className="rounded-md border border-border/60 overflow-hidden">
+                <div className="grid grid-cols-[1fr_70px_70px_110px_110px_120px_36px] gap-2 px-3 py-2 bg-muted/30 text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <div>Designação</div>
+                  <div className="text-right">Qtd</div>
+                  <div>Unid</div>
+                  <div className="text-right">Preço unit.</div>
+                  <div>Imposto</div>
+                  <div className="text-right">Total s/ imp.</div>
+                  <div></div>
+                </div>
+                <div className="divide-y divide-border/50">
+                  {form.items.map((it, idx) => {
+                    const lineNet = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0);
+                    return (
+                      <div key={it.id} className="grid grid-cols-[1fr_70px_70px_110px_110px_120px_36px] gap-2 px-3 py-2 items-center">
+                        <Input
+                          value={it.designation}
+                          onChange={(e) => {
+                            const items = [...form.items];
+                            items[idx] = { ...it, designation: e.target.value };
+                            setForm({ ...form, items });
+                          }}
+                          placeholder="Descrição do item / serviço"
+                          className="h-8 text-xs"
+                        />
+                        <Input
+                          type="number" step="0.01" value={it.quantity}
+                          onChange={(e) => {
+                            const items = [...form.items];
+                            items[idx] = { ...it, quantity: Number(e.target.value) || 0 };
+                            setForm({ ...form, items });
+                          }}
+                          className="h-8 text-xs text-right tabular-nums"
+                        />
+                        <Input
+                          value={it.unit}
+                          onChange={(e) => {
+                            const items = [...form.items];
+                            items[idx] = { ...it, unit: e.target.value };
+                            setForm({ ...form, items });
+                          }}
+                          className="h-8 text-xs"
+                        />
+                        <Input
+                          type="number" step="0.01" value={it.unit_price}
+                          onChange={(e) => {
+                            const items = [...form.items];
+                            items[idx] = { ...it, unit_price: Number(e.target.value) || 0 };
+                            setForm({ ...form, items });
+                          }}
+                          className="h-8 text-xs text-right tabular-nums"
+                        />
+                        <Select
+                          value={String(it.tax_rate)}
+                          onValueChange={(v) => {
+                            const items = [...form.items];
+                            items[idx] = { ...it, tax_rate: Number(v) };
+                            setForm({ ...form, items });
+                          }}
+                        >
+                          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {TAX_RATES.map((r) => (
+                              <SelectItem key={r} value={String(r)}>{r}%</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <div className="text-right tabular-nums text-xs font-medium">
+                          {fmtMoney(lineNet)}
+                        </div>
+                        <Button
+                          variant="ghost" size="icon" className="h-7 w-7"
+                          disabled={form.items.length <= 1}
+                          onClick={() => setForm({ ...form, items: form.items.filter((_, i) => i !== idx) })}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="px-3 py-2 border-t border-border/50 bg-muted/10">
+                  <Button
+                    variant="ghost" size="sm" className="h-7 text-xs"
+                    onClick={() => setForm({ ...form, items: [...form.items, newItem()] })}
+                  >
+                    <Plus className="h-3.5 w-3.5 mr-1.5" /> Adicionar linha
+                  </Button>
+                </div>
+              </div>
+
+              {/* Totals */}
+              <div className="mt-4 flex justify-end">
+                <div className="w-full md:w-80 rounded-md border border-border/60 divide-y divide-border/50 text-xs">
+                  <div className="flex justify-between px-3 py-2">
+                    <span className="text-muted-foreground">Total sem imposto</span>
+                    <span className="tabular-nums">{fmtMoney(totals.subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between px-3 py-2">
+                    <span className="text-muted-foreground">Total imposto</span>
+                    <span className="tabular-nums">{fmtMoney(totals.tax)}</span>
+                  </div>
+                  <div className="flex justify-between px-3 py-2 bg-primary/5">
+                    <span className="font-semibold">Total final</span>
+                    <span className="tabular-nums font-semibold text-primary">{fmtMoney(totals.total)}</span>
+                  </div>
+                </div>
+              </div>
+            </FormSection>
+
+            {/* SECTION 5 — Bank details */}
+            <FormSection title="Dados bancários" subtitle="Conta para recebimento (futuramente vinda do perfil da empresa)">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <Field label="IBAN">
+                  <Input value={form.bank_iban} onChange={(e) => setForm({ ...form, bank_iban: e.target.value })} className="h-9" placeholder="PT50 ..." />
+                </Field>
+                <Field label="BIC / SWIFT">
+                  <Input value={form.bank_bic} onChange={(e) => setForm({ ...form, bank_bic: e.target.value })} className="h-9" />
+                </Field>
+                <Field label="Banco">
+                  <Input value={form.bank_name} onChange={(e) => setForm({ ...form, bank_name: e.target.value })} className="h-9" />
+                </Field>
+              </div>
+            </FormSection>
+
+            {/* SECTION 6 — Notes & Legal */}
+            <FormSection title="Observações e nota legal" subtitle="Informações adicionais ao cliente">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Field label="Observações">
+                  <Textarea
+                    rows={4}
+                    value={form.notes}
+                    onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                    className="text-xs"
+                    placeholder="Notas internas ou para o cliente..."
+                  />
+                </Field>
+                <Field label="Texto legal (rodapé)">
+                  <Textarea
+                    rows={4}
+                    value={form.legal_text}
+                    onChange={(e) => setForm({ ...form, legal_text: e.target.value })}
+                    className="text-xs"
+                  />
+                </Field>
+              </div>
+            </FormSection>
           </div>
-          <DialogFooter>
+
+          <DialogFooter className="px-6 py-4 border-t border-border/50 sticky bottom-0 bg-background">
+            <div className="flex-1 text-xs text-muted-foreground">
+              {!editing && "Estado inicial: "}
+              {!editing && <Badge variant="outline" className={cn("text-[10px] gap-1.5", STATUS_META["pending"].cls)}>
+                <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_META["pending"].dot)} /> Pendente
+              </Badge>}
+            </div>
             <Button variant="outline" onClick={() => setFormOpen(false)}>Cancelar</Button>
             <Button onClick={submitForm} disabled={upsertMut.isPending}>
               {upsertMut.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
-              Gravar
+              {editing ? "Atualizar fatura" : "Emitir fatura"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
 
       {/* ─── Delete confirm */}
       <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
