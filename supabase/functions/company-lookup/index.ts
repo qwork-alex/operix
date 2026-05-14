@@ -93,21 +93,27 @@ Deno.serve(async (req) => {
     // Frozen jurisdictions (FR/PT/BE/NL/IT/BR) are intentionally NOT routed here.
     // Runs BEFORE the legacy switch so high-confidence registry detections win,
     // but only when the detected country belongs to the modular set.
-    const registryHits = detectAcrossRegistry(query);
+    // Skip registry entirely if the legacy classifier already produced a strong frozen-country match.
     const FROZEN = new Set(["FR","PT","BE","NL","IT","BR"]);
-    const topRegistry = registryHits.find((d) => !FROZEN.has(d.country));
-    if (topRegistry) {
-      const mod = resolveModule(topRegistry.country);
-      if (mod) {
-        const cctx = {
-          query: query.trim(), detected_kind: topRegistry.kind,
-          country: topRegistry.country, logs: ctx.logs, session_id: sessionId,
-        };
-        const r = await mod.lookup(cctx);
-        if (r) {
-          result = r;
-          ctx.kind = topRegistry.kind as any;
-          ctx.country = topRegistry.country;
+    const frozenStrong = ordered.find((c) => c.country && FROZEN.has(c.country) && c.score >= 0.7);
+    let registryFormatBoost = 0;
+    if (!frozenStrong) {
+      const registryHits = detectAcrossRegistry(query);
+      const topRegistry = registryHits.find((d) => !FROZEN.has(d.country));
+      if (topRegistry) {
+        const mod = resolveModule(topRegistry.country);
+        if (mod) {
+          const cctx = {
+            query: query.trim(), detected_kind: topRegistry.kind,
+            country: topRegistry.country, logs: ctx.logs, session_id: sessionId,
+          };
+          const r = await mod.lookup(cctx);
+          if (r) {
+            result = r;
+            ctx.kind = topRegistry.kind as any;
+            ctx.country = topRegistry.country;
+            registryFormatBoost = topRegistry.score; // feed into confidence engine below
+          }
         }
       }
     }
