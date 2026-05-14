@@ -1179,6 +1179,65 @@ export type Database = {
           },
         ]
       }
+      invoice_send_log: {
+        Row: {
+          body: string | null
+          cc: string | null
+          created_at: string
+          error: string | null
+          id: string
+          idempotency_key: string | null
+          invoice_id: string
+          pdf_path: string | null
+          provider: string
+          recipient: string
+          sent_at: string | null
+          sent_by: string | null
+          status: string
+          subject: string
+        }
+        Insert: {
+          body?: string | null
+          cc?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          idempotency_key?: string | null
+          invoice_id: string
+          pdf_path?: string | null
+          provider?: string
+          recipient: string
+          sent_at?: string | null
+          sent_by?: string | null
+          status?: string
+          subject: string
+        }
+        Update: {
+          body?: string | null
+          cc?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          idempotency_key?: string | null
+          invoice_id?: string
+          pdf_path?: string | null
+          provider?: string
+          recipient?: string
+          sent_at?: string | null
+          sent_by?: string | null
+          status?: string
+          subject?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_send_log_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "billing_invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       memberships: {
         Row: {
           created_at: string

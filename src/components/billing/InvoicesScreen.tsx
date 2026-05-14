@@ -5,12 +5,13 @@ import {
   Search, Plus, Filter, FileText, FileSpreadsheet,
   MoreHorizontal, Eye, Pencil, Trash2, ChevronLeft, ChevronRight,
   X, History, Loader2, ArrowDownToLine, ArrowUpFromLine,
-  Printer, FileEdit, FileUp,
+  Printer, FileEdit, FileUp, Send,
 } from "lucide-react";
 import ImportInvoiceDialog from "./ImportInvoiceDialog";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { BRAND } from "@/config/brand";
 import { InvoiceDocumentA4 } from "./InvoiceDocumentA4";
+import { SendInvoiceDialog } from "./SendInvoiceDialog";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
@@ -350,6 +351,7 @@ export default function InvoicesScreen() {
   const [detail, setDetail] = useState<Invoice | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Invoice | null>(null);
   const [confirmDraft, setConfirmDraft] = useState(false);
+  const [sendingInvoice, setSendingInvoice] = useState<Invoice | null>(null);
 
   // ── data
   const invoicesQ = useQuery({
@@ -870,6 +872,9 @@ export default function InvoicesScreen() {
                           <DropdownMenuItem onClick={() => openEdit(r)}>
                             <Pencil className="h-3.5 w-3.5 mr-2" /> Editar
                           </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setSendingInvoice(r)}>
+                            <Send className="h-3.5 w-3.5 mr-2" /> Enviar por email
+                          </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem className="text-destructive" onClick={() => setConfirmDelete(r)}>
                             <Trash2 className="h-3.5 w-3.5 mr-2" /> Eliminar
@@ -1327,12 +1332,20 @@ export default function InvoicesScreen() {
               supplierName={supplierMap.get(detail.supplier_id ?? "") ?? null}
               onEdit={() => { openEdit(detail); setDetail(null); }}
               onDelete={() => { setConfirmDelete(detail); setDetail(null); }}
+              onSend={() => { setSendingInvoice(detail); }}
             />
           )}
         </SheetContent>
       </Sheet>
 
       <ImportInvoiceDialog open={importOpen} onOpenChange={setImportOpen} />
+
+      <SendInvoiceDialog
+        open={!!sendingInvoice}
+        onOpenChange={(o) => !o && setSendingInvoice(null)}
+        invoice={sendingInvoice}
+        companyName={(companySettings as any)?.legal_name ?? (companySettings as any)?.name ?? BRAND.name}
+      />
 
       {/* ─── Save draft confirmation */}
       <AlertDialog open={confirmDraft} onOpenChange={setConfirmDraft}>
@@ -1694,12 +1707,13 @@ function Field({ label, children, full }: { label: string; children: React.React
 
 // ───────────────────────────── side panel content
 function DetailContent({
-  invoice, supplierName, onEdit, onDelete,
+  invoice, supplierName, onEdit, onDelete, onSend,
 }: {
   invoice: Invoice;
   supplierName: string | null;
   onEdit: () => void;
   onDelete: () => void;
+  onSend: () => void;
 }) {
   const auditQ = useQuery({
     queryKey: ["invoice_audit", invoice.id],
@@ -1790,6 +1804,9 @@ function DetailContent({
       <div className="mt-6 flex items-center gap-2">
         <Button variant="outline" size="sm" className="h-8 flex-1" onClick={onEdit}>
           <Pencil className="h-3.5 w-3.5 mr-1.5" /> Editar
+        </Button>
+        <Button variant="default" size="sm" className="h-8" onClick={onSend}>
+          <Send className="h-3.5 w-3.5 mr-1.5" /> Enviar
         </Button>
         <Button variant="destructive" size="sm" className="h-8" onClick={onDelete}>
           <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Eliminar
