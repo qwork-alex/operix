@@ -1055,6 +1055,8 @@ export default function InvoicesScreen() {
                   brandLogo={BRAND.logo}
                   lang={form.options.lang}
                   docType={form.type}
+                  mode={form.options.mode}
+                  electronicFormat={form.options.electronic_format}
                 />
               </InvoiceA4PreviewFrame>
             </div>
