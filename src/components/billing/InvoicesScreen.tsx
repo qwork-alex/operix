@@ -430,6 +430,7 @@ export default function InvoicesScreen() {
       bank_bic: "",
       bank_name: "",
       legal_text: DEFAULT_LEGAL,
+      options: defaultOptions(),
     });
     setFormOpen(true);
   };
