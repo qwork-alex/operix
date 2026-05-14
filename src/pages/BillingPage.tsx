@@ -90,7 +90,7 @@ const TITLES: Record<Slug, { title: string; subtitle: string; primaryLabel: stri
   "pagamentos":      { title: "Pagamentos",       subtitle: "Histórico e processamento de pagamentos", primaryLabel: "Registrar pagamento" },
   "conciliacao":     { title: "Conciliação",      subtitle: "Cruzamento entre faturas e pagamentos",   primaryLabel: "Nova conciliação" },
   "contas-a-vencer": { title: "Contas a vencer",  subtitle: "Faturas em aberto com vencimento próximo", primaryLabel: "Adicionar conta" },
-  "fornecedores":    { title: "Fornecedores",     subtitle: "Cadastro e gestão de fornecedores",         primaryLabel: "Novo fornecedor" },
+  "clientes":        { title: "Clientes",         subtitle: "Cadastro geral de clientes empresariais e particulares", primaryLabel: "Novo cliente" },
   "relatorios":      { title: "Relatórios",       subtitle: "Exportação e análise de faturamento",       primaryLabel: "Gerar relatório" },
 };
 
