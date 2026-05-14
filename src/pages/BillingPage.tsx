@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import InvoicesScreen from "@/components/billing/InvoicesScreen";
 import PaymentsScreen from "@/components/billing/PaymentsScreen";
 import ReconciliationScreen from "@/components/billing/ReconciliationScreen";
+import UpcomingBillsScreen from "@/components/billing/UpcomingBillsScreen";
 
 // ─────────────────────────────────────────────────────────────
 // Sub-nav definition
