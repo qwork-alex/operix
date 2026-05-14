@@ -404,6 +404,50 @@ export function OperationalMap() {
       addClusterLayer("teams", "#22d3ee");
       addClusterLayer("operations", "#f59e0b");
 
+      /* ---- Hail cells (real data, severity-colored, not clustered) ---- */
+      map.addSource("hail", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] } as any,
+      });
+      // Outer pulse halo
+      map.addLayer({
+        id: "hail-halo",
+        type: "circle",
+        source: "hail",
+        paint: {
+          "circle-color": ["get", "color"],
+          "circle-radius": ["*", ["get", "size_factor"], 1.6],
+          "circle-opacity": 0.18,
+          "circle-blur": 1,
+        },
+      });
+      // Mid ring
+      map.addLayer({
+        id: "hail-ring",
+        type: "circle",
+        source: "hail",
+        paint: {
+          "circle-color": "transparent",
+          "circle-radius": ["get", "size_factor"],
+          "circle-stroke-color": ["get", "color"],
+          "circle-stroke-width": 2,
+          "circle-stroke-opacity": 0.85,
+        },
+      });
+      // Core
+      map.addLayer({
+        id: "hail-core",
+        type: "circle",
+        source: "hail",
+        paint: {
+          "circle-color": ["get", "color"],
+          "circle-radius": ["max", 5, ["/", ["get", "size_factor"], 3]],
+          "circle-stroke-color": "rgba(255,255,255,0.9)",
+          "circle-stroke-width": 1.5,
+          "circle-opacity": 0.9,
+        },
+      });
+
       /* ---- Click popup ---- */
       const popupHandler = (sourceId: string) => (e: any) => {
         const f = e.features?.[0];
