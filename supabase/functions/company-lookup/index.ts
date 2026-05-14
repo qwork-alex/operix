@@ -12,6 +12,7 @@ import {
   usaProvider, canadaProvider, mexicoProvider,
   indiaProvider, japanProvider, genericProvider,
 } from "./providers.ts";
+import { detectAcrossRegistry, resolveModule } from "./country-registry/registry.ts";
 
 function enrichAddress(c: NormalizedCompany | null): NormalizedCompany | null {
   if (!c) return c;
