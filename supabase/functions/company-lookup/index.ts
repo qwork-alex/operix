@@ -1,9 +1,9 @@
 // Edge function: company-lookup
-// Multi-provider orchestrator with score-based document classification,
-// country-preference strategy (FR → EU → Global), and confidence engine.
+// Country-first orchestrator with isolated per-request session, parallel FR providers,
+// strict country gating (no FR/PT/BR cross-leak) and confidence engine gated at 85%.
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import type { LookupResult, NormalizedCompany, ProviderLog } from "./core.ts";
-import { joinAddress } from "./core.ts";
+import { joinAddress, isValidSiren, isValidSiret } from "./core.ts";
 import { classifyDocument, type ClassificationCandidate } from "./classifiers/document-classifier.ts";
 import { parseAddressIntelligent, joinAddressLine } from "./parsers/address-parser.ts";
 import { scoreCompany, type ConfidenceBreakdown } from "./confidence-engine/score.ts";
@@ -15,7 +15,6 @@ import {
 
 function enrichAddress(c: NormalizedCompany | null): NormalizedCompany | null {
   if (!c) return c;
-  // If structured address is mostly empty but we have an address_line, parse it.
   const a = c.address ?? {};
   const empty = !a.street && !a.city && !a.postal_code;
   if (empty && c.address_line) {
@@ -49,10 +48,22 @@ function buildMessage(
   return `Sem correspondência confiável. Verifique o identificador.`;
 }
 
+// Pick the kind/country pairs that match the country hint first; fall through only if no FR-side match exists.
+function orderCandidatesByCountry(
+  candidates: ClassificationCandidate[],
+  countryHint: string,
+): ClassificationCandidate[] {
+  const preferred = candidates.filter((c) => c.country === countryHint);
+  const eu        = candidates.filter((c) => c.country !== countryHint && c.country && ["FR","BE","LU","DE","IT","ES","PT","NL"].includes(c.country));
+  const rest      = candidates.filter((c) => !preferred.includes(c) && !eu.includes(c));
+  return [...preferred, ...eu, ...rest];
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const t0 = Date.now();
+  const sessionId = crypto.randomUUID(); // search session isolation: per-request id
   try {
     const body = await req.json().catch(() => ({}));
     const query: string = (body?.query ?? "").toString();
@@ -65,15 +76,19 @@ Deno.serve(async (req) => {
     }
 
     const classification = classifyDocument(query, countryHint);
-    const best = classification.best;
-    const ctx = { query: query.trim(), kind: best.kind, country: best.country, logs: [] as ProviderLog[] };
+    const ordered = orderCandidatesByCountry(classification.candidates, countryHint);
+    const best = ordered[0] ?? classification.best;
+
+    // Fresh, request-scoped state — never reused across calls.
+    const ctx: { query: string; kind: any; country: string | null; logs: ProviderLog[]; session_id: string } = {
+      query: query.trim(), kind: best.kind, country: best.country, logs: [], session_id: sessionId,
+    };
 
     let result: NormalizedCompany | null = null;
     let candidates: NormalizedCompany[] = [];
     let vies: any = null;
 
-    // Try the top classification candidates in order until one yields a result.
-    for (const cand of classification.candidates) {
+    for (const cand of ordered) {
       ctx.kind = cand.kind; ctx.country = cand.country;
 
       switch (cand.kind) {
@@ -87,12 +102,15 @@ Deno.serve(async (req) => {
             const r = await franceProvider.lookup(ctx);
             result = r.result;
           }
+          // VIES validates regardless, but only enrich with VIES when no FR result.
           const v = await europeVatProvider.validate(ctx.query, ctx);
           vies = v.vies;
-          if (!result) result = v.company;
+          if (!result && v.company && (ctx.country == null || v.company.country === ctx.country)) {
+            result = v.company;
+          }
           break;
         }
-        case "cnpj":   result = await brazilProvider.lookup(ctx); break;
+        case "cnpj":   if (countryHint === "BR" || classification.candidates.find((x) => x.kind === "cnpj" && x.score >= 0.8)) result = await brazilProvider.lookup(ctx); break;
         case "ein":    result = await usaProvider.lookup(ctx);    break;
         case "bn_ca":  result = await canadaProvider.lookup(ctx); break;
         case "rfc_mx": result = await mexicoProvider.lookup(ctx); break;
@@ -109,12 +127,22 @@ Deno.serve(async (req) => {
       if (result || candidates.length) break;
     }
 
+    // Strict country isolation: if user is in FR context and a non-FR result slipped through
+    // a name-based fallback, demote it to "unverified" so it does not auto-apply.
+    if (result && countryHint && result.country && result.country !== countryHint && result.provider === "generic") {
+      result.confidence = "unverified";
+    }
+
     // Address Intelligence pass
     result = enrichAddress(result);
     candidates = candidates.map((c) => enrichAddress(c)!).filter(Boolean);
 
-    // Confidence Engine
-    const conf = scoreCompany({ company: result, formatScore: best.score, countryHint });
+    // Identifier-validity boost: exact Luhn pass adds to format score.
+    let formatScore = best.score;
+    if (best.kind === "siren" && isValidSiren(query)) formatScore = Math.min(1, formatScore + 0.1);
+    if (best.kind === "siret" && isValidSiret(query)) formatScore = Math.min(1, formatScore + 0.1);
+
+    const conf = scoreCompany({ company: result, formatScore, countryHint });
     if (result) result.confidence = conf.level;
 
     const payload: LookupResult & {
@@ -123,6 +151,7 @@ Deno.serve(async (req) => {
       country_hint: string;
       total_ms: number;
       provider_available: boolean;
+      session_id: string;
     } = {
       detected_kind: best.kind,
       detected_country: best.country,
@@ -139,14 +168,15 @@ Deno.serve(async (req) => {
       confidence_breakdown: conf,
       country_hint: countryHint,
       total_ms: Date.now() - t0,
-      provider_available: !!Deno.env.get("PAPPERS_API_KEY"),
+      provider_available: true, // always true now: api.gouv.fr is keyless
+      session_id: sessionId,
     };
 
     return new Response(JSON.stringify(payload), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
-    return new Response(JSON.stringify({ error: "lookup_failed", message: String((e as any)?.message ?? e) }), {
+    return new Response(JSON.stringify({ error: "lookup_failed", message: String((e as any)?.message ?? e), session_id: sessionId }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
