@@ -492,6 +492,41 @@ export default function InvoicesScreen() {
     } as any);
   };
 
+  // Save current form as draft (no validation beyond minimum)
+  const saveDraft = () => {
+    const number = form.invoice_number.trim() || `RASCUNHO-${Date.now().toString().slice(-6)}`;
+    const client = (clientsQ.data ?? []).find((c) => c.id === form.client_id) || null;
+    upsertMut.mutate({
+      id: editing?.id,
+      invoice_number: number,
+      type: form.type,
+      supplier_id: editing?.supplier_id ?? null,
+      customer_name: client?.name ?? editing?.customer_name ?? null,
+      issue_date: form.issue_date,
+      due_date: form.due_date || null,
+      total_amount: totals.total,
+      paid_amount: editing?.paid_amount ?? 0,
+      status: "draft",
+      notes: form.notes.trim() || null,
+    } as any);
+  };
+
+  // Detect if user has entered anything worth saving
+  const isDirty = () => {
+    if (editing) return false; // edits already persist via explicit Save
+    if (form.invoice_number.trim()) return true;
+    if (form.client_id) return true;
+    if (form.notes.trim()) return true;
+    if (form.items.some((it) => it.designation.trim() || it.unit_price > 0)) return true;
+    return false;
+  };
+
+  const requestCloseForm = (open: boolean) => {
+    if (open) { setFormOpen(true); return; }
+    if (isDirty()) { setConfirmDraft(true); return; }
+    setFormOpen(false);
+  };
+
   // ── export
   const exportRows = () => (selected.size > 0
     ? filtered.filter((r) => selected.has(r.id))
