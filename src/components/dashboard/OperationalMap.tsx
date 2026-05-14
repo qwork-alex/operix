@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import maplibregl, { Map as MLMap, GeoJSONSource } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { Users, CloudRain, Zap, Radar, Wrench, FileText, Layers, X, AlertTriangle, Wind, Clock, Gauge } from "lucide-react";
+import { OperationalPanel, PanelTeam, PanelOrder } from "./OperationalPanel";
 
 /* ------------------------------------------------------------------ */
 /*  Hail severity → premium color palette                              */
