@@ -228,6 +228,10 @@
 
   body.invoice-print-mode * { visibility: hidden !important; }
 
+  body.invoice-print-mode > *:not(.invoice-print-dialog-content) {
+    display: none !important;
+  }
+
   body.invoice-print-mode [data-sidebar],
   body.invoice-print-mode aside,
   body.invoice-print-mode nav,
