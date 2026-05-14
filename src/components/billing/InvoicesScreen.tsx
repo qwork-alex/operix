@@ -1056,9 +1056,21 @@ export default function InvoicesScreen() {
                 </Field>
               </div>
             </FormSection>
+              </div>
+            </div>
+
+            {/* ─── Right side options panel */}
+            {optionsPanelOpen && (
+              <aside className="hidden md:flex w-72 lg:w-80 shrink-0 flex-col border-l border-border/50 bg-muted/10 overflow-y-auto">
+                <InvoiceOptionsPanel
+                  options={form.options}
+                  onChange={(next) => setForm({ ...form, options: next })}
+                />
+              </aside>
+            )}
           </div>
 
-          <DialogFooter className="px-6 py-4 border-t border-border/50 sticky bottom-0 bg-background">
+          <DialogFooter className="px-6 py-4 border-t border-border/50 bg-background">
             <div className="flex-1 text-xs text-muted-foreground">
               {!editing && "Estado inicial: "}
               {!editing && <Badge variant="outline" className={cn("text-[10px] gap-1.5", STATUS_META["pending"].cls)}>
