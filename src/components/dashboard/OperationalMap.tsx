@@ -480,6 +480,43 @@ export function OperationalMap() {
       addClusterLayer("teams", "#22d3ee");
       addClusterLayer("operations", "#f59e0b");
 
+      /* ---- PDR Intel heatmap (operational opportunities) ---- */
+      map.addSource("pdr-heat", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] } as any,
+      });
+      map.addLayer({
+        id: "pdr-heatmap",
+        type: "heatmap",
+        source: "pdr-heat",
+        paint: {
+          "heatmap-weight": ["coalesce", ["get", "weight"], 0.3],
+          "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 3, 0.6, 9, 2],
+          "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 3, 22, 9, 60],
+          "heatmap-opacity": 0.55,
+          "heatmap-color": [
+            "interpolate", ["linear"], ["heatmap-density"],
+            0,    "rgba(0,0,0,0)",
+            0.2,  "rgba(34,211,238,0.55)",
+            0.45, "rgba(234,179,8,0.7)",
+            0.7,  "rgba(249,115,22,0.85)",
+            1,    "rgba(239,68,68,1)",
+          ],
+        },
+      });
+      map.addLayer({
+        id: "pdr-points",
+        type: "circle",
+        source: "pdr-heat",
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["get", "potential"], 0, 4, 100, 16],
+          "circle-color": ["get", "color"],
+          "circle-opacity": 0.85,
+          "circle-stroke-color": "rgba(255,255,255,0.95)",
+          "circle-stroke-width": 1.5,
+        },
+      });
+
       /* ---- Hail cells (real data, severity-colored, not clustered) ---- */
       map.addSource("hail", {
         type: "geojson",
