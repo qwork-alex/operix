@@ -5,8 +5,9 @@ import {
   Search, Plus, Filter, Download, FileText, FileSpreadsheet,
   MoreHorizontal, Eye, Pencil, Trash2, ChevronLeft, ChevronRight,
   X, History, Loader2, ArrowDownToLine, ArrowUpFromLine,
-  Printer, FileEdit,
+  Printer, FileEdit, FileUp,
 } from "lucide-react";
+import ImportInvoiceDialog from "./ImportInvoiceDialog";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { BRAND } from "@/config/brand";
 import jsPDF from "jspdf";
