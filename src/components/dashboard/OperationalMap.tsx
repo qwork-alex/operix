@@ -811,18 +811,26 @@ export function OperationalMap() {
     ["pdr-heatmap", "pdr-points"].forEach((id) => setVis(id, layers.pdr));
   }, [layers, mapReady]);
 
-  /* -------- RainViewer radar layer --------------------------------- */
+  /* -------- RainViewer radar layer (animated frame playback) ------- */
+  const radarFramesRef = useRef<{ host: string; frames: any[] } | null>(null);
+  const radarIdxRef = useRef(0);
+  const radarIntervalRef = useRef<number | null>(null);
+
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
     const map = mapRef.current;
     let cancelled = false;
 
     const cleanupRaster = () => {
+      if (radarIntervalRef.current) {
+        window.clearInterval(radarIntervalRef.current);
+        radarIntervalRef.current = null;
+      }
       ["radar-layer", "storms-layer"].forEach((id) => {
-        if (map.getLayer(id)) map.removeLayer(id);
+        try { if (map.getLayer(id)) map.removeLayer(id); } catch {}
       });
       ["radar-src", "storms-src"].forEach((id) => {
-        if (map.getSource(id)) map.removeSource(id);
+        try { if (map.getSource(id)) map.removeSource(id); } catch {}
       });
     };
 
@@ -832,41 +840,61 @@ export function OperationalMap() {
       return;
     }
 
+    const buildUrl = (host: string, path: string, kind: "radar" | "storms") =>
+      kind === "radar"
+        ? `${host}${path}/256/{z}/{x}/{y}/2/1_1.png`
+        : `${host}${path}/256/{z}/{x}/{y}/7/1_1.png`;
+
     (async () => {
       try {
         const res = await fetch("https://api.rainviewer.com/public/weather-maps.json");
         const json = await res.json();
         if (cancelled) return;
-        const frames = json?.radar?.past ?? [];
-        const last = frames[frames.length - 1];
-        if (!last) return;
+        const past = json?.radar?.past ?? [];
+        const nowcast = json?.radar?.nowcast ?? [];
+        const frames = [...past, ...nowcast];
+        if (!frames.length) return;
         const host = json.host as string;
-        if (layers.radar && !map.getSource("radar-src")) {
-          map.addSource("radar-src", {
+        radarFramesRef.current = { host, frames };
+        radarIdxRef.current = past.length - 1; // start at "now"
+
+        const ensureLayer = (kind: "radar" | "storms") => {
+          const srcId = `${kind}-src`;
+          const layerId = `${kind}-layer`;
+          if (map.getSource(srcId)) return;
+          map.addSource(srcId, {
             type: "raster",
-            tiles: [`${host}${last.path}/256/{z}/{x}/{y}/2/1_1.png`],
+            tiles: [buildUrl(host, frames[radarIdxRef.current].path, kind)],
             tileSize: 256,
           });
           map.addLayer({
-            id: "radar-layer",
+            id: layerId,
             type: "raster",
-            source: "radar-src",
-            paint: { "raster-opacity": 0.55 },
-          }, "hail-halo");
-        }
-        if (layers.storms && !map.getSource("storms-src")) {
-          map.addSource("storms-src", {
-            type: "raster",
-            tiles: [`${host}${last.path}/256/{z}/{x}/{y}/7/1_1.png`],
-            tileSize: 256,
+            source: srcId,
+            paint: {
+              "raster-opacity": kind === "radar" ? 0.55 : 0.65,
+              "raster-fade-duration": 600,
+            },
+          }, map.getLayer("hail-halo") ? "hail-halo" : undefined);
+        };
+
+        if (layers.radar) ensureLayer("radar");
+        if (layers.storms) ensureLayer("storms");
+
+        // Animate: cycle frames smoothly
+        if (radarIntervalRef.current) window.clearInterval(radarIntervalRef.current);
+        radarIntervalRef.current = window.setInterval(() => {
+          const data = radarFramesRef.current;
+          if (!data) return;
+          radarIdxRef.current = (radarIdxRef.current + 1) % data.frames.length;
+          const path = data.frames[radarIdxRef.current].path;
+          (["radar", "storms"] as const).forEach((kind) => {
+            const src = map.getSource(`${kind}-src`) as any;
+            if (src && typeof src.setTiles === "function") {
+              try { src.setTiles([buildUrl(data.host, path, kind)]); } catch {}
+            }
           });
-          map.addLayer({
-            id: "storms-layer",
-            type: "raster",
-            source: "storms-src",
-            paint: { "raster-opacity": 0.65 },
-          }, "hail-halo");
-        }
+        }, 900);
       } catch (e) {
         console.warn("[OperationalMap] radar fetch failed", e);
       }
@@ -874,6 +902,10 @@ export function OperationalMap() {
 
     return () => {
       cancelled = true;
+      if (radarIntervalRef.current) {
+        window.clearInterval(radarIntervalRef.current);
+        radarIntervalRef.current = null;
+      }
     };
   }, [layers.radar, layers.storms, mapReady]);
 
