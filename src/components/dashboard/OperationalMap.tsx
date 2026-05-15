@@ -955,18 +955,34 @@ export function OperationalMap() {
             </div>
           </div>
         )}
-        {/* Map init error fallback with retry */}
+        {/* Map init/WebGL error fallback with retry + non-WebGL list */}
         {mapError && (
-          <div className="absolute inset-0 rounded-lg bg-[#0a1628]/85 flex flex-col items-center justify-center gap-2 text-center px-6">
+          <div className="absolute inset-0 rounded-lg bg-[#0a1628]/90 flex flex-col items-center justify-center gap-2 text-center px-6 overflow-auto">
             <AlertTriangle className="h-6 w-6 text-amber-400" />
-            <div className="text-xs text-amber-200">Falha ao iniciar o mapa</div>
-            <div className="text-[10px] text-muted-foreground max-w-[280px]">{mapError}</div>
+            <div className="text-xs text-amber-200">Mapa em modo seguro</div>
+            <div className="text-[10px] text-muted-foreground max-w-[320px]">{mapError}</div>
             <button
               onClick={() => { initRetryRef.current = 0; setMapError(null); }}
               className="mt-1 text-[11px] px-3 py-1 rounded-md border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10"
             >
               Tentar novamente
             </button>
+            {/* Non-WebGL fallback: textual hail summary so operations don't stop */}
+            {hailEvents.length > 0 && (
+              <div className="mt-3 w-full max-w-[420px] text-left">
+                <div className="text-[10px] uppercase tracking-wider text-cyan-300/70 mb-1">
+                  Eventos ativos ({hailEvents.length})
+                </div>
+                <ul className="space-y-1 max-h-32 overflow-auto pr-1">
+                  {hailEvents.slice(0, 8).map((h) => (
+                    <li key={h.id} className="text-[10px] flex justify-between gap-2 border border-white/5 rounded px-2 py-1 bg-white/[0.02]">
+                      <span className="truncate">{h.city ?? h.region ?? "—"}</span>
+                      <span style={{ color: HAIL_COLORS[h.severity] }}>{h.severity}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
         {/* Diagnostic badge: provider + status */}
