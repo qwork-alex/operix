@@ -16,7 +16,6 @@ import {
   type OppTeam,
 } from "./OperationalOpportunities";
 import { HailReportDialog } from "./HailReportDialog";
-import { DiagnosticBadge } from "./operational-map";
 
 /* ------------------------------------------------------------------ */
 /*  Hail severity → premium color palette                              */
@@ -99,12 +98,13 @@ const DARK_STYLE: maplibregl.StyleSpecification = {
     "carto-dark": {
       type: "raster",
       tiles: [
-        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
+        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
       ],
       tileSize: 256,
       attribution: "© OpenStreetMap © CARTO",
+      minzoom: 0,
       maxzoom: 19,
     },
   },
@@ -118,7 +118,10 @@ const DARK_STYLE: maplibregl.StyleSpecification = {
       id: "carto-dark",
       type: "raster",
       source: "carto-dark",
-      paint: { "raster-opacity": 0.88, "raster-contrast": 0.08, "raster-saturation": -0.15, "raster-hue-rotate": 200 },
+      paint: {
+        "raster-opacity": 0.9,
+        "raster-fade-duration": 0,
+      },
     },
   ],
 };
@@ -1087,7 +1090,6 @@ export function OperationalMap() {
           className="h-[420px] rounded-lg overflow-hidden relative"
           style={{ background: "#0a1628" }}
         />
-        {mapReady && !mapError && <DiagnosticBadge provider="RainViewer" />}
         {/* Loading overlay (mapa base permanece sempre montado) */}
         {(isLoading || !mapReady) && !mapError && (
           <div className="absolute inset-0 rounded-lg bg-[#0a1628]/60 backdrop-blur-sm flex items-center justify-center pointer-events-none">
