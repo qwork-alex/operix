@@ -3,6 +3,7 @@ import { KPICard } from "@/components/dashboard/KPICard";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { ServicePieChart } from "@/components/dashboard/ServicePieChart";
 import { OperationalMap } from "@/components/dashboard/OperationalMap";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { RecentActivity } from "@/components/dashboard/RecentActivity";
 import { useDashboardStats } from "@/hooks/useDashboardData";
 import { useLanguage } from "@/hooks/useLanguage";
