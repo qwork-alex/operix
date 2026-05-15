@@ -173,11 +173,21 @@ const MAP_CSS = `
 /* ------------------------------------------------------------------ */
 export function OperationalMap() {
   const { t } = useLanguage();
-  const containerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MLMap | null>(null);
   const styleRef = useRef<HTMLStyleElement | null>(null);
   const radarTimerRef = useRef<number | null>(null);
+  const initRetryRef = useRef<number>(0);
   const [mapReady, setMapReady] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
+  const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
+
+  // Callback ref guarantees init runs the moment the DOM node exists,
+  // regardless of whether the loader skeleton was rendered first.
+  const setContainerRef = useCallback((el: HTMLDivElement | null) => {
+    containerRef.current = el;
+    setContainerEl(el);
+  }, []);
 
   const [layers, setLayers] = useState<Record<LayerKey, boolean>>({
     teams: true,
@@ -386,7 +396,7 @@ export function OperationalMap() {
 
   /* -------- Init map ------------------------------------------------ */
   useEffect(() => {
-    if (!containerRef.current || mapRef.current) return;
+    if (!containerEl || mapRef.current) return;
 
     if (!styleRef.current) {
       const s = document.createElement("style");
@@ -395,14 +405,32 @@ export function OperationalMap() {
       styleRef.current = s;
     }
 
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: DARK_STYLE,
-      center: [2.3522, 46.6034],
-      zoom: 4.8,
-      attributionControl: { compact: true },
-      maxZoom: 18,
-      minZoom: 2,
+    let map: MLMap;
+    try {
+      map = new maplibregl.Map({
+        container: containerEl,
+        style: DARK_STYLE,
+        center: [2.3522, 46.6034],
+        zoom: 4.8,
+        attributionControl: { compact: true },
+        maxZoom: 18,
+        minZoom: 2,
+      });
+    } catch (err) {
+      console.error("[OperationalMap] init failed", err);
+      setMapError((err as Error)?.message ?? "init failed");
+      // Auto-retry up to 3 times with backoff
+      if (initRetryRef.current < 3) {
+        initRetryRef.current += 1;
+        const delay = 800 * initRetryRef.current;
+        window.setTimeout(() => setMapError(null), delay);
+      }
+      return;
+    }
+
+    map.on("error", (e: any) => {
+      // Silent diagnostic: tile/style errors won't crash the map
+      console.warn("[OperationalMap] maplibre error", e?.error?.message ?? e);
     });
 
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
@@ -640,7 +668,7 @@ export function OperationalMap() {
       mapRef.current = null;
       setMapReady(false);
     };
-  }, []);
+  }, [containerEl, mapError]);
 
   /* -------- Push data into sources --------------------------------- */
   useEffect(() => {
@@ -872,19 +900,41 @@ export function OperationalMap() {
         />
       )}
 
-      {isLoading && !mapReady ? (
-        <Skeleton className="h-[400px] rounded-lg" />
-      ) : (
-        <div className="relative">
-          <div
-            ref={containerRef}
-            className="h-[420px] rounded-lg overflow-hidden relative"
-            style={{ background: "#0a1628" }}
-          />
-          {/* -------- Elegant operational legend overlay -------- */}
-          {layers.hail && <HailLegend />}
+      <div className="relative">
+        <div
+          ref={setContainerRef}
+          className="h-[420px] rounded-lg overflow-hidden relative"
+          style={{ background: "#0a1628" }}
+        />
+        {/* Loading overlay (mapa base permanece sempre montado) */}
+        {(isLoading || !mapReady) && !mapError && (
+          <div className="absolute inset-0 rounded-lg bg-[#0a1628]/60 backdrop-blur-sm flex items-center justify-center pointer-events-none">
+            <div className="text-[11px] text-cyan-300/80 animate-pulse">
+              {!mapReady ? "Inicializando mapa…" : "Carregando dados operacionais…"}
+            </div>
+          </div>
+        )}
+        {/* Map init error fallback with retry */}
+        {mapError && (
+          <div className="absolute inset-0 rounded-lg bg-[#0a1628]/85 flex flex-col items-center justify-center gap-2 text-center px-6">
+            <AlertTriangle className="h-6 w-6 text-amber-400" />
+            <div className="text-xs text-amber-200">Falha ao iniciar o mapa</div>
+            <div className="text-[10px] text-muted-foreground max-w-[280px]">{mapError}</div>
+            <button
+              onClick={() => { initRetryRef.current = 0; setMapError(null); }}
+              className="mt-1 text-[11px] px-3 py-1 rounded-md border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        )}
+        {/* Diagnostic badge: provider + status */}
+        <div className="absolute top-2 left-2 z-10 text-[9px] font-mono text-cyan-200/70 bg-[#0a1628]/70 border border-cyan-500/20 rounded px-2 py-0.5 pointer-events-none">
+          CARTO · {mapReady ? "online" : "init"} · hail:{hailEvents.length}
         </div>
-      )}
+        {/* -------- Elegant operational legend overlay -------- */}
+        {layers.hail && mapReady && <HailLegend />}
+      </div>
 
       {/* -------- Dynamic operational command panel -------- */}
       {selectedHail && (

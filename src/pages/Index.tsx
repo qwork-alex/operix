@@ -3,6 +3,7 @@ import { KPICard } from "@/components/dashboard/KPICard";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { ServicePieChart } from "@/components/dashboard/ServicePieChart";
 import { OperationalMap } from "@/components/dashboard/OperationalMap";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { RecentActivity } from "@/components/dashboard/RecentActivity";
 import { useDashboardStats } from "@/hooks/useDashboardData";
 import { useLanguage } from "@/hooks/useLanguage";
@@ -56,7 +57,9 @@ const Dashboard = () => {
       <RevenueChart />
 
       {/* Map - full width */}
-      <OperationalMap />
+      <ErrorBoundary>
+        <OperationalMap />
+      </ErrorBoundary>
 
       {/* Service Status + Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
