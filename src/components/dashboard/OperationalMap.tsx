@@ -16,7 +16,6 @@ import {
   type OppTeam,
 } from "./OperationalOpportunities";
 import { HailReportDialog } from "./HailReportDialog";
-import { DiagnosticBadge } from "./operational-map";
 
 /* ------------------------------------------------------------------ */
 /*  Hail severity → premium color palette                              */
