@@ -15,6 +15,7 @@ import {
   type OppOrder,
   type OppTeam,
 } from "./OperationalOpportunities";
+import { HailReportDialog } from "./HailReportDialog";
 
 /* ------------------------------------------------------------------ */
 /*  Hail severity → premium color palette                              */
