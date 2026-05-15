@@ -415,6 +415,30 @@ export function OperationalMap() {
     return { type: "FeatureCollection", features };
   }, [visibleHailEvents]);
 
+  const hailReportsGeo = useMemo(() => {
+    const features = (hailReports ?? [])
+      .filter((r: any) => r.lat != null && r.lng != null)
+      .map((r: any) => ({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [Number(r.lng), Number(r.lat)] },
+        properties: {
+          id: r.id,
+          severity: r.severity ?? "low",
+          status: r.status ?? "partial",
+          color: HAIL_COLORS[(r.severity as HailSeverity) ?? "low"] ?? HAIL_COLORS.low,
+          city: r.city ?? "",
+          country: r.country ?? "",
+          hail_size_mm: r.hail_size_mm ?? 0,
+          confidence: Number(r.confidence_score ?? 0),
+          corroborations: Number(r.corroboration_count ?? 0),
+          photo_url: r.photo_url ?? "",
+          observed_at: r.observed_at ?? "",
+          notes: r.notes ?? "",
+        },
+      }));
+    return { type: "FeatureCollection", features };
+  }, [hailReports]);
+
   /* -------- Init map ------------------------------------------------ */
   useEffect(() => {
     if (!containerEl || mapRef.current) return;
