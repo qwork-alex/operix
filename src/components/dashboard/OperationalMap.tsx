@@ -111,13 +111,13 @@ const DARK_STYLE: maplibregl.StyleSpecification = {
     {
       id: "bg-ocean",
       type: "background",
-      paint: { "background-color": "#0a1628" },
+      paint: { "background-color": "#0b1f3d" },
     },
     {
       id: "carto-dark",
       type: "raster",
       source: "carto-dark",
-      paint: { "raster-opacity": 0.92, "raster-contrast": 0.05 },
+      paint: { "raster-opacity": 0.88, "raster-contrast": 0.08, "raster-saturation": -0.15, "raster-hue-rotate": 200 },
     },
   ],
 };
@@ -193,11 +193,11 @@ export function OperationalMap() {
   const [layers, setLayers] = useState<Record<LayerKey, boolean>>({
     teams: true,
     orders: true,
-    operations: false,
+    operations: true,
     radar: true,
     storms: false,
-    hail: false,
-    pdr: false,
+    hail: true,
+    pdr: true,
   });
 
   /* -------- data: service orders (orders + operations inferred) ----- */
@@ -255,9 +255,29 @@ export function OperationalMap() {
       .on("postgres_changes", { event: "*", schema: "public", table: "hail_events" }, () => {
         queryClient.invalidateQueries({ queryKey: ["op-map-hail"] });
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "hail_reports" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["op-map-hail-reports"] });
+      })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [queryClient]);
+
+  /* -------- data: community hail reports ---------------------------- */
+  const { data: hailReports = [] } = useQuery<any[]>({
+    queryKey: ["op-map-hail-reports"],
+    queryFn: async () => {
+      const since = new Date(Date.now() - 24 * 3600_000).toISOString();
+      const { data, error } = await supabase
+        .from("hail_reports")
+        .select("id, lat, lng, city, region, country, severity, status, hail_size_mm, photo_url, confidence_score, corroboration_count, observed_at, notes")
+        .gte("observed_at", since)
+        .order("observed_at", { ascending: false })
+        .limit(300);
+      if (error) throw error;
+      return data ?? [];
+    },
+    staleTime: 60_000,
+  });
 
   /* -------- Hail filters & timeline replay -------------------------- */
   type StatusFilter = "all" | "forecast" | "ongoing" | "confirmed";
@@ -394,6 +414,30 @@ export function OperationalMap() {
     });
     return { type: "FeatureCollection", features };
   }, [visibleHailEvents]);
+
+  const hailReportsGeo = useMemo(() => {
+    const features = (hailReports ?? [])
+      .filter((r: any) => r.lat != null && r.lng != null)
+      .map((r: any) => ({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [Number(r.lng), Number(r.lat)] },
+        properties: {
+          id: r.id,
+          severity: r.severity ?? "low",
+          status: r.status ?? "partial",
+          color: HAIL_COLORS[(r.severity as HailSeverity) ?? "low"] ?? HAIL_COLORS.low,
+          city: r.city ?? "",
+          country: r.country ?? "",
+          hail_size_mm: r.hail_size_mm ?? 0,
+          confidence: Number(r.confidence_score ?? 0),
+          corroborations: Number(r.corroboration_count ?? 0),
+          photo_url: r.photo_url ?? "",
+          observed_at: r.observed_at ?? "",
+          notes: r.notes ?? "",
+        },
+      }));
+    return { type: "FeatureCollection", features };
+  }, [hailReports]);
 
   /* -------- Init map ------------------------------------------------ */
   useEffect(() => {
@@ -641,7 +685,65 @@ export function OperationalMap() {
         },
       });
 
-      /* ---- Click popup ---- */
+      /* ---- Community hail reports (camera/marker layer) ---- */
+      map.addSource("hail-reports", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] } as any,
+      });
+      map.addLayer({
+        id: "hail-reports-glow",
+        type: "circle",
+        source: "hail-reports",
+        paint: {
+          "circle-color": ["get", "color"],
+          "circle-radius": ["interpolate", ["linear"], ["get", "confidence"], 0, 10, 1, 22],
+          "circle-opacity": 0.18,
+          "circle-blur": 0.9,
+        },
+      });
+      map.addLayer({
+        id: "hail-reports-core",
+        type: "circle",
+        source: "hail-reports",
+        paint: {
+          "circle-color": ["get", "color"],
+          "circle-radius": 6,
+          "circle-stroke-color": "rgba(255,255,255,0.95)",
+          "circle-stroke-width": 1.5,
+          "circle-opacity": 0.95,
+        },
+      });
+
+      const onReportClick = (e: any) => {
+        const f = e.features?.[0];
+        if (!f) return;
+        const p = f.properties || {};
+        const photo = p.photo_url
+          ? `<img src="${p.photo_url}" alt="report" style="width:180px;height:120px;object-fit:cover;border-radius:6px;margin-top:6px;border:1px solid rgba(255,255,255,0.1)"/>`
+          : `<div style="opacity:.6;font-size:10px;margin-top:4px">Sem foto enviada</div>`;
+        const conf = Math.round(Number(p.confidence ?? 0) * 100);
+        const html = `
+          <div style="min-width:200px">
+            <strong>${p.city || "Relato comunitário"}</strong>
+            <div style="font-size:10px;opacity:.75">${p.country || ""}</div>
+            <div style="margin-top:4px;font-size:11px">
+              <span style="color:${p.color}">●</span> ${(p.severity || "").toUpperCase()} · ${p.hail_size_mm || 0}mm
+            </div>
+            <div style="font-size:10px;opacity:.75">Confiança ${conf}% · ${p.corroborations} corrob.</div>
+            ${photo}
+            ${p.notes ? `<div style="font-size:10px;opacity:.7;margin-top:4px">${p.notes}</div>` : ""}
+          </div>`;
+        new maplibregl.Popup({ closeButton: true, offset: 12, maxWidth: "240px" })
+          .setLngLat(f.geometry.coordinates)
+          .setHTML(html)
+          .addTo(map);
+      };
+      ["hail-reports-core", "hail-reports-glow"].forEach((id) => {
+        map.on("click", id, onReportClick);
+        map.on("mouseenter", id, () => (map.getCanvas().style.cursor = "pointer"));
+        map.on("mouseleave", id, () => (map.getCanvas().style.cursor = ""));
+      });
+
       const popupHandler = (sourceId: string) => (e: any) => {
         const f = e.features?.[0];
         if (!f) return;
@@ -718,7 +820,8 @@ export function OperationalMap() {
   useEffect(() => {
     if (!mapReady) return;
     safeSetData("hail", hailGeo);
-  }, [mapReady, hailGeo, safeSetData]);
+    safeSetData("hail-reports", hailReportsGeo);
+  }, [mapReady, hailGeo, hailReportsGeo, safeSetData]);
 
   /* -------- PDR Operational Opportunities (intelligence layer) ----- */
   const oppOrders: OppOrder[] = useMemo(
@@ -807,22 +910,32 @@ export function OperationalMap() {
     });
     // Hail layers
     ["hail-halo", "hail-ring", "hail-core"].forEach((id) => setVis(id, layers.hail));
+    // Community reports follow hail layer
+    ["hail-reports-glow", "hail-reports-core"].forEach((id) => setVis(id, layers.hail));
     // PDR Intel layers
     ["pdr-heatmap", "pdr-points"].forEach((id) => setVis(id, layers.pdr));
   }, [layers, mapReady]);
 
-  /* -------- RainViewer radar layer --------------------------------- */
+  /* -------- RainViewer radar layer (animated frame playback) ------- */
+  const radarFramesRef = useRef<{ host: string; frames: any[] } | null>(null);
+  const radarIdxRef = useRef(0);
+  const radarIntervalRef = useRef<number | null>(null);
+
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
     const map = mapRef.current;
     let cancelled = false;
 
     const cleanupRaster = () => {
+      if (radarIntervalRef.current) {
+        window.clearInterval(radarIntervalRef.current);
+        radarIntervalRef.current = null;
+      }
       ["radar-layer", "storms-layer"].forEach((id) => {
-        if (map.getLayer(id)) map.removeLayer(id);
+        try { if (map.getLayer(id)) map.removeLayer(id); } catch {}
       });
       ["radar-src", "storms-src"].forEach((id) => {
-        if (map.getSource(id)) map.removeSource(id);
+        try { if (map.getSource(id)) map.removeSource(id); } catch {}
       });
     };
 
@@ -832,41 +945,61 @@ export function OperationalMap() {
       return;
     }
 
+    const buildUrl = (host: string, path: string, kind: "radar" | "storms") =>
+      kind === "radar"
+        ? `${host}${path}/256/{z}/{x}/{y}/2/1_1.png`
+        : `${host}${path}/256/{z}/{x}/{y}/7/1_1.png`;
+
     (async () => {
       try {
         const res = await fetch("https://api.rainviewer.com/public/weather-maps.json");
         const json = await res.json();
         if (cancelled) return;
-        const frames = json?.radar?.past ?? [];
-        const last = frames[frames.length - 1];
-        if (!last) return;
+        const past = json?.radar?.past ?? [];
+        const nowcast = json?.radar?.nowcast ?? [];
+        const frames = [...past, ...nowcast];
+        if (!frames.length) return;
         const host = json.host as string;
-        if (layers.radar && !map.getSource("radar-src")) {
-          map.addSource("radar-src", {
+        radarFramesRef.current = { host, frames };
+        radarIdxRef.current = past.length - 1; // start at "now"
+
+        const ensureLayer = (kind: "radar" | "storms") => {
+          const srcId = `${kind}-src`;
+          const layerId = `${kind}-layer`;
+          if (map.getSource(srcId)) return;
+          map.addSource(srcId, {
             type: "raster",
-            tiles: [`${host}${last.path}/256/{z}/{x}/{y}/2/1_1.png`],
+            tiles: [buildUrl(host, frames[radarIdxRef.current].path, kind)],
             tileSize: 256,
           });
           map.addLayer({
-            id: "radar-layer",
+            id: layerId,
             type: "raster",
-            source: "radar-src",
-            paint: { "raster-opacity": 0.55 },
-          }, "hail-halo");
-        }
-        if (layers.storms && !map.getSource("storms-src")) {
-          map.addSource("storms-src", {
-            type: "raster",
-            tiles: [`${host}${last.path}/256/{z}/{x}/{y}/7/1_1.png`],
-            tileSize: 256,
+            source: srcId,
+            paint: {
+              "raster-opacity": kind === "radar" ? 0.55 : 0.65,
+              "raster-fade-duration": 600,
+            },
+          }, map.getLayer("hail-halo") ? "hail-halo" : undefined);
+        };
+
+        if (layers.radar) ensureLayer("radar");
+        if (layers.storms) ensureLayer("storms");
+
+        // Animate: cycle frames smoothly
+        if (radarIntervalRef.current) window.clearInterval(radarIntervalRef.current);
+        radarIntervalRef.current = window.setInterval(() => {
+          const data = radarFramesRef.current;
+          if (!data) return;
+          radarIdxRef.current = (radarIdxRef.current + 1) % data.frames.length;
+          const path = data.frames[radarIdxRef.current].path;
+          (["radar", "storms"] as const).forEach((kind) => {
+            const src = map.getSource(`${kind}-src`) as any;
+            if (src && typeof src.setTiles === "function") {
+              try { src.setTiles([buildUrl(data.host, path, kind)]); } catch {}
+            }
           });
-          map.addLayer({
-            id: "storms-layer",
-            type: "raster",
-            source: "storms-src",
-            paint: { "raster-opacity": 0.65 },
-          }, "hail-halo");
-        }
+        }, 900);
       } catch (e) {
         console.warn("[OperationalMap] radar fetch failed", e);
       }
@@ -874,6 +1007,10 @@ export function OperationalMap() {
 
     return () => {
       cancelled = true;
+      if (radarIntervalRef.current) {
+        window.clearInterval(radarIntervalRef.current);
+        radarIntervalRef.current = null;
+      }
     };
   }, [layers.radar, layers.storms, mapReady]);
 
