@@ -398,6 +398,18 @@ export function OperationalMap() {
   useEffect(() => {
     if (!containerEl || mapRef.current) return;
 
+    // WebGL availability check — fall back to no-WebGL panel if missing
+    const probe = document.createElement("canvas");
+    const gl =
+      probe.getContext("webgl2") ||
+      probe.getContext("webgl") ||
+      probe.getContext("experimental-webgl");
+    if (!gl) {
+      console.warn("[OperationalMap] WebGL unavailable — fallback mode");
+      setMapError("WebGL indisponível neste dispositivo");
+      return;
+    }
+
     if (!styleRef.current) {
       const s = document.createElement("style");
       s.textContent = MAP_CSS;
@@ -419,7 +431,6 @@ export function OperationalMap() {
     } catch (err) {
       console.error("[OperationalMap] init failed", err);
       setMapError((err as Error)?.message ?? "init failed");
-      // Auto-retry up to 3 times with backoff
       if (initRetryRef.current < 3) {
         initRetryRef.current += 1;
         const delay = 800 * initRetryRef.current;
@@ -428,9 +439,20 @@ export function OperationalMap() {
       return;
     }
 
+    // GPU context-loss recovery
+    const canvas = map.getCanvas();
+    const onCtxLost = (e: Event) => {
+      e.preventDefault();
+      console.warn("[OperationalMap] WebGL context lost");
+      setMapError("Contexto GPU perdido — toque em Tentar novamente");
+    };
+    canvas.addEventListener("webglcontextlost", onCtxLost);
+
     map.on("error", (e: any) => {
-      // Silent diagnostic: tile/style errors won't crash the map
-      console.warn("[OperationalMap] maplibre error", e?.error?.message ?? e);
+      // Isolated: tile/style/zoom errors won't crash the map
+      const msg = e?.error?.message ?? String(e);
+      if (/zoom|tile|404|aborted/i.test(msg)) return; // expected, ignore
+      console.warn("[OperationalMap] maplibre error", msg);
     });
 
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
