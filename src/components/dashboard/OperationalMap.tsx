@@ -111,13 +111,13 @@ const DARK_STYLE: maplibregl.StyleSpecification = {
     {
       id: "bg-ocean",
       type: "background",
-      paint: { "background-color": "#0a1628" },
+      paint: { "background-color": "#0b1f3d" },
     },
     {
       id: "carto-dark",
       type: "raster",
       source: "carto-dark",
-      paint: { "raster-opacity": 0.92, "raster-contrast": 0.05 },
+      paint: { "raster-opacity": 0.88, "raster-contrast": 0.08, "raster-saturation": -0.15, "raster-hue-rotate": 200 },
     },
   ],
 };
