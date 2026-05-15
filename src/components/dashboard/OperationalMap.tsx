@@ -967,30 +967,43 @@ export function OperationalMap() {
         radarFramesRef.current = { host, frames };
         radarIdxRef.current = past.length - 1; // start at "now"
 
-        const ensureLayer = (kind: "radar" | "storms") => {
+        const reconcile = (kind: "radar" | "storms", active: boolean) => {
           const srcId = `${kind}-src`;
           const layerId = `${kind}-layer`;
-          if (map.getSource(srcId)) return;
-          map.addSource(srcId, {
-            type: "raster",
-            tiles: [buildUrl(host, frames[radarIdxRef.current].path, kind)],
-            tileSize: 256,
-          });
-          map.addLayer({
-            id: layerId,
-            type: "raster",
-            source: srcId,
-            paint: {
-              "raster-opacity": kind === "radar" ? 0.55 : 0.65,
-              "raster-fade-duration": 600,
-            },
-          }, map.getLayer("hail-halo") ? "hail-halo" : undefined);
+          const hasLayer = !!map.getLayer(layerId);
+          const hasSrc = !!map.getSource(srcId);
+          if (active) {
+            if (hasLayer) return;
+            if (!hasSrc) {
+              try {
+                map.addSource(srcId, {
+                  type: "raster",
+                  tiles: [buildUrl(host, frames[radarIdxRef.current].path, kind)],
+                  tileSize: 256,
+                });
+              } catch {}
+            }
+            try {
+              map.addLayer({
+                id: layerId,
+                type: "raster",
+                source: srcId,
+                paint: {
+                  "raster-opacity": kind === "radar" ? 0.55 : 0.65,
+                  "raster-fade-duration": 600,
+                },
+              }, map.getLayer("hail-halo") ? "hail-halo" : undefined);
+            } catch {}
+          } else {
+            if (hasLayer) { try { map.removeLayer(layerId); } catch {} }
+            if (hasSrc) { try { map.removeSource(srcId); } catch {} }
+          }
         };
 
-        if (layers.radar) ensureLayer("radar");
-        if (layers.storms) ensureLayer("storms");
+        reconcile("radar", !!layers.radar);
+        reconcile("storms", !!layers.storms);
 
-        // Animate: cycle frames smoothly
+        // Animate: cycle frames smoothly — only for currently-active layers
         if (radarIntervalRef.current) window.clearInterval(radarIntervalRef.current);
         radarIntervalRef.current = window.setInterval(() => {
           const data = radarFramesRef.current;
@@ -998,6 +1011,7 @@ export function OperationalMap() {
           radarIdxRef.current = (radarIdxRef.current + 1) % data.frames.length;
           const path = data.frames[radarIdxRef.current].path;
           (["radar", "storms"] as const).forEach((kind) => {
+            if (!map.getLayer(`${kind}-layer`)) return;
             const src = map.getSource(`${kind}-src`) as any;
             if (src && typeof src.setTiles === "function") {
               try { src.setTiles([buildUrl(data.host, path, kind)]); } catch {}
