@@ -173,11 +173,21 @@ const MAP_CSS = `
 /* ------------------------------------------------------------------ */
 export function OperationalMap() {
   const { t } = useLanguage();
-  const containerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MLMap | null>(null);
   const styleRef = useRef<HTMLStyleElement | null>(null);
   const radarTimerRef = useRef<number | null>(null);
+  const initRetryRef = useRef<number>(0);
   const [mapReady, setMapReady] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
+  const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
+
+  // Callback ref guarantees init runs the moment the DOM node exists,
+  // regardless of whether the loader skeleton was rendered first.
+  const setContainerRef = useCallback((el: HTMLDivElement | null) => {
+    containerRef.current = el;
+    setContainerEl(el);
+  }, []);
 
   const [layers, setLayers] = useState<Record<LayerKey, boolean>>({
     teams: true,
