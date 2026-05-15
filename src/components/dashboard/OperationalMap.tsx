@@ -668,7 +668,7 @@ export function OperationalMap() {
       mapRef.current = null;
       setMapReady(false);
     };
-  }, []);
+  }, [containerEl, mapError]);
 
   /* -------- Push data into sources --------------------------------- */
   useEffect(() => {
