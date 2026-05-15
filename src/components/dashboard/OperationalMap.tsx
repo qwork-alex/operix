@@ -396,7 +396,7 @@ export function OperationalMap() {
 
   /* -------- Init map ------------------------------------------------ */
   useEffect(() => {
-    if (!containerRef.current || mapRef.current) return;
+    if (!containerEl || mapRef.current) return;
 
     if (!styleRef.current) {
       const s = document.createElement("style");
@@ -405,14 +405,32 @@ export function OperationalMap() {
       styleRef.current = s;
     }
 
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: DARK_STYLE,
-      center: [2.3522, 46.6034],
-      zoom: 4.8,
-      attributionControl: { compact: true },
-      maxZoom: 18,
-      minZoom: 2,
+    let map: MLMap;
+    try {
+      map = new maplibregl.Map({
+        container: containerEl,
+        style: DARK_STYLE,
+        center: [2.3522, 46.6034],
+        zoom: 4.8,
+        attributionControl: { compact: true },
+        maxZoom: 18,
+        minZoom: 2,
+      });
+    } catch (err) {
+      console.error("[OperationalMap] init failed", err);
+      setMapError((err as Error)?.message ?? "init failed");
+      // Auto-retry up to 3 times with backoff
+      if (initRetryRef.current < 3) {
+        initRetryRef.current += 1;
+        const delay = 800 * initRetryRef.current;
+        window.setTimeout(() => setMapError(null), delay);
+      }
+      return;
+    }
+
+    map.on("error", (e: any) => {
+      // Silent diagnostic: tile/style errors won't crash the map
+      console.warn("[OperationalMap] maplibre error", e?.error?.message ?? e);
     });
 
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
