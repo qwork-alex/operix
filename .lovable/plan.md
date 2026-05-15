@@ -1,168 +1,199 @@
 # Fase 1 — Rearquitetura do Motor Climático-Operacional
 
-Objetivo: transformar o `OperationalMap` monolítico numa plataforma modular, estável e viva, sem perder funcionalidades já entregues (radar animado, granizo, PDR, oportunidades, relatos comunitários).
+Plataforma climática operacional modular, estável e viva. Sem efeito "dashboard bonito": núcleo de decisão real, layers apenas renderizam, tudo escalável para Command Center multi-monitor.
 
-## Diagnóstico atual
+## Princípios travados
 
-- `OperationalMap.tsx` concentra: estilo do mapa, fetch de providers, parser meteorológico, layers (radar/granizo/PDR/operações/equipes/relatos), animação temporal, estado de UI, interações.
-- Cada nova feature reescreve parcialmente as outras → regressões em ordens/operações/PDR.
-- Eventos de granizo às vezes ficam em zero porque o parser e o ingest competem com camadas visuais.
-- Relatar granizo: upload existe mas preview/thumb quebram.
-- Visual cartográfico: oceano cinza, fronteiras sem hierarquia.
+1. **Single source of truth**: um `WeatherEventEngine` consolida radar, hail, reports, forecasts e estado temporal. Layers nunca decidem lógica — apenas leem snapshots normalizados e desenham.
+2. **Mapa imperativo, não reativo**: o componente React do mapa monta uma vez. Atualizações vão por refs + APIs MapLibre (`setData`, `setPaintProperty`, `setTiles`). Zero re-render React por frame.
+3. **Hail engine operacional**: cada célula tem direção, velocidade, intensidade, derivada (crescendo/perdendo), ETA por cidade, raio de impacto, score operacional.
+4. **PDR Intel = motor de decisão**: ranking ponderado de oportunidades, não heatmap decorativo.
+5. **Cartografia cinematográfica**: hierarquia oceano → país → região → cidade → vila com glow controlado e labels refinadas.
+6. **Timeline premium**: scrub suave, autoplay, velocidades, ghost trails.
+7. **Pronto para Command Center**: fullscreen, auto-cycling, auto-focus em severos, alertas sonoros, dispatch mode — arquitetura preparada desde já.
+8. **Higiene de GPU**: cleanup rigoroso, FPS/memory monitor, anti-thrashing.
+9. **Prioridade**: estabilidade > fidelidade > fluidez > inteligência > arquitetura. Features novas depois.
+10. **Validação cruzada**: cada PR comparado a Windy / RainViewer / Zoom Earth / RadarScope antes de fechar.
 
 ## Arquitetura alvo
 
 ```text
 src/components/dashboard/operational-map/
-├── OperationalMap.tsx          // shell: container, error boundary, controles
+├── OperationalMap.tsx          // shell React (monta 1x), error boundary, controles
 ├── core/
-│   ├── MapEngine.ts            // init MapLibre, WebGL probe, style, retry, lifecycle
-│   ├── LayerRegistry.ts        // registra/ativa/desativa layers de forma isolada
-│   ├── TemporalEngine.ts       // clock global, frames, interpolação, playback
-│   └── safeSetData.ts          // helpers seguros (já existe inline)
-├── layers/
-│   ├── radarLayer.ts
-│   ├── hailForecastLayer.ts    // previsão
-│   ├── hailActiveLayer.ts      // ativo
-│   ├── hailConfirmedLayer.ts   // confirmado + relatos comunitários
-│   ├── stormLayer.ts
-│   ├── ordersLayer.ts
-│   ├── operationsLayer.ts      // zonas/cobertura
-│   ├── teamsLayer.ts
-│   ├── pdrIntelLayer.ts        // heatmap de oportunidades
-│   └── reportsLayer.ts
+│   ├── MapEngine.ts            // init MapLibre, WebGL probe, retry, lifecycle
+│   ├── LayerRegistry.ts        // mount/unmount/visibility isolados, ordem estável
+│   ├── TemporalEngine.ts       // clock global rAF, frames, interpolação, playback
+│   ├── safeOps.ts              // setData/setPaintProperty seguros
+│   ├── PerfMonitor.ts          // FPS, drawCalls, memória, tile thrashing
+│   └── CommandBus.ts           // eventos: focus(event), alert(severity), dispatch(team→event)
+├── engine/
+│   ├── WeatherEventEngine.ts   // SOURCE OF TRUTH — consolida tudo, emite snapshots
+│   ├── HailEngine.ts           // direção, velocidade, derivada, ETA, raio, score
+│   ├── ConfidenceEngine.ts     // score meteorológico + comunitário
+│   ├── PdrDecisionEngine.ts    // ranking operacional ponderado
+│   └── ForecastEngine.ts       // hotspots futuros, probabilidade
 ├── data/
-│   ├── useHailEvents.ts        // forecast/active/confirmed normalizados
-│   ├── useRadarFrames.ts       // RainViewer
+│   ├── useRadarFrames.ts
+│   ├── useHailIngest.ts
+│   ├── useCommunityReports.ts  // realtime
 │   ├── useOrdersGeo.ts
 │   ├── useTeamsGeo.ts
-│   └── useCommunityReports.ts  // hail_reports + realtime
-├── intel/
-│   ├── confidenceEngine.ts     // score: meteorológico + comunitário
-│   └── opportunityEngine.ts    // já existe em OperationalOpportunities
+│   └── useCityIndex.ts         // catálogo de cidades p/ ETA
+├── layers/
+│   ├── radarLayer.ts
+│   ├── hailForecastLayer.ts
+│   ├── hailActiveLayer.ts      // inclui ghost trail
+│   ├── hailConfirmedLayer.ts
+│   ├── stormLayer.ts
+│   ├── ordersLayer.ts
+│   ├── operationsLayer.ts
+│   ├── teamsLayer.ts
+│   ├── pdrIntelLayer.ts
+│   └── reportsLayer.ts
 ├── ui/
-│   ├── LayerToggleBar.tsx      // botões: Radar/Granizo/Ordens/Operações/PDR…
+│   ├── LayerToggleBar.tsx
 │   ├── MapLegend.tsx
-│   ├── TimelineControl.tsx     // playback + scrubber
+│   ├── TimelineControl.tsx     // scrub, play, 0.5x/1x/2x/4x, replay
 │   ├── HailReportButton.tsx
-│   └── DiagnosticBadge.tsx
+│   ├── OpportunityRanking.tsx  // saída do PdrDecisionEngine
+│   ├── DiagnosticBadge.tsx     // provider, frames, FPS, mem, layers
+│   └── CommandCenterShell.tsx  // fullscreen, auto-cycle, auto-focus
 └── style/
-    └── premiumDark.ts          // estilo cartográfico premium (oceano/fronteiras/texto)
+    └── premiumDark.ts          // oceano gradiente, fronteiras hierárquicas, halos
 ```
 
-Cada layer expõe um contrato uniforme:
+### Contratos
 
 ```ts
-interface MapLayer<T = unknown> {
+// SOURCE OF TRUTH — emite snapshots imutáveis
+interface WeatherSnapshot {
+  t: number;                    // tempo do clock
+  radar: RadarFrame[];
+  hail: HailCell[];             // já enriquecidas pela HailEngine
+  reports: CommunityReport[];   // já com confidence
+  forecast: ForecastHotspot[];
+  opportunities: Opportunity[]; // já rankeadas
+}
+class WeatherEventEngine {
+  subscribe(fn: (snap: WeatherSnapshot) => void): Unsubscribe;
+  setTime(t: number): void;
+  current(): WeatherSnapshot;
+}
+
+// LAYER — só renderiza, recebe slice do snapshot
+interface MapLayer<K extends keyof WeatherSnapshot> {
   id: string;
-  category: "radar" | "hail" | "orders" | "ops" | "teams" | "pdr" | "reports";
-  mount(map: Map): void;        // cria sources + layers, idempotente
-  unmount(map: Map): void;      // remove sem afetar outros
-  update(data: T): void;        // setData seguro
+  category: LayerCategory;
+  select(snap: WeatherSnapshot): WeatherSnapshot[K];
+  mount(map: Map): void;
+  unmount(map: Map): void;
+  apply(slice: WeatherSnapshot[K], t: number): void;  // imperativo
   setVisible(v: boolean): void;
-  onTick?(t: number): void;     // chamado pelo TemporalEngine
 }
 ```
 
-`LayerRegistry` garante:
-- mount/unmount idempotente,
-- isolamento de erros (try/catch por layer),
-- ordem de empilhamento estável (radar abaixo, intel acima),
-- toggle não destrói estado dos outros.
+### HailCell enriquecida
 
-## Entregas por bloco
+```ts
+interface HailCell {
+  id: string;
+  lat: number; lng: number;
+  velocityKts: number;          // intensidade meteorológica
+  bearingDeg: number;           // direção
+  speedKmh: number;             // deslocamento
+  derivative: "growing" | "steady" | "decaying";
+  radiusKm: number;
+  hailSizeMm: number | null;
+  severity: Severity;
+  status: "forecast" | "active" | "confirmed";
+  etaToCities: Array<{ cityId: string; eta: number; distanceKm: number }>;
+  operationalScore: number;     // 0..100, alimenta PDR
+  trail: Array<{ t: number; lat: number; lng: number }>; // ghost
+}
+```
 
-### 1. Camadas independentes
-- Extrair cada bloco do `OperationalMap` para arquivos em `layers/`.
-- `LayerRegistry` substitui os `addSource/addLayer` espalhados.
-- Botões da toolbar passam a chamar `registry.toggle(category)`.
+### PdrDecisionEngine — ranking ponderado
 
-### 2. Motor de eventos restaurado
-- `useHailEvents` consolida 3 streams: `forecast`, `active`, `confirmed`.
-- Parser normaliza severidade, tamanho mm, raio, status, probabilidade.
-- Edge function `ingest-hail` permanece; o cliente passa a filtrar/derivar localmente sem perder dados.
-- Garantir que mesmo sem provider pago, mocks/seed do RainViewer + relatos gerem eventos visíveis.
+Score = soma normalizada de:
+- severidade climática (peso 0.25)
+- demanda prevista da região (0.20)
+- densidade de veículos / renda média (0.15)
+- distância das equipes disponíveis (0.15)
+- trânsito estimado (0.05)
+- histórico de conversão da região (0.10)
+- potencial financeiro (ticket médio × volume) (0.10)
 
-### 3. Funcionalidades originais
-- Forecast: hotspots com halo pulsante + probabilidade.
-- Ativo: células em deslocamento (vetor + trail).
-- Confirmado: ocorrências + relatos comunitários com foto.
-- PDR Intel: heatmap derivado de `computeOpportunities` (já existe).
+Saída: `Opportunity[]` ordenada, com breakdown por fator (explicabilidade) → exibido no painel atual `OperationalOpportunities`.
 
-### 4. Botões funcionais
-- Toolbar única (`LayerToggleBar`) com estado persistido em `useState` + localStorage.
-- Cada botão → `registry.toggle("orders" | "ops" | "pdr" | …)`.
-- Ordens: clusters por status/prioridade.
-- Operações: zonas (turf buffer das equipes) + capacidade.
+## Estilo cartográfico (premiumDark.ts)
 
-### 5. Motor temporal real
-- `TemporalEngine` com `requestAnimationFrame`, clock 0..1 entre frames.
-- Radar: troca de tiles + `raster-fade-duration` já implementado, agora com scrubber e play/pause.
-- Hail ativo: interpolação linear de posição entre frames consecutivos.
-- TimelineControl visível na base do mapa.
+- **Oceano**: gradiente radial `#06223f` centro → `#0a2e55` borda, leve textura via raster overlay opacidade 0.04.
+- **Países**: linha `#3aa0ff` α0.35, `line-blur 1.2`, halo via duplicate layer α0.12 width×3.
+- **Regiões**: `#a78bfa` α0.22.
+- **Cidades**: label `#e6f2ff`, `text-halo-color #0b1f3d`, `text-halo-blur 1.5`, weight por população.
+- **Vilas**: `#9fb3c8`, halo 0.8.
+- **Hierarquia por zoom**: cada nível aparece em range definido para evitar poluição.
 
-### 6. Relatar granizo — pipeline completo
-- Compressão client-side (canvas → webp ~1024px, q=0.8).
-- Geração de thumbnail (256px) salvo em `hail-reports/thumbs/`.
-- Preview no dialog antes do envio.
-- Tooltip no popup do mapa com thumbnail; clique abre modal expandido.
-- Persistir `photo_thumb_url` em `hail_reports`.
+## Timeline premium (TemporalEngine + TimelineControl)
 
-### 7. Confiança comunitária
-- `confidenceEngine.ts`:
-  - base 0.2
-  - +0.3 se foto
-  - +0.15 por cada confirmação adicional (cap 0.6)
-  - +0.2 se há radar/storm cell no raio de 15 km nos últimos 60 min
-- Status derivado: `partial` < 0.5, `confirmed` ≥ 0.5, `validated` ≥ 0.85.
-- Coluna `corroboration_count` já existe; adicionar trigger para recomputar `confidence_score` e `status` ao inserir confirmações.
+- Clock global em rAF, `t ∈ [t0, t1]`.
+- Frames discretos (radar, hail) + interpolação contínua (posição de células ativas, opacidade de fade).
+- Controles: scrub, play/pause, 0.5x/1x/2x/4x, replay, "live".
+- Ghost trail: layer dedicada com últimos N pontos da `HailCell.trail`, opacidade decrescente.
+- Throttling adaptativo: se FPS < 30, reduz frequência de interpolação.
 
-### 8. Visual cartográfico premium
-- `premiumDark.ts` aplica overrides ao estilo CARTO:
-  - oceano: gradiente `#06223f → #0a2e55`
-  - fronteiras país: `#3aa0ff` α0.35 + glow
-  - regiões: `#a78bfa` α0.25
-  - cidades: `#e6f2ff`, halo azul
-  - vilas: `#9fb3c8`
-- Labels com `text-halo-color` e `text-halo-blur` para glow sutil.
+## Command Center (preparação)
 
-### 9. Performance
-- `useMemo` em GeoJSON pesados.
-- Layers lazy: só `mount` quando ativadas pela primeira vez.
-- Diff em `setData` (hash simples) para evitar re-uploads à GPU.
-- `requestIdleCallback` para parsers não-críticos.
+- `CommandCenterShell` envolve o mapa quando `?mode=command`.
+- Hooks expostos: `focusEvent(id)`, `cycleEvents(intervalMs)`, `onSeverityAlert(cb)`.
+- `CommandBus` desacopla UI de motor → futuro dispatch automático e WhatsApp/push só assinam o bus.
 
-### 10. Padrão de qualidade
-- ErrorBoundary por categoria de layer.
-- Diagnostic badge mostra: provider, frames, layers ativas, último sync, FPS.
-- Smoke test manual: ativar/desativar cada layer N vezes sem crash.
+## Performance & GPU
 
-## Estratégia de execução (incremental, sem regressão)
+- `PerfMonitor`: FPS rolling avg, JS heap (quando disponível), tiles em vôo, layers montadas.
+- Diff hash em `setData` para evitar upload redundante à GPU.
+- Cleanup contratual: `unmount` remove sources + layers + listeners + intervals + rAF.
+- Detector de "tile thrashing": se mesma URL pedida >3x em 5s, pausa playback.
+- Lazy mount: layer só sobe na primeira ativação.
 
-1. **PR1 — Scaffold**: criar pasta `operational-map/`, `MapEngine`, `LayerRegistry`, `TemporalEngine`, `premiumDark`. `OperationalMap.tsx` continua funcionando, apenas delega init ao `MapEngine`.
-2. **PR2 — Migrar layers radar + hail**: mover para `layers/`, toolbar plugada no registry. Validar paridade visual.
-3. **PR3 — Migrar orders/ops/teams/pdr/reports**: cada botão volta a funcionar.
-4. **PR4 — TemporalEngine + TimelineControl**: scrubber + interpolação.
-5. **PR5 — Relatar granizo v2**: compressão, thumb, preview, popup expandido.
-6. **PR6 — Confidence engine + trigger SQL**.
-7. **PR7 — Visual premium cartográfico**.
-8. **PR8 — Performance pass + diagnostic badge final**.
+## Mudanças de banco
 
-Cada PR mantém o app rodando; nada é removido antes do substituto estar verde.
+- `hail_reports`: adicionar `photo_thumb_url text`.
+- Nova tabela `hail_report_confirmations(id, report_id, user_id, created_at)` + RLS.
+- Trigger `recompute_hail_confidence()` recalcula `confidence_score` e `status` no insert/delete.
+- Catálogo `weather_cities(id, name, country, lat, lng, population)` para ETA (seed PT/FR/ES).
 
-## Mudanças de banco previstas
+## Pipeline "Relatar Granizo" v2
 
-- `hail_reports`: adicionar `photo_thumb_url text`, `confidence_score` recomputado por trigger.
-- Nova tabela `hail_report_confirmations (id, report_id, user_id, created_at)` com RLS (insert por authenticated, select público).
-- Trigger `recompute_hail_confidence()` atualiza `confidence_score` e `status` no insert/delete de confirmações.
+Compressão client-side (canvas → webp 1024px q0.8) + thumbnail (256px q0.7) → upload para `hail-reports/full/` e `hail-reports/thumbs/` → `photo_url` + `photo_thumb_url` persistidos → preview no dialog → popup do mapa usa thumb → clique abre modal expandido.
 
-## O que NÃO entra nesta fase
+## Roadmap incremental (PRs pequenos, sem regressão)
 
-- Provedores meteorológicos pagos (mantemos RainViewer + ingest atual).
-- IA preditiva / dispatch automático (arquitetura preparada, implementação depois).
-- WhatsApp/push/email (planejado, não construído agora).
+| PR | Escopo | Critério de pronto |
+|----|--------|--------------------|
+| PR1 | Scaffold pasta + `MapEngine` + `LayerRegistry` + `TemporalEngine` + `safeOps` + `PerfMonitor` stub. `OperationalMap` continua funcional, delega init. | Mapa abre, FPS visível, nada quebrou |
+| PR2 | `WeatherEventEngine` + migração de radar e hail (forecast/active/confirmed) para layers isoladas | Paridade visual com hoje, eventos > 0 |
+| PR3 | `HailEngine` enriquecido (direção, velocidade, ETA, score) + ghost trail | Células se movem com vetor real |
+| PR4 | Migrar orders/ops/teams/pdr/reports → toggles funcionais | Cada botão liga/desliga sem efeito colateral |
+| PR5 | `PdrDecisionEngine` + ranking explicável no painel | Top-5 com breakdown de fatores |
+| PR6 | `TimelineControl` premium (scrub, velocidades, replay) | Comparação Windy/RainViewer aprovada |
+| PR7 | Relatar granizo v2 (compressão, thumb, preview, modal) + `ConfidenceEngine` + trigger SQL | Foto carrega, score atualiza ao confirmar |
+| PR8 | `premiumDark.ts` (oceano, fronteiras, labels, halos) | Comparação Zoom Earth aprovada |
+| PR9 | `CommandCenterShell` + `CommandBus` + auto-focus/auto-cycle | `?mode=command` funcional em fullscreen |
+| PR10 | Performance pass final + memory diagnostics + anti-thrashing | 60 FPS sustentados com 200+ eventos |
 
-## Riscos
+Cada PR fecha com checklist visual lado-a-lado contra Windy/RainViewer/Zoom Earth/RadarScope.
 
-- Migração das layers pode esconder regressões visuais pontuais → mitigado por PRs pequenos com validação visual.
-- TemporalEngine pode aumentar uso de GPU → throttling adaptativo conforme FPS.
+## Fora desta fase
+
+- Provedores meteorológicos pagos (continua RainViewer + ingest atual).
+- IA preditiva avançada e dispatch automático real (arquitetura preparada via `CommandBus`).
+- WhatsApp/push/email (assinarão o bus depois).
+
+## Riscos e mitigações
+
+- **Regressão visual durante migração** → PRs pequenos + screenshots comparativos.
+- **GPU pressure no playback** → throttle adaptativo + tile diff hash.
+- **Drift entre engine e layer** → snapshots imutáveis, layers stateless.
+- **Layers órfãs em HMR** → `LayerRegistry` mantém inventário e força cleanup no dispose.
