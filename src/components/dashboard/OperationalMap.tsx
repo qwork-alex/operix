@@ -193,11 +193,11 @@ export function OperationalMap() {
   const [layers, setLayers] = useState<Record<LayerKey, boolean>>({
     teams: true,
     orders: true,
-    operations: false,
+    operations: true,
     radar: true,
     storms: false,
-    hail: false,
-    pdr: false,
+    hail: true,
+    pdr: true,
   });
 
   /* -------- data: service orders (orders + operations inferred) ----- */
