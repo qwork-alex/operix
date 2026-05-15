@@ -685,7 +685,65 @@ export function OperationalMap() {
         },
       });
 
-      /* ---- Click popup ---- */
+      /* ---- Community hail reports (camera/marker layer) ---- */
+      map.addSource("hail-reports", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] } as any,
+      });
+      map.addLayer({
+        id: "hail-reports-glow",
+        type: "circle",
+        source: "hail-reports",
+        paint: {
+          "circle-color": ["get", "color"],
+          "circle-radius": ["interpolate", ["linear"], ["get", "confidence"], 0, 10, 1, 22],
+          "circle-opacity": 0.18,
+          "circle-blur": 0.9,
+        },
+      });
+      map.addLayer({
+        id: "hail-reports-core",
+        type: "circle",
+        source: "hail-reports",
+        paint: {
+          "circle-color": ["get", "color"],
+          "circle-radius": 6,
+          "circle-stroke-color": "rgba(255,255,255,0.95)",
+          "circle-stroke-width": 1.5,
+          "circle-opacity": 0.95,
+        },
+      });
+
+      const onReportClick = (e: any) => {
+        const f = e.features?.[0];
+        if (!f) return;
+        const p = f.properties || {};
+        const photo = p.photo_url
+          ? `<img src="${p.photo_url}" alt="report" style="width:180px;height:120px;object-fit:cover;border-radius:6px;margin-top:6px;border:1px solid rgba(255,255,255,0.1)"/>`
+          : `<div style="opacity:.6;font-size:10px;margin-top:4px">Sem foto enviada</div>`;
+        const conf = Math.round(Number(p.confidence ?? 0) * 100);
+        const html = `
+          <div style="min-width:200px">
+            <strong>${p.city || "Relato comunitário"}</strong>
+            <div style="font-size:10px;opacity:.75">${p.country || ""}</div>
+            <div style="margin-top:4px;font-size:11px">
+              <span style="color:${p.color}">●</span> ${(p.severity || "").toUpperCase()} · ${p.hail_size_mm || 0}mm
+            </div>
+            <div style="font-size:10px;opacity:.75">Confiança ${conf}% · ${p.corroborations} corrob.</div>
+            ${photo}
+            ${p.notes ? `<div style="font-size:10px;opacity:.7;margin-top:4px">${p.notes}</div>` : ""}
+          </div>`;
+        new maplibregl.Popup({ closeButton: true, offset: 12, maxWidth: "240px" })
+          .setLngLat(f.geometry.coordinates)
+          .setHTML(html)
+          .addTo(map);
+      };
+      ["hail-reports-core", "hail-reports-glow"].forEach((id) => {
+        map.on("click", id, onReportClick);
+        map.on("mouseenter", id, () => (map.getCanvas().style.cursor = "pointer"));
+        map.on("mouseleave", id, () => (map.getCanvas().style.cursor = ""));
+      });
+
       const popupHandler = (sourceId: string) => (e: any) => {
         const f = e.features?.[0];
         if (!f) return;
