@@ -757,9 +757,9 @@ export function OperationalMap() {
 
   // Push PDR heatmap data
   useEffect(() => {
-    if (!mapReady || !mapRef.current) return;
-    (mapRef.current.getSource("pdr-heat") as GeoJSONSource | undefined)?.setData(pdrHeatGeo as any);
-  }, [mapReady, pdrHeatGeo]);
+    if (!mapReady) return;
+    safeSetData("pdr-heat", pdrHeatGeo);
+  }, [mapReady, pdrHeatGeo, safeSetData]);
 
   // Soft pulse animation for confirmed/ongoing hail halos (cheap; modulates opacity only)
   useEffect(() => {
