@@ -291,7 +291,7 @@ export function OperationalMap() {
   });
   const [hailMinSizeMm, setHailMinSizeMm] = useState<number>(0);
   const [hailWindowHours, setHailWindowHours] = useState<number>(6); // last N hours
-  const [replayCursor, setReplayCursor] = useState<number>(0); // 0..1 (1 = now)
+  const [replayCursor, setReplayCursor] = useState<number>(1); // 0..1 (1 = now / AO VIVO)
   const [replayPlaying, setReplayPlaying] = useState(false);
 
   // auto-advance replay
