@@ -1207,6 +1207,83 @@ export type Database = {
         }
         Relationships: []
       }
+      hail_reports: {
+        Row: {
+          city: string | null
+          confidence_score: number
+          corroboration_count: number
+          country: string | null
+          created_at: string
+          hail_event_id: string | null
+          hail_size_mm: number | null
+          id: string
+          lat: number
+          lng: number
+          metadata: Json
+          notes: string | null
+          observed_at: string
+          photo_storage_path: string | null
+          photo_url: string | null
+          region: string | null
+          reporter_user_id: string | null
+          severity: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          city?: string | null
+          confidence_score?: number
+          corroboration_count?: number
+          country?: string | null
+          created_at?: string
+          hail_event_id?: string | null
+          hail_size_mm?: number | null
+          id?: string
+          lat: number
+          lng: number
+          metadata?: Json
+          notes?: string | null
+          observed_at?: string
+          photo_storage_path?: string | null
+          photo_url?: string | null
+          region?: string | null
+          reporter_user_id?: string | null
+          severity?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          city?: string | null
+          confidence_score?: number
+          corroboration_count?: number
+          country?: string | null
+          created_at?: string
+          hail_event_id?: string | null
+          hail_size_mm?: number | null
+          id?: string
+          lat?: number
+          lng?: number
+          metadata?: Json
+          notes?: string | null
+          observed_at?: string
+          photo_storage_path?: string | null
+          photo_url?: string | null
+          region?: string | null
+          reporter_user_id?: string | null
+          severity?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hail_reports_hail_event_id_fkey"
+            columns: ["hail_event_id"]
+            isOneToOne: false
+            referencedRelation: "hail_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invites: {
         Row: {
           accepted_at: string | null

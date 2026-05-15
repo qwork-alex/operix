@@ -15,6 +15,7 @@ import {
   type OppOrder,
   type OppTeam,
 } from "./OperationalOpportunities";
+import { HailReportDialog } from "./HailReportDialog";
 
 /* ------------------------------------------------------------------ */
 /*  Hail severity → premium color palette                              */
@@ -398,6 +399,18 @@ export function OperationalMap() {
   useEffect(() => {
     if (!containerEl || mapRef.current) return;
 
+    // WebGL availability check — fall back to no-WebGL panel if missing
+    const probe = document.createElement("canvas");
+    const gl =
+      probe.getContext("webgl2") ||
+      probe.getContext("webgl") ||
+      probe.getContext("experimental-webgl");
+    if (!gl) {
+      console.warn("[OperationalMap] WebGL unavailable — fallback mode");
+      setMapError("WebGL indisponível neste dispositivo");
+      return;
+    }
+
     if (!styleRef.current) {
       const s = document.createElement("style");
       s.textContent = MAP_CSS;
@@ -419,7 +432,6 @@ export function OperationalMap() {
     } catch (err) {
       console.error("[OperationalMap] init failed", err);
       setMapError((err as Error)?.message ?? "init failed");
-      // Auto-retry up to 3 times with backoff
       if (initRetryRef.current < 3) {
         initRetryRef.current += 1;
         const delay = 800 * initRetryRef.current;
@@ -428,9 +440,20 @@ export function OperationalMap() {
       return;
     }
 
+    // GPU context-loss recovery
+    const canvas = map.getCanvas();
+    const onCtxLost = (e: Event) => {
+      e.preventDefault();
+      console.warn("[OperationalMap] WebGL context lost");
+      setMapError("Contexto GPU perdido — toque em Tentar novamente");
+    };
+    canvas.addEventListener("webglcontextlost", onCtxLost);
+
     map.on("error", (e: any) => {
-      // Silent diagnostic: tile/style errors won't crash the map
-      console.warn("[OperationalMap] maplibre error", e?.error?.message ?? e);
+      // Isolated: tile/style/zoom errors won't crash the map
+      const msg = e?.error?.message ?? String(e);
+      if (/zoom|tile|404|aborted/i.test(msg)) return; // expected, ignore
+      console.warn("[OperationalMap] maplibre error", msg);
     });
 
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
@@ -664,26 +687,38 @@ export function OperationalMap() {
 
     return () => {
       if (radarTimerRef.current) window.clearTimeout(radarTimerRef.current);
-      map.remove();
+      try { canvas.removeEventListener("webglcontextlost", onCtxLost); } catch {}
+      try { map.remove(); } catch (e) { console.warn("[OperationalMap] remove failed", e); }
       mapRef.current = null;
       setMapReady(false);
     };
   }, [containerEl, mapError]);
 
+  /* -------- Safe per-layer setData (isolated failures) ------------- */
+  const safeSetData = useCallback((id: string, data: any) => {
+    const map = mapRef.current;
+    if (!map || !(map as any).style) return;
+    try {
+      const src = map.getSource(id) as GeoJSONSource | undefined;
+      src?.setData(data);
+    } catch (e) {
+      console.warn(`[OperationalMap] setData(${id}) skipped`, e);
+    }
+  }, []);
+
   /* -------- Push data into sources --------------------------------- */
   useEffect(() => {
-    if (!mapReady || !mapRef.current) return;
-    const map = mapRef.current;
-    (map.getSource("orders") as GeoJSONSource | undefined)?.setData(ordersGeo as any);
-    (map.getSource("teams") as GeoJSONSource | undefined)?.setData(teamsGeo as any);
-    (map.getSource("operations") as GeoJSONSource | undefined)?.setData(operationsGeo as any);
-  }, [mapReady, ordersGeo, teamsGeo, operationsGeo]);
+    if (!mapReady) return;
+    safeSetData("orders", ordersGeo);
+    safeSetData("teams", teamsGeo);
+    safeSetData("operations", operationsGeo);
+  }, [mapReady, ordersGeo, teamsGeo, operationsGeo, safeSetData]);
 
   // Push hail data
   useEffect(() => {
-    if (!mapReady || !mapRef.current) return;
-    (mapRef.current.getSource("hail") as GeoJSONSource | undefined)?.setData(hailGeo as any);
-  }, [mapReady, hailGeo]);
+    if (!mapReady) return;
+    safeSetData("hail", hailGeo);
+  }, [mapReady, hailGeo, safeSetData]);
 
   /* -------- PDR Operational Opportunities (intelligence layer) ----- */
   const oppOrders: OppOrder[] = useMemo(
@@ -723,31 +758,38 @@ export function OperationalMap() {
 
   // Push PDR heatmap data
   useEffect(() => {
-    if (!mapReady || !mapRef.current) return;
-    (mapRef.current.getSource("pdr-heat") as GeoJSONSource | undefined)?.setData(pdrHeatGeo as any);
-  }, [mapReady, pdrHeatGeo]);
+    if (!mapReady) return;
+    safeSetData("pdr-heat", pdrHeatGeo);
+  }, [mapReady, pdrHeatGeo, safeSetData]);
 
   // Soft pulse animation for confirmed/ongoing hail halos (cheap; modulates opacity only)
   useEffect(() => {
-    if (!mapReady || !mapRef.current) return;
-    const map = mapRef.current;
+    if (!mapReady) return;
     let raf = 0;
-    let t0 = performance.now();
+    let cancelled = false;
+    const t0 = performance.now();
     const tick = (now: number) => {
-      const phase = ((now - t0) % 1800) / 1800; // 0..1 over 1.8s
-      const pulse = 0.18 + 0.18 * Math.sin(phase * Math.PI * 2); // 0..0.36
-      if (map.getLayer("hail-halo")) {
-        map.setPaintProperty("hail-halo", "circle-opacity", [
-          "case",
-          ["==", ["get", "is_closed"], 1], 0.05,
-          ["==", ["get", "is_forecast"], 1], 0.12,
-          0.18 + pulse,
-        ] as any);
+      if (cancelled) return;
+      const map = mapRef.current;
+      if (!map || !(map as any).style) return;
+      try {
+        if (map.getLayer("hail-halo")) {
+          const phase = ((now - t0) % 1800) / 1800;
+          const pulse = 0.18 + 0.18 * Math.sin(phase * Math.PI * 2);
+          map.setPaintProperty("hail-halo", "circle-opacity", [
+            "case",
+            ["==", ["get", "is_closed"], 1], 0.05,
+            ["==", ["get", "is_forecast"], 1], 0.12,
+            0.18 + pulse,
+          ] as any);
+        }
+      } catch {
+        return;
       }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => { cancelled = true; cancelAnimationFrame(raf); };
   }, [mapReady]);
 
   /* -------- Toggle layer visibility -------------------------------- */
@@ -853,7 +895,7 @@ export function OperationalMap() {
             {t("chart.techDistribution") || "Equipes, ordens e clima em tempo real"}
           </p>
         </div>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1.5 items-center">
           {LAYER_DEFS.map(({ key, label, icon: Icon, color }) => {
             const active = layers[key];
             return (
@@ -873,6 +915,7 @@ export function OperationalMap() {
               </button>
             );
           })}
+          <HailReportDialog />
         </div>
       </div>
 
@@ -914,18 +957,34 @@ export function OperationalMap() {
             </div>
           </div>
         )}
-        {/* Map init error fallback with retry */}
+        {/* Map init/WebGL error fallback with retry + non-WebGL list */}
         {mapError && (
-          <div className="absolute inset-0 rounded-lg bg-[#0a1628]/85 flex flex-col items-center justify-center gap-2 text-center px-6">
+          <div className="absolute inset-0 rounded-lg bg-[#0a1628]/90 flex flex-col items-center justify-center gap-2 text-center px-6 overflow-auto">
             <AlertTriangle className="h-6 w-6 text-amber-400" />
-            <div className="text-xs text-amber-200">Falha ao iniciar o mapa</div>
-            <div className="text-[10px] text-muted-foreground max-w-[280px]">{mapError}</div>
+            <div className="text-xs text-amber-200">Mapa em modo seguro</div>
+            <div className="text-[10px] text-muted-foreground max-w-[320px]">{mapError}</div>
             <button
               onClick={() => { initRetryRef.current = 0; setMapError(null); }}
               className="mt-1 text-[11px] px-3 py-1 rounded-md border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10"
             >
               Tentar novamente
             </button>
+            {/* Non-WebGL fallback: textual hail summary so operations don't stop */}
+            {hailEvents.length > 0 && (
+              <div className="mt-3 w-full max-w-[420px] text-left">
+                <div className="text-[10px] uppercase tracking-wider text-cyan-300/70 mb-1">
+                  Eventos ativos ({hailEvents.length})
+                </div>
+                <ul className="space-y-1 max-h-32 overflow-auto pr-1">
+                  {hailEvents.slice(0, 8).map((h) => (
+                    <li key={h.id} className="text-[10px] flex justify-between gap-2 border border-white/5 rounded px-2 py-1 bg-white/[0.02]">
+                      <span className="truncate">{h.city ?? h.region ?? "—"}</span>
+                      <span style={{ color: HAIL_COLORS[h.severity] }}>{h.severity}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
         {/* Diagnostic badge: provider + status */}
