@@ -763,25 +763,32 @@ export function OperationalMap() {
 
   // Soft pulse animation for confirmed/ongoing hail halos (cheap; modulates opacity only)
   useEffect(() => {
-    if (!mapReady || !mapRef.current) return;
-    const map = mapRef.current;
+    if (!mapReady) return;
     let raf = 0;
-    let t0 = performance.now();
+    let cancelled = false;
+    const t0 = performance.now();
     const tick = (now: number) => {
-      const phase = ((now - t0) % 1800) / 1800; // 0..1 over 1.8s
-      const pulse = 0.18 + 0.18 * Math.sin(phase * Math.PI * 2); // 0..0.36
-      if (map.getLayer("hail-halo")) {
-        map.setPaintProperty("hail-halo", "circle-opacity", [
-          "case",
-          ["==", ["get", "is_closed"], 1], 0.05,
-          ["==", ["get", "is_forecast"], 1], 0.12,
-          0.18 + pulse,
-        ] as any);
+      if (cancelled) return;
+      const map = mapRef.current;
+      if (!map || !(map as any).style) return;
+      try {
+        if (map.getLayer("hail-halo")) {
+          const phase = ((now - t0) % 1800) / 1800;
+          const pulse = 0.18 + 0.18 * Math.sin(phase * Math.PI * 2);
+          map.setPaintProperty("hail-halo", "circle-opacity", [
+            "case",
+            ["==", ["get", "is_closed"], 1], 0.05,
+            ["==", ["get", "is_forecast"], 1], 0.12,
+            0.18 + pulse,
+          ] as any);
+        }
+      } catch {
+        return;
       }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => { cancelled = true; cancelAnimationFrame(raf); };
   }, [mapReady]);
 
   /* -------- Toggle layer visibility -------------------------------- */
