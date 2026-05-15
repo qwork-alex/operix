@@ -1086,7 +1086,6 @@ export function OperationalMap() {
           className="h-[420px] rounded-lg overflow-hidden relative"
           style={{ background: "#0a1628" }}
         />
-        {mapReady && !mapError && <DiagnosticBadge provider="RainViewer" />}
         {/* Loading overlay (mapa base permanece sempre montado) */}
         {(isLoading || !mapReady) && !mapError && (
           <div className="absolute inset-0 rounded-lg bg-[#0a1628]/60 backdrop-blur-sm flex items-center justify-center pointer-events-none">
