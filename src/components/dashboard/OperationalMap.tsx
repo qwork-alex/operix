@@ -255,9 +255,29 @@ export function OperationalMap() {
       .on("postgres_changes", { event: "*", schema: "public", table: "hail_events" }, () => {
         queryClient.invalidateQueries({ queryKey: ["op-map-hail"] });
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "hail_reports" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["op-map-hail-reports"] });
+      })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [queryClient]);
+
+  /* -------- data: community hail reports ---------------------------- */
+  const { data: hailReports = [] } = useQuery<any[]>({
+    queryKey: ["op-map-hail-reports"],
+    queryFn: async () => {
+      const since = new Date(Date.now() - 24 * 3600_000).toISOString();
+      const { data, error } = await supabase
+        .from("hail_reports")
+        .select("id, lat, lng, city, region, country, severity, status, hail_size_mm, photo_url, confidence_score, corroboration_count, observed_at, notes")
+        .gte("observed_at", since)
+        .order("observed_at", { ascending: false })
+        .limit(300);
+      if (error) throw error;
+      return data ?? [];
+    },
+    staleTime: 60_000,
+  });
 
   /* -------- Hail filters & timeline replay -------------------------- */
   type StatusFilter = "all" | "forecast" | "ongoing" | "confirmed";
