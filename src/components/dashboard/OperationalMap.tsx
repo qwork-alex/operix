@@ -686,26 +686,38 @@ export function OperationalMap() {
 
     return () => {
       if (radarTimerRef.current) window.clearTimeout(radarTimerRef.current);
-      map.remove();
+      try { canvas.removeEventListener("webglcontextlost", onCtxLost); } catch {}
+      try { map.remove(); } catch (e) { console.warn("[OperationalMap] remove failed", e); }
       mapRef.current = null;
       setMapReady(false);
     };
   }, [containerEl, mapError]);
 
+  /* -------- Safe per-layer setData (isolated failures) ------------- */
+  const safeSetData = useCallback((id: string, data: any) => {
+    const map = mapRef.current;
+    if (!map || !(map as any).style) return;
+    try {
+      const src = map.getSource(id) as GeoJSONSource | undefined;
+      src?.setData(data);
+    } catch (e) {
+      console.warn(`[OperationalMap] setData(${id}) skipped`, e);
+    }
+  }, []);
+
   /* -------- Push data into sources --------------------------------- */
   useEffect(() => {
-    if (!mapReady || !mapRef.current) return;
-    const map = mapRef.current;
-    (map.getSource("orders") as GeoJSONSource | undefined)?.setData(ordersGeo as any);
-    (map.getSource("teams") as GeoJSONSource | undefined)?.setData(teamsGeo as any);
-    (map.getSource("operations") as GeoJSONSource | undefined)?.setData(operationsGeo as any);
-  }, [mapReady, ordersGeo, teamsGeo, operationsGeo]);
+    if (!mapReady) return;
+    safeSetData("orders", ordersGeo);
+    safeSetData("teams", teamsGeo);
+    safeSetData("operations", operationsGeo);
+  }, [mapReady, ordersGeo, teamsGeo, operationsGeo, safeSetData]);
 
   // Push hail data
   useEffect(() => {
-    if (!mapReady || !mapRef.current) return;
-    (mapRef.current.getSource("hail") as GeoJSONSource | undefined)?.setData(hailGeo as any);
-  }, [mapReady, hailGeo]);
+    if (!mapReady) return;
+    safeSetData("hail", hailGeo);
+  }, [mapReady, hailGeo, safeSetData]);
 
   /* -------- PDR Operational Opportunities (intelligence layer) ----- */
   const oppOrders: OppOrder[] = useMemo(
