@@ -894,7 +894,7 @@ export function OperationalMap() {
             {t("chart.techDistribution") || "Equipes, ordens e clima em tempo real"}
           </p>
         </div>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1.5 items-center">
           {LAYER_DEFS.map(({ key, label, icon: Icon, color }) => {
             const active = layers[key];
             return (
@@ -914,6 +914,7 @@ export function OperationalMap() {
               </button>
             );
           })}
+          <HailReportDialog />
         </div>
       </div>
 
