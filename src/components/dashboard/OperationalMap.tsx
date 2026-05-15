@@ -910,6 +910,8 @@ export function OperationalMap() {
     });
     // Hail layers
     ["hail-halo", "hail-ring", "hail-core"].forEach((id) => setVis(id, layers.hail));
+    // Community reports follow hail layer
+    ["hail-reports-glow", "hail-reports-core"].forEach((id) => setVis(id, layers.hail));
     // PDR Intel layers
     ["pdr-heatmap", "pdr-points"].forEach((id) => setVis(id, layers.pdr));
   }, [layers, mapReady]);
