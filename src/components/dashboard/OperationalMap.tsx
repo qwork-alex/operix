@@ -820,7 +820,8 @@ export function OperationalMap() {
   useEffect(() => {
     if (!mapReady) return;
     safeSetData("hail", hailGeo);
-  }, [mapReady, hailGeo, safeSetData]);
+    safeSetData("hail-reports", hailReportsGeo);
+  }, [mapReady, hailGeo, hailReportsGeo, safeSetData]);
 
   /* -------- PDR Operational Opportunities (intelligence layer) ----- */
   const oppOrders: OppOrder[] = useMemo(
