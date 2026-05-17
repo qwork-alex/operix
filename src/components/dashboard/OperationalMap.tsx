@@ -267,22 +267,35 @@ export function OperationalMap() {
     return () => { supabase.removeChannel(ch); };
   }, [queryClient]);
 
-  /* -------- data: community hail reports ---------------------------- */
+  /* -------- data: community hail reports (lifecycle window) -------- */
   const { data: hailReports = [] } = useQuery<any[]>({
     queryKey: ["op-map-hail-reports"],
     queryFn: async () => {
-      const since = new Date(Date.now() - 24 * 3600_000).toISOString();
+      // 30-day lifecycle window: live/recent/history (archived = older, not fetched here)
+      const since = new Date(Date.now() - 30 * 24 * 3600_000).toISOString();
       const { data, error } = await supabase
         .from("hail_reports")
-        .select("id, lat, lng, city, region, country, severity, status, hail_size_mm, photo_url, confidence_score, corroboration_count, observed_at, notes")
+        .select("id, hail_event_id, lat, lng, city, region, country, severity, status, hail_size_mm, photo_url, confidence_score, corroboration_count, observed_at, notes")
         .gte("observed_at", since)
         .order("observed_at", { ascending: false })
-        .limit(300);
+        .limit(500);
       if (error) throw error;
       return data ?? [];
     },
     staleTime: 60_000,
   });
+
+  /* -------- Reports indexed per hail event ------------------------- */
+  const reportsByEvent = useMemo(() => {
+    const map = new Map<string, any[]>();
+    for (const r of hailReports ?? []) {
+      if (!r.hail_event_id) continue;
+      const arr = map.get(r.hail_event_id) ?? [];
+      arr.push(r);
+      map.set(r.hail_event_id, arr);
+    }
+    return map;
+  }, [hailReports]);
 
   /* -------- Hail filters & timeline replay -------------------------- */
   type StatusFilter = "all" | "forecast" | "ongoing" | "confirmed";
