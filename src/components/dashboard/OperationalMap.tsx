@@ -869,6 +869,7 @@ export function OperationalMap() {
     return () => {
       if (radarTimerRef.current) window.clearTimeout(radarTimerRef.current);
       try { canvas.removeEventListener("webglcontextlost", onCtxLost); } catch {}
+      try { canvas.removeEventListener("webglcontextrestored", onCtxRestored); } catch {}
       try { map.remove(); } catch (e) { console.warn("[OperationalMap] remove failed", e); }
       mapRef.current = null;
       setMapReady(false);
