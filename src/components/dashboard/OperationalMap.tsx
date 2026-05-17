@@ -5,7 +5,7 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { Skeleton } from "@/components/ui/skeleton";
 import maplibregl, { Map as MLMap, GeoJSONSource } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { Users, CloudRain, Zap, Radar, Wrench, FileText, Layers, X, AlertTriangle, Wind, Clock, Gauge, Filter, Play, Pause, RotateCcw, Target } from "lucide-react";
+import { Users, CloudRain, Zap, Radar, Wrench, FileText, Layers, X, AlertTriangle, Wind, Clock, Gauge, Filter, Play, Pause, RotateCcw, Target, Eye } from "lucide-react";
 import { OperationalPanel, PanelTeam, PanelOrder } from "./OperationalPanel";
 import {
   OperationalOpportunities,
@@ -267,22 +267,35 @@ export function OperationalMap() {
     return () => { supabase.removeChannel(ch); };
   }, [queryClient]);
 
-  /* -------- data: community hail reports ---------------------------- */
+  /* -------- data: community hail reports (lifecycle window) -------- */
   const { data: hailReports = [] } = useQuery<any[]>({
     queryKey: ["op-map-hail-reports"],
     queryFn: async () => {
-      const since = new Date(Date.now() - 24 * 3600_000).toISOString();
+      // 30-day lifecycle window: live/recent/history (archived = older, not fetched here)
+      const since = new Date(Date.now() - 30 * 24 * 3600_000).toISOString();
       const { data, error } = await supabase
         .from("hail_reports")
-        .select("id, lat, lng, city, region, country, severity, status, hail_size_mm, photo_url, confidence_score, corroboration_count, observed_at, notes")
+        .select("id, hail_event_id, lat, lng, city, region, country, severity, status, hail_size_mm, photo_url, confidence_score, corroboration_count, observed_at, notes")
         .gte("observed_at", since)
         .order("observed_at", { ascending: false })
-        .limit(300);
+        .limit(500);
       if (error) throw error;
       return data ?? [];
     },
     staleTime: 60_000,
   });
+
+  /* -------- Reports indexed per hail event ------------------------- */
+  const reportsByEvent = useMemo(() => {
+    const map = new Map<string, any[]>();
+    for (const r of hailReports ?? []) {
+      if (!r.hail_event_id) continue;
+      const arr = map.get(r.hail_event_id) ?? [];
+      arr.push(r);
+      map.set(r.hail_event_id, arr);
+    }
+    return map;
+  }, [hailReports]);
 
   /* -------- Hail filters & timeline replay -------------------------- */
   type StatusFilter = "all" | "forecast" | "ongoing" | "confirmed";
@@ -538,14 +551,26 @@ export function OperationalMap() {
       return;
     }
 
-    // GPU context-loss recovery
+    // GPU context-loss recovery (preserves engine, doesn't recreate map)
     const canvas = map.getCanvas();
     const onCtxLost = (e: Event) => {
       e.preventDefault();
-      console.warn("[OperationalMap] WebGL context lost");
-      setMapError("Contexto GPU perdido — toque em Tentar novamente");
+      console.warn("[OperationalMap] WebGL context lost — awaiting restore");
+      setMapError("Contexto GPU perdido — restaurando…");
+    };
+    const onCtxRestored = () => {
+      console.info("[OperationalMap] WebGL context restored");
+      setMapError(null);
+      try {
+        map.resize();
+        map.triggerRepaint();
+        // Force data effects to re-sync sources after GPU reset
+        queryClient.invalidateQueries({ queryKey: ["op-map-hail"] });
+        queryClient.invalidateQueries({ queryKey: ["op-map-hail-reports"] });
+      } catch {}
     };
     canvas.addEventListener("webglcontextlost", onCtxLost);
+    canvas.addEventListener("webglcontextrestored", onCtxRestored);
 
     map.on("error", (e: any) => {
       // Isolated: tile/style/zoom errors won't crash the map
@@ -844,6 +869,7 @@ export function OperationalMap() {
     return () => {
       if (radarTimerRef.current) window.clearTimeout(radarTimerRef.current);
       try { canvas.removeEventListener("webglcontextlost", onCtxLost); } catch {}
+      try { canvas.removeEventListener("webglcontextrestored", onCtxRestored); } catch {}
       try { map.remove(); } catch (e) { console.warn("[OperationalMap] remove failed", e); }
       mapRef.current = null;
       setMapReady(false);
@@ -1181,12 +1207,28 @@ export function OperationalMap() {
                   Eventos ativos ({hailEvents.length})
                 </div>
                 <ul className="space-y-1 max-h-32 overflow-auto pr-1">
-                  {hailEvents.slice(0, 8).map((h) => (
-                    <li key={h.id} className="text-[10px] flex justify-between gap-2 border border-white/5 rounded px-2 py-1 bg-white/[0.02]">
-                      <span className="truncate">{h.city ?? h.region ?? "—"}</span>
-                      <span style={{ color: HAIL_COLORS[h.severity] }}>{h.severity}</span>
-                    </li>
-                  ))}
+                  {hailEvents.slice(0, 8).map((h) => {
+                    const reps = reportsByEvent.get(h.id) ?? [];
+                    return (
+                      <li key={h.id} className="text-[10px] flex justify-between items-center gap-2 border border-white/5 rounded px-2 py-1 bg-white/[0.02]">
+                        <span className="truncate flex items-center gap-1.5">
+                          {reps.length > 0 ? (
+                            <span
+                              className="inline-flex items-center gap-0.5 px-1.5 py-[1px] rounded-full text-[9px] font-semibold"
+                              style={{ background: "#ef444422", color: "#fca5a5", border: "1px solid #ef444455" }}
+                              title={`${reps.length} relato(s) confirmando granizo`}
+                            >
+                              <CloudRain className="h-2.5 w-2.5" /> {reps.length}
+                            </span>
+                          ) : (
+                            <span className="opacity-50" title="Sem relatos reais"><Eye className="h-2.5 w-2.5" /></span>
+                          )}
+                          <span className="truncate">{h.city ?? h.region ?? "—"}</span>
+                        </span>
+                        <span style={{ color: HAIL_COLORS[h.severity] }}>{h.severity}</span>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}
@@ -1220,6 +1262,7 @@ export function OperationalMap() {
             lat: f.geometry.coordinates[1],
           }))}
           onClose={() => setSelectedHailId(null)}
+          reports={reportsByEvent.get(selectedHail.id) ?? []}
         />
       )}
 
