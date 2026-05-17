@@ -75,15 +75,28 @@ function fmtTime(iso: string | null) {
 /* ---------- Sizing modes ---------- */
 type Mode = "compact" | "medium" | "fullscreen";
 
+export interface PanelHailReport {
+  id: string;
+  severity?: string;
+  status?: string;
+  hail_size_mm?: number | null;
+  photo_url?: string | null;
+  observed_at?: string | null;
+  notes?: string | null;
+  confidence_score?: number | null;
+}
+
 export function OperationalPanel({
   event,
   teams,
   orders,
+  reports = [],
   onClose,
 }: {
   event: PanelHailEvent;
   teams: PanelTeam[];
   orders: PanelOrder[];
+  reports?: PanelHailReport[];
   onClose: () => void;
 }) {
   const color = HAIL_COLORS[event.severity];
