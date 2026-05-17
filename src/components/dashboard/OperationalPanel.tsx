@@ -308,6 +308,62 @@ export function OperationalPanel({
               </ListCard>
             </div>
 
+            {/* ---- Real community reports (Fase 2) ---- */}
+            {reports.length > 0 && (
+              <>
+                <SectionTitle icon={<CloudRain className="h-3.5 w-3.5 text-red-400" />}>
+                  Relatos reais ({reports.length})
+                </SectionTitle>
+                <div className="mb-4 rounded-lg border border-red-400/20 bg-red-400/[0.04] p-2">
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {reports
+                      .filter((r) => !!r.photo_url)
+                      .slice(0, 8)
+                      .map((r) => (
+                        <a
+                          key={r.id}
+                          href={r.photo_url!}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="shrink-0 h-14 w-14 rounded border border-white/10 bg-black/40 overflow-hidden"
+                          title={fmtTime(r.observed_at ?? null)}
+                        >
+                          <img
+                            src={r.photo_url!}
+                            alt="relato granizo"
+                            loading="lazy"
+                            className="h-full w-full object-cover"
+                          />
+                        </a>
+                      ))}
+                  </div>
+                  <ul className="mt-2 space-y-1 max-h-40 overflow-auto">
+                    {reports.slice(0, 12).map((r) => {
+                      const sev = (r.severity ?? "low") as HailSeverity;
+                      const tone = HAIL_COLORS[sev] ?? HAIL_COLORS.low;
+                      return (
+                        <li key={r.id} className="text-[11px] flex items-start gap-2 px-2 py-1 rounded hover:bg-white/[0.03]">
+                          <span className="mt-1 inline-block h-1.5 w-1.5 rounded-full shrink-0" style={{ background: tone }} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="truncate">
+                                {SEVERITY_LABEL[sev]}
+                                {r.hail_size_mm ? ` · ${r.hail_size_mm} mm` : ""}
+                              </span>
+                              <span className="text-muted-foreground tabular-nums">{fmtTime(r.observed_at ?? null)}</span>
+                            </div>
+                            {r.notes && (
+                              <div className="text-muted-foreground/80 text-[10px] truncate">{r.notes}</div>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              </>
+            )}
+
             {/* ---- Timeline ---- */}
             <SectionTitle icon={<Clock className="h-3.5 w-3.5 text-amber-400" />}>
               Linha do tempo
