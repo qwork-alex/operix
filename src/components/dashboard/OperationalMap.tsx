@@ -239,8 +239,9 @@ export function OperationalMap() {
   const { data: hailEvents = [] } = useQuery<HailEvent[]>({
     queryKey: ["op-map-hail"],
     queryFn: async () => {
-      // last 24h window keeps replay meaningful and bounded
-      const since = new Date(Date.now() - 24 * 3600_000).toISOString();
+      // 7-day window: keeps replay meaningful while ensuring operational
+      // entities remain visible even when no fresh ingest happened recently.
+      const since = new Date(Date.now() - 7 * 24 * 3600_000).toISOString();
       const { data, error } = await supabase
         .from("hail_events")
         .select("*")
@@ -313,26 +314,75 @@ export function OperationalMap() {
     return start + windowMs * replayCursor;
   }, [hailWindowHours, replayCursor]);
 
-  const visibleHailEvents = useMemo(() => {
-    return hailEvents.filter((h) => {
-      if (!hailSeverityFilter[h.severity]) return false;
-      if (hailMinSizeMm > 0 && (h.hail_size_mm ?? 0) < hailMinSizeMm) return false;
+  /* -------- Operational hail entities (Phase 2) --------------------- */
+  /* Normalized climate entities the map reacts to. Filter chips operate
+     directly over this collection — no raster/timeline coupling.        */
+  type HailEntity = {
+    id: string;
+    lat: number;
+    lng: number;
+    status: HailStatus;
+    severity: HailSeverity;
+    forecast: boolean;
+    active: boolean;
+    confirmed: boolean;
+    timestamp: number;
+    confidence: number;
+    source: string;
+    size: number;
+    raw: HailEvent;
+  };
 
-      if (hailStatusFilter !== "all") {
-        if (hailStatusFilter === "ongoing") {
-          if (h.status !== "ongoing" && h.status !== "confirmed") return false;
-        } else if (h.status !== hailStatusFilter) return false;
-      }
-
-      // Time window + replay scrubbing
-      const ref = new Date(h.observed_time ?? h.forecast_time ?? h.expires_at ?? Date.now()).getTime();
-      const windowStart = Date.now() - hailWindowHours * 3600_000;
-      if (ref < windowStart) return false;
-      // Hide events that have not yet "happened" at the replay cursor
-      if (ref > replayTimeMs && replayCursor < 1) return false;
-      return true;
+  const hailEntities = useMemo<HailEntity[]>(() => {
+    return (hailEvents ?? []).map((h) => {
+      const ts = new Date(
+        h.observed_time ?? h.forecast_time ?? h.expires_at ?? Date.now()
+      ).getTime();
+      return {
+        id: h.id,
+        lat: h.lat,
+        lng: h.lng,
+        status: h.status,
+        severity: h.severity,
+        forecast: h.status === "forecast",
+        active: h.status === "ongoing",
+        confirmed: h.status === "confirmed",
+        timestamp: isNaN(ts) ? Date.now() : ts,
+        confidence: Number((h as any).probability ?? (h as any).confidence ?? 0),
+        source: (h as any).source ?? "unknown",
+        size: h.hail_size_mm ?? 0,
+        raw: h,
+      };
     });
-  }, [hailEvents, hailStatusFilter, hailSeverityFilter, hailMinSizeMm, hailWindowHours, replayTimeMs, replayCursor]);
+  }, [hailEvents]);
+
+  const visibleHailEvents = useMemo(() => {
+    const windowStart = Date.now() - hailWindowHours * 3600_000;
+    const isLive = replayCursor >= 0.999;
+
+    return hailEntities
+      .filter((e) => {
+        // Severity chips
+        if (!hailSeverityFilter[e.severity]) return false;
+        if (hailMinSizeMm > 0 && e.size < hailMinSizeMm) return false;
+
+        // Status chips (Todos / Previsão / Ativo / Confirmado)
+        if (hailStatusFilter !== "all") {
+          if (hailStatusFilter === "forecast" && !e.forecast) return false;
+          if (hailStatusFilter === "ongoing" && !e.active) return false;
+          if (hailStatusFilter === "confirmed" && !e.confirmed) return false;
+        }
+
+        // Time window only applies during replay scrubbing — at AO VIVO,
+        // status/severity chips must reveal every loaded entity.
+        if (!isLive) {
+          if (e.timestamp < windowStart) return false;
+          if (e.timestamp > replayTimeMs) return false;
+        }
+        return true;
+      })
+      .map((e) => e.raw);
+  }, [hailEntities, hailStatusFilter, hailSeverityFilter, hailMinSizeMm, hailWindowHours, replayTimeMs, replayCursor]);
 
   const [selectedHailId, setSelectedHailId] = useState<string | null>(null);
   const selectedHail = useMemo(
