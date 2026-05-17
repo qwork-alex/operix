@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
 import {
   X, AlertTriangle, Wind, Clock, Gauge, Radar, Zap, Users, FileText,
-  Activity, Maximize2, Minimize2, Shrink, MapPin, Shield, Radio, CheckCircle2, Eye,
+  Activity, Maximize2, Minimize2, Shrink, MapPin, Shield, Radio, CheckCircle2, Eye, CloudRain,
 } from "lucide-react";
 
 /* ---------- Shared types (kept in sync with OperationalMap) ---------- */
