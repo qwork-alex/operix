@@ -239,8 +239,9 @@ export function OperationalMap() {
   const { data: hailEvents = [] } = useQuery<HailEvent[]>({
     queryKey: ["op-map-hail"],
     queryFn: async () => {
-      // last 24h window keeps replay meaningful and bounded
-      const since = new Date(Date.now() - 24 * 3600_000).toISOString();
+      // 7-day window: keeps replay meaningful while ensuring operational
+      // entities remain visible even when no fresh ingest happened recently.
+      const since = new Date(Date.now() - 7 * 24 * 3600_000).toISOString();
       const { data, error } = await supabase
         .from("hail_events")
         .select("*")
