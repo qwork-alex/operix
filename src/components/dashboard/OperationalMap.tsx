@@ -551,14 +551,26 @@ export function OperationalMap() {
       return;
     }
 
-    // GPU context-loss recovery
+    // GPU context-loss recovery (preserves engine, doesn't recreate map)
     const canvas = map.getCanvas();
     const onCtxLost = (e: Event) => {
       e.preventDefault();
-      console.warn("[OperationalMap] WebGL context lost");
-      setMapError("Contexto GPU perdido — toque em Tentar novamente");
+      console.warn("[OperationalMap] WebGL context lost — awaiting restore");
+      setMapError("Contexto GPU perdido — restaurando…");
+    };
+    const onCtxRestored = () => {
+      console.info("[OperationalMap] WebGL context restored");
+      setMapError(null);
+      try {
+        map.resize();
+        map.triggerRepaint();
+        // Force data effects to re-sync sources after GPU reset
+        queryClient.invalidateQueries({ queryKey: ["op-map-hail"] });
+        queryClient.invalidateQueries({ queryKey: ["op-map-hail-reports"] });
+      } catch {}
     };
     canvas.addEventListener("webglcontextlost", onCtxLost);
+    canvas.addEventListener("webglcontextrestored", onCtxRestored);
 
     map.on("error", (e: any) => {
       // Isolated: tile/style/zoom errors won't crash the map
