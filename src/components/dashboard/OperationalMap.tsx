@@ -1207,12 +1207,28 @@ export function OperationalMap() {
                   Eventos ativos ({hailEvents.length})
                 </div>
                 <ul className="space-y-1 max-h-32 overflow-auto pr-1">
-                  {hailEvents.slice(0, 8).map((h) => (
-                    <li key={h.id} className="text-[10px] flex justify-between gap-2 border border-white/5 rounded px-2 py-1 bg-white/[0.02]">
-                      <span className="truncate">{h.city ?? h.region ?? "—"}</span>
-                      <span style={{ color: HAIL_COLORS[h.severity] }}>{h.severity}</span>
-                    </li>
-                  ))}
+                  {hailEvents.slice(0, 8).map((h) => {
+                    const reps = reportsByEvent.get(h.id) ?? [];
+                    return (
+                      <li key={h.id} className="text-[10px] flex justify-between items-center gap-2 border border-white/5 rounded px-2 py-1 bg-white/[0.02]">
+                        <span className="truncate flex items-center gap-1.5">
+                          {reps.length > 0 ? (
+                            <span
+                              className="inline-flex items-center gap-0.5 px-1.5 py-[1px] rounded-full text-[9px] font-semibold"
+                              style={{ background: "#ef444422", color: "#fca5a5", border: "1px solid #ef444455" }}
+                              title={`${reps.length} relato(s) confirmando granizo`}
+                            >
+                              <CloudRain className="h-2.5 w-2.5" /> {reps.length}
+                            </span>
+                          ) : (
+                            <span className="opacity-50" title="Sem relatos reais"><Eye className="h-2.5 w-2.5" /></span>
+                          )}
+                          <span className="truncate">{h.city ?? h.region ?? "—"}</span>
+                        </span>
+                        <span style={{ color: HAIL_COLORS[h.severity] }}>{h.severity}</span>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}
