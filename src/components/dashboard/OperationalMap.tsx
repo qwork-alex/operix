@@ -1262,6 +1262,7 @@ export function OperationalMap() {
             lat: f.geometry.coordinates[1],
           }))}
           onClose={() => setSelectedHailId(null)}
+          reports={reportsByEvent.get(selectedHail.id) ?? []}
         />
       )}
 
