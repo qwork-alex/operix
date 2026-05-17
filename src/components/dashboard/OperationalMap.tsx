@@ -5,7 +5,7 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { Skeleton } from "@/components/ui/skeleton";
 import maplibregl, { Map as MLMap, GeoJSONSource } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { Users, CloudRain, Zap, Radar, Wrench, FileText, Layers, X, AlertTriangle, Wind, Clock, Gauge, Filter, Play, Pause, RotateCcw, Target } from "lucide-react";
+import { Users, CloudRain, Zap, Radar, Wrench, FileText, Layers, X, AlertTriangle, Wind, Clock, Gauge, Filter, Play, Pause, RotateCcw, Target, Eye } from "lucide-react";
 import { OperationalPanel, PanelTeam, PanelOrder } from "./OperationalPanel";
 import {
   OperationalOpportunities,
