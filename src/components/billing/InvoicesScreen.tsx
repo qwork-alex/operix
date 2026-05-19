@@ -514,6 +514,8 @@ export default function InvoicesScreen() {
   const openCreate = () => {
     setEditing(null);
     setForm(emptyForm());
+    setFormPOIds([]);
+    setFormPOs([]);
     setFormOpen(true);
   };
   const openEdit = (inv: Invoice) => {
