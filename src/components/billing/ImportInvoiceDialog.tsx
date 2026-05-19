@@ -208,6 +208,9 @@ export default function ImportInvoiceDialog({
       if (upErr) throw upErr;
 
       const total = Number(extracted.total_amount.replace(",", ".")) || 0;
+      const linked_payment_orders = Array.from(
+        new Set(linkedLists.flatMap(l => l.payment_order_ids))
+      );
       const insertPayload: any = {
         invoice_number: extracted.invoice_number.trim(),
         type: "incoming",
@@ -221,6 +224,14 @@ export default function ImportInvoiceDialog({
         ].filter(Boolean).join("\n") || null,
         status: "pending",
         source: "imported",
+        metadata: {
+          linked_list_ids: linkedListIds,
+          linked_lists: linkedLists.map(l => ({
+            id: l.id, user_id: l.user_id, technician_name: l.technician_name,
+            week: l.week, year: l.year, os_count: l.os_count, total: l.total,
+          })),
+          linked_payment_orders,
+        },
       };
 
       const { data: inv, error: invErr } = await (supabase as any)
