@@ -865,7 +865,7 @@ export default function InvoicesScreen() {
                 </TableHead>
                 <TableHead className="w-[140px]">Número</TableHead>
                 <TableHead>Cliente / Fornecedor</TableHead>
-                <TableHead className="w-[180px]">Lista</TableHead>
+                <TableHead className="w-[200px]">Ordens de pagamento</TableHead>
                 <TableHead className="w-[90px]">Tipo</TableHead>
                 <TableHead className="text-right w-[110px]">Valor total</TableHead>
                 <TableHead className="text-right w-[110px]">Pago</TableHead>
@@ -925,22 +925,48 @@ export default function InvoicesScreen() {
                     <TableCell className="font-medium">{partyName}</TableCell>
                     <TableCell>
                       {(() => {
-                        const ll = r.metadata?.linked_lists;
-                        if (!ll || ll.length === 0) {
-                          return <span className="text-[10px] text-muted-foreground italic">—</span>;
-                        }
-                        const first = ll[0];
-                        return (
-                          <div className="flex flex-wrap gap-1">
+                        const meta = r.metadata?.linked_payment_orders_meta ?? [];
+                        const ids = r.metadata?.linked_payment_order_ids
+                          ?? r.metadata?.linked_payment_orders
+                          ?? [];
+                        if (meta.length === 0 && ids.length === 0) {
+                          // Legacy week buckets fallback (if invoice was imported under the old schema)
+                          const legacy = r.metadata?.linked_lists ?? [];
+                          if (legacy.length === 0) {
+                            return <span className="text-[10px] text-muted-foreground italic">—</span>;
+                          }
+                          const first = legacy[0];
+                          return (
                             <Badge variant="outline" className="text-[10px] gap-1 font-normal">
                               <span className="font-mono text-primary">S{first.week}</span>
-                              <span className="text-foreground">{first.technician_name}</span>
+                              <span>{first.technician_name}</span>
                               <span className="text-muted-foreground">· {first.os_count} OS</span>
                             </Badge>
-                            {ll.length > 1 && (
-                              <Badge variant="outline" className="text-[10px] font-normal text-muted-foreground">
-                                +{ll.length - 1}
+                          );
+                        }
+                        const first = meta[0];
+                        const count = Math.max(meta.length, ids.length);
+                        if (count === 1 && first) {
+                          return (
+                            <div className="flex flex-wrap gap-1">
+                              <Badge variant="outline" className="text-[10px] gap-1 font-normal">
+                                <span className="font-mono text-primary">{first.code}</span>
+                                <span className="text-muted-foreground">·</span>
+                                <span>{first.technician_name}</span>
+                                <span className="text-muted-foreground">S{first.week}</span>
                               </Badge>
+                            </div>
+                          );
+                        }
+                        return (
+                          <div className="flex flex-wrap gap-1">
+                            <Badge variant="outline" className="text-[10px] gap-1 font-normal border-primary/40">
+                              <span className="font-mono text-primary">{count} OPs vinculadas</span>
+                            </Badge>
+                            {first && (
+                              <span className="text-[10px] text-muted-foreground self-center">
+                                {first.technician_name} · S{first.week}
+                              </span>
                             )}
                           </div>
                         );
