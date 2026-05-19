@@ -937,7 +937,7 @@ export default function InvoicesScreen() {
                 </TableHead>
                 <TableHead className="w-[140px]">Número</TableHead>
                 <TableHead>Cliente / Fornecedor</TableHead>
-                <TableHead className="w-[200px]">Ordens de pagamento</TableHead>
+                <TableHead className="w-[200px]">Lista</TableHead>
                 <TableHead className="w-[90px]">Tipo</TableHead>
                 <TableHead className="text-right w-[110px]">Valor total</TableHead>
                 <TableHead className="text-right w-[110px]">Pago</TableHead>
@@ -997,49 +997,53 @@ export default function InvoicesScreen() {
                     <TableCell className="font-medium">{partyName}</TableCell>
                     <TableCell>
                       {(() => {
-                        const meta = r.metadata?.linked_payment_orders_meta ?? [];
-                        const ids = r.metadata?.linked_payment_order_ids
-                          ?? r.metadata?.linked_payment_orders
-                          ?? [];
-                        if (meta.length === 0 && ids.length === 0) {
-                          // Legacy week buckets fallback (if invoice was imported under the old schema)
-                          const legacy = r.metadata?.linked_lists ?? [];
-                          if (legacy.length === 0) {
-                            return <span className="text-[10px] text-muted-foreground italic">—</span>;
+                        // Prefer consolidated LISTS metadata (new canonical shape)
+                        const listsMeta = r.metadata?.linked_lists_meta ?? [];
+                        const listNames = r.metadata?.linked_list_names ?? [];
+                        // Fallback: derive list_names from legacy PO meta snapshots
+                        const legacyPoMeta = r.metadata?.linked_payment_orders_meta ?? [];
+                        const derivedLists: { list_name: string; technician_name: string }[] = [];
+                        if (listsMeta.length === 0 && listNames.length === 0 && legacyPoMeta.length > 0) {
+                          const seen = new Set<string>();
+                          for (const m of legacyPoMeta) {
+                            if (!m.list_name || seen.has(m.list_name)) continue;
+                            seen.add(m.list_name);
+                            derivedLists.push({ list_name: m.list_name, technician_name: m.technician_name });
                           }
-                          const first = legacy[0];
-                          return (
-                            <Badge variant="outline" className="text-[10px] gap-1 font-normal">
-                              <span className="font-mono text-primary">S{first.week}</span>
-                              <span>{first.technician_name}</span>
-                              <span className="text-muted-foreground">· {first.os_count} OS</span>
-                            </Badge>
-                          );
                         }
-                        const first = meta[0];
-                        const count = Math.max(meta.length, ids.length);
-                        if (count === 1 && first) {
+                        const items = listsMeta.length > 0
+                          ? listsMeta.map((m) => ({ list_name: m.list_name, technician_name: m.technician_name }))
+                          : derivedLists.length > 0
+                            ? derivedLists
+                            : listNames.map((ln) => ({ list_name: ln, technician_name: "" }));
+
+                        if (items.length === 0) {
+                          return <span className="text-[10px] text-muted-foreground italic">—</span>;
+                        }
+                        if (items.length === 1) {
+                          const first = items[0];
                           return (
                             <div className="flex flex-wrap gap-1">
                               <Badge variant="outline" className="text-[10px] gap-1 font-normal">
-                                <span className="font-mono text-primary">{first.code}</span>
-                                <span className="text-muted-foreground">·</span>
-                                <span>{first.technician_name}</span>
-                                <span className="text-muted-foreground">S{first.week}</span>
+                                <span className="font-mono text-primary font-semibold">{first.list_name}</span>
+                                {first.technician_name && (
+                                  <>
+                                    <span className="text-muted-foreground">·</span>
+                                    <span>{first.technician_name}</span>
+                                  </>
+                                )}
                               </Badge>
                             </div>
                           );
                         }
                         return (
-                          <div className="flex flex-wrap gap-1">
+                          <div className="flex flex-wrap gap-1 items-center">
                             <Badge variant="outline" className="text-[10px] gap-1 font-normal border-primary/40">
-                              <span className="font-mono text-primary">{count} OPs vinculadas</span>
+                              <span className="font-mono text-primary">{items.length} listas vinculadas</span>
                             </Badge>
-                            {first && (
-                              <span className="text-[10px] text-muted-foreground self-center">
-                                {first.technician_name} · S{first.week}
-                              </span>
-                            )}
+                            <span className="text-[10px] text-muted-foreground">
+                              {items[0].list_name}{items.length > 1 ? ` +${items.length - 1}` : ""}
+                            </span>
                           </div>
                         );
                       })()}
