@@ -82,6 +82,8 @@ export default function ImportInvoiceDialog({
   const [fieldConf, setFieldConf] = useState<FieldConfidence>({});
   const [stage, setStage] = useState<Stage>("idle");
   const [stageMsg, setStageMsg] = useState<string>("");
+  const [linkedListIds, setLinkedListIds] = useState<string[]>([]);
+  const [linkedLists, setLinkedLists] = useState<PaymentList[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const scanRef = useRef<HTMLInputElement>(null);
