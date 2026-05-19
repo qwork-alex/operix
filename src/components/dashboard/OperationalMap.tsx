@@ -975,6 +975,16 @@ export function OperationalMap() {
   useEffect(() => {
     if (!mapReady || sourceRecoveryTick === 0) return;
     syncActiveSources();
+    const map = mapRef.current;
+    if (!map || !(map as any).style || gpuContextLostRef.current) return;
+    const setVis = (id: string, vis: boolean) => {
+      try { if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", vis ? "visible" : "none"); } catch {}
+    };
+    (["orders", "teams", "operations"] as const).forEach((k) => {
+      [`${k}-clusters`, `${k}-cluster-count`, `${k}-points`, `${k}-glow`].forEach((id) => setVis(id, layersRef.current[k]));
+    });
+    ["hail-halo", "hail-ring", "hail-core", "hail-reports-glow", "hail-reports-core"].forEach((id) => setVis(id, layersRef.current.hail));
+    ["pdr-heatmap", "pdr-points"].forEach((id) => setVis(id, layersRef.current.pdr));
   }, [mapReady, sourceRecoveryTick, syncActiveSources]);
 
   // Push PDR heatmap data
