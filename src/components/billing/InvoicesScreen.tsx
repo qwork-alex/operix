@@ -1205,6 +1205,23 @@ export default function InvoicesScreen() {
               </div>
             </FormSection>
 
+            {/* SECTION 1.5 — Vinculação a Ordens de Pagamento (fonte: payment_orders) */}
+            <FormSection
+              title="Ordens de pagamento vinculadas"
+              subtitle="Selecione OPs individuais ou agrupamentos por técnico/semana. Origem: payment_orders."
+            >
+              <PaymentOrdersSelector
+                value={formPOIds}
+                onChange={(ids, pos) => { setFormPOIds(ids); setFormPOs(pos); }}
+              />
+              {formPOIds.length > 0 && (
+                <p className="mt-2 text-[10px] text-muted-foreground">
+                  {formPOIds.length} OP{formPOIds.length !== 1 ? "s" : ""} vinculada{formPOIds.length !== 1 ? "s" : ""}.
+                  O estado da fatura propaga automaticamente para as OPs.
+                </p>
+              )}
+            </FormSection>
+
             {/* SECTION 2 — Client (source of truth) */}
             <FormSection
               title="Cliente"
