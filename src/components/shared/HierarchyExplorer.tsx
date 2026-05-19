@@ -9,6 +9,8 @@ import {
   HardHat,
   Wrench,
   Factory,
+  FileText,
+  BarChart3,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
@@ -261,9 +263,27 @@ function buildTree(records: HierarchyRecord[], weekIcon?: LucideIcon, extraYears
       icon: Calendar,
       // No `section` on the year ctx → enables the inline delete button.
       ctx: { level: "year", year } as HierarchyContext,
-      children: operationalChildren.length > 0
-        ? operationalChildren
-        : buildPlaceholderTree(year),
+      children: [
+        ...(operationalChildren.length > 0
+          ? operationalChildren
+          : buildPlaceholderTree(year)),
+        // Sub-sections that always exist per year — restoration of the
+        // Documentos / Relatórios entry points (do not remove).
+        {
+          key: `y:${year}|section:documentos`,
+          label: "Documentos",
+          count: 0,
+          icon: FileText,
+          ctx: { level: "year", year, section: "documentos" } as HierarchyContext,
+        },
+        {
+          key: `y:${year}|section:relatorios`,
+          label: "Relatórios",
+          count: 0,
+          icon: BarChart3,
+          ctx: { level: "year", year, section: "relatorios" } as HierarchyContext,
+        },
+      ],
     };
   });
 }
@@ -300,7 +320,8 @@ function Row({ node, depth, open, toggle, active, onView, onRequestDelete }: Row
     active.platform === node.ctx.platform &&
     active.unit === node.ctx.unit &&
     active.week === node.ctx.week &&
-    active.technician === node.ctx.technician;
+    active.technician === node.ctx.technician &&
+    active.section === node.ctx.section;
 
   const Icon = node.icon;
   const handleActivate = () => {

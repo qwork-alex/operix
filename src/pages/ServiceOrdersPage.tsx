@@ -133,10 +133,10 @@ export default function ServiceOrdersPage() {
       const ctxDefaults = hierarchyDefaults(hCtx);
       const payload: Record<string, any> = {
         client_id: clientMatch?.id || null,
-        client_name: r.client?.trim() || clientMatch?.name || "",
+        client_name: r.client?.trim() || clientMatch?.name || ctxDefaults.client || "",
         technician_name: technicianName,
         technician_id: null,
-        platform: r.platform ?? null,
+        platform: r.platform ?? ctxDefaults.platform ?? null,
         week: r.week ?? ctxDefaults.week ?? null,
         operational_unit: ctxDefaults.operational_unit ?? null,
         car_name: r.car_name ?? null,
@@ -153,15 +153,12 @@ export default function ServiceOrdersPage() {
         status: "draft",
         group_id: r.week ?? ctxDefaults.week ?? null,
       };
-      // Phase 1E-X: respect active operational year context.
-      if (hCtx.year && /^\d{4}$/.test(hCtx.year)) {
-        const y = parseInt(hCtx.year, 10);
-        const now = new Date();
-        if (y !== now.getFullYear()) {
-          const d = new Date(now);
-          d.setFullYear(y);
-          payload.created_at = d.toISOString();
-        }
+      // Contexto operacional SEMPRE prevalece sobre o ano atual.
+      if (ctxDefaults.year) {
+        const y = parseInt(ctxDefaults.year, 10);
+        const d = new Date();
+        d.setFullYear(y);
+        payload.created_at = d.toISOString();
       }
       const techName = payload.technician_name || r.technician;
       const techEarn = getTechEarnings(techName, payload.total, earningsMap);
