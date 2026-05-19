@@ -601,6 +601,7 @@ export function OperationalMap() {
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
 
     map.on("load", () => {
+      try {
       /* ---- Empty sources & layers; populated by data effect -------- */
       const addClusterLayer = (id: string, color: string) => {
         map.addSource(id, {
@@ -877,6 +878,10 @@ export function OperationalMap() {
         map.on("mouseleave", id, () => (map.getCanvas().style.cursor = ""));
       });
       setMapReady(true);
+      } catch (e) {
+        console.warn("[OperationalMap] layer bootstrap isolated", e);
+        setMapReady(true);
+      }
     });
 
     mapRef.current = map;
