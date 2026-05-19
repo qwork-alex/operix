@@ -17,8 +17,8 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
-import { PaymentOrdersSelector } from "@/components/billing/PaymentOrdersSelector";
-import type { BillingPaymentOrder } from "@/hooks/usePaymentOrdersForBilling";
+import { PaymentListsSelector } from "@/components/billing/PaymentListsSelector";
+import type { BillingPaymentList } from "@/hooks/usePaymentListsConsolidated";
 
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -106,16 +106,22 @@ type Invoice = {
   created_at: string;
   updated_at: string;
   metadata?: {
-    // Canonical link — source of truth = payment_orders
+    // Canonical link — LISTS consolidate payment_orders for billing purposes.
+    linked_list_names?: string[];
+    linked_lists_meta?: Array<{
+      list_name: string; technician_name: string; assigned_user_id: string | null;
+      client_name: string | null; year: number; week: number; total: number; po_count: number;
+    }>;
+    linked_user_ids?: string[];
+    // Underlying PO ids (expanded from selected lists) — required by status-propagation trigger.
     linked_payment_order_ids?: string[];
+    linked_payment_orders?: string[]; // legacy alias
+    // Legacy (older snapshots) — kept for read fallback only
     linked_payment_orders_meta?: Array<{
       id: string; code: string; assigned_user_id: string | null;
       technician_name: string; week: number; year: number; total: number;
       service_order_id: string | null; list_name: string | null;
     }>;
-    linked_user_ids?: string[];
-    // Legacy keys (kept for propagation trigger compat)
-    linked_payment_orders?: string[];
     linked_list_ids?: string[];
     linked_lists?: Array<{ id: string; user_id: string; technician_name: string; week: number; year: number; os_count: number; total: number }>;
   } | null;
@@ -364,9 +370,9 @@ export default function InvoicesScreen() {
   const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<Invoice | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
-  // Vinculação a payment_orders (fonte única de verdade)
-  const [formPOIds, setFormPOIds] = useState<string[]>([]);
-  const [formPOs, setFormPOs] = useState<BillingPaymentOrder[]>([]);
+  // Vinculação a LISTAS consolidadas (financeiro trabalha por lista, nunca por OP)
+  const [formListIds, setFormListIds] = useState<string[]>([]);
+  const [formLists, setFormLists] = useState<BillingPaymentList[]>([]);
 
   const [detail, setDetail] = useState<Invoice | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Invoice | null>(null);
@@ -492,8 +498,8 @@ export default function InvoicesScreen() {
       setFormOpen(false);
       setEditing(null);
       setForm(emptyForm());
-      setFormPOIds([]);
-      setFormPOs([]);
+      setFormListIds([]);
+      setFormLists([]);
     },
     onError: (e: any) => toast.error(e?.message ?? "Erro ao gravar fatura"),
   });
@@ -516,8 +522,8 @@ export default function InvoicesScreen() {
   const openCreate = () => {
     setEditing(null);
     setForm(emptyForm());
-    setFormPOIds([]);
-    setFormPOs([]);
+    setFormListIds([]);
+    setFormLists([]);
     setFormOpen(true);
   };
   const openEdit = (inv: Invoice) => {
@@ -545,14 +551,36 @@ export default function InvoicesScreen() {
       legal_text: DEFAULT_LEGAL,
       options: defaultOptions(),
     });
-    // Seed linked POs from metadata snapshot (no extra fetch needed for hydration)
-    const metaPOs = inv.metadata?.linked_payment_orders_meta ?? [];
-    setFormPOIds(inv.metadata?.linked_payment_order_ids ?? inv.metadata?.linked_payment_orders ?? metaPOs.map((m) => m.id));
-    setFormPOs(metaPOs.map((m) => ({
-      id: m.id, code: m.code, list_name: m.list_name, assigned_user_id: m.assigned_user_id,
-      technician_name: m.technician_name, total: m.total, service_order_id: m.service_order_id,
-      created_at: "", week: m.week, year: m.year, client_name: null, status: null,
-    })));
+    // Seed linked LISTS from metadata snapshot. Falls back to deriving list_names from legacy PO meta.
+    const listsMeta = inv.metadata?.linked_lists_meta ?? [];
+    const legacyPoMeta = inv.metadata?.linked_payment_orders_meta ?? [];
+    const derivedNames = inv.metadata?.linked_list_names
+      ?? Array.from(new Set(legacyPoMeta.map((m) => m.list_name).filter(Boolean) as string[]));
+    setFormListIds(derivedNames);
+    setFormLists(
+      listsMeta.length > 0
+        ? listsMeta.map((m) => ({
+            id: m.list_name, list_name: m.list_name, technician_name: m.technician_name,
+            assigned_user_id: m.assigned_user_id, client_name: m.client_name, city: null,
+            year: m.year, week: m.week, total: m.total, po_count: m.po_count,
+            payment_order_ids: [], user_ids: m.assigned_user_id ? [m.assigned_user_id] : [],
+          }))
+        : derivedNames.map((ln) => {
+            const sample = legacyPoMeta.find((m) => m.list_name === ln);
+            return {
+              id: ln, list_name: ln,
+              technician_name: sample?.technician_name ?? "—",
+              assigned_user_id: sample?.assigned_user_id ?? null,
+              client_name: null, city: null,
+              year: sample?.year ?? new Date().getUTCFullYear(),
+              week: sample?.week ?? 0,
+              total: legacyPoMeta.filter((m) => m.list_name === ln).reduce((s, m) => s + (m.total || 0), 0),
+              po_count: legacyPoMeta.filter((m) => m.list_name === ln).length,
+              payment_order_ids: legacyPoMeta.filter((m) => m.list_name === ln).map((m) => m.id),
+              user_ids: sample?.assigned_user_id ? [sample.assigned_user_id] : [],
+            };
+          })
+    );
     setFormOpen(true);
   };
 
