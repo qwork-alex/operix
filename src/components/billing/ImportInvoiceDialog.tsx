@@ -100,6 +100,8 @@ export default function ImportInvoiceDialog({
     setFieldConf({});
     setStage("idle");
     setStageMsg("");
+    setLinkedListIds([]);
+    setLinkedLists([]);
     setStep("upload");
   };
 
