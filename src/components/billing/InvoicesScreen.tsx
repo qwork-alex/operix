@@ -17,8 +17,8 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
-import { PaymentOrdersSelector } from "@/components/billing/PaymentOrdersSelector";
-import type { BillingPaymentOrder } from "@/hooks/usePaymentOrdersForBilling";
+import { PaymentListsSelector } from "@/components/billing/PaymentListsSelector";
+import type { BillingPaymentList } from "@/hooks/usePaymentListsConsolidated";
 
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -106,16 +106,22 @@ type Invoice = {
   created_at: string;
   updated_at: string;
   metadata?: {
-    // Canonical link — source of truth = payment_orders
+    // Canonical link — LISTS consolidate payment_orders for billing purposes.
+    linked_list_names?: string[];
+    linked_lists_meta?: Array<{
+      list_name: string; technician_name: string; assigned_user_id: string | null;
+      client_name: string | null; year: number; week: number; total: number; po_count: number;
+    }>;
+    linked_user_ids?: string[];
+    // Underlying PO ids (expanded from selected lists) — required by status-propagation trigger.
     linked_payment_order_ids?: string[];
+    linked_payment_orders?: string[]; // legacy alias
+    // Legacy (older snapshots) — kept for read fallback only
     linked_payment_orders_meta?: Array<{
       id: string; code: string; assigned_user_id: string | null;
       technician_name: string; week: number; year: number; total: number;
       service_order_id: string | null; list_name: string | null;
     }>;
-    linked_user_ids?: string[];
-    // Legacy keys (kept for propagation trigger compat)
-    linked_payment_orders?: string[];
     linked_list_ids?: string[];
     linked_lists?: Array<{ id: string; user_id: string; technician_name: string; week: number; year: number; os_count: number; total: number }>;
   } | null;
@@ -364,9 +370,9 @@ export default function InvoicesScreen() {
   const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<Invoice | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
-  // Vinculação a payment_orders (fonte única de verdade)
-  const [formPOIds, setFormPOIds] = useState<string[]>([]);
-  const [formPOs, setFormPOs] = useState<BillingPaymentOrder[]>([]);
+  // Vinculação a LISTAS consolidadas (financeiro trabalha por lista, nunca por OP)
+  const [formListIds, setFormListIds] = useState<string[]>([]);
+  const [formLists, setFormLists] = useState<BillingPaymentList[]>([]);
 
   const [detail, setDetail] = useState<Invoice | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Invoice | null>(null);
@@ -492,8 +498,8 @@ export default function InvoicesScreen() {
       setFormOpen(false);
       setEditing(null);
       setForm(emptyForm());
-      setFormPOIds([]);
-      setFormPOs([]);
+      setFormListIds([]);
+      setFormLists([]);
     },
     onError: (e: any) => toast.error(e?.message ?? "Erro ao gravar fatura"),
   });
@@ -516,8 +522,8 @@ export default function InvoicesScreen() {
   const openCreate = () => {
     setEditing(null);
     setForm(emptyForm());
-    setFormPOIds([]);
-    setFormPOs([]);
+    setFormListIds([]);
+    setFormLists([]);
     setFormOpen(true);
   };
   const openEdit = (inv: Invoice) => {
@@ -545,14 +551,36 @@ export default function InvoicesScreen() {
       legal_text: DEFAULT_LEGAL,
       options: defaultOptions(),
     });
-    // Seed linked POs from metadata snapshot (no extra fetch needed for hydration)
-    const metaPOs = inv.metadata?.linked_payment_orders_meta ?? [];
-    setFormPOIds(inv.metadata?.linked_payment_order_ids ?? inv.metadata?.linked_payment_orders ?? metaPOs.map((m) => m.id));
-    setFormPOs(metaPOs.map((m) => ({
-      id: m.id, code: m.code, list_name: m.list_name, assigned_user_id: m.assigned_user_id,
-      technician_name: m.technician_name, total: m.total, service_order_id: m.service_order_id,
-      created_at: "", week: m.week, year: m.year, client_name: null, status: null,
-    })));
+    // Seed linked LISTS from metadata snapshot. Falls back to deriving list_names from legacy PO meta.
+    const listsMeta = inv.metadata?.linked_lists_meta ?? [];
+    const legacyPoMeta = inv.metadata?.linked_payment_orders_meta ?? [];
+    const derivedNames = inv.metadata?.linked_list_names
+      ?? Array.from(new Set(legacyPoMeta.map((m) => m.list_name).filter(Boolean) as string[]));
+    setFormListIds(derivedNames);
+    setFormLists(
+      listsMeta.length > 0
+        ? listsMeta.map((m) => ({
+            id: m.list_name, list_name: m.list_name, technician_name: m.technician_name,
+            assigned_user_id: m.assigned_user_id, client_name: m.client_name, city: null,
+            year: m.year, week: m.week, total: m.total, po_count: m.po_count,
+            payment_order_ids: [], user_ids: m.assigned_user_id ? [m.assigned_user_id] : [],
+          }))
+        : derivedNames.map((ln) => {
+            const sample = legacyPoMeta.find((m) => m.list_name === ln);
+            return {
+              id: ln, list_name: ln,
+              technician_name: sample?.technician_name ?? "—",
+              assigned_user_id: sample?.assigned_user_id ?? null,
+              client_name: null, city: null,
+              year: sample?.year ?? new Date().getUTCFullYear(),
+              week: sample?.week ?? 0,
+              total: legacyPoMeta.filter((m) => m.list_name === ln).reduce((s, m) => s + (m.total || 0), 0),
+              po_count: legacyPoMeta.filter((m) => m.list_name === ln).length,
+              payment_order_ids: legacyPoMeta.filter((m) => m.list_name === ln).map((m) => m.id),
+              user_ids: sample?.assigned_user_id ? [sample.assigned_user_id] : [],
+            };
+          })
+    );
     setFormOpen(true);
   };
 
@@ -639,25 +667,28 @@ export default function InvoicesScreen() {
     return { subtotal, discount, netSubtotal, tax, total: netSubtotal + tax };
   }, [form.items, form.options]);
 
-  // Build invoice metadata from the linked payment_orders selection.
-  // Preserves any unrelated keys already on editing.metadata.
+  // Build invoice metadata from the linked LISTS selection.
+  // Underlying PO ids are expanded for trigger propagation (status sync).
   const buildLinkedMetadata = () => {
-    const linked_payment_order_ids = Array.from(new Set(formPOIds));
-    const linked_user_ids = Array.from(
-      new Set(formPOs.map((p) => p.assigned_user_id).filter(Boolean) as string[])
-    );
-    const linked_payment_orders_meta = formPOs.map((p) => ({
-      id: p.id, code: p.code, assigned_user_id: p.assigned_user_id,
-      technician_name: p.technician_name, week: p.week, year: p.year,
-      total: p.total, service_order_id: p.service_order_id, list_name: p.list_name,
+    const linked_list_names = Array.from(new Set(formListIds));
+    const linked_lists_meta = formLists.map((l) => ({
+      list_name: l.list_name, technician_name: l.technician_name,
+      assigned_user_id: l.assigned_user_id, client_name: l.client_name,
+      year: l.year, week: l.week, total: l.total, po_count: l.po_count,
     }));
+    const linked_user_ids = Array.from(
+      new Set(formLists.flatMap((l) => l.user_ids).filter(Boolean) as string[])
+    );
+    const linked_payment_order_ids = Array.from(
+      new Set(formLists.flatMap((l) => l.payment_order_ids))
+    );
     return {
       ...(editing?.metadata ?? {}),
-      linked_payment_order_ids,
-      linked_payment_orders_meta,
+      linked_list_names,
+      linked_lists_meta,
       linked_user_ids,
-      // legacy compat (propagation trigger)
-      linked_payment_orders: linked_payment_order_ids,
+      linked_payment_order_ids,
+      linked_payment_orders: linked_payment_order_ids, // legacy alias
     };
   };
 
@@ -906,7 +937,7 @@ export default function InvoicesScreen() {
                 </TableHead>
                 <TableHead className="w-[140px]">Número</TableHead>
                 <TableHead>Cliente / Fornecedor</TableHead>
-                <TableHead className="w-[200px]">Ordens de pagamento</TableHead>
+                <TableHead className="w-[200px]">Lista</TableHead>
                 <TableHead className="w-[90px]">Tipo</TableHead>
                 <TableHead className="text-right w-[110px]">Valor total</TableHead>
                 <TableHead className="text-right w-[110px]">Pago</TableHead>
@@ -966,49 +997,53 @@ export default function InvoicesScreen() {
                     <TableCell className="font-medium">{partyName}</TableCell>
                     <TableCell>
                       {(() => {
-                        const meta = r.metadata?.linked_payment_orders_meta ?? [];
-                        const ids = r.metadata?.linked_payment_order_ids
-                          ?? r.metadata?.linked_payment_orders
-                          ?? [];
-                        if (meta.length === 0 && ids.length === 0) {
-                          // Legacy week buckets fallback (if invoice was imported under the old schema)
-                          const legacy = r.metadata?.linked_lists ?? [];
-                          if (legacy.length === 0) {
-                            return <span className="text-[10px] text-muted-foreground italic">—</span>;
+                        // Prefer consolidated LISTS metadata (new canonical shape)
+                        const listsMeta = r.metadata?.linked_lists_meta ?? [];
+                        const listNames = r.metadata?.linked_list_names ?? [];
+                        // Fallback: derive list_names from legacy PO meta snapshots
+                        const legacyPoMeta = r.metadata?.linked_payment_orders_meta ?? [];
+                        const derivedLists: { list_name: string; technician_name: string }[] = [];
+                        if (listsMeta.length === 0 && listNames.length === 0 && legacyPoMeta.length > 0) {
+                          const seen = new Set<string>();
+                          for (const m of legacyPoMeta) {
+                            if (!m.list_name || seen.has(m.list_name)) continue;
+                            seen.add(m.list_name);
+                            derivedLists.push({ list_name: m.list_name, technician_name: m.technician_name });
                           }
-                          const first = legacy[0];
-                          return (
-                            <Badge variant="outline" className="text-[10px] gap-1 font-normal">
-                              <span className="font-mono text-primary">S{first.week}</span>
-                              <span>{first.technician_name}</span>
-                              <span className="text-muted-foreground">· {first.os_count} OS</span>
-                            </Badge>
-                          );
                         }
-                        const first = meta[0];
-                        const count = Math.max(meta.length, ids.length);
-                        if (count === 1 && first) {
+                        const items = listsMeta.length > 0
+                          ? listsMeta.map((m) => ({ list_name: m.list_name, technician_name: m.technician_name }))
+                          : derivedLists.length > 0
+                            ? derivedLists
+                            : listNames.map((ln) => ({ list_name: ln, technician_name: "" }));
+
+                        if (items.length === 0) {
+                          return <span className="text-[10px] text-muted-foreground italic">—</span>;
+                        }
+                        if (items.length === 1) {
+                          const first = items[0];
                           return (
                             <div className="flex flex-wrap gap-1">
                               <Badge variant="outline" className="text-[10px] gap-1 font-normal">
-                                <span className="font-mono text-primary">{first.code}</span>
-                                <span className="text-muted-foreground">·</span>
-                                <span>{first.technician_name}</span>
-                                <span className="text-muted-foreground">S{first.week}</span>
+                                <span className="font-mono text-primary font-semibold">{first.list_name}</span>
+                                {first.technician_name && (
+                                  <>
+                                    <span className="text-muted-foreground">·</span>
+                                    <span>{first.technician_name}</span>
+                                  </>
+                                )}
                               </Badge>
                             </div>
                           );
                         }
                         return (
-                          <div className="flex flex-wrap gap-1">
+                          <div className="flex flex-wrap gap-1 items-center">
                             <Badge variant="outline" className="text-[10px] gap-1 font-normal border-primary/40">
-                              <span className="font-mono text-primary">{count} OPs vinculadas</span>
+                              <span className="font-mono text-primary">{items.length} listas vinculadas</span>
                             </Badge>
-                            {first && (
-                              <span className="text-[10px] text-muted-foreground self-center">
-                                {first.technician_name} · S{first.week}
-                              </span>
-                            )}
+                            <span className="text-[10px] text-muted-foreground">
+                              {items[0].list_name}{items.length > 1 ? ` +${items.length - 1}` : ""}
+                            </span>
                           </div>
                         );
                       })()}
@@ -1205,19 +1240,19 @@ export default function InvoicesScreen() {
               </div>
             </FormSection>
 
-            {/* SECTION 1.5 — Vinculação a Ordens de Pagamento (fonte: payment_orders) */}
+            {/* SECTION 1.5 — Vinculação a LISTAS consolidadas (entidade financeira) */}
             <FormSection
-              title="Ordens de pagamento vinculadas"
-              subtitle="Selecione OPs individuais ou agrupamentos por técnico/semana. Origem: payment_orders."
+              title="Listas vinculadas"
+              subtitle="O faturamento trabalha por LISTAS consolidadas (ex.: L012483), nunca por OP individual. Origem: payment-orders."
             >
-              <PaymentOrdersSelector
-                value={formPOIds}
-                onChange={(ids, pos) => { setFormPOIds(ids); setFormPOs(pos); }}
+              <PaymentListsSelector
+                value={formListIds}
+                onChange={(ids, lists) => { setFormListIds(ids); setFormLists(lists); }}
               />
-              {formPOIds.length > 0 && (
+              {formListIds.length > 0 && (
                 <p className="mt-2 text-[10px] text-muted-foreground">
-                  {formPOIds.length} OP{formPOIds.length !== 1 ? "s" : ""} vinculada{formPOIds.length !== 1 ? "s" : ""}.
-                  O estado da fatura propaga automaticamente para as OPs.
+                  {formListIds.length} lista{formListIds.length !== 1 ? "s" : ""} vinculada{formListIds.length !== 1 ? "s" : ""}.
+                  O estado da fatura propaga automaticamente para as OPs internas.
                 </p>
               )}
             </FormSection>
