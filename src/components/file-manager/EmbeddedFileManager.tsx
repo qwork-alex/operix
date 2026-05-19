@@ -1038,17 +1038,17 @@ export async function storeFileInDocuments(
       console.log("[FileManager] Upload verified, signed URL OK:", storagePath);
     }
 
-    // Honor active operational year context (Phase 1E-X) — uploads must
-    // attach to the year the user is currently viewing, not "today".
+    // Honor active operational year context — uploads must attach to the
+    // year currently active in the operational tree, NOT "today".
+    // Rule: contexto da árvore SEMPRE prevalece. Só usa o ano atual quando
+    // nenhum ano operacional estiver ativo.
     let createdAtOverride: string | undefined;
     if (targetYear && /^\d{4}$/.test(targetYear)) {
       const y = parseInt(targetYear, 10);
       const now = new Date();
-      if (y !== now.getFullYear()) {
-        const d = new Date(now);
-        d.setFullYear(y);
-        createdAtOverride = d.toISOString();
-      }
+      const d = new Date(now);
+      d.setFullYear(y);
+      createdAtOverride = d.toISOString();
     }
 
     const insertPayload: Record<string, any> = {
