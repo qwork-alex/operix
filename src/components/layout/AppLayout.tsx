@@ -3,6 +3,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { TopBar } from "./TopBar";
 import { ImpersonationBanner } from "./ImpersonationBanner";
+import { AppFooter } from "./AppFooter";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   return (
@@ -15,6 +16,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <main className="flex-1 overflow-auto p-6">
             {children}
           </main>
+          <AppFooter />
         </div>
       </div>
     </SidebarProvider>

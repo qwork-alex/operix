@@ -31,6 +31,7 @@ import { RolePermissionsManager } from "@/components/permissions/RolePermissions
 import { UserPermissionsDialog } from "@/components/permissions/UserPermissionsDialog";
 import { Can } from "@/components/Can";
 import { getCurrentUserId, logSaveError, logSavePayload } from "@/lib/authUser";
+import { SYSTEM_METADATA } from "@/config/system";
 
 // ─── PROFIT DISTRIBUTION ───
 // Moved to src/components/profit/ProfitDistribution.tsx
@@ -1975,6 +1976,30 @@ export function SettingsPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* ─── About — institutional / proprietary attribution ─── */}
+      <Card className="border-border/40 bg-card/40">
+        <CardHeader>
+          <CardTitle className="text-sm text-muted-foreground">
+            Sobre o Sistema
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-xs text-muted-foreground">
+          <p className="text-sm font-medium text-foreground">
+            {SYSTEM_METADATA.trademark}
+          </p>
+          <p>{SYSTEM_METADATA.description}</p>
+          <div className="pt-2">
+            <p className="text-[11px] uppercase tracking-wider opacity-70">
+              Arquitetura e direção de produto
+            </p>
+            <p className="text-foreground/90">{SYSTEM_METADATA.system_architect}</p>
+          </div>
+          <p className="pt-2 text-[11px] opacity-70">
+            © {SYSTEM_METADATA.year} · {SYSTEM_METADATA.proprietary_notice}.
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 }
