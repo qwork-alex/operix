@@ -25,6 +25,8 @@ import {
   pdfFirstPageToImageBase64,
   fileToBase64,
 } from "@/lib/pdfUtils";
+import { PaymentListsSelector } from "@/components/billing/PaymentListsSelector";
+import type { PaymentList } from "@/hooks/usePaymentLists";
 
 type Step = "upload" | "review";
 type Stage = "idle" | "uploading" | "rendering" | "ocr" | "extracting" | "validating" | "done" | "error";
@@ -80,6 +82,8 @@ export default function ImportInvoiceDialog({
   const [fieldConf, setFieldConf] = useState<FieldConfidence>({});
   const [stage, setStage] = useState<Stage>("idle");
   const [stageMsg, setStageMsg] = useState<string>("");
+  const [linkedListIds, setLinkedListIds] = useState<string[]>([]);
+  const [linkedLists, setLinkedLists] = useState<PaymentList[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const scanRef = useRef<HTMLInputElement>(null);
@@ -96,6 +100,8 @@ export default function ImportInvoiceDialog({
     setFieldConf({});
     setStage("idle");
     setStageMsg("");
+    setLinkedListIds([]);
+    setLinkedLists([]);
     setStep("upload");
   };
 
@@ -202,6 +208,9 @@ export default function ImportInvoiceDialog({
       if (upErr) throw upErr;
 
       const total = Number(extracted.total_amount.replace(",", ".")) || 0;
+      const linked_payment_orders = Array.from(
+        new Set(linkedLists.flatMap(l => l.payment_order_ids))
+      );
       const insertPayload: any = {
         invoice_number: extracted.invoice_number.trim(),
         type: "incoming",
@@ -215,6 +224,14 @@ export default function ImportInvoiceDialog({
         ].filter(Boolean).join("\n") || null,
         status: "pending",
         source: "imported",
+        metadata: {
+          linked_list_ids: linkedListIds,
+          linked_lists: linkedLists.map(l => ({
+            id: l.id, user_id: l.user_id, technician_name: l.technician_name,
+            week: l.week, year: l.year, os_count: l.os_count, total: l.total,
+          })),
+          linked_payment_orders,
+        },
       };
 
       const { data: inv, error: invErr } = await (supabase as any)
@@ -447,6 +464,18 @@ export default function ImportInvoiceDialog({
                       onChange={(e) => setExtracted({ ...extracted, notes: e.target.value })}
                       className="text-xs" />
                   </Field>
+
+                  {/* Listas vinculadas — incremental link to payment orders by technician+week */}
+                  <div className="pt-3 mt-3 border-t border-border/50">
+                    <PaymentListsSelector
+                      value={linkedListIds}
+                      onChange={(ids, lists) => { setLinkedListIds(ids); setLinkedLists(lists); }}
+                    />
+                    <p className="mt-1.5 text-[10px] text-muted-foreground">
+                      Vincula esta fatura a ordens de pagamento existentes por técnico + semana.
+                      O estado da fatura propaga automaticamente para as OPs ligadas.
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>

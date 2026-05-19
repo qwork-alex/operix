@@ -269,6 +269,7 @@ export type Database = {
           id: string
           invoice_number: string
           issue_date: string
+          metadata: Json
           notes: string | null
           paid_amount: number
           remaining_amount: number | null
@@ -292,6 +293,7 @@ export type Database = {
           id?: string
           invoice_number: string
           issue_date?: string
+          metadata?: Json
           notes?: string | null
           paid_amount?: number
           remaining_amount?: number | null
@@ -315,6 +317,7 @@ export type Database = {
           id?: string
           invoice_number?: string
           issue_date?: string
+          metadata?: Json
           notes?: string | null
           paid_amount?: number
           remaining_amount?: number | null

@@ -103,6 +103,11 @@ type Invoice = {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  metadata?: {
+    linked_list_ids?: string[];
+    linked_lists?: Array<{ id: string; user_id: string; technician_name: string; week: number; year: number; os_count: number; total: number }>;
+    linked_payment_orders?: string[];
+  } | null;
 };
 
 type Supplier = { id: string; name: string };
@@ -851,6 +856,7 @@ export default function InvoicesScreen() {
                 </TableHead>
                 <TableHead className="w-[140px]">Número</TableHead>
                 <TableHead>Cliente / Fornecedor</TableHead>
+                <TableHead className="w-[180px]">Lista</TableHead>
                 <TableHead className="w-[90px]">Tipo</TableHead>
                 <TableHead className="text-right w-[110px]">Valor total</TableHead>
                 <TableHead className="text-right w-[110px]">Pago</TableHead>
@@ -864,13 +870,13 @@ export default function InvoicesScreen() {
             <TableBody>
               {invoicesQ.isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="text-center py-12">
+                  <TableCell colSpan={12} className="text-center py-12">
                     <Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" />
                   </TableCell>
                 </TableRow>
               ) : pageData.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="text-center py-12 text-xs text-muted-foreground">
+                  <TableCell colSpan={12} className="text-center py-12 text-xs text-muted-foreground">
                     Nenhuma fatura encontrada.
                   </TableCell>
                 </TableRow>
@@ -908,6 +914,29 @@ export default function InvoicesScreen() {
                       </div>
                     </TableCell>
                     <TableCell className="font-medium">{partyName}</TableCell>
+                    <TableCell>
+                      {(() => {
+                        const ll = r.metadata?.linked_lists;
+                        if (!ll || ll.length === 0) {
+                          return <span className="text-[10px] text-muted-foreground italic">—</span>;
+                        }
+                        const first = ll[0];
+                        return (
+                          <div className="flex flex-wrap gap-1">
+                            <Badge variant="outline" className="text-[10px] gap-1 font-normal">
+                              <span className="font-mono text-primary">S{first.week}</span>
+                              <span className="text-foreground">{first.technician_name}</span>
+                              <span className="text-muted-foreground">· {first.os_count} OS</span>
+                            </Badge>
+                            {ll.length > 1 && (
+                              <Badge variant="outline" className="text-[10px] font-normal text-muted-foreground">
+                                +{ll.length - 1}
+                              </Badge>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </TableCell>
                     <TableCell>
                       <span className={cn("inline-flex items-center gap-1.5", TYPE_META[r.type].cls)}>
                         <TypeIcon className="h-3 w-3" />
