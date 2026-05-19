@@ -464,6 +464,18 @@ export default function ImportInvoiceDialog({
                       onChange={(e) => setExtracted({ ...extracted, notes: e.target.value })}
                       className="text-xs" />
                   </Field>
+
+                  {/* Listas vinculadas — incremental link to payment orders by technician+week */}
+                  <div className="pt-3 mt-3 border-t border-border/50">
+                    <PaymentListsSelector
+                      value={linkedListIds}
+                      onChange={(ids, lists) => { setLinkedListIds(ids); setLinkedLists(lists); }}
+                    />
+                    <p className="mt-1.5 text-[10px] text-muted-foreground">
+                      Vincula esta fatura a ordens de pagamento existentes por técnico + semana.
+                      O estado da fatura propaga automaticamente para as OPs ligadas.
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
