@@ -915,6 +915,29 @@ export default function InvoicesScreen() {
                     </TableCell>
                     <TableCell className="font-medium">{partyName}</TableCell>
                     <TableCell>
+                      {(() => {
+                        const ll = r.metadata?.linked_lists;
+                        if (!ll || ll.length === 0) {
+                          return <span className="text-[10px] text-muted-foreground italic">—</span>;
+                        }
+                        const first = ll[0];
+                        return (
+                          <div className="flex flex-wrap gap-1">
+                            <Badge variant="outline" className="text-[10px] gap-1 font-normal">
+                              <span className="font-mono text-primary">S{first.week}</span>
+                              <span className="text-foreground">{first.technician_name}</span>
+                              <span className="text-muted-foreground">· {first.os_count} OS</span>
+                            </Badge>
+                            {ll.length > 1 && (
+                              <Badge variant="outline" className="text-[10px] font-normal text-muted-foreground">
+                                +{ll.length - 1}
+                              </Badge>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </TableCell>
+                    <TableCell>
                       <span className={cn("inline-flex items-center gap-1.5", TYPE_META[r.type].cls)}>
                         <TypeIcon className="h-3 w-3" />
                         {TYPE_META[r.type].label}
