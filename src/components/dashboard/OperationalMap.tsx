@@ -535,6 +535,7 @@ export function OperationalMap() {
       setMapError("WebGL indisponível neste dispositivo");
       return;
     }
+    try { (gl as WebGLRenderingContext).getExtension("WEBGL_lose_context")?.loseContext(); } catch {}
 
     if (!styleRef.current) {
       const s = document.createElement("style");
