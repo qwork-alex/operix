@@ -543,6 +543,14 @@ export default function InvoicesScreen() {
       legal_text: DEFAULT_LEGAL,
       options: defaultOptions(),
     });
+    // Seed linked POs from metadata snapshot (no extra fetch needed for hydration)
+    const metaPOs = inv.metadata?.linked_payment_orders_meta ?? [];
+    setFormPOIds(inv.metadata?.linked_payment_order_ids ?? inv.metadata?.linked_payment_orders ?? metaPOs.map((m) => m.id));
+    setFormPOs(metaPOs.map((m) => ({
+      id: m.id, code: m.code, list_name: m.list_name, assigned_user_id: m.assigned_user_id,
+      technician_name: m.technician_name, total: m.total, service_order_id: m.service_order_id,
+      created_at: "", week: m.week, year: m.year, client_name: null, status: null,
+    })));
     setFormOpen(true);
   };
 
