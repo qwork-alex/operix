@@ -25,8 +25,8 @@ import {
   pdfFirstPageToImageBase64,
   fileToBase64,
 } from "@/lib/pdfUtils";
-import { PaymentOrdersSelector } from "@/components/billing/PaymentOrdersSelector";
-import type { BillingPaymentOrder } from "@/hooks/usePaymentOrdersForBilling";
+import { PaymentListsSelector } from "@/components/billing/PaymentListsSelector";
+import type { BillingPaymentList } from "@/hooks/usePaymentListsConsolidated";
 
 type Step = "upload" | "review";
 type Stage = "idle" | "uploading" | "rendering" | "ocr" | "extracting" | "validating" | "done" | "error";
@@ -82,8 +82,8 @@ export default function ImportInvoiceDialog({
   const [fieldConf, setFieldConf] = useState<FieldConfidence>({});
   const [stage, setStage] = useState<Stage>("idle");
   const [stageMsg, setStageMsg] = useState<string>("");
-  const [linkedPOIds, setLinkedPOIds] = useState<string[]>([]);
-  const [linkedPOs, setLinkedPOs] = useState<BillingPaymentOrder[]>([]);
+  const [linkedListIds, setLinkedListIds] = useState<string[]>([]);
+  const [linkedLists, setLinkedLists] = useState<BillingPaymentList[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const scanRef = useRef<HTMLInputElement>(null);
@@ -100,8 +100,8 @@ export default function ImportInvoiceDialog({
     setFieldConf({});
     setStage("idle");
     setStageMsg("");
-    setLinkedPOIds([]);
-    setLinkedPOs([]);
+    setLinkedListIds([]);
+    setLinkedLists([]);
     setStep("upload");
   };
 
@@ -208,16 +208,19 @@ export default function ImportInvoiceDialog({
       if (upErr) throw upErr;
 
       const total = Number(extracted.total_amount.replace(",", ".")) || 0;
-      // Canonical source = payment_orders (NEVER profit_distribution).
-      const linked_payment_order_ids = Array.from(new Set(linkedPOIds));
+      // Canonical billing entity = consolidated LIST (grouped by list_name in payment_orders).
+      const linked_list_names = Array.from(new Set(linkedListIds));
       const linked_user_ids = Array.from(
-        new Set(linkedPOs.map((p) => p.assigned_user_id).filter(Boolean) as string[])
+        new Set(linkedLists.flatMap((l) => l.user_ids).filter(Boolean) as string[])
       );
-      const linked_payment_orders_meta = linkedPOs.map((p) => ({
-        id: p.id, code: p.code, assigned_user_id: p.assigned_user_id,
-        technician_name: p.technician_name, week: p.week, year: p.year,
-        total: p.total, service_order_id: p.service_order_id, list_name: p.list_name,
+      const linked_lists_meta = linkedLists.map((l) => ({
+        list_name: l.list_name, technician_name: l.technician_name,
+        assigned_user_id: l.assigned_user_id, client_name: l.client_name,
+        year: l.year, week: l.week, total: l.total, po_count: l.po_count,
       }));
+      const linked_payment_order_ids = Array.from(
+        new Set(linkedLists.flatMap((l) => l.payment_order_ids))
+      );
       const insertPayload: any = {
         invoice_number: extracted.invoice_number.trim(),
         type: "incoming",
@@ -232,11 +235,12 @@ export default function ImportInvoiceDialog({
         status: "pending",
         source: "imported",
         metadata: {
-          linked_payment_order_ids,
-          linked_payment_orders_meta,
+          linked_list_names,
+          linked_lists_meta,
           linked_user_ids,
-          // legacy compat key consumed by autostatus propagation trigger
-          linked_payment_orders: linked_payment_order_ids,
+          // expanded PO ids — required by status-propagation trigger
+          linked_payment_order_ids,
+          linked_payment_orders: linked_payment_order_ids, // legacy alias
         },
       };
 
@@ -473,14 +477,13 @@ export default function ImportInvoiceDialog({
 
                   {/* Vinculação direta a payment_orders (fonte única de verdade) */}
                   <div className="pt-3 mt-3 border-t border-border/50">
-                    <PaymentOrdersSelector
-                      value={linkedPOIds}
-                      onChange={(ids, pos) => { setLinkedPOIds(ids); setLinkedPOs(pos); }}
+                    <PaymentListsSelector
+                      value={linkedListIds}
+                      onChange={(ids, lists) => { setLinkedListIds(ids); setLinkedLists(lists); }}
                     />
                     <p className="mt-1.5 text-[10px] text-muted-foreground">
-                      Origem: <span className="font-medium">payment_orders</span>.
-                      Selecione OPs individuais ou um agrupamento por técnico/semana.
-                      O estado da fatura propaga automaticamente para as OPs vinculadas.
+                      Entidade financeira: <span className="font-medium">Lista consolidada</span> (ex.: L012483).
+                      Origem: payment-orders. O estado da fatura propaga automaticamente para as OPs internas das listas.
                     </p>
                   </div>
                 </div>
