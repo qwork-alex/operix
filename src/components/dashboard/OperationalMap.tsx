@@ -557,7 +557,7 @@ export function OperationalMap() {
       if (initRetryRef.current < 3) {
         initRetryRef.current += 1;
         const delay = 800 * initRetryRef.current;
-        window.setTimeout(() => setMapError(null), delay);
+        initTimerRef.current = window.setTimeout(() => setMapInitTick((n) => n + 1), delay);
       }
       return;
     }
@@ -566,18 +566,23 @@ export function OperationalMap() {
     const canvas = map.getCanvas();
     const onCtxLost = (e: Event) => {
       e.preventDefault();
+      gpuContextLostRef.current = true;
+      if (radarIntervalRef.current) {
+        window.clearInterval(radarIntervalRef.current);
+        radarIntervalRef.current = null;
+      }
       console.warn("[OperationalMap] WebGL context lost — awaiting restore");
       setMapError("Contexto GPU perdido — restaurando…");
     };
     const onCtxRestored = () => {
       console.info("[OperationalMap] WebGL context restored");
+      gpuContextLostRef.current = false;
       setMapError(null);
       try {
         map.resize();
-        map.triggerRepaint();
-        // Force data effects to re-sync sources after GPU reset
-        queryClient.invalidateQueries({ queryKey: ["op-map-hail"] });
-        queryClient.invalidateQueries({ queryKey: ["op-map-hail-reports"] });
+        setSourceRecoveryTick((n) => n + 1);
+        setRasterRecoveryTick((n) => n + 1);
+        window.setTimeout(() => { try { map.triggerRepaint(); } catch {} }, 80);
       } catch {}
     };
     canvas.addEventListener("webglcontextlost", onCtxLost);
@@ -879,13 +884,15 @@ export function OperationalMap() {
 
     return () => {
       if (radarTimerRef.current) window.clearTimeout(radarTimerRef.current);
+      if (initTimerRef.current) window.clearTimeout(initTimerRef.current);
+      if (radarStaggerTimerRef.current) window.clearTimeout(radarStaggerTimerRef.current);
       try { canvas.removeEventListener("webglcontextlost", onCtxLost); } catch {}
       try { canvas.removeEventListener("webglcontextrestored", onCtxRestored); } catch {}
       try { map.remove(); } catch (e) { console.warn("[OperationalMap] remove failed", e); }
       mapRef.current = null;
       setMapReady(false);
     };
-  }, [containerEl, mapError]);
+  }, [containerEl, mapInitTick]);
 
   /* -------- Safe per-layer setData (isolated failures) ------------- */
   const safeSetData = useCallback((id: string, data: any) => {
