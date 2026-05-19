@@ -667,25 +667,28 @@ export default function InvoicesScreen() {
     return { subtotal, discount, netSubtotal, tax, total: netSubtotal + tax };
   }, [form.items, form.options]);
 
-  // Build invoice metadata from the linked payment_orders selection.
-  // Preserves any unrelated keys already on editing.metadata.
+  // Build invoice metadata from the linked LISTS selection.
+  // Underlying PO ids are expanded for trigger propagation (status sync).
   const buildLinkedMetadata = () => {
-    const linked_payment_order_ids = Array.from(new Set(formPOIds));
-    const linked_user_ids = Array.from(
-      new Set(formPOs.map((p) => p.assigned_user_id).filter(Boolean) as string[])
-    );
-    const linked_payment_orders_meta = formPOs.map((p) => ({
-      id: p.id, code: p.code, assigned_user_id: p.assigned_user_id,
-      technician_name: p.technician_name, week: p.week, year: p.year,
-      total: p.total, service_order_id: p.service_order_id, list_name: p.list_name,
+    const linked_list_names = Array.from(new Set(formListIds));
+    const linked_lists_meta = formLists.map((l) => ({
+      list_name: l.list_name, technician_name: l.technician_name,
+      assigned_user_id: l.assigned_user_id, client_name: l.client_name,
+      year: l.year, week: l.week, total: l.total, po_count: l.po_count,
     }));
+    const linked_user_ids = Array.from(
+      new Set(formLists.flatMap((l) => l.user_ids).filter(Boolean) as string[])
+    );
+    const linked_payment_order_ids = Array.from(
+      new Set(formLists.flatMap((l) => l.payment_order_ids))
+    );
     return {
       ...(editing?.metadata ?? {}),
-      linked_payment_order_ids,
-      linked_payment_orders_meta,
+      linked_list_names,
+      linked_lists_meta,
       linked_user_ids,
-      // legacy compat (propagation trigger)
-      linked_payment_orders: linked_payment_order_ids,
+      linked_payment_order_ids,
+      linked_payment_orders: linked_payment_order_ids, // legacy alias
     };
   };
 
@@ -1233,19 +1236,19 @@ export default function InvoicesScreen() {
               </div>
             </FormSection>
 
-            {/* SECTION 1.5 — Vinculação a Ordens de Pagamento (fonte: payment_orders) */}
+            {/* SECTION 1.5 — Vinculação a LISTAS consolidadas (entidade financeira) */}
             <FormSection
-              title="Ordens de pagamento vinculadas"
-              subtitle="Selecione OPs individuais ou agrupamentos por técnico/semana. Origem: payment_orders."
+              title="Listas vinculadas"
+              subtitle="O faturamento trabalha por LISTAS consolidadas (ex.: L012483), nunca por OP individual. Origem: payment-orders."
             >
-              <PaymentOrdersSelector
-                value={formPOIds}
-                onChange={(ids, pos) => { setFormPOIds(ids); setFormPOs(pos); }}
+              <PaymentListsSelector
+                value={formListIds}
+                onChange={(ids, lists) => { setFormListIds(ids); setFormLists(lists); }}
               />
-              {formPOIds.length > 0 && (
+              {formListIds.length > 0 && (
                 <p className="mt-2 text-[10px] text-muted-foreground">
-                  {formPOIds.length} OP{formPOIds.length !== 1 ? "s" : ""} vinculada{formPOIds.length !== 1 ? "s" : ""}.
-                  O estado da fatura propaga automaticamente para as OPs.
+                  {formListIds.length} lista{formListIds.length !== 1 ? "s" : ""} vinculada{formListIds.length !== 1 ? "s" : ""}.
+                  O estado da fatura propaga automaticamente para as OPs internas.
                 </p>
               )}
             </FormSection>
