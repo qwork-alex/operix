@@ -17,6 +17,8 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
+import { PaymentOrdersSelector } from "@/components/billing/PaymentOrdersSelector";
+import type { BillingPaymentOrder } from "@/hooks/usePaymentOrdersForBilling";
 
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -362,6 +364,9 @@ export default function InvoicesScreen() {
   const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<Invoice | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
+  // Vinculação a payment_orders (fonte única de verdade)
+  const [formPOIds, setFormPOIds] = useState<string[]>([]);
+  const [formPOs, setFormPOs] = useState<BillingPaymentOrder[]>([]);
 
   const [detail, setDetail] = useState<Invoice | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Invoice | null>(null);
