@@ -104,9 +104,18 @@ type Invoice = {
   created_at: string;
   updated_at: string;
   metadata?: {
+    // Canonical link — source of truth = payment_orders
+    linked_payment_order_ids?: string[];
+    linked_payment_orders_meta?: Array<{
+      id: string; code: string; assigned_user_id: string | null;
+      technician_name: string; week: number; year: number; total: number;
+      service_order_id: string | null; list_name: string | null;
+    }>;
+    linked_user_ids?: string[];
+    // Legacy keys (kept for propagation trigger compat)
+    linked_payment_orders?: string[];
     linked_list_ids?: string[];
     linked_lists?: Array<{ id: string; user_id: string; technician_name: string; week: number; year: number; os_count: number; total: number }>;
-    linked_payment_orders?: string[];
   } | null;
 };
 
