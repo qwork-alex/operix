@@ -28,6 +28,13 @@ import {
 } from "./pages/ModulePages";
 import FleetPage from "./pages/FleetPage";
 import BillingPage from "./pages/BillingPage";
+import {
+  TermsPage,
+  PrivacyPage,
+  GdprPage,
+  CookiesPage,
+  DataProcessingPage,
+} from "./pages/legal/LegalPages";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -55,6 +62,11 @@ const App = () => (
             <BrowserRouter>
               <Routes>
                 <Route path="/auth" element={<Auth />} />
+                <Route path="/legal/terms" element={<TermsPage />} />
+                <Route path="/legal/privacy" element={<PrivacyPage />} />
+                <Route path="/legal/gdpr" element={<GdprPage />} />
+                <Route path="/legal/cookies" element={<CookiesPage />} />
+                <Route path="/legal/data-processing" element={<DataProcessingPage />} />
                 <Route path="/change-password" element={<ProtectedRoute><ChangePasswordPage /></ProtectedRoute>} />
                 <Route
                   path="/*"
