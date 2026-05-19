@@ -28,7 +28,7 @@ export default function FinancialPage() {
   const { data: aggregation } = useParticipantAggregation();
   const runMutation = useRunReconciliation();
   const [confrontoTab, setConfrontoTab] = useState("fusao");
-  const [mainTab, setMainTab] = useState("overview");
+  const [mainTab, setMainTab] = useState("confronto");
   const [showAddTech, setShowAddTech] = useState(false);
 
   // Financial alerts: unread discrepancy notifications
