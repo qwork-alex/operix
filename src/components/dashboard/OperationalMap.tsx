@@ -1249,7 +1249,16 @@ export function OperationalMap() {
             <div className="text-xs text-amber-200">Mapa em modo seguro</div>
             <div className="text-[10px] text-muted-foreground max-w-[320px]">{mapError}</div>
             <button
-              onClick={() => { initRetryRef.current = 0; setMapError(null); }}
+              onClick={() => {
+                initRetryRef.current = 0;
+                if (!mapRef.current) setMapInitTick((n) => n + 1);
+                else {
+                  gpuContextLostRef.current = false;
+                  setSourceRecoveryTick((n) => n + 1);
+                  setRasterRecoveryTick((n) => n + 1);
+                }
+                setMapError(null);
+              }}
               className="mt-1 text-[11px] px-3 py-1 rounded-md border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10"
             >
               Tentar novamente
