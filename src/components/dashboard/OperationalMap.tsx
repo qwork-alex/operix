@@ -983,27 +983,18 @@ export function OperationalMap() {
     safeSetData("pdr-heat", pdrHeatGeo);
   }, [mapReady, pdrHeatGeo, safeSetData]);
 
-  // Soft pulse animation for confirmed/ongoing hail halos (cheap; modulates opacity only)
+  // Soft pulse animation for confirmed/ongoing hail halos (throttled; no continuous RAF loop)
   useEffect(() => {
     if (!mapReady) return;
-    let raf = 0;
     let cancelled = false;
     const t0 = performance.now();
-    let last = 0;
-    const tick = (now: number) => {
+    const tick = () => {
       if (cancelled) return;
       const map = mapRef.current;
-      if (!map || !(map as any).style || gpuContextLostRef.current || !layersRef.current.hail) {
-        raf = requestAnimationFrame(tick);
-        return;
-      }
-      if (now - last < 900) {
-        raf = requestAnimationFrame(tick);
-        return;
-      }
-      last = now;
+      if (!map || !(map as any).style || gpuContextLostRef.current || !layersRef.current.hail) return;
       try {
         if (map.getLayer("hail-halo")) {
+          const now = performance.now();
           const phase = ((now - t0) % 1800) / 1800;
           const pulse = 0.18 + 0.18 * Math.sin(phase * Math.PI * 2);
           map.setPaintProperty("hail-halo", "circle-opacity", [
@@ -1016,15 +1007,16 @@ export function OperationalMap() {
       } catch {
         return;
       }
-      raf = requestAnimationFrame(tick);
     };
-    raf = requestAnimationFrame(tick);
-    return () => { cancelled = true; cancelAnimationFrame(raf); };
+    tick();
+    const id = window.setInterval(tick, 900);
+    return () => { cancelled = true; window.clearInterval(id); };
   }, [mapReady]);
 
   /* -------- Toggle layer visibility -------------------------------- */
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
+    if (gpuContextLostRef.current) return;
     const map = mapRef.current;
     const setVis = (id: string, vis: boolean) => {
       if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", vis ? "visible" : "none");
