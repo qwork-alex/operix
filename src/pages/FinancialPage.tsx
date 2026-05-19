@@ -16,7 +16,7 @@ import { useParticipantAggregation } from "@/hooks/useParticipantAggregation";
 import FusaoManualTab from "@/components/confronto/FusaoManualTab";
 import PendentesTab from "@/components/confronto/PendentesTab";
 import HistoricoTab from "@/components/confronto/HistoricoTab";
-import OverviewTab from "@/components/financial/OverviewTab";
+
 import TechnicianDetailTab from "@/components/financial/TechnicianDetailTab";
 import { Link2, AlertTriangle } from "lucide-react";
 
