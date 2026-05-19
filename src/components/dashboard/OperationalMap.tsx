@@ -517,17 +517,6 @@ export function OperationalMap() {
     return { type: "FeatureCollection", features };
   }, [hailReports]);
 
-  const syncActiveSources = useCallback(() => {
-    const map = mapRef.current;
-    if (!map || !(map as any).style || gpuContextLostRef.current) return;
-    try { (map.getSource("orders") as GeoJSONSource | undefined)?.setData(ordersGeo as any); } catch (e) { console.warn("[OperationalMap] recover orders skipped", e); }
-    try { (map.getSource("teams") as GeoJSONSource | undefined)?.setData(teamsGeo as any); } catch (e) { console.warn("[OperationalMap] recover teams skipped", e); }
-    try { (map.getSource("operations") as GeoJSONSource | undefined)?.setData(operationsGeo as any); } catch (e) { console.warn("[OperationalMap] recover operations skipped", e); }
-    try { (map.getSource("hail") as GeoJSONSource | undefined)?.setData(hailGeo as any); } catch (e) { console.warn("[OperationalMap] recover hail skipped", e); }
-    try { (map.getSource("hail-reports") as GeoJSONSource | undefined)?.setData(hailReportsGeo as any); } catch (e) { console.warn("[OperationalMap] recover hail reports skipped", e); }
-    try { (map.getSource("pdr-heat") as GeoJSONSource | undefined)?.setData(pdrHeatGeo as any); } catch (e) { console.warn("[OperationalMap] recover pdr skipped", e); }
-  }, [ordersGeo, teamsGeo, operationsGeo, hailGeo, hailReportsGeo, pdrHeatGeo]);
-
   /* -------- Init map ------------------------------------------------ */
   useEffect(() => {
     if (!containerEl || mapRef.current) return;
