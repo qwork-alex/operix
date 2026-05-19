@@ -96,7 +96,9 @@ export function HierarchyBreadcrumb({ context, onClear, className }: HierarchyBr
  * Fallback labels (e.g. "Sem Cliente") are intentionally NOT propagated.
  */
 export function hierarchyDefaults(ctx: HierarchyContext): {
+  year: string | null;
   client: string | null;
+  platform: string | null;
   operational_unit: string | null;
   week: string | null;
   technician: string | null;
@@ -104,7 +106,9 @@ export function hierarchyDefaults(ctx: HierarchyContext): {
   const clean = (v: string | undefined, fb: string) =>
     v && v !== fb ? v : null;
   return {
+    year: ctx.year && /^\d{4}$/.test(ctx.year) ? ctx.year : null,
     client: clean(ctx.client, HIERARCHY_FALLBACK.client),
+    platform: clean(ctx.platform, HIERARCHY_FALLBACK.platform),
     operational_unit: clean(ctx.unit, HIERARCHY_FALLBACK.unit),
     week: clean(ctx.week, HIERARCHY_FALLBACK.week),
     technician: clean(ctx.technician, HIERARCHY_FALLBACK.technician),
