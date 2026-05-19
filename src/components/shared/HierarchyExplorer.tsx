@@ -9,6 +9,8 @@ import {
   HardHat,
   Wrench,
   Factory,
+  FileText,
+  BarChart3,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
