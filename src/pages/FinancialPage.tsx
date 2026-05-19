@@ -93,68 +93,75 @@ export default function FinancialPage() {
 
         {/* Icon-only actions */}
         <div className="flex items-center gap-1">
-          {/* Alert bell — only renders if alerts exist */}
-          {hasAlerts && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+          {/* Confronto-only: Alert bell + Refresh */}
+          {mainTab === "confronto" && (
+            <>
+              {hasAlerts && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:text-destructive relative"
+                    >
+                      <Bell className="h-4 w-4" />
+                      <span className="absolute -top-0.5 -right-0.5 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-destructive text-[9px] text-destructive-foreground px-1">
+                        {financialAlerts.length}
+                      </span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-72">
+                    {financialAlerts.map((alert: any) => (
+                      <DropdownMenuItem
+                        key={alert.id}
+                        className="cursor-pointer flex flex-col items-start gap-0.5 py-2"
+                        onClick={() => {
+                          markAsRead(alert.id);
+                          setMainTab("confronto");
+                          setConfrontoTab("pendentes");
+                        }}
+                      >
+                        <span className="text-sm font-medium text-foreground">{alert.title}</span>
+                        {alert.message && <span className="text-xs text-muted-foreground">{alert.message}</span>}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => runMutation.mutate()}
+                    disabled={runMutation.isPending}
+                  >
+                    <RefreshCw className={`h-4 w-4 ${runMutation.isPending ? "animate-spin" : ""}`} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{t("fin.refreshAnalysis")}</TooltipContent>
+              </Tooltip>
+            </>
+          )}
+
+          {/* Detalhamento-only: Add technician */}
+          {mainTab === "breakdown" && (
+            <Tooltip>
+              <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-destructive hover:text-destructive relative"
+                  className="h-8 w-8"
+                  onClick={() => setShowAddTech(true)}
                 >
-                  <Bell className="h-4 w-4" />
-                  <span className="absolute -top-0.5 -right-0.5 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-destructive text-[9px] text-destructive-foreground px-1">
-                    {financialAlerts.length}
-                  </span>
+                  <UserPlus className="h-4 w-4" />
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-72">
-                {financialAlerts.map((alert: any) => (
-                  <DropdownMenuItem
-                    key={alert.id}
-                    className="cursor-pointer flex flex-col items-start gap-0.5 py-2"
-                    onClick={() => {
-                      markAsRead(alert.id);
-                      setMainTab("confronto");
-                      setConfrontoTab("pendentes");
-                    }}
-                  >
-                    <span className="text-sm font-medium text-foreground">{alert.title}</span>
-                    {alert.message && <span className="text-xs text-muted-foreground">{alert.message}</span>}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+              </TooltipTrigger>
+              <TooltipContent>Adicionar técnico</TooltipContent>
+            </Tooltip>
           )}
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setShowAddTech(true)}
-              >
-                <UserPlus className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Adicionar técnico</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => runMutation.mutate()}
-                disabled={runMutation.isPending}
-              >
-                <RefreshCw className={`h-4 w-4 ${runMutation.isPending ? "animate-spin" : ""}`} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{t("fin.refreshAnalysis")}</TooltipContent>
-          </Tooltip>
         </div>
       </div>
 
