@@ -487,8 +487,15 @@ Deno.serve(async (req) => {
     }
 
     // ── CREATE USER ──
-    const { email, full_name, role } = body;
+    const { full_name, role } = body;
+    const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     if (!email || !role) return jsonResp({ error: "email and role required" }, 400);
+
+    // Validate email format before calling Supabase auth (which returns a generic 400)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return jsonResp({ error: "Formato de email inválido. Verifique e tente novamente." }, 400);
+    }
 
     const validRoles = ["admin", "partner", "technician", "client"];
     if (!validRoles.includes(role)) return jsonResp({ error: "invalid role" }, 400);
