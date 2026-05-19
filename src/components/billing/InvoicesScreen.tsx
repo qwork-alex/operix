@@ -492,6 +492,8 @@ export default function InvoicesScreen() {
       setFormOpen(false);
       setEditing(null);
       setForm(emptyForm());
+      setFormPOIds([]);
+      setFormPOs([]);
     },
     onError: (e: any) => toast.error(e?.message ?? "Erro ao gravar fatura"),
   });
