@@ -2172,6 +2172,57 @@ export type Database = {
         }
         Relationships: []
       }
+      user_consents: {
+        Row: {
+          accepted_data_storage: boolean
+          accepted_gdpr: boolean
+          accepted_privacy: boolean
+          accepted_sharing_policy: boolean
+          accepted_terms: boolean
+          created_at: string
+          id: string
+          ip_address: string | null
+          language: string | null
+          revoked_at: string | null
+          status: string
+          terms_version: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          accepted_data_storage?: boolean
+          accepted_gdpr?: boolean
+          accepted_privacy?: boolean
+          accepted_sharing_policy?: boolean
+          accepted_terms?: boolean
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          language?: string | null
+          revoked_at?: string | null
+          status?: string
+          terms_version: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          accepted_data_storage?: boolean
+          accepted_gdpr?: boolean
+          accepted_privacy?: boolean
+          accepted_sharing_policy?: boolean
+          accepted_terms?: boolean
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          language?: string | null
+          revoked_at?: string | null
+          status?: string
+          terms_version?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_permissions: {
         Row: {
           allow: boolean
