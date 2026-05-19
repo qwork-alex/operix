@@ -183,9 +183,15 @@ export function OperationalMap() {
   const styleRef = useRef<HTMLStyleElement | null>(null);
   const radarTimerRef = useRef<number | null>(null);
   const initRetryRef = useRef<number>(0);
+  const initTimerRef = useRef<number | null>(null);
+  const gpuContextLostRef = useRef(false);
+  const radarStaggerTimerRef = useRef<number | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
+  const [mapInitTick, setMapInitTick] = useState(0);
+  const [sourceRecoveryTick, setSourceRecoveryTick] = useState(0);
+  const [rasterRecoveryTick, setRasterRecoveryTick] = useState(0);
 
   // Callback ref guarantees init runs the moment the DOM node exists,
   // regardless of whether the loader skeleton was rendered first.
@@ -203,6 +209,11 @@ export function OperationalMap() {
     hail: true,
     pdr: true,
   });
+
+  const layersRef = useRef(layers);
+  useEffect(() => {
+    layersRef.current = layers;
+  }, [layers]);
 
   /* -------- data: service orders (orders + operations inferred) ----- */
   const { data: serviceOrders = [], isLoading: loadingSO } = useQuery({
