@@ -320,7 +320,8 @@ function Row({ node, depth, open, toggle, active, onView, onRequestDelete }: Row
     active.platform === node.ctx.platform &&
     active.unit === node.ctx.unit &&
     active.week === node.ctx.week &&
-    active.technician === node.ctx.technician;
+    active.technician === node.ctx.technician &&
+    active.section === node.ctx.section;
 
   const Icon = node.icon;
   const handleActivate = () => {
