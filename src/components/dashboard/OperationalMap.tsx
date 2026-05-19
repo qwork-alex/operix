@@ -1041,6 +1041,7 @@ export function OperationalMap() {
   /* -------- RainViewer radar layer (animated frame playback) ------- */
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
+    if (gpuContextLostRef.current) return;
     const map = mapRef.current;
     let cancelled = false;
 
@@ -1048,6 +1049,10 @@ export function OperationalMap() {
       if (radarIntervalRef.current) {
         window.clearInterval(radarIntervalRef.current);
         radarIntervalRef.current = null;
+      }
+      if (radarStaggerTimerRef.current) {
+        window.clearTimeout(radarStaggerTimerRef.current);
+        radarStaggerTimerRef.current = null;
       }
       ["radar-layer", "storms-layer"].forEach((id) => {
         try { if (map.getLayer(id)) map.removeLayer(id); } catch {}
@@ -1104,7 +1109,7 @@ export function OperationalMap() {
                 source: srcId,
                 paint: {
                   "raster-opacity": kind === "radar" ? 0.55 : 0.65,
-                  "raster-fade-duration": 600,
+                    "raster-fade-duration": 0,
                 },
               }, map.getLayer("hail-halo") ? "hail-halo" : undefined);
             } catch {}
@@ -1115,23 +1120,33 @@ export function OperationalMap() {
         };
 
         reconcile("radar", !!layers.radar);
-        reconcile("storms", !!layers.storms);
+        if (layers.radar && layers.storms) {
+          radarStaggerTimerRef.current = window.setTimeout(() => reconcile("storms", true), 120);
+        } else {
+          reconcile("storms", !!layers.storms);
+        }
 
         // Animate: cycle frames smoothly — only for currently-active layers
         if (radarIntervalRef.current) window.clearInterval(radarIntervalRef.current);
         radarIntervalRef.current = window.setInterval(() => {
+          if (gpuContextLostRef.current) return;
           const data = radarFramesRef.current;
           if (!data) return;
           radarIdxRef.current = (radarIdxRef.current + 1) % data.frames.length;
           const path = data.frames[radarIdxRef.current].path;
-          (["radar", "storms"] as const).forEach((kind) => {
+          const updateRaster = (kind: "radar" | "storms") => {
             if (!map.getLayer(`${kind}-layer`)) return;
             const src = map.getSource(`${kind}-src`) as any;
             if (src && typeof src.setTiles === "function") {
               try { src.setTiles([buildUrl(data.host, path, kind)]); } catch {}
             }
-          });
-        }, 900);
+          };
+          updateRaster("radar");
+          if (map.getLayer("storms-layer")) {
+            if (radarStaggerTimerRef.current) window.clearTimeout(radarStaggerTimerRef.current);
+            radarStaggerTimerRef.current = window.setTimeout(() => updateRaster("storms"), 160);
+          }
+        }, 2400);
       } catch (e) {
         console.warn("[OperationalMap] radar fetch failed", e);
       }
@@ -1143,8 +1158,12 @@ export function OperationalMap() {
         window.clearInterval(radarIntervalRef.current);
         radarIntervalRef.current = null;
       }
+      if (radarStaggerTimerRef.current) {
+        window.clearTimeout(radarStaggerTimerRef.current);
+        radarStaggerTimerRef.current = null;
+      }
     };
-  }, [layers.radar, layers.storms, mapReady]);
+  }, [layers.radar, layers.storms, mapReady, rasterRecoveryTick]);
 
   const toggleLayer = useCallback((k: LayerKey) => {
     setLayers((prev) => ({ ...prev, [k]: !prev[k] }));
