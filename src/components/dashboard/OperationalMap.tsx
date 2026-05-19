@@ -182,6 +182,9 @@ export function OperationalMap() {
   const mapRef = useRef<MLMap | null>(null);
   const styleRef = useRef<HTMLStyleElement | null>(null);
   const radarTimerRef = useRef<number | null>(null);
+  const radarFramesRef = useRef<{ host: string; frames: any[] } | null>(null);
+  const radarIdxRef = useRef(0);
+  const radarIntervalRef = useRef<number | null>(null);
   const initRetryRef = useRef<number>(0);
   const initTimerRef = useRef<number | null>(null);
   const gpuContextLostRef = useRef(false);
@@ -1015,10 +1018,6 @@ export function OperationalMap() {
   }, [layers, mapReady]);
 
   /* -------- RainViewer radar layer (animated frame playback) ------- */
-  const radarFramesRef = useRef<{ host: string; frames: any[] } | null>(null);
-  const radarIdxRef = useRef(0);
-  const radarIntervalRef = useRef<number | null>(null);
-
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
     const map = mapRef.current;
