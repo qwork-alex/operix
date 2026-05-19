@@ -25,8 +25,8 @@ import {
   pdfFirstPageToImageBase64,
   fileToBase64,
 } from "@/lib/pdfUtils";
-import { PaymentListsSelector } from "@/components/billing/PaymentListsSelector";
-import type { PaymentList } from "@/hooks/usePaymentLists";
+import { PaymentOrdersSelector } from "@/components/billing/PaymentOrdersSelector";
+import type { BillingPaymentOrder } from "@/hooks/usePaymentOrdersForBilling";
 
 type Step = "upload" | "review";
 type Stage = "idle" | "uploading" | "rendering" | "ocr" | "extracting" | "validating" | "done" | "error";
@@ -82,8 +82,8 @@ export default function ImportInvoiceDialog({
   const [fieldConf, setFieldConf] = useState<FieldConfidence>({});
   const [stage, setStage] = useState<Stage>("idle");
   const [stageMsg, setStageMsg] = useState<string>("");
-  const [linkedListIds, setLinkedListIds] = useState<string[]>([]);
-  const [linkedLists, setLinkedLists] = useState<PaymentList[]>([]);
+  const [linkedPOIds, setLinkedPOIds] = useState<string[]>([]);
+  const [linkedPOs, setLinkedPOs] = useState<BillingPaymentOrder[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const scanRef = useRef<HTMLInputElement>(null);
@@ -100,8 +100,8 @@ export default function ImportInvoiceDialog({
     setFieldConf({});
     setStage("idle");
     setStageMsg("");
-    setLinkedListIds([]);
-    setLinkedLists([]);
+    setLinkedPOIds([]);
+    setLinkedPOs([]);
     setStep("upload");
   };
 
@@ -208,9 +208,16 @@ export default function ImportInvoiceDialog({
       if (upErr) throw upErr;
 
       const total = Number(extracted.total_amount.replace(",", ".")) || 0;
-      const linked_payment_orders = Array.from(
-        new Set(linkedLists.flatMap(l => l.payment_order_ids))
+      // Canonical source = payment_orders (NEVER profit_distribution).
+      const linked_payment_order_ids = Array.from(new Set(linkedPOIds));
+      const linked_user_ids = Array.from(
+        new Set(linkedPOs.map((p) => p.assigned_user_id).filter(Boolean) as string[])
       );
+      const linked_payment_orders_meta = linkedPOs.map((p) => ({
+        id: p.id, code: p.code, assigned_user_id: p.assigned_user_id,
+        technician_name: p.technician_name, week: p.week, year: p.year,
+        total: p.total, service_order_id: p.service_order_id, list_name: p.list_name,
+      }));
       const insertPayload: any = {
         invoice_number: extracted.invoice_number.trim(),
         type: "incoming",
@@ -225,12 +232,11 @@ export default function ImportInvoiceDialog({
         status: "pending",
         source: "imported",
         metadata: {
-          linked_list_ids: linkedListIds,
-          linked_lists: linkedLists.map(l => ({
-            id: l.id, user_id: l.user_id, technician_name: l.technician_name,
-            week: l.week, year: l.year, os_count: l.os_count, total: l.total,
-          })),
-          linked_payment_orders,
+          linked_payment_order_ids,
+          linked_payment_orders_meta,
+          linked_user_ids,
+          // legacy compat key consumed by autostatus propagation trigger
+          linked_payment_orders: linked_payment_order_ids,
         },
       };
 
@@ -465,15 +471,16 @@ export default function ImportInvoiceDialog({
                       className="text-xs" />
                   </Field>
 
-                  {/* Listas vinculadas — incremental link to payment orders by technician+week */}
+                  {/* Vinculação direta a payment_orders (fonte única de verdade) */}
                   <div className="pt-3 mt-3 border-t border-border/50">
-                    <PaymentListsSelector
-                      value={linkedListIds}
-                      onChange={(ids, lists) => { setLinkedListIds(ids); setLinkedLists(lists); }}
+                    <PaymentOrdersSelector
+                      value={linkedPOIds}
+                      onChange={(ids, pos) => { setLinkedPOIds(ids); setLinkedPOs(pos); }}
                     />
                     <p className="mt-1.5 text-[10px] text-muted-foreground">
-                      Vincula esta fatura a ordens de pagamento existentes por técnico + semana.
-                      O estado da fatura propaga automaticamente para as OPs ligadas.
+                      Origem: <span className="font-medium">payment_orders</span>.
+                      Selecione OPs individuais ou um agrupamento por técnico/semana.
+                      O estado da fatura propaga automaticamente para as OPs vinculadas.
                     </p>
                   </div>
                 </div>
