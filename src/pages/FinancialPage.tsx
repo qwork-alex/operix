@@ -184,14 +184,10 @@ export default function FinancialPage() {
       {/* TABS */}
       <Tabs value={mainTab} onValueChange={setMainTab} className="space-y-4">
         <TabsList className="bg-muted">
-          <TabsTrigger value="overview">Visão geral</TabsTrigger>
           <TabsTrigger value="confronto">Confronto OS x OP</TabsTrigger>
           <TabsTrigger value="breakdown">Detalhamento</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="space-y-4">
-          <OverviewTab summary={s} hasNoData={hasNoData} />
-        </TabsContent>
 
         {/* CONFRONTO — UNTOUCHED */}
         <TabsContent value="confronto" className="space-y-4">
