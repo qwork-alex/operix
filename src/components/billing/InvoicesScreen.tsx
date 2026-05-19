@@ -17,6 +17,8 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
+import { PaymentOrdersSelector } from "@/components/billing/PaymentOrdersSelector";
+import type { BillingPaymentOrder } from "@/hooks/usePaymentOrdersForBilling";
 
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -104,9 +106,18 @@ type Invoice = {
   created_at: string;
   updated_at: string;
   metadata?: {
+    // Canonical link — source of truth = payment_orders
+    linked_payment_order_ids?: string[];
+    linked_payment_orders_meta?: Array<{
+      id: string; code: string; assigned_user_id: string | null;
+      technician_name: string; week: number; year: number; total: number;
+      service_order_id: string | null; list_name: string | null;
+    }>;
+    linked_user_ids?: string[];
+    // Legacy keys (kept for propagation trigger compat)
+    linked_payment_orders?: string[];
     linked_list_ids?: string[];
     linked_lists?: Array<{ id: string; user_id: string; technician_name: string; week: number; year: number; os_count: number; total: number }>;
-    linked_payment_orders?: string[];
   } | null;
 };
 
@@ -353,6 +364,9 @@ export default function InvoicesScreen() {
   const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<Invoice | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
+  // Vinculação a payment_orders (fonte única de verdade)
+  const [formPOIds, setFormPOIds] = useState<string[]>([]);
+  const [formPOs, setFormPOs] = useState<BillingPaymentOrder[]>([]);
 
   const [detail, setDetail] = useState<Invoice | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Invoice | null>(null);
@@ -478,6 +492,8 @@ export default function InvoicesScreen() {
       setFormOpen(false);
       setEditing(null);
       setForm(emptyForm());
+      setFormPOIds([]);
+      setFormPOs([]);
     },
     onError: (e: any) => toast.error(e?.message ?? "Erro ao gravar fatura"),
   });
@@ -500,6 +516,8 @@ export default function InvoicesScreen() {
   const openCreate = () => {
     setEditing(null);
     setForm(emptyForm());
+    setFormPOIds([]);
+    setFormPOs([]);
     setFormOpen(true);
   };
   const openEdit = (inv: Invoice) => {
@@ -527,6 +545,14 @@ export default function InvoicesScreen() {
       legal_text: DEFAULT_LEGAL,
       options: defaultOptions(),
     });
+    // Seed linked POs from metadata snapshot (no extra fetch needed for hydration)
+    const metaPOs = inv.metadata?.linked_payment_orders_meta ?? [];
+    setFormPOIds(inv.metadata?.linked_payment_order_ids ?? inv.metadata?.linked_payment_orders ?? metaPOs.map((m) => m.id));
+    setFormPOs(metaPOs.map((m) => ({
+      id: m.id, code: m.code, list_name: m.list_name, assigned_user_id: m.assigned_user_id,
+      technician_name: m.technician_name, total: m.total, service_order_id: m.service_order_id,
+      created_at: "", week: m.week, year: m.year, client_name: null, status: null,
+    })));
     setFormOpen(true);
   };
 
@@ -613,6 +639,28 @@ export default function InvoicesScreen() {
     return { subtotal, discount, netSubtotal, tax, total: netSubtotal + tax };
   }, [form.items, form.options]);
 
+  // Build invoice metadata from the linked payment_orders selection.
+  // Preserves any unrelated keys already on editing.metadata.
+  const buildLinkedMetadata = () => {
+    const linked_payment_order_ids = Array.from(new Set(formPOIds));
+    const linked_user_ids = Array.from(
+      new Set(formPOs.map((p) => p.assigned_user_id).filter(Boolean) as string[])
+    );
+    const linked_payment_orders_meta = formPOs.map((p) => ({
+      id: p.id, code: p.code, assigned_user_id: p.assigned_user_id,
+      technician_name: p.technician_name, week: p.week, year: p.year,
+      total: p.total, service_order_id: p.service_order_id, list_name: p.list_name,
+    }));
+    return {
+      ...(editing?.metadata ?? {}),
+      linked_payment_order_ids,
+      linked_payment_orders_meta,
+      linked_user_ids,
+      // legacy compat (propagation trigger)
+      linked_payment_orders: linked_payment_order_ids,
+    };
+  };
+
   const submitForm = () => {
     if (!form.invoice_number.trim()) {
       toast.error("Número da fatura é obrigatório");
@@ -638,6 +686,7 @@ export default function InvoicesScreen() {
       paid_amount: editing?.paid_amount ?? 0,
       status: editing?.status ?? "pending",
       notes: form.notes.trim() || null,
+      metadata: buildLinkedMetadata() as any,
     } as any);
   };
 
@@ -660,6 +709,7 @@ export default function InvoicesScreen() {
       paid_amount: editing?.paid_amount ?? 0,
       status: "draft",
       notes: form.notes.trim() || null,
+      metadata: buildLinkedMetadata() as any,
     } as any);
   };
 
@@ -856,7 +906,7 @@ export default function InvoicesScreen() {
                 </TableHead>
                 <TableHead className="w-[140px]">Número</TableHead>
                 <TableHead>Cliente / Fornecedor</TableHead>
-                <TableHead className="w-[180px]">Lista</TableHead>
+                <TableHead className="w-[200px]">Ordens de pagamento</TableHead>
                 <TableHead className="w-[90px]">Tipo</TableHead>
                 <TableHead className="text-right w-[110px]">Valor total</TableHead>
                 <TableHead className="text-right w-[110px]">Pago</TableHead>
@@ -916,22 +966,48 @@ export default function InvoicesScreen() {
                     <TableCell className="font-medium">{partyName}</TableCell>
                     <TableCell>
                       {(() => {
-                        const ll = r.metadata?.linked_lists;
-                        if (!ll || ll.length === 0) {
-                          return <span className="text-[10px] text-muted-foreground italic">—</span>;
-                        }
-                        const first = ll[0];
-                        return (
-                          <div className="flex flex-wrap gap-1">
+                        const meta = r.metadata?.linked_payment_orders_meta ?? [];
+                        const ids = r.metadata?.linked_payment_order_ids
+                          ?? r.metadata?.linked_payment_orders
+                          ?? [];
+                        if (meta.length === 0 && ids.length === 0) {
+                          // Legacy week buckets fallback (if invoice was imported under the old schema)
+                          const legacy = r.metadata?.linked_lists ?? [];
+                          if (legacy.length === 0) {
+                            return <span className="text-[10px] text-muted-foreground italic">—</span>;
+                          }
+                          const first = legacy[0];
+                          return (
                             <Badge variant="outline" className="text-[10px] gap-1 font-normal">
                               <span className="font-mono text-primary">S{first.week}</span>
-                              <span className="text-foreground">{first.technician_name}</span>
+                              <span>{first.technician_name}</span>
                               <span className="text-muted-foreground">· {first.os_count} OS</span>
                             </Badge>
-                            {ll.length > 1 && (
-                              <Badge variant="outline" className="text-[10px] font-normal text-muted-foreground">
-                                +{ll.length - 1}
+                          );
+                        }
+                        const first = meta[0];
+                        const count = Math.max(meta.length, ids.length);
+                        if (count === 1 && first) {
+                          return (
+                            <div className="flex flex-wrap gap-1">
+                              <Badge variant="outline" className="text-[10px] gap-1 font-normal">
+                                <span className="font-mono text-primary">{first.code}</span>
+                                <span className="text-muted-foreground">·</span>
+                                <span>{first.technician_name}</span>
+                                <span className="text-muted-foreground">S{first.week}</span>
                               </Badge>
+                            </div>
+                          );
+                        }
+                        return (
+                          <div className="flex flex-wrap gap-1">
+                            <Badge variant="outline" className="text-[10px] gap-1 font-normal border-primary/40">
+                              <span className="font-mono text-primary">{count} OPs vinculadas</span>
+                            </Badge>
+                            {first && (
+                              <span className="text-[10px] text-muted-foreground self-center">
+                                {first.technician_name} · S{first.week}
+                              </span>
                             )}
                           </div>
                         );
@@ -1127,6 +1203,23 @@ export default function InvoicesScreen() {
                   />
                 </Field>
               </div>
+            </FormSection>
+
+            {/* SECTION 1.5 — Vinculação a Ordens de Pagamento (fonte: payment_orders) */}
+            <FormSection
+              title="Ordens de pagamento vinculadas"
+              subtitle="Selecione OPs individuais ou agrupamentos por técnico/semana. Origem: payment_orders."
+            >
+              <PaymentOrdersSelector
+                value={formPOIds}
+                onChange={(ids, pos) => { setFormPOIds(ids); setFormPOs(pos); }}
+              />
+              {formPOIds.length > 0 && (
+                <p className="mt-2 text-[10px] text-muted-foreground">
+                  {formPOIds.length} OP{formPOIds.length !== 1 ? "s" : ""} vinculada{formPOIds.length !== 1 ? "s" : ""}.
+                  O estado da fatura propaga automaticamente para as OPs.
+                </p>
+              )}
             </FormSection>
 
             {/* SECTION 2 — Client (source of truth) */}
