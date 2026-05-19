@@ -103,6 +103,11 @@ type Invoice = {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  metadata?: {
+    linked_list_ids?: string[];
+    linked_lists?: Array<{ id: string; user_id: string; technician_name: string; week: number; year: number; os_count: number; total: number }>;
+    linked_payment_orders?: string[];
+  } | null;
 };
 
 type Supplier = { id: string; name: string };
