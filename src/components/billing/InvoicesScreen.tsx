@@ -870,13 +870,13 @@ export default function InvoicesScreen() {
             <TableBody>
               {invoicesQ.isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="text-center py-12">
+                  <TableCell colSpan={12} className="text-center py-12">
                     <Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" />
                   </TableCell>
                 </TableRow>
               ) : pageData.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="text-center py-12 text-xs text-muted-foreground">
+                  <TableCell colSpan={12} className="text-center py-12 text-xs text-muted-foreground">
                     Nenhuma fatura encontrada.
                   </TableCell>
                 </TableRow>
