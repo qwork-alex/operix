@@ -816,9 +816,6 @@ export function OperationalMap() {
         const f = e.features?.[0];
         if (!f) return;
         const p = f.properties || {};
-        const photo = p.photo_url
-          ? `<img src="${p.photo_url}" alt="report" style="width:180px;height:120px;object-fit:cover;border-radius:6px;margin-top:6px;border:1px solid rgba(255,255,255,0.1)"/>`
-          : `<div style="opacity:.6;font-size:10px;margin-top:4px">Sem foto enviada</div>`;
         const conf = Math.round(Number(p.confidence ?? 0) * 100);
         const html = `
           <div style="min-width:200px">
@@ -828,7 +825,6 @@ export function OperationalMap() {
               <span style="color:${p.color}">●</span> ${(p.severity || "").toUpperCase()} · ${p.hail_size_mm || 0}mm
             </div>
             <div style="font-size:10px;opacity:.75">Confiança ${conf}% · ${p.corroborations} corrob.</div>
-            ${photo}
             ${p.notes ? `<div style="font-size:10px;opacity:.7;margin-top:4px">${p.notes}</div>` : ""}
           </div>`;
         new maplibregl.Popup({ closeButton: true, offset: 12, maxWidth: "240px" })
