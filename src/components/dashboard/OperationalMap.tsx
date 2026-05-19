@@ -900,7 +900,7 @@ export function OperationalMap() {
   /* -------- Safe per-layer setData (isolated failures) ------------- */
   const safeSetData = useCallback((id: string, data: any) => {
     const map = mapRef.current;
-    if (!map || !(map as any).style) return;
+    if (!map || !(map as any).style || gpuContextLostRef.current) return;
     try {
       const src = map.getSource(id) as GeoJSONSource | undefined;
       src?.setData(data);
@@ -988,10 +988,19 @@ export function OperationalMap() {
     let raf = 0;
     let cancelled = false;
     const t0 = performance.now();
+    let last = 0;
     const tick = (now: number) => {
       if (cancelled) return;
       const map = mapRef.current;
-      if (!map || !(map as any).style) return;
+      if (!map || !(map as any).style || gpuContextLostRef.current || !layersRef.current.hail) {
+        raf = requestAnimationFrame(tick);
+        return;
+      }
+      if (now - last < 900) {
+        raf = requestAnimationFrame(tick);
+        return;
+      }
+      last = now;
       try {
         if (map.getLayer("hail-halo")) {
           const phase = ((now - t0) % 1800) / 1800;
