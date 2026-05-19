@@ -25,6 +25,8 @@ import {
   pdfFirstPageToImageBase64,
   fileToBase64,
 } from "@/lib/pdfUtils";
+import { PaymentListsSelector } from "@/components/billing/PaymentListsSelector";
+import type { PaymentList } from "@/hooks/usePaymentLists";
 
 type Step = "upload" | "review";
 type Stage = "idle" | "uploading" | "rendering" | "ocr" | "extracting" | "validating" | "done" | "error";
