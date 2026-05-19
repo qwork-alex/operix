@@ -182,10 +182,19 @@ export function OperationalMap() {
   const mapRef = useRef<MLMap | null>(null);
   const styleRef = useRef<HTMLStyleElement | null>(null);
   const radarTimerRef = useRef<number | null>(null);
+  const radarFramesRef = useRef<{ host: string; frames: any[] } | null>(null);
+  const radarIdxRef = useRef(0);
+  const radarIntervalRef = useRef<number | null>(null);
   const initRetryRef = useRef<number>(0);
+  const initTimerRef = useRef<number | null>(null);
+  const gpuContextLostRef = useRef(false);
+  const radarStaggerTimerRef = useRef<number | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
+  const [mapInitTick, setMapInitTick] = useState(0);
+  const [sourceRecoveryTick, setSourceRecoveryTick] = useState(0);
+  const [rasterRecoveryTick, setRasterRecoveryTick] = useState(0);
 
   // Callback ref guarantees init runs the moment the DOM node exists,
   // regardless of whether the loader skeleton was rendered first.
@@ -203,6 +212,11 @@ export function OperationalMap() {
     hail: true,
     pdr: true,
   });
+
+  const layersRef = useRef(layers);
+  useEffect(() => {
+    layersRef.current = layers;
+  }, [layers]);
 
   /* -------- data: service orders (orders + operations inferred) ----- */
   const { data: serviceOrders = [], isLoading: loadingSO } = useQuery({
@@ -521,6 +535,7 @@ export function OperationalMap() {
       setMapError("WebGL indisponível neste dispositivo");
       return;
     }
+    try { (gl as WebGLRenderingContext).getExtension("WEBGL_lose_context")?.loseContext(); } catch {}
 
     if (!styleRef.current) {
       const s = document.createElement("style");
@@ -546,7 +561,7 @@ export function OperationalMap() {
       if (initRetryRef.current < 3) {
         initRetryRef.current += 1;
         const delay = 800 * initRetryRef.current;
-        window.setTimeout(() => setMapError(null), delay);
+        initTimerRef.current = window.setTimeout(() => setMapInitTick((n) => n + 1), delay);
       }
       return;
     }
@@ -555,18 +570,23 @@ export function OperationalMap() {
     const canvas = map.getCanvas();
     const onCtxLost = (e: Event) => {
       e.preventDefault();
+      gpuContextLostRef.current = true;
+      if (radarIntervalRef.current) {
+        window.clearInterval(radarIntervalRef.current);
+        radarIntervalRef.current = null;
+      }
       console.warn("[OperationalMap] WebGL context lost — awaiting restore");
       setMapError("Contexto GPU perdido — restaurando…");
     };
     const onCtxRestored = () => {
       console.info("[OperationalMap] WebGL context restored");
+      gpuContextLostRef.current = false;
       setMapError(null);
       try {
         map.resize();
-        map.triggerRepaint();
-        // Force data effects to re-sync sources after GPU reset
-        queryClient.invalidateQueries({ queryKey: ["op-map-hail"] });
-        queryClient.invalidateQueries({ queryKey: ["op-map-hail-reports"] });
+        setSourceRecoveryTick((n) => n + 1);
+        setRasterRecoveryTick((n) => n + 1);
+        window.setTimeout(() => { try { map.triggerRepaint(); } catch {} }, 80);
       } catch {}
     };
     canvas.addEventListener("webglcontextlost", onCtxLost);
@@ -582,6 +602,7 @@ export function OperationalMap() {
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
 
     map.on("load", () => {
+      try {
       /* ---- Empty sources & layers; populated by data effect -------- */
       const addClusterLayer = (id: string, color: string) => {
         map.addSource(id, {
@@ -797,9 +818,6 @@ export function OperationalMap() {
         const f = e.features?.[0];
         if (!f) return;
         const p = f.properties || {};
-        const photo = p.photo_url
-          ? `<img src="${p.photo_url}" alt="report" style="width:180px;height:120px;object-fit:cover;border-radius:6px;margin-top:6px;border:1px solid rgba(255,255,255,0.1)"/>`
-          : `<div style="opacity:.6;font-size:10px;margin-top:4px">Sem foto enviada</div>`;
         const conf = Math.round(Number(p.confidence ?? 0) * 100);
         const html = `
           <div style="min-width:200px">
@@ -809,7 +827,6 @@ export function OperationalMap() {
               <span style="color:${p.color}">●</span> ${(p.severity || "").toUpperCase()} · ${p.hail_size_mm || 0}mm
             </div>
             <div style="font-size:10px;opacity:.75">Confiança ${conf}% · ${p.corroborations} corrob.</div>
-            ${photo}
             ${p.notes ? `<div style="font-size:10px;opacity:.7;margin-top:4px">${p.notes}</div>` : ""}
           </div>`;
         new maplibregl.Popup({ closeButton: true, offset: 12, maxWidth: "240px" })
@@ -862,24 +879,30 @@ export function OperationalMap() {
         map.on("mouseleave", id, () => (map.getCanvas().style.cursor = ""));
       });
       setMapReady(true);
+      } catch (e) {
+        console.warn("[OperationalMap] layer bootstrap isolated", e);
+        setMapReady(true);
+      }
     });
 
     mapRef.current = map;
 
     return () => {
       if (radarTimerRef.current) window.clearTimeout(radarTimerRef.current);
+      if (initTimerRef.current) window.clearTimeout(initTimerRef.current);
+      if (radarStaggerTimerRef.current) window.clearTimeout(radarStaggerTimerRef.current);
       try { canvas.removeEventListener("webglcontextlost", onCtxLost); } catch {}
       try { canvas.removeEventListener("webglcontextrestored", onCtxRestored); } catch {}
       try { map.remove(); } catch (e) { console.warn("[OperationalMap] remove failed", e); }
       mapRef.current = null;
       setMapReady(false);
     };
-  }, [containerEl, mapError]);
+  }, [containerEl, mapInitTick]);
 
   /* -------- Safe per-layer setData (isolated failures) ------------- */
   const safeSetData = useCallback((id: string, data: any) => {
     const map = mapRef.current;
-    if (!map || !(map as any).style) return;
+    if (!map || !(map as any).style || gpuContextLostRef.current) return;
     try {
       const src = map.getSource(id) as GeoJSONSource | undefined;
       src?.setData(data);
@@ -939,24 +962,50 @@ export function OperationalMap() {
   );
   const pdrHeatGeo = useMemo(() => opportunitiesToHeatmapGeoJSON(opportunities), [opportunities]);
 
+  const syncActiveSources = useCallback(() => {
+    const map = mapRef.current;
+    if (!map || !(map as any).style || gpuContextLostRef.current) return;
+    try { (map.getSource("orders") as GeoJSONSource | undefined)?.setData(ordersGeo as any); } catch (e) { console.warn("[OperationalMap] recover orders skipped", e); }
+    try { (map.getSource("teams") as GeoJSONSource | undefined)?.setData(teamsGeo as any); } catch (e) { console.warn("[OperationalMap] recover teams skipped", e); }
+    try { (map.getSource("operations") as GeoJSONSource | undefined)?.setData(operationsGeo as any); } catch (e) { console.warn("[OperationalMap] recover operations skipped", e); }
+    try { (map.getSource("hail") as GeoJSONSource | undefined)?.setData(hailGeo as any); } catch (e) { console.warn("[OperationalMap] recover hail skipped", e); }
+    try { (map.getSource("hail-reports") as GeoJSONSource | undefined)?.setData(hailReportsGeo as any); } catch (e) { console.warn("[OperationalMap] recover hail reports skipped", e); }
+    try { (map.getSource("pdr-heat") as GeoJSONSource | undefined)?.setData(pdrHeatGeo as any); } catch (e) { console.warn("[OperationalMap] recover pdr skipped", e); }
+  }, [ordersGeo, teamsGeo, operationsGeo, hailGeo, hailReportsGeo, pdrHeatGeo]);
+
+  useEffect(() => {
+    if (!mapReady || sourceRecoveryTick === 0) return;
+    syncActiveSources();
+    const map = mapRef.current;
+    if (!map || !(map as any).style || gpuContextLostRef.current) return;
+    const setVis = (id: string, vis: boolean) => {
+      try { if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", vis ? "visible" : "none"); } catch {}
+    };
+    (["orders", "teams", "operations"] as const).forEach((k) => {
+      [`${k}-clusters`, `${k}-cluster-count`, `${k}-points`, `${k}-glow`].forEach((id) => setVis(id, layersRef.current[k]));
+    });
+    ["hail-halo", "hail-ring", "hail-core", "hail-reports-glow", "hail-reports-core"].forEach((id) => setVis(id, layersRef.current.hail));
+    ["pdr-heatmap", "pdr-points"].forEach((id) => setVis(id, layersRef.current.pdr));
+  }, [mapReady, sourceRecoveryTick, syncActiveSources]);
+
   // Push PDR heatmap data
   useEffect(() => {
     if (!mapReady) return;
     safeSetData("pdr-heat", pdrHeatGeo);
   }, [mapReady, pdrHeatGeo, safeSetData]);
 
-  // Soft pulse animation for confirmed/ongoing hail halos (cheap; modulates opacity only)
+  // Soft pulse animation for confirmed/ongoing hail halos (throttled; no continuous RAF loop)
   useEffect(() => {
     if (!mapReady) return;
-    let raf = 0;
     let cancelled = false;
     const t0 = performance.now();
-    const tick = (now: number) => {
+    const tick = () => {
       if (cancelled) return;
       const map = mapRef.current;
-      if (!map || !(map as any).style) return;
+      if (!map || !(map as any).style || gpuContextLostRef.current || !layersRef.current.hail) return;
       try {
         if (map.getLayer("hail-halo")) {
+          const now = performance.now();
           const phase = ((now - t0) % 1800) / 1800;
           const pulse = 0.18 + 0.18 * Math.sin(phase * Math.PI * 2);
           map.setPaintProperty("hail-halo", "circle-opacity", [
@@ -969,15 +1018,16 @@ export function OperationalMap() {
       } catch {
         return;
       }
-      raf = requestAnimationFrame(tick);
     };
-    raf = requestAnimationFrame(tick);
-    return () => { cancelled = true; cancelAnimationFrame(raf); };
+    tick();
+    const id = window.setInterval(tick, 900);
+    return () => { cancelled = true; window.clearInterval(id); };
   }, [mapReady]);
 
   /* -------- Toggle layer visibility -------------------------------- */
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
+    if (gpuContextLostRef.current) return;
     const map = mapRef.current;
     const setVis = (id: string, vis: boolean) => {
       if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", vis ? "visible" : "none");
@@ -997,12 +1047,9 @@ export function OperationalMap() {
   }, [layers, mapReady]);
 
   /* -------- RainViewer radar layer (animated frame playback) ------- */
-  const radarFramesRef = useRef<{ host: string; frames: any[] } | null>(null);
-  const radarIdxRef = useRef(0);
-  const radarIntervalRef = useRef<number | null>(null);
-
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
+    if (gpuContextLostRef.current) return;
     const map = mapRef.current;
     let cancelled = false;
 
@@ -1010,6 +1057,10 @@ export function OperationalMap() {
       if (radarIntervalRef.current) {
         window.clearInterval(radarIntervalRef.current);
         radarIntervalRef.current = null;
+      }
+      if (radarStaggerTimerRef.current) {
+        window.clearTimeout(radarStaggerTimerRef.current);
+        radarStaggerTimerRef.current = null;
       }
       ["radar-layer", "storms-layer"].forEach((id) => {
         try { if (map.getLayer(id)) map.removeLayer(id); } catch {}
@@ -1066,7 +1117,7 @@ export function OperationalMap() {
                 source: srcId,
                 paint: {
                   "raster-opacity": kind === "radar" ? 0.55 : 0.65,
-                  "raster-fade-duration": 600,
+                    "raster-fade-duration": 0,
                 },
               }, map.getLayer("hail-halo") ? "hail-halo" : undefined);
             } catch {}
@@ -1077,23 +1128,33 @@ export function OperationalMap() {
         };
 
         reconcile("radar", !!layers.radar);
-        reconcile("storms", !!layers.storms);
+        if (layers.radar && layers.storms) {
+          radarStaggerTimerRef.current = window.setTimeout(() => reconcile("storms", true), 120);
+        } else {
+          reconcile("storms", !!layers.storms);
+        }
 
         // Animate: cycle frames smoothly — only for currently-active layers
         if (radarIntervalRef.current) window.clearInterval(radarIntervalRef.current);
         radarIntervalRef.current = window.setInterval(() => {
+          if (gpuContextLostRef.current) return;
           const data = radarFramesRef.current;
           if (!data) return;
           radarIdxRef.current = (radarIdxRef.current + 1) % data.frames.length;
           const path = data.frames[radarIdxRef.current].path;
-          (["radar", "storms"] as const).forEach((kind) => {
+          const updateRaster = (kind: "radar" | "storms") => {
             if (!map.getLayer(`${kind}-layer`)) return;
             const src = map.getSource(`${kind}-src`) as any;
             if (src && typeof src.setTiles === "function") {
               try { src.setTiles([buildUrl(data.host, path, kind)]); } catch {}
             }
-          });
-        }, 900);
+          };
+          updateRaster("radar");
+          if (map.getLayer("storms-layer")) {
+            if (radarStaggerTimerRef.current) window.clearTimeout(radarStaggerTimerRef.current);
+            radarStaggerTimerRef.current = window.setTimeout(() => updateRaster("storms"), 160);
+          }
+        }, 2400);
       } catch (e) {
         console.warn("[OperationalMap] radar fetch failed", e);
       }
@@ -1105,8 +1166,12 @@ export function OperationalMap() {
         window.clearInterval(radarIntervalRef.current);
         radarIntervalRef.current = null;
       }
+      if (radarStaggerTimerRef.current) {
+        window.clearTimeout(radarStaggerTimerRef.current);
+        radarStaggerTimerRef.current = null;
+      }
     };
-  }, [layers.radar, layers.storms, mapReady]);
+  }, [layers.radar, layers.storms, mapReady, rasterRecoveryTick]);
 
   const toggleLayer = useCallback((k: LayerKey) => {
     setLayers((prev) => ({ ...prev, [k]: !prev[k] }));
@@ -1195,7 +1260,16 @@ export function OperationalMap() {
             <div className="text-xs text-amber-200">Mapa em modo seguro</div>
             <div className="text-[10px] text-muted-foreground max-w-[320px]">{mapError}</div>
             <button
-              onClick={() => { initRetryRef.current = 0; setMapError(null); }}
+              onClick={() => {
+                initRetryRef.current = 0;
+                if (!mapRef.current) setMapInitTick((n) => n + 1);
+                else {
+                  gpuContextLostRef.current = false;
+                  setSourceRecoveryTick((n) => n + 1);
+                  setRasterRecoveryTick((n) => n + 1);
+                }
+                setMapError(null);
+              }}
               className="mt-1 text-[11px] px-3 py-1 rounded-md border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10"
             >
               Tentar novamente
