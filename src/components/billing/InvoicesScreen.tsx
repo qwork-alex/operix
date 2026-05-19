@@ -639,6 +639,28 @@ export default function InvoicesScreen() {
     return { subtotal, discount, netSubtotal, tax, total: netSubtotal + tax };
   }, [form.items, form.options]);
 
+  // Build invoice metadata from the linked payment_orders selection.
+  // Preserves any unrelated keys already on editing.metadata.
+  const buildLinkedMetadata = () => {
+    const linked_payment_order_ids = Array.from(new Set(formPOIds));
+    const linked_user_ids = Array.from(
+      new Set(formPOs.map((p) => p.assigned_user_id).filter(Boolean) as string[])
+    );
+    const linked_payment_orders_meta = formPOs.map((p) => ({
+      id: p.id, code: p.code, assigned_user_id: p.assigned_user_id,
+      technician_name: p.technician_name, week: p.week, year: p.year,
+      total: p.total, service_order_id: p.service_order_id, list_name: p.list_name,
+    }));
+    return {
+      ...(editing?.metadata ?? {}),
+      linked_payment_order_ids,
+      linked_payment_orders_meta,
+      linked_user_ids,
+      // legacy compat (propagation trigger)
+      linked_payment_orders: linked_payment_order_ids,
+    };
+  };
+
   const submitForm = () => {
     if (!form.invoice_number.trim()) {
       toast.error("Número da fatura é obrigatório");
@@ -664,6 +686,7 @@ export default function InvoicesScreen() {
       paid_amount: editing?.paid_amount ?? 0,
       status: editing?.status ?? "pending",
       notes: form.notes.trim() || null,
+      metadata: buildLinkedMetadata() as any,
     } as any);
   };
 
@@ -686,6 +709,7 @@ export default function InvoicesScreen() {
       paid_amount: editing?.paid_amount ?? 0,
       status: "draft",
       notes: form.notes.trim() || null,
+      metadata: buildLinkedMetadata() as any,
     } as any);
   };
 
