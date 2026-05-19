@@ -31,6 +31,7 @@ import { RolePermissionsManager } from "@/components/permissions/RolePermissions
 import { UserPermissionsDialog } from "@/components/permissions/UserPermissionsDialog";
 import { Can } from "@/components/Can";
 import { getCurrentUserId, logSaveError, logSavePayload } from "@/lib/authUser";
+import { SYSTEM_METADATA } from "@/config/system";
 
 // ─── PROFIT DISTRIBUTION ───
 // Moved to src/components/profit/ProfitDistribution.tsx
