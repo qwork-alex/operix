@@ -765,7 +765,7 @@ export default function InvoicesScreen() {
     ? filtered.filter((r) => selected.has(r.id))
     : filtered);
 
-  const exportExcel = () => {
+  const exportExcel = async () => {
     const rows = exportRows().map((r) => ({
       Número: r.invoice_number,
       Tipo: TYPE_META[r.type].label,
