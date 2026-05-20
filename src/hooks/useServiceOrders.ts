@@ -51,6 +51,7 @@ export function useServiceOrders(filters?: {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { can, isLoading: permsLoading } = useCan();
+  const { workspaceId } = useWorkspace();
 
   const hasRequiredAuditFields = (payload: {
     id?: string;
@@ -61,7 +62,7 @@ export function useServiceOrders(filters?: {
   const { allowed, scope } = can("service_orders", "view");
 
   const query = useQuery({
-    queryKey: ["service_orders", filters, allowed, scope, user?.id],
+    queryKey: ["service_orders", workspaceId, filters, allowed, scope, user?.id],
     enabled: !permsLoading && allowed && !!user?.id,
     queryFn: async () => {
       logScope("service_orders", "view", scope, allowed);
@@ -73,6 +74,7 @@ export function useServiceOrders(filters?: {
         .order("created_at", { ascending: false });
 
       q = applyScope(q, scope, user, "user_id");
+      q = scopeQuery(q, "service_orders", workspaceId);
 
       if (filters?.client_id) q = q.eq("client_id", filters.client_id);
       if (filters?.platform) q = q.eq("platform", filters.platform);
