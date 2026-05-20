@@ -122,6 +122,7 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
   const { data: techList = [] } = useWorkspaceTechnicians();
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
+  const [aiOpen, setAiOpen] = useState(false);
 
   useEffect(() => {
     if (yearsList.length === 0) return;
