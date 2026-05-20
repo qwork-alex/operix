@@ -44,12 +44,12 @@ export type IntegrityFilters = {
 };
 
 export function useFinancialIntegrity(filters: IntegrityFilters = {}) {
-  const { activeWorkspaceId } = useWorkspace();
+  const { workspaceId } = useWorkspace();
   const year = filters.year ?? new Date().getFullYear();
 
   const issues = useQuery({
-    queryKey: ["integrity-issues", activeWorkspaceId, year, filters],
-    enabled: !!activeWorkspaceId,
+    queryKey: ["integrity-issues", workspaceId, year, filters],
+    enabled: !!workspaceId,
     queryFn: async () => {
       let q = (supabase as any)
         .from("financial_integrity_issues")
@@ -57,7 +57,7 @@ export function useFinancialIntegrity(filters: IntegrityFilters = {}) {
         .eq("year_reference", year)
         .order("detected_at", { ascending: false })
         .limit(500);
-      if (activeWorkspaceId) q = q.eq("workspace_id", activeWorkspaceId);
+      if (workspaceId) q = q.eq("workspace_id", workspaceId);
       if (filters.severity && filters.severity !== "all") q = q.eq("severity", filters.severity);
       if (filters.issueType && filters.issueType !== "all") q = q.eq("issue_type", filters.issueType);
       if (filters.status && filters.status !== "all") q = q.eq("status", filters.status);
@@ -68,8 +68,8 @@ export function useFinancialIntegrity(filters: IntegrityFilters = {}) {
   });
 
   const snapshots = useQuery({
-    queryKey: ["integrity-snapshots", activeWorkspaceId, year],
-    enabled: !!activeWorkspaceId,
+    queryKey: ["integrity-snapshots", workspaceId, year],
+    enabled: !!workspaceId,
     queryFn: async () => {
       let q = (supabase as any)
         .from("financial_integrity_snapshots")
@@ -77,7 +77,7 @@ export function useFinancialIntegrity(filters: IntegrityFilters = {}) {
         .eq("year_reference", year)
         .order("created_at", { ascending: false })
         .limit(50);
-      if (activeWorkspaceId) q = q.eq("workspace_id", activeWorkspaceId);
+      if (workspaceId) q = q.eq("workspace_id", workspaceId);
       const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as IntegritySnapshot[];
@@ -89,13 +89,13 @@ export function useFinancialIntegrity(filters: IntegrityFilters = {}) {
 
 export function useRunIntegrityCheck() {
   const qc = useQueryClient();
-  const { activeWorkspaceId } = useWorkspace();
+  const { workspaceId } = useWorkspace();
   const { t } = useLanguage();
 
   return useMutation({
     mutationFn: async (year?: number) => {
       const { data, error } = await (supabase as any).rpc("run_financial_integrity_check", {
-        _workspace_id: activeWorkspaceId ?? null,
+        _workspace_id: workspaceId ?? null,
         _year: year ?? new Date().getFullYear(),
       });
       if (error) throw error;
