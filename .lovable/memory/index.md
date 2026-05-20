@@ -46,6 +46,7 @@ i18n rule: every visible string MUST flow through useLanguage().t(key) — no in
 - [Fleet OCR](mem://features/frota/captura-e-ocr) — Calculates price_per_liter, 1 active driver rule, clickable status toggles
 - [Fleet Reports](mem://features/frota/relatorios-e-kpis) — EU/FR compliant PDF/CSV reports (€/km, L/100km) generated weekly/monthly
 - [Control Center](mem://features/contabilidade/centro-de-controle) — 3D globe nav hub, maps expense categories for real-time DRE
+- [Accounting Isolation](mem://features/financeiro/accounting-isolation) — Accounting lives inside Financial tab; every record scoped to workspace+user+year, RLS prevents cross-user leakage
 - [RBAC](mem://auth/single-tenant-rbac) — Admin, Sócio, Técnico, Cliente roles with strict RLS filtering
 - [Hardening A1](mem://auth/hardening-phase-a1) — RLS leaks fechadas: discrepancies/drivers restritas; sod ampliada ao dono; is_system_owner flag.
 - [Hardening B1](mem://auth/hardening-phase-b1) — Canonical helpers (is_order_visible/writable, owner_filter_uids, assert_active). Sem policy changes; base de B2/B3/B4.
