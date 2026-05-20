@@ -3,6 +3,7 @@ import {
   Home,
   Receipt,
   Plane,
+  Fuel,
   ShoppingCart,
   Landmark,
   Wallet,
@@ -19,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { FinancialAIAssistant } from "./FinancialAIAssistant";
 
-type ModuleKey = "rentals" | "expenses" | "fuel" | "purchases" | "government" | "withdrawals";
+type ModuleKey = "rentals" | "expenses" | "fuel" | "travel" | "purchases" | "government" | "withdrawals";
 
 interface ModuleDef {
   key: ModuleKey;
@@ -28,12 +29,14 @@ interface ModuleDef {
   color: string; // HSL string without hsl()
 }
 
-// "fuel" module is rebranded as "Viagens" (Travel). Data continues to mirror
-// fleet_fuel_logs internally — only the visible label/icon changes.
+// "fuel" mirrors fleet_fuel_logs (operational fleet domain).
+// "travel" is an independent accounting expense category (tolls, parking,
+// hotels, transport, etc.) — does NOT touch fleet data.
 const MODULES: ModuleDef[] = [
   { key: "rentals",     label: "Aluguéis",    icon: Home,         color: "43 85% 55%"  },
   { key: "expenses",    label: "Despesas",    icon: Receipt,      color: "0 72% 55%"   },
-  { key: "fuel",        label: "Viagens",     icon: Plane,        color: "210 80% 55%" },
+  { key: "fuel",        label: "Combustível", icon: Fuel,         color: "210 80% 55%" },
+  { key: "travel",      label: "Viagens",     icon: Plane,        color: "190 75% 55%" },
   { key: "purchases",   label: "Compras",     icon: ShoppingCart, color: "280 60% 60%" },
   { key: "government",  label: "Governo",     icon: Landmark,     color: "152 60% 45%" },
   { key: "withdrawals", label: "Retiradas",   icon: Wallet,       color: "28 92% 55%"  },
