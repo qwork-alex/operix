@@ -1111,9 +1111,11 @@ function DerivedCell({ label, value, formatCurrency, tone = "neutral" }: {
 
 /* ── Phase 5D: visible inline + Novo Período (arbitrary year) ── */
 function AddPeriodInline({
+  compact = false,
   existingYears,
   onAddYear,
 }: {
+  compact?: boolean;
   existingYears: string[];
   onAddYear: (year?: number) => void;
 }) {
@@ -1141,20 +1143,20 @@ function AddPeriodInline({
   };
 
   return (
-    <div className="flex flex-wrap items-center justify-center gap-2 py-2">
+    <div className={compact ? "flex flex-wrap items-center justify-end gap-1" : "flex flex-wrap items-center justify-center gap-2 py-2"}>
       {!open ? (
         <Button
           type="button"
           size="sm"
           variant="outline"
-          className="h-7 px-3 text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/10 hover:border-primary/50"
+          className="h-7 px-2 sm:px-3 text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/10 hover:border-primary/50 whitespace-nowrap"
           onClick={() => setOpen(true)}
         >
           <Plus className="h-3.5 w-3.5" />
-          <span>+ Novo Período</span>
+          <span>Novo Período</span>
         </Button>
       ) : (
-        <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-primary/30 bg-muted/30 p-1.5">
+        <div className="flex flex-wrap items-center justify-end gap-1.5 rounded-md border border-primary/30 bg-muted/30 p-1.5 max-w-full">
           <Input
             autoFocus
             className="h-7 w-24 text-xs"
