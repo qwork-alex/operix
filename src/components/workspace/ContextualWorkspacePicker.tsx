@@ -1,16 +1,20 @@
 /**
- * ContextualWorkspacePicker — discreet inline selector.
+ * ContextualWorkspacePicker — discreet contextual workspace selector.
  *
- * Renders ONLY when the user must choose between 2+ eligible workspaces
- * for the given module. Hidden when auto-resolved.
+ * Renders ONLY when the user is linked to 2+ workspaces eligible for the
+ * current module (e.g. a technician shared between "Quality Work" and
+ * "Sanches"). For single-workspace users it renders nothing — assignment
+ * is silent and automatic.
  *
- * Usage:
- *   const ctx = useContextualWorkspace("payment_orders");
- *   <ContextualWorkspacePicker ctx={ctx} label="Atribuir a:" />
- *   // commit your action with ctx.resolvedWorkspaceId
+ * Visual: a single minimalist Users icon button. Clicking opens a popover
+ * listing the user's workspaces by name. The selected workspace is the
+ * destination for the action being performed (upload, OS, OP, etc.).
+ *
+ * This is NOT a global workspace switcher. It does not change the active
+ * application context — it only picks the destination workspace for the
+ * next assignment.
  */
-import { Check } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Users2, Check } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -21,101 +25,77 @@ import type { ContextualWorkspaceResult } from "@/hooks/useContextualWorkspace";
 
 interface Props {
   ctx: ContextualWorkspaceResult;
-  label?: string;
   className?: string;
-  /** Auto-hide after the user confirms (default true). */
+  /** Visual label is intentionally suppressed; kept for backward compat. */
+  label?: string;
   autoCollapse?: boolean;
 }
 
-export function ContextualWorkspacePicker({
-  ctx,
-  label = "Workspace:",
-  className,
-  autoCollapse = true,
-}: Props) {
-  // Auto-mode: only 1 eligible workspace → render nothing.
+export function ContextualWorkspacePicker({ ctx, className }: Props) {
+  // Single-workspace users: silent auto-assignment, no UI.
   if (ctx.eligibleWorkspaces.length <= 1) return null;
 
-  // User has already confirmed in this session and we don't need to nag.
-  const confirmed = !ctx.requireSelection && !!ctx.resolvedWorkspaceId;
-  if (confirmed && autoCollapse) {
-    const current = ctx.eligibleWorkspaces.find(
-      (w) => w.id === ctx.resolvedWorkspaceId,
-    );
-    return (
-      <Popover>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            className={cn(
-              "inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors",
-              className,
-            )}
-            aria-label="Alterar workspace desta ação"
-          >
-            <span className="opacity-60">↳</span>
-            <span className="font-mono">{current?.name ?? "—"}</span>
-          </button>
-        </PopoverTrigger>
-        <PopoverContent className="w-56 p-1" align="start">
-          <WorkspaceList ctx={ctx} />
-        </PopoverContent>
-      </Popover>
-    );
-  }
-
-  return (
-    <div
-      className={cn(
-        "inline-flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-2 py-1 text-[11px]",
-        className,
-      )}
-      role="group"
-      aria-label="Selecionar workspace para esta ação"
-    >
-      <span className="text-muted-foreground">{label}</span>
-      <div className="flex items-center gap-1">
-        {ctx.eligibleWorkspaces.map((w) => {
-          const active = ctx.resolvedWorkspaceId === w.id;
-          return (
-            <Button
-              key={w.id}
-              type="button"
-              size="sm"
-              variant={active ? "default" : "ghost"}
-              onClick={() => ctx.selectWorkspace(w.id)}
-              className="h-6 px-2 text-[10px] font-mono"
-            >
-              {active && <Check className="h-3 w-3 mr-1" />}
-              {w.name}
-            </Button>
-          );
-        })}
-      </div>
-    </div>
+  const current = ctx.eligibleWorkspaces.find(
+    (w) => w.id === ctx.resolvedWorkspaceId,
   );
-}
+  const needsPick = ctx.requireSelection || !ctx.resolvedWorkspaceId;
 
-function WorkspaceList({ ctx }: { ctx: ContextualWorkspaceResult }) {
   return (
-    <div className="flex flex-col gap-0.5">
-      {ctx.eligibleWorkspaces.map((w) => {
-        const active = ctx.resolvedWorkspaceId === w.id;
-        return (
-          <button
-            key={w.id}
-            type="button"
-            onClick={() => ctx.selectWorkspace(w.id)}
-            className={cn(
-              "flex items-center justify-between rounded px-2 py-1 text-xs hover:bg-accent transition-colors",
-              active && "bg-accent font-medium",
-            )}
-          >
-            <span className="font-mono">{w.name}</span>
-            {active && <Check className="h-3 w-3 text-primary" />}
-          </button>
-        );
-      })}
-    </div>
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={
+            current
+              ? `Workspace de destino: ${current.name}`
+              : "Selecionar workspace de destino"
+          }
+          title={
+            current
+              ? `Destino: ${current.name}`
+              : "Selecionar workspace de destino"
+          }
+          className={cn(
+            "relative inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
+            needsPick && "text-primary",
+            className,
+          )}
+        >
+          <Users2 className="h-3.5 w-3.5" />
+          {needsPick && (
+            <span className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        sideOffset={6}
+        collisionPadding={12}
+        className="w-56 max-w-[calc(100vw-24px)] p-1"
+      >
+        <div className="px-2 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+          Atribuir a
+        </div>
+        <div className="flex flex-col gap-0.5">
+          {ctx.eligibleWorkspaces.map((w) => {
+            const active = ctx.resolvedWorkspaceId === w.id;
+            return (
+              <button
+                key={w.id}
+                type="button"
+                onClick={() => ctx.selectWorkspace(w.id)}
+                className={cn(
+                  "flex items-center justify-between rounded px-2 py-1.5 text-xs transition-colors hover:bg-accent",
+                  active && "bg-accent font-medium text-foreground",
+                )}
+              >
+                <span className="truncate">{w.name}</span>
+                {active && <Check className="h-3 w-3 shrink-0 text-primary" />}
+              </button>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
