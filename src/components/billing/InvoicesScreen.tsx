@@ -19,6 +19,7 @@ import ExcelJS from "exceljs";
 import { toast } from "sonner";
 import { PaymentListsSelector } from "@/components/billing/PaymentListsSelector";
 import type { BillingPaymentList } from "@/hooks/usePaymentListsConsolidated";
+import { InvoiceLogoButton } from "@/components/settings/InvoiceLogoButton";
 
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
