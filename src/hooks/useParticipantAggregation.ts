@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { partialPaymentsStore } from "@/lib/partialPaymentsStore";
@@ -11,29 +11,7 @@ import {
 
 /**
  * READ-ONLY group/distribution-driven financial engine.
- *
- * Architecture: Service Orders → Groups → Distribution Rules → Participants.
- *
- * Sources (read-only):
- *  - service_orders                 → universe + total + status + group_id
- *      Uses the FROZEN distribution_snapshot (immutable per OS).
- *      Falls back to the live profit_rule for OS without snapshot,
- *      matched by `group_id ∈ profit_rules.group_ids`.
- *  - profit_rules + profit_rule_items
- *                                    → ensures every participant from any
- *                                      active rule appears (even with 0 OS).
- *  - localStorage (partialPaymentsStore)
- *                                    → Financial-UI-only partial amounts.
- *
- * Status rules:
- *  - 'paid'     → received = expected (full)
- *  - 'partial'  → received = partial_amount(UI) × percentage_share
- *                 (i.e. snapshot_value × partial/total, ratio capped at 1)
- *  - 'pending'  → received = 0
- *
- * NEVER writes to any of these tables.
- * NEVER reads from payment_orders or financial_entries.
- * NEVER filters by technician ownership — only group linkage matters.
+ * See header docs in repo history — unchanged.
  */
 
 export interface ParticipantAgg {
@@ -45,8 +23,6 @@ export interface ParticipantAgg {
 
 export interface ParticipantAggregation {
   byParticipant: Record<string, ParticipantAgg>;
-  /** week (raw service_orders.week, e.g. "40") → name → agg.
-   *  Time dimension is WEEK — no date/year filtering. */
   byParticipantWeek: Record<string, Record<string, ParticipantAgg>>;
   totals: { expected: number; received: number; difference: number };
   debug: {
@@ -69,42 +45,53 @@ function emptyAgg(name: string): ParticipantAgg {
 
 export function useParticipantAggregation() {
   const qc = useQueryClient();
-  const [, force] = useState(0);
 
-  // Re-run aggregation whenever the UI-only partial store changes.
+  // Phase 5D: Re-run only on partialPaymentsStore changes.
+  // The previous global cache subscriber called setState inside
+  // queryCache.subscribe — every invalidation re-fired the subscriber
+  // → "Maximum update depth exceeded" → black flashes / blank screens.
+  // Mutating hooks (useServiceOrders, profit rules CRUD) already
+  // invalidate ["participant-aggregation"] directly when needed.
   useEffect(() => {
     return partialPaymentsStore.subscribe(() => {
       qc.invalidateQueries({ queryKey: ["participant-aggregation"] });
-      force((n) => n + 1);
     });
   }, [qc]);
 
-  // NOTE: No supabase realtime channel here — Financial recomputes locally
-  // via TanStack Query invalidations triggered by mutating hooks
-  // (useServiceOrders, profit rules, etc.) and by partialPaymentsStore.
-  // Realtime caused "cannot add postgres_changes after subscribe" crashes
-  // under StrictMode and is not needed: all writes happen in-app and
-  // already invalidate their query keys.
-  //
-  // We piggy-back on cache invalidation of the most relevant keys to keep
-  // Financial instant without opening a websocket.
+  // SAFE cache subscriber — invalidate-only, NO setState, debounced.
+  // Excludes own key to prevent the previous render-loop storm.
   useEffect(() => {
+    let timer: number | null = null;
+    const schedule = () => {
+      if (timer != null) return;
+      timer = window.setTimeout(() => {
+        timer = null;
+        qc.invalidateQueries({ queryKey: ["participant-aggregation"] });
+      }, 120);
+    };
     const unsub = qc.getQueryCache().subscribe((event) => {
-      const key = (event?.query?.queryKey ?? []) as unknown[];
+      if (event.type !== "updated") return;
+      const action = (event as any).action;
+      if (!action || action.type !== "success") return;
+      const key = (event.query.queryKey ?? []) as unknown[];
       const head = typeof key[0] === "string" ? (key[0] as string) : "";
       if (
         head === "service-orders" ||
+        head === "service_orders" ||
         head === "payment-orders" ||
         head === "profit-rules" ||
         head === "profit_rules" ||
         head === "profit-rule-items"
       ) {
-        qc.invalidateQueries({ queryKey: ["participant-aggregation"] });
-        force((n) => n + 1);
+        schedule();
       }
     });
-    return () => unsub();
+    return () => {
+      if (timer != null) window.clearTimeout(timer);
+      unsub();
+    };
   }, [qc]);
+
 
   return useQuery<ParticipantAggregation>({
     queryKey: ["participant-aggregation"],

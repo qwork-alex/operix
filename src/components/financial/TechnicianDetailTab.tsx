@@ -502,9 +502,15 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
     toast.success(`Período ${finalPeriod} criado`);
   }, [localSpreadsheet, data.id, data.name, saveSpreadsheet]);
 
-  const handleAddYear = useCallback(() => {
+  const handleAddYear = useCallback((targetYear?: number) => {
     const existingYears = yearBlocks.map((yb) => parseInt(yb.year)).filter((y) => !isNaN(y));
-    const nextYear = existingYears.length > 0 ? Math.max(...existingYears) + 1 : new Date().getFullYear();
+    const nextYear = typeof targetYear === "number" && !isNaN(targetYear)
+      ? targetYear
+      : (existingYears.length > 0 ? Math.max(...existingYears) + 1 : new Date().getFullYear());
+    if (nextYear < 1900 || nextYear > 2999) {
+      toast.error("Ano inválido");
+      return;
+    }
     const yy = String(nextYear).slice(2);
     const firstPeriod = `Jan/${yy}`;
     if (localSpreadsheet.rows.some((r) => r.period === firstPeriod)) {
@@ -592,22 +598,11 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
                 derivedAgg={getParticipantYearAgg(aggregation, data.name, yb.year)}
               />
             ))}
-            {/* Add next year button */}
-            {yearBlocks.length > 0 && (
-              <div className="flex justify-center group/addyear">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      className="opacity-0 group-hover/addyear:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-primary/10 border border-transparent hover:border-primary/20"
-                      onClick={handleAddYear}
-                    >
-                      <Plus className="h-4 w-4 text-primary" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>Criar próximo ano</TooltipContent>
-                </Tooltip>
-              </div>
-            )}
+            {/* Phase 5D — visible inline "+ Novo Período" with arbitrary year */}
+            <AddPeriodInline
+              existingYears={yearBlocks.map((yb) => yb.year)}
+              onAddYear={handleAddYear}
+            />
           </div>
         </CollapsibleContent>
       </Collapsible>
@@ -1108,6 +1103,93 @@ function DerivedCell({ label, value, formatCurrency, tone = "neutral" }: {
       <div className={`h-7 flex items-center justify-end px-3 text-xs font-medium tabular-nums rounded-md bg-muted/20 ${color}`}>
         {formatCurrency(Math.abs(value))}
       </div>
+    </div>
+  );
+}
+
+/* ── Phase 5D: visible inline + Novo Período (arbitrary year) ── */
+function AddPeriodInline({
+  existingYears,
+  onAddYear,
+}: {
+  existingYears: string[];
+  onAddYear: (year?: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [yearInput, setYearInput] = useState("");
+  const currentYear = new Date().getFullYear();
+  const suggestions = useMemo(() => {
+    const set = new Set<number>();
+    set.add(currentYear - 1);
+    set.add(currentYear);
+    set.add(currentYear + 1);
+    existingYears.forEach((y) => { const n = parseInt(y); if (!isNaN(n)) set.add(n); });
+    return Array.from(set).sort((a, b) => a - b);
+  }, [existingYears, currentYear]);
+
+  const submit = () => {
+    const n = parseInt(yearInput.trim());
+    if (isNaN(n) || n < 1900 || n > 2999) {
+      toast.error("Ano inválido — use 4 dígitos (ex.: 2025)");
+      return;
+    }
+    onAddYear(n);
+    setYearInput("");
+    setOpen(false);
+  };
+
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-2 py-2">
+      {!open ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-7 px-3 text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/10 hover:border-primary/50"
+          onClick={() => setOpen(true)}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          <span>+ Novo Período</span>
+        </Button>
+      ) : (
+        <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-primary/30 bg-muted/30 p-1.5">
+          <Input
+            autoFocus
+            className="h-7 w-24 text-xs"
+            placeholder="Ano (2025)"
+            value={yearInput}
+            onChange={(e) => setYearInput(e.target.value.replace(/\D/g, "").slice(0, 4))}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") submit();
+              if (e.key === "Escape") { setOpen(false); setYearInput(""); }
+            }}
+          />
+          <Button type="button" size="sm" className="h-7 px-2 text-xs" onClick={submit}>
+            Criar
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-xs"
+            onClick={() => { setOpen(false); setYearInput(""); }}
+          >
+            Cancelar
+          </Button>
+          <div className="flex flex-wrap items-center gap-1 ml-1">
+            {suggestions.map((y) => (
+              <button
+                key={y}
+                type="button"
+                className="text-[10px] px-1.5 py-0.5 rounded bg-muted/40 hover:bg-primary/15 text-muted-foreground hover:text-primary transition-colors"
+                onClick={() => { setYearInput(String(y)); }}
+              >
+                {y}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
