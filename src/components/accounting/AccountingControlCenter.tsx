@@ -8,6 +8,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { SpaceBackground } from "./SpaceBackground";
+import { Globe } from "./Globe";
 import { ModulePanel } from "./ModulePanel";
 import { useAccountingModule } from "./useAccountingModules";
 import { cn } from "@/lib/utils";
