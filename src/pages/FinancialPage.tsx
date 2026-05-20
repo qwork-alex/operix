@@ -161,7 +161,7 @@ export default function FinancialPage() {
                   <UserPlus className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Adicionar técnico</TooltipContent>
+              <TooltipContent>{t("fin.addTech")}</TooltipContent>
             </Tooltip>
           )}
         </div>
@@ -175,9 +175,9 @@ export default function FinancialPage() {
         <Card className="border-border/50 bg-muted/30">
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <BarChart3 className="h-12 w-12 text-muted-foreground/40 mb-4" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">Sem dados para análise</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-2">{t("fin.empty.title")}</h3>
             <p className="text-sm text-muted-foreground max-w-md">
-              Nenhuma ordem de serviço ou pagamento encontrada. Importe dados nas respetivas páginas.
+              {t("fin.empty.desc")}
             </p>
           </CardContent>
         </Card>
@@ -186,13 +186,13 @@ export default function FinancialPage() {
       {/* TABS */}
       <Tabs value={mainTab} onValueChange={setMainTab} className="space-y-4">
         <TabsList className="bg-muted">
-          <TabsTrigger value="confronto">Confronto OS x OP</TabsTrigger>
-          <TabsTrigger value="breakdown">Detalhamento</TabsTrigger>
+          <TabsTrigger value="confronto">{t("fin.tabs.confronto")}</TabsTrigger>
+          <TabsTrigger value="breakdown">{t("fin.tabs.breakdown")}</TabsTrigger>
           <TabsTrigger value="participation">
-            <Users className="h-3.5 w-3.5 mr-1" /> Participation
+            <Users className="h-3.5 w-3.5 mr-1" /> {t("fin.tabs.participation")}
           </TabsTrigger>
           <TabsTrigger value="audit">
-            <ShieldCheck className="h-3.5 w-3.5 mr-1" /> Audit
+            <ShieldCheck className="h-3.5 w-3.5 mr-1" /> {t("fin.tabs.audit")}
           </TabsTrigger>
         </TabsList>
 
@@ -203,17 +203,17 @@ export default function FinancialPage() {
           <Tabs value={confrontoTab} onValueChange={setConfrontoTab}>
             <TabsList className="bg-muted/50">
               <TabsTrigger value="fusao">
-                <Link2 className="h-3.5 w-3.5 mr-1" /> Fusão manual
+                <Link2 className="h-3.5 w-3.5 mr-1" /> {t("fin.confronto.fusao")}
               </TabsTrigger>
               <TabsTrigger value="pendentes" className="relative">
-                <AlertTriangle className="h-3.5 w-3.5 mr-1" /> Pendentes
+                <AlertTriangle className="h-3.5 w-3.5 mr-1" /> {t("fin.confronto.pendentes")}
                 {pendingItems.length > 0 && (
                   <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive/20 text-destructive text-[9px] px-1">
                     {pendingItems.length}
                   </span>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="historico">Histórico</TabsTrigger>
+              <TabsTrigger value="historico">{t("fin.confronto.historico")}</TabsTrigger>
             </TabsList>
 
             <TabsContent value="fusao">

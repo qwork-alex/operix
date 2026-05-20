@@ -18,6 +18,7 @@ import {
   useFinancialIntegritySummary,
   useParticipationDiffs,
 } from "@/hooks/useFinancialAudit";
+import { useLanguage } from "@/hooks/useLanguage";
 
 const EVENT_TYPES = [
   "all", "billing.payment.synced", "billing.invoice.updated",
@@ -104,6 +105,7 @@ function EventRow({ ev, onSelect }: { ev: any; onSelect: (e: any) => void }) {
 }
 
 function DiffPanel({ event, onClose }: { event: any | null; onClose: () => void }) {
+  const { t } = useLanguage();
   const ledgerId =
     event?.payload?.ledger_id ||
     event?.payload?.participation_ledger_id ||
@@ -115,7 +117,7 @@ function DiffPanel({ event, onClose }: { event: any | null; onClose: () => void 
       <SheetContent className="w-[520px] sm:max-w-[520px] overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
-            <GitCompare className="h-4 w-4" /> Participation diffs
+            <GitCompare className="h-4 w-4" /> {t("audit.diffs.title")}
           </SheetTitle>
           <SheetDescription className="font-mono text-[10px] break-all">
             ledger {ledgerId ?? "—"}
@@ -124,7 +126,7 @@ function DiffPanel({ event, onClose }: { event: any | null; onClose: () => void 
         <div className="mt-4 space-y-2">
           {isLoading && <Skeleton className="h-24" />}
           {!isLoading && diffs.length === 0 && (
-            <p className="text-xs text-muted-foreground">No diffs captured yet.</p>
+            <p className="text-xs text-muted-foreground">{t("audit.diffs.none")}</p>
           )}
           {diffs.map((d: any) => (
             <Card key={d.id} className="border-border/50">
@@ -138,15 +140,15 @@ function DiffPanel({ event, onClose }: { event: any | null; onClose: () => void 
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-[11px]">
                   <div>
-                    <p className="text-muted-foreground">Expected</p>
+                    <p className="text-muted-foreground">{t("part.expected")}</p>
                     <p className="font-mono">{Number(d.previous_expected).toFixed(2)} → <span className="text-foreground font-semibold">{Number(d.new_expected).toFixed(2)}</span></p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Received</p>
+                    <p className="text-muted-foreground">{t("part.received")}</p>
                     <p className="font-mono">{Number(d.previous_received).toFixed(2)} → <span className="text-foreground font-semibold">{Number(d.new_received).toFixed(2)}</span></p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Status</p>
+                    <p className="text-muted-foreground">{t("label.status")}</p>
                     <p className="font-mono">{d.previous_status} → <span className="text-foreground font-semibold">{d.new_status}</span></p>
                   </div>
                 </div>
@@ -160,6 +162,7 @@ function DiffPanel({ event, onClose }: { event: any | null; onClose: () => void 
 }
 
 export default function FinancialAuditTab() {
+  const { t } = useLanguage();
   const [year, setYear] = useState<number | null>(null);
   const [eventType, setEventType] = useState<string>("all");
   const [entityType, setEntityType] = useState<string>("all");
@@ -194,19 +197,19 @@ export default function FinancialAuditTab() {
           Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)
         ) : (
           <>
-            <KPI label="Duplicate hashes" value={integrity?.duplicate_hash_count ?? 0}
+            <KPI label={t("audit.kpi.dupeHash")} value={integrity?.duplicate_hash_count ?? 0}
               tone={(integrity?.duplicate_hash_count ?? 0) > 0 ? "danger" : "ok"} icon={Hash} />
-            <KPI label="Orphan OPs" value={integrity?.orphan_op_count ?? 0}
+            <KPI label={t("audit.kpi.orphanOp")} value={integrity?.orphan_op_count ?? 0}
               tone={(integrity?.orphan_op_count ?? 0) > 0 ? "warn" : "ok"} icon={AlertTriangle} />
-            <KPI label="Missing SO links" value={integrity?.missing_so_links ?? 0}
+            <KPI label={t("audit.kpi.missingSo")} value={integrity?.missing_so_links ?? 0}
               tone={(integrity?.missing_so_links ?? 0) > 0 ? "warn" : "ok"} icon={Layers} />
-            <KPI label="Over-allocated" value={integrity?.over_allocated_distributions ?? 0}
+            <KPI label={t("audit.kpi.overAlloc")} value={integrity?.over_allocated_distributions ?? 0}
               tone={(integrity?.over_allocated_distributions ?? 0) > 0 ? "danger" : "ok"} icon={AlertTriangle} />
-            <KPI label="Invalid workspace rows" value={integrity?.invalid_workspace_rows ?? 0}
+            <KPI label={t("audit.kpi.invalidWs")} value={integrity?.invalid_workspace_rows ?? 0}
               tone={(integrity?.invalid_workspace_rows ?? 0) > 0 ? "danger" : "ok"} icon={ShieldCheck} />
-            <KPI label="Replay collapses" value={integrity?.replay_collapses ?? 0} icon={RefreshCw} />
-            <KPI label="Skipped diff updates" value={integrity?.skipped_diff_updates ?? 0} icon={Activity} />
-            <KPI label="Sync lock hits" value={integrity?.financial_sync_lock_hits ?? 0} icon={ShieldCheck} />
+            <KPI label={t("audit.kpi.replay")} value={integrity?.replay_collapses ?? 0} icon={RefreshCw} />
+            <KPI label={t("audit.kpi.skipped")} value={integrity?.skipped_diff_updates ?? 0} icon={Activity} />
+            <KPI label={t("audit.kpi.lockHits")} value={integrity?.financial_sync_lock_hits ?? 0} icon={ShieldCheck} />
           </>
         )}
       </div>
@@ -217,7 +220,7 @@ export default function FinancialAuditTab() {
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
-              placeholder="Search by event, entity or hash…"
+              placeholder={t("audit.search")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-8 h-8 text-xs"
@@ -226,20 +229,20 @@ export default function FinancialAuditTab() {
           <Select value={year?.toString() ?? "all"} onValueChange={(v) => setYear(v === "all" ? null : Number(v))}>
             <SelectTrigger className="h-8 w-[110px] text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All years</SelectItem>
+              <SelectItem value="all">{t("audit.allYears")}</SelectItem>
               {YEARS.map(y => <SelectItem key={y} value={y.toString()}>{y}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={eventType} onValueChange={setEventType}>
             <SelectTrigger className="h-8 w-[200px] text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {EVENT_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+              {EVENT_TYPES.map(tk => <SelectItem key={tk} value={tk}>{tk}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={entityType} onValueChange={setEntityType}>
             <SelectTrigger className="h-8 w-[180px] text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {ENTITY_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+              {ENTITY_TYPES.map(tk => <SelectItem key={tk} value={tk}>{tk}</SelectItem>)}
             </SelectContent>
           </Select>
           <Button
@@ -256,9 +259,9 @@ export default function FinancialAuditTab() {
         <CardContent className="p-0">
           <div className="px-3 py-2 border-b border-border/40 flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Event timeline
+              {t("audit.timeline")}
             </p>
-            <p className="text-[10px] text-muted-foreground">{filteredEvents.length} events</p>
+            <p className="text-[10px] text-muted-foreground">{filteredEvents.length} {t("audit.eventsCount")}</p>
           </div>
           {evLoading ? (
             <div className="p-3 space-y-2">
@@ -266,7 +269,7 @@ export default function FinancialAuditTab() {
             </div>
           ) : filteredEvents.length === 0 ? (
             <div className="p-8 text-center text-xs text-muted-foreground">
-              No events recorded yet.
+              {t("audit.empty")}
             </div>
           ) : (
             <ScrollArea className="h-[500px]">

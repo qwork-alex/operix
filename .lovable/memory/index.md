@@ -10,8 +10,10 @@ Dark Luxury UI: charcoal/black base, neon accents, glassmorphism. Inline editing
 Constraint: No visual redesigns/feature removals. Stabilize logic & complete CRUD operations.
 Resilience: Try/catch all async actions, localized toasts, diffing for mutations. Fallbacks for IDs.
 Owner account (qwork@qworkgroup.com) is protected, has exclusive reset access. No public signup.
+i18n rule: every visible string MUST flow through useLanguage().t(key) — no inline literals (see mem://style/i18n-rule).
 
 ## Memories
+- [i18n Rule](mem://style/i18n-rule) — Phase 4C: all UI strings via t(); no inline literals; Brazilian PT goes in the existing pt slot
 - [Workspace Context Phase 1](mem://auth/workspace-context-phase1) — workspace_id/year_reference/visibility_scope em todas tabelas críticas, workspace_module_permissions, resolvers SQL, hooks frontend opt-in (scopeQuery, useWorkspaceModules). Aditivo, sem quebra de RLS.
 - [Contextual Action Engine](mem://auth/contextual-action-engine) — useContextualWorkspace + ContextualWorkspacePicker (discreet chip) + treeGrouping helper. Auto-resolve quando 1 ws elegível, prompt mínimo quando 2+. Session-scoped.
 - [Data Visibility Flags](mem://features/auth/data-visibility-flags) — user_settings table + has_global_view() controlling SO/PO/financial SELECT scope
