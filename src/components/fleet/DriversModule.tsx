@@ -350,6 +350,29 @@ export default function DriversModule() {
                 </div>
               </div>
             </div>
+
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1">
+                <Link2 className="h-3 w-3" /> Vincular a Utilizador (opcional)
+              </p>
+              <Select
+                value={form.linked_user_id || "none"}
+                onValueChange={(v) => set("linked_user_id", v === "none" ? "" : v)}
+              >
+                <SelectTrigger className="text-sm">
+                  <SelectValue placeholder="Condutor independente" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Condutor independente</SelectItem>
+                  {workspaceUsers.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Eventos operacionais sincronizam automaticamente quando vinculado.
+              </p>
+            </div>
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
