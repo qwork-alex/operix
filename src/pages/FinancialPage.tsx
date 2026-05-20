@@ -161,7 +161,7 @@ export default function FinancialPage() {
                   <UserPlus className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Adicionar técnico</TooltipContent>
+              <TooltipContent>{t("fin.addTech")}</TooltipContent>
             </Tooltip>
           )}
         </div>
