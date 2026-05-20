@@ -598,22 +598,11 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
                 derivedAgg={getParticipantYearAgg(aggregation, data.name, yb.year)}
               />
             ))}
-            {/* Add next year button */}
-            {yearBlocks.length > 0 && (
-              <div className="flex justify-center group/addyear">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      className="opacity-0 group-hover/addyear:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-primary/10 border border-transparent hover:border-primary/20"
-                      onClick={handleAddYear}
-                    >
-                      <Plus className="h-4 w-4 text-primary" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>Criar próximo ano</TooltipContent>
-                </Tooltip>
-              </div>
-            )}
+            {/* Phase 5D — visible inline "+ Novo Período" with arbitrary year */}
+            <AddPeriodInline
+              existingYears={yearBlocks.map((yb) => yb.year)}
+              onAddYear={handleAddYear}
+            />
           </div>
         </CollapsibleContent>
       </Collapsible>
