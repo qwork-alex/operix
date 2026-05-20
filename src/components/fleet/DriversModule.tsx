@@ -110,6 +110,7 @@ export default function DriversModule() {
         license_expiry_date: form.license_expiry_date || null,
         phone: form.phone || null,
         email: form.email || null,
+        linked_user_id: form.linked_user_id || null,
       };
       if (editId) {
         const { error } = await supabase.from("drivers").update(payload).eq("id", editId);
@@ -136,6 +137,8 @@ export default function DriversModule() {
     onError: (e) => toast.error(`Erro ao remover condutor: ${(e as Error).message}`),
   });
 
+  const { data: workspaceUsers = [] } = useWorkspaceTechnicians();
+
   const closeDialog = () => {
     setOpen(false); setEditId(null); setForm(emptyForm);
     setConfidence({}); setOcrNotes(null);
@@ -152,6 +155,7 @@ export default function DriversModule() {
       addr_region: parsed.addr_region || "", addr_country: parsed.addr_country || "Portugal",
       license_category: d.license_category || "", license_number: d.license_number || "",
       license_expiry_date: d.license_expiry_date || "",
+      linked_user_id: d.linked_user_id || "",
     });
     setConfidence({});
     setOcrNotes(null);
