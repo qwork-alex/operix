@@ -112,18 +112,40 @@ export function ModulePanel({
         </Button>
       </div>
 
-      {/* Add button */}
+      {/* Add / Import buttons */}
       {allowAdd && !showForm && (
-        <div className="p-3 border-b border-border/30">
+        <div className="p-3 border-b border-border/30 flex gap-2">
           <Button
             variant="outline"
             size="sm"
-            className="w-full gap-2 border-dashed"
+            className="flex-1 gap-2 border-dashed"
             onClick={() => { resetForm(); setShowForm(true); }}
           >
             <Plus size={14} /> Adicionar
           </Button>
+          {importCategory && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1 gap-2 border-dashed"
+              onClick={() => setShowImport(true)}
+              title="Importar talão, fatura ou recibo"
+            >
+              <Upload size={14} /> Importar
+            </Button>
+          )}
         </div>
+      )}
+
+      {importCategory && (
+        <ImportReceiptDialog
+          open={showImport}
+          onClose={() => setShowImport(false)}
+          defaultCategory={importCategory}
+          year={year}
+          month={month ?? null}
+          techId={techId ?? null}
+        />
       )}
 
       {/* Form */}
