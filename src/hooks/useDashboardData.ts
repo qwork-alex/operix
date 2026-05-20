@@ -33,6 +33,10 @@ export function useDashboardStats() {
       poQ = applyScope(poQ, poView.allowed ? poView.scope : "own", user);
       frQ = applyScope(frQ, finView.allowed ? finView.scope : "own", user);
       clientQ = applyScope(clientQ, soView.allowed ? soView.scope : "own", user);
+      soQ = scopeQuery(soQ, "service_orders", workspaceId);
+      poQ = scopeQuery(poQ, "payment_orders", workspaceId);
+      frQ = scopeQuery(frQ, "financial_records", workspaceId);
+      clientQ = scopeQuery(clientQ, "clients", workspaceId);
 
       const [soRes, poRes, frRes, techRes, clientRes, discRes] = await Promise.all([
         soQ, poQ, frQ, techQ, clientQ, discQ,
