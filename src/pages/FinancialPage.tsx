@@ -225,8 +225,8 @@ export default function FinancialPage() {
           <ProfitDistribution />
         </TabsContent>
 
-        <TabsContent value="accounting" className="space-y-4">
-          <div className="min-h-[600px]">
+        <TabsContent value="accounting" className="space-y-4 min-w-0 max-w-full">
+          <div className="min-h-[600px] min-w-0 max-w-full w-full overflow-hidden">
             <AccountingControlCenter embedded />
           </div>
         </TabsContent>
