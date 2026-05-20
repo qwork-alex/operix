@@ -35,7 +35,7 @@ export default function FinancialPage() {
   const [confrontoTab, setConfrontoTab] = useState("fusao");
   const [searchParams] = useSearchParams();
   const initialTab = searchParams.get("tab");
-  const validTabs = ["confronto", "breakdown", "participation", "audit", "accounting"];
+  const validTabs = ["confronto", "breakdown", "participation", "audit", "accounting", "integrity"];
   const [mainTab, setMainTab] = useState(
     initialTab && validTabs.includes(initialTab) ? initialTab : "confronto"
   );
