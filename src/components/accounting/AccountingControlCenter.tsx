@@ -484,6 +484,8 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
           </div>
         )}
       </div>
+
+      <FinancialAIAssistant open={aiOpen} onClose={() => setAiOpen(false)} year={selectedYear} />
     </div>
   );
 }
