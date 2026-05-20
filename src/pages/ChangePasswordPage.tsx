@@ -34,6 +34,7 @@ export default function ChangePasswordPage() {
         data: { must_change_password: false },
       });
       if (error) throw error;
+      try { await supabase.rpc("clear_my_temp_credential" as any); } catch { /* noop */ }
       toast.success("Senha atualizada com sucesso!");
       navigate("/", { replace: true });
     } catch (err: any) {
