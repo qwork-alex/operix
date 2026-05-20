@@ -386,6 +386,7 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
             }}
           >
             <StaticAccountingGlobe size={globeSize} />
+            <Globe size={globeSize} />
           </div>
 
           {/* Orbital module buttons (positions mutated directly in DOM) */}
