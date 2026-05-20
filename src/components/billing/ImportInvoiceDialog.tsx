@@ -245,6 +245,7 @@ export default function ImportInvoiceDialog({
           linked_payment_order_ids,
           linked_payment_orders: linked_payment_order_ids, // legacy alias
         },
+        ...(ctxWs.resolvedWorkspaceId ? { workspace_id: ctxWs.resolvedWorkspaceId } : {}),
       };
 
       const { data: inv, error: invErr } = await (supabase as any)
@@ -258,6 +259,7 @@ export default function ImportInvoiceDialog({
         mime_type: file.type,
         size_bytes: file.size,
         uploaded_by: uid,
+        ...(ctxWs.resolvedWorkspaceId ? { workspace_id: ctxWs.resolvedWorkspaceId } : {}),
       });
       if (attErr) throw attErr;
     },
