@@ -149,6 +149,7 @@ async function fetchDocumentBlobUrl(
 export function EmbeddedFileManager({ entityType, module: moduleName = "orders", sessionFileNames = [], defaultCollapsed = false, year = null }: Props) {
   const { t, formatDate } = useLanguage();
   const { user } = useAuth();
+  const { workspaceId } = useWorkspace();
   const queryClient = useQueryClient();
   const collapseKey = `fm.collapsed.${entityType}.${moduleName}`;
   const [collapsed, setCollapsed] = useState<boolean>(() => {
