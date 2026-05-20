@@ -7,7 +7,6 @@ import {
   Landmark,
   Wallet,
 } from "lucide-react";
-import { Globe } from "./Globe";
 import { SpaceBackground } from "./SpaceBackground";
 import { ModulePanel } from "./ModulePanel";
 import { useAccountingModule } from "./useAccountingModules";
@@ -33,6 +32,26 @@ const MODULES: ModuleDef[] = [
   { key: "government",  label: "Governo",     icon: Landmark,     color: "152 60% 45%" },
   { key: "withdrawals", label: "Retiradas",   icon: Wallet,       color: "28 92% 55%"  },
 ];
+
+function StaticAccountingGlobe({ size }: { size: number }) {
+  return (
+    <div
+      className="relative rounded-full border border-primary/20 shadow-[0_0_60px_hsl(var(--primary)/0.20)]"
+      style={{
+        width: size,
+        height: size,
+        background:
+          "radial-gradient(circle at 34% 30%, hsl(var(--primary) / 0.62), hsl(var(--primary) / 0.26) 30%, hsl(var(--card) / 0.72) 62%, hsl(var(--background)) 100%)",
+      }}
+      aria-hidden
+    >
+      <div className="absolute inset-[12%] rounded-full border border-primary/15" />
+      <div className="absolute left-[18%] top-[28%] h-[12%] w-[34%] rounded-full bg-primary/25 blur-[1px]" />
+      <div className="absolute right-[18%] top-[48%] h-[10%] w-[28%] rounded-full bg-primary/20 blur-[1px]" />
+      <div className="absolute inset-0 rounded-full shadow-[inset_-24px_-28px_55px_hsl(var(--background)/0.78)]" />
+    </div>
+  );
+}
 
 // ---------- Memoized orbital button (GPU transform only) ----------
 interface OrbitButtonProps {
