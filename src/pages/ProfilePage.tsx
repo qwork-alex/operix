@@ -9,6 +9,8 @@ import { AvatarCard } from "@/components/settings/AvatarCard";
 import { CompanyDataCard } from "@/components/settings/CompanyDataCard";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { COUNTRIES } from "@/lib/countries";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { LoadingState } from "@/components/shared/LoadingState";
 
 interface AddrParts { street_number: string; street_name: string; postal_code: string; city: string; country: string; }
 const EMPTY_ADDR: AddrParts = { street_number: "", street_name: "", postal_code: "", city: "", country: "" };
