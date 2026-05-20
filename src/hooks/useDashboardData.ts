@@ -3,17 +3,20 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useCan } from "./usePermission";
 import { applyScope, logScope } from "@/lib/applyScope";
+import { useWorkspace } from "./useWorkspace";
+import { scopeQuery } from "@/lib/workspaceScope";
 
 export function useDashboardStats() {
   const { user } = useAuth();
   const { can, isLoading: permsLoading } = useCan();
+  const { workspaceId } = useWorkspace();
   const soView = can("service_orders", "view");
   const poView = can("payment_orders", "view");
   const finView = can("financial", "view");
   const allowed = soView.allowed || poView.allowed || finView.allowed;
 
   return useQuery({
-    queryKey: ["dashboard-stats", allowed, soView.scope, poView.scope, finView.scope, user?.id],
+    queryKey: ["dashboard-stats", workspaceId, allowed, soView.scope, poView.scope, finView.scope, user?.id],
     enabled: !permsLoading && allowed && !!user?.id,
     queryFn: async () => {
       logScope("dashboard", "view", soView.scope, allowed);
@@ -30,6 +33,10 @@ export function useDashboardStats() {
       poQ = applyScope(poQ, poView.allowed ? poView.scope : "own", user);
       frQ = applyScope(frQ, finView.allowed ? finView.scope : "own", user);
       clientQ = applyScope(clientQ, soView.allowed ? soView.scope : "own", user);
+      soQ = scopeQuery(soQ, "service_orders", workspaceId);
+      poQ = scopeQuery(poQ, "payment_orders", workspaceId);
+      frQ = scopeQuery(frQ, "financial_records", workspaceId);
+      clientQ = scopeQuery(clientQ, "clients", workspaceId);
 
       const [soRes, poRes, frRes, techRes, clientRes, discRes] = await Promise.all([
         soQ, poQ, frQ, techQ, clientQ, discQ,

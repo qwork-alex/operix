@@ -2906,6 +2906,14 @@ export type Database = {
         }
         Returns: boolean
       }
+      has_role_in_workspace: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _uid: string
+          _ws: string
+        }
+        Returns: boolean
+      }
       is_order_visible: {
         Args: {
           _assigned: string
@@ -2920,6 +2928,10 @@ export type Database = {
         Returns: boolean
       }
       is_user_active: { Args: { _user_id: string }; Returns: boolean }
+      is_workspace_member: {
+        Args: { _uid: string; _ws: string }
+        Returns: boolean
+      }
       owner_filter_uids: { Args: { _uid: string }; Returns: string[] }
       row_in_scope: {
         Args: {
@@ -2943,6 +2955,7 @@ export type Database = {
         Args: { _uid: string; _ws_id: string }
         Returns: boolean
       }
+      user_workspace_ids: { Args: { _uid: string }; Returns: string[] }
     }
     Enums: {
       app_role: "admin" | "partner" | "technician" | "client"

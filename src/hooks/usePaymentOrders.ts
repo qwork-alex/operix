@@ -5,6 +5,8 @@ import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import { useAuth } from "./useAuth";
 import { useCan } from "./usePermission";
 import { applyScope, logScope } from "@/lib/applyScope";
+import { useWorkspace } from "./useWorkspace";
+import { scopeQuery } from "@/lib/workspaceScope";
 import { getCurrentUserId, logSaveError, logSavePayload } from "@/lib/authUser";
 import { toast } from "sonner";
 import type { Json } from "@/integrations/supabase/types";
@@ -43,10 +45,11 @@ export function usePaymentOrders(filters?: {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { can, isLoading: permsLoading } = useCan();
+  const { workspaceId } = useWorkspace();
   const { allowed, scope } = can("payment_orders", "view");
 
   const query = useQuery({
-    queryKey: ["payment_orders", filters, allowed, scope, user?.id],
+    queryKey: ["payment_orders", workspaceId, filters, allowed, scope, user?.id],
     enabled: !permsLoading && allowed && !!user?.id,
     queryFn: async () => {
       logScope("payment_orders", "view", scope, allowed);
@@ -58,6 +61,7 @@ export function usePaymentOrders(filters?: {
         .order("created_at", { ascending: false });
 
       q = applyScope(q, scope, user, "user_id");
+      q = scopeQuery(q, "payment_orders", workspaceId);
 
       if (filters?.client_id) q = q.eq("client_id", filters.client_id);
       if (filters?.platform) q = q.eq("platform", filters.platform);
@@ -314,13 +318,14 @@ export function useDiscrepancies() {
 export function useFinancialSummary() {
   const { user } = useAuth();
   const { can, isLoading: permsLoading } = useCan();
+  const { workspaceId } = useWorkspace();
   const finView = can("financial", "view");
   const soView = can("service_orders", "view");
   const poView = can("payment_orders", "view");
   const allowed = finView.allowed || soView.allowed || poView.allowed;
 
   return useQuery({
-    queryKey: ["financial-summary", allowed, soView.scope, poView.scope, user?.id],
+    queryKey: ["financial-summary", workspaceId, allowed, soView.scope, poView.scope, user?.id],
     enabled: !permsLoading && allowed && !!user?.id,
     queryFn: async () => {
       logScope("financial", "summary", finView.scope, allowed);
@@ -336,6 +341,8 @@ export function useFinancialSummary() {
       let poQ: any = supabase.from("payment_orders").select("total, status, client_id, platform, clients(name)");
       soQ = applyScope(soQ, soView.allowed ? soView.scope : "own", user);
       poQ = applyScope(poQ, poView.allowed ? poView.scope : "own", user);
+      soQ = scopeQuery(soQ, "service_orders", workspaceId);
+      poQ = scopeQuery(poQ, "payment_orders", workspaceId);
 
       const [soRes, poRes, discRes] = await Promise.all([
         soQ,

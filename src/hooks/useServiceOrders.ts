@@ -5,6 +5,8 @@ import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import { useAuth } from "./useAuth";
 import { useCan } from "./usePermission";
 import { applyScope, logScope } from "@/lib/applyScope";
+import { useWorkspace } from "./useWorkspace";
+import { scopeQuery } from "@/lib/workspaceScope";
 import { getCurrentUserId, logSaveError, logSavePayload } from "@/lib/authUser";
 import { toast } from "sonner";
 
@@ -49,6 +51,7 @@ export function useServiceOrders(filters?: {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { can, isLoading: permsLoading } = useCan();
+  const { workspaceId } = useWorkspace();
 
   const hasRequiredAuditFields = (payload: {
     id?: string;
@@ -59,7 +62,7 @@ export function useServiceOrders(filters?: {
   const { allowed, scope } = can("service_orders", "view");
 
   const query = useQuery({
-    queryKey: ["service_orders", filters, allowed, scope, user?.id],
+    queryKey: ["service_orders", workspaceId, filters, allowed, scope, user?.id],
     enabled: !permsLoading && allowed && !!user?.id,
     queryFn: async () => {
       logScope("service_orders", "view", scope, allowed);
@@ -71,6 +74,7 @@ export function useServiceOrders(filters?: {
         .order("created_at", { ascending: false });
 
       q = applyScope(q, scope, user, "user_id");
+      q = scopeQuery(q, "service_orders", workspaceId);
 
       if (filters?.client_id) q = q.eq("client_id", filters.client_id);
       if (filters?.platform) q = q.eq("platform", filters.platform);
@@ -86,7 +90,7 @@ export function useServiceOrders(filters?: {
   // Real-time: refresh service orders when payment_orders change (status sync via trigger)
   useEffect(() => {
     const channel = supabase
-      .channel('so-po-sync')
+      .channel(`so-po-sync:${workspaceId ?? 'global'}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'payment_orders' },
@@ -97,7 +101,7 @@ export function useServiceOrders(filters?: {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [queryClient]);
+  }, [queryClient, workspaceId]);
 
   const saveMutation = useMutation({
     mutationFn: async (orders: ServiceOrderInsert[]) => {
