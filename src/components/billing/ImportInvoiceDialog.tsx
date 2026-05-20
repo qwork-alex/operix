@@ -291,9 +291,11 @@ export default function ImportInvoiceDialog({
                 PDF / imagem / câmera / scan — OCR PT · FR · EN.
               </p>
             </div>
-            <Badge variant="outline" className="text-[10px] gap-1">
-              <Sparkles className="h-3 w-3 text-amber-400" /> Gemini OCR
-            </Badge>
+            <div className="flex items-center gap-2">
+              <ContextualWorkspacePicker ctx={ctxWs} />
+              <Badge variant="outline" className="text-[10px] gap-1">
+                <Sparkles className="h-3 w-3 text-amber-400" /> Gemini OCR
+              </Badge>
           </div>
         </DialogHeader>
 
