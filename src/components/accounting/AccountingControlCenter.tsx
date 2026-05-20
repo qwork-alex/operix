@@ -205,28 +205,13 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
     applyOrbitToDom();
   }, [applyOrbitToDom]);
 
-  // Animation loop — pure DOM updates, no React state in hot path
+  // Stabilized Phase 5D: no continuous render loop in the mounted financial route.
   useEffect(() => {
-    const loop = () => {
-      if (!draggingRef.current && !activeModule) {
-        if (Math.abs(velocityRef.current) > 0.00005) {
-          orbitAngleRef.current += velocityRef.current;
-          velocityRef.current *= 0.94;
-          applyOrbitToDom();
-        } else if (velocityRef.current !== 0) {
-          velocityRef.current = 0;
-        } else {
-          orbitAngleRef.current += 0.0008;
-          applyOrbitToDom();
-        }
-      }
-      rafRef.current = requestAnimationFrame(loop);
-    };
-    rafRef.current = requestAnimationFrame(loop);
+    applyOrbitToDom();
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [activeModule, applyOrbitToDom]);
+  }, [applyOrbitToDom]);
 
   // Pointer drag handlers
   const onPointerDown = useCallback((e: React.PointerEvent) => {
