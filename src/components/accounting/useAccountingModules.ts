@@ -1,6 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getCurrentUserId, logSaveError, logSavePayload } from "@/lib/authUser";
+import { useWorkspace } from "@/hooks/useWorkspace";
+import { useAuth } from "@/hooks/useAuth";
+import { invalidateAccountingDownstream } from "@/lib/financialSync";
 import type { ModuleEntry } from "./ModulePanel";
 
 type ModuleKey = "rentals" | "expenses" | "fuel" | "purchases" | "government" | "withdrawals";
@@ -25,23 +28,33 @@ function buildEntries(data: any[], editable: boolean): ModuleEntry[] {
   }));
 }
 
-export function useAccountingModule(moduleKey: ModuleKey) {
+export function useAccountingModule(moduleKey: ModuleKey, year?: number) {
   const queryClient = useQueryClient();
+  const { workspaceId } = useWorkspace();
+  const { user } = useAuth();
   const config = CATEGORY_MAP[moduleKey];
 
   // FUEL is a read-only mirror of fleet_fuel_logs (Frota = single source of truth)
   const isFuelMirror = moduleKey === "fuel";
+  const selectedYear = year ?? null;
 
   const query = useQuery({
     queryKey: isFuelMirror
-      ? ["accounting-module", "fuel", "fleet-mirror"]
-      : ["accounting-module", moduleKey],
+      ? ["accounting-module", "fuel", "fleet-mirror", workspaceId, selectedYear]
+      : ["accounting-module", moduleKey, workspaceId, user?.id, selectedYear],
+    enabled: !!workspaceId,
     queryFn: async () => {
       if (isFuelMirror) {
-        const { data, error } = await supabase
+        let q = supabase
           .from("fleet_fuel_logs")
-          .select("id, total_cost, liters, km_at_fuel, date, notes, vehicle_id, created_at, vehicles(brand, model, license_plate)")
-          .order("date", { ascending: false });
+          .select("id, total_cost, liters, km_at_fuel, date, notes, vehicle_id, created_at, vehicles(brand, model, license_plate)");
+        if (workspaceId) q = q.eq("workspace_id", workspaceId);
+        if (selectedYear) {
+          q = q
+            .gte("date", `${selectedYear}-01-01`)
+            .lte("date", `${selectedYear}-12-31`);
+        }
+        const { data, error } = await q.order("date", { ascending: false });
         if (error) throw error;
         return (data || []).map((r: any) => {
           const v = r.vehicles || {};
@@ -61,14 +74,20 @@ export function useAccountingModule(moduleKey: ModuleKey) {
         });
       }
 
-      let q = supabase.from("financial_records").select("*").eq("type", "expense");
+      let q = supabase
+        .from("financial_records")
+        .select("*")
+        .eq("type", "expense")
+        .eq("workspace_id", workspaceId!);
 
       if (config.category) {
-        // Strict category match — each module owns its own bucket
         q = q.eq("category", config.category);
       } else if (moduleKey === "expenses") {
-        // "Despesas" module owns ONLY entries explicitly categorized as "other"
         q = q.eq("category", "other");
+      }
+
+      if (selectedYear) {
+        q = q.eq("year_reference", selectedYear);
       }
 
       q = q.order("created_at", { ascending: false });
@@ -85,15 +104,16 @@ export function useAccountingModule(moduleKey: ModuleKey) {
     : buildEntries(query.data || [], isManualEditable);
   const total = entries.reduce((s, e) => s + e.amount, 0);
 
-  const invalidate = () =>
-    queryClient.invalidateQueries({
-      queryKey: isFuelMirror ? ["accounting-module", "fuel", "fleet-mirror"] : ["accounting-module", moduleKey],
-    });
+  const invalidate = () => {
+    invalidateAccountingDownstream(queryClient);
+  };
 
   const addMutation = useMutation({
     mutationFn: async (entry: { label: string; amount: number; notes: string }) => {
       if (isFuelMirror) throw new Error("Combustível é gerido na Frota");
+      if (!workspaceId) throw new Error("Workspace ativa não encontrada");
       const currentUserId = await getCurrentUserId();
+      const yr = selectedYear ?? new Date().getFullYear();
       const payload = {
         type: config.type || "expense",
         source: "manual",
@@ -102,6 +122,8 @@ export function useAccountingModule(moduleKey: ModuleKey) {
         label: entry.label,
         notes: entry.notes,
         status: "confirmed",
+        workspace_id: workspaceId,
+        year_reference: yr,
       };
       logSavePayload("AccountingModule:insert", currentUserId, payload);
       const { error } = await (supabase as any).from("financial_records").insert(payload);
@@ -148,6 +170,6 @@ export function useAccountingModule(moduleKey: ModuleKey) {
     update: (id: string, e: { label: string; amount: number; notes: string }) =>
       updateMutation.mutateAsync({ id, ...e }),
     delete: deleteMutation.mutateAsync,
-    allowAdd: isManualEditable,
+    allowAdd: isManualEditable && !!workspaceId,
   };
 }
