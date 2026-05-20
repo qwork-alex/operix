@@ -35,7 +35,9 @@ export function useConsent() {
 
   return {
     hasConsented: !!query.data,
-    isLoading: authLoading || query.isLoading,
+    // Only report loading when there is actually a session to check against —
+    // prevents the consent screen flashing for logged-out / deleted users.
+    isLoading: !!user?.id && (authLoading || query.isLoading),
     refetch: query.refetch,
   };
 }
