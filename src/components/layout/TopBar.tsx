@@ -193,10 +193,9 @@ export function TopBar() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="bg-card border-border w-56">
             <div className="px-3 py-2">
-              <p className="text-sm font-medium text-foreground truncate">{profile?.full_name || t("common.user")}</p>
-              {workspaceName && (
-                <p className="text-[11px] text-muted-foreground truncate mt-0.5">{workspaceName}</p>
-              )}
+              <p className="text-sm font-medium text-foreground truncate">
+                {workspaceName && workspaceName.toLowerCase() !== "default workspace" ? workspaceName : (profile?.full_name || t("common.user"))}
+              </p>
             </div>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => navigate("/profile")} className="text-sm cursor-pointer">
