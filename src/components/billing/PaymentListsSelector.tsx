@@ -196,9 +196,6 @@ export function PaymentListsSelector({ value, onChange, label = "Listas vinculad
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 truncate">
                       <span className="font-mono text-[11px] text-primary font-semibold">{l.list_name}</span>
-                      <Badge variant="outline" className="h-4 px-1 text-[9px] font-normal">
-                        S{l.week}/{String(l.year).slice(2)}
-                      </Badge>
                       <span className="ml-auto tabular-nums font-medium text-[11px]">{fmtMoney(l.total)}</span>
                     </div>
                     <div className="text-muted-foreground text-[10px] truncate mt-0.5">
