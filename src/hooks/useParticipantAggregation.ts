@@ -58,6 +58,40 @@ export function useParticipantAggregation() {
     });
   }, [qc]);
 
+  // SAFE cache subscriber — invalidate-only, NO setState, debounced.
+  // Excludes own key to prevent the previous render-loop storm.
+  useEffect(() => {
+    let timer: number | null = null;
+    const schedule = () => {
+      if (timer != null) return;
+      timer = window.setTimeout(() => {
+        timer = null;
+        qc.invalidateQueries({ queryKey: ["participant-aggregation"] });
+      }, 120);
+    };
+    const unsub = qc.getQueryCache().subscribe((event) => {
+      if (event.type !== "updated") return;
+      const action = (event as any).action;
+      if (!action || action.type !== "success") return;
+      const key = (event.query.queryKey ?? []) as unknown[];
+      const head = typeof key[0] === "string" ? (key[0] as string) : "";
+      if (
+        head === "service-orders" ||
+        head === "service_orders" ||
+        head === "payment-orders" ||
+        head === "profit-rules" ||
+        head === "profit_rules" ||
+        head === "profit-rule-items"
+      ) {
+        schedule();
+      }
+    });
+    return () => {
+      if (timer != null) window.clearTimeout(timer);
+      unsub();
+    };
+  }, [qc]);
+
 
   return useQuery<ParticipantAggregation>({
     queryKey: ["participant-aggregation"],
