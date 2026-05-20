@@ -8,6 +8,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { SpaceBackground } from "./SpaceBackground";
+import { Globe } from "./Globe";
 import { ModulePanel } from "./ModulePanel";
 import { useAccountingModule } from "./useAccountingModules";
 import { cn } from "@/lib/utils";
@@ -375,7 +376,7 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
             })}
           </svg>
 
-          {/* Static center planet — avoids extra WebGL contexts in the mounted financial route */}
+          {/* Center planet — restored WebGL Earth renderer with graceful CSS fallback (see Globe.tsx) */}
           <div
             className="absolute z-10 pointer-events-none left-0 top-0"
             style={{
@@ -384,7 +385,7 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
               overflow: "visible",
             }}
           >
-            <StaticAccountingGlobe size={globeSize} />
+            <Globe size={globeSize} />
           </div>
 
           {/* Orbital module buttons (positions mutated directly in DOM) */}
