@@ -346,6 +346,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
         uploaded_by: user?.id,
         entity_type: entityType,
         module: moduleName,
+        ...(workspaceId ? { workspace_id: workspaceId } : {}),
       }).select("id").single();
       if (error) throw error;
       return data.id;
