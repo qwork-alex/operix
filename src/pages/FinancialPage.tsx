@@ -259,6 +259,10 @@ export default function FinancialPage() {
             <AccountingControlCenter embedded />
           </div>
         </TabsContent>
+
+        <TabsContent value="integrity" className="space-y-4">
+          <FinancialIntegrityTab />
+        </TabsContent>
       </Tabs>
     </div>
   );
