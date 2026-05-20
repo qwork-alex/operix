@@ -143,9 +143,9 @@ export function CompanyDataCard() {
                   <Label className="text-xs">País</Label>
                   <Select value={form.country} onValueChange={(v) => set("country", v)}>
                     <SelectTrigger className="h-9"><SelectValue placeholder="—" /></SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-72">
                       {COUNTRIES.map((c) => (
-                        <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>
+                        <SelectItem key={c.code} value={c.code}>{c.code}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
