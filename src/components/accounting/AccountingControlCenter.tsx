@@ -268,23 +268,23 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
   }, [yearsList]);
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
+    <div className="h-full flex flex-col min-w-0 w-full">
+      {/* Header — responsive toolbar, viewport-safe */}
+      <div className="flex items-center justify-between mb-4 gap-2 flex-wrap min-w-0">
         {embedded ? (
           <div />
         ) : (
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">{t("acc.controlCenter")}</h1>
-            <p className="text-sm text-muted-foreground">{t("acc.subtitle")}</p>
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold text-foreground truncate">{t("acc.controlCenter")}</h1>
+            <p className="text-sm text-muted-foreground truncate">{t("acc.subtitle")}</p>
           </div>
         )}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 flex-wrap min-w-0 max-w-full">
           <Select value={selectedTech} onValueChange={setSelectedTech}>
-            <SelectTrigger className="h-8 w-[160px] text-xs">
+            <SelectTrigger className="h-8 w-[130px] sm:w-[160px] text-xs">
               <SelectValue placeholder={t("acc.allTechs")} />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent collisionPadding={8} className="max-w-[90vw]">
               <SelectItem value="all">{t("acc.allTechs")}</SelectItem>
               {techList.map((tech) => (
                 <SelectItem key={tech.id} value={tech.id}>{tech.name}</SelectItem>
@@ -292,20 +292,20 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
             </SelectContent>
           </Select>
           <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(Number(v))}>
-            <SelectTrigger className="h-8 w-[100px] text-xs">
+            <SelectTrigger className="h-8 w-[90px] text-xs">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent collisionPadding={8} className="max-w-[90vw]">
               {years.map((y) => (
                 <SelectItem key={y} value={String(y)}>{y}</SelectItem>
               ))}
             </SelectContent>
           </Select>
           <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-            <SelectTrigger className="h-8 w-[110px] text-xs">
+            <SelectTrigger className="h-8 w-[100px] text-xs">
               <SelectValue placeholder={t("acc.allMonths")} />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent collisionPadding={8} className="max-w-[90vw]">
               <SelectItem value="all">{t("acc.allMonths")}</SelectItem>
               {MONTH_LABELS.map((m, i) => (
                 <SelectItem key={m} value={String(i + 1)}>{m}</SelectItem>
@@ -314,6 +314,8 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
           </Select>
         </div>
       </div>
+
+
 
 
       {/* Main split area */}
