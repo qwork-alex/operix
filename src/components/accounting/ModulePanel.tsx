@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { X, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
+import { X, Plus, Pencil, Trash2, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/hooks/useLanguage";
+import { ImportReceiptDialog } from "./ImportReceiptDialog";
 
 export interface ModuleEntry {
   id: string;
@@ -27,6 +28,10 @@ interface ModulePanelProps {
   onUpdate: (id: string, entry: { label: string; amount: number; notes: string }) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   allowAdd?: boolean;
+  importCategory?: string;
+  year?: number;
+  month?: number | null;
+  techId?: string | null;
 }
 
 export function ModulePanel({
@@ -41,12 +46,17 @@ export function ModulePanel({
   onUpdate,
   onDelete,
   allowAdd = true,
+  importCategory,
+  year,
+  month,
+  techId,
 }: ModulePanelProps) {
   const { formatCurrency } = useLanguage();
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState({ label: "", amount: "", notes: "" });
   const [saving, setSaving] = useState(false);
+  const [showImport, setShowImport] = useState(false);
 
   const resetForm = () => {
     setForm({ label: "", amount: "", notes: "" });
@@ -102,18 +112,40 @@ export function ModulePanel({
         </Button>
       </div>
 
-      {/* Add button */}
+      {/* Add / Import buttons */}
       {allowAdd && !showForm && (
-        <div className="p-3 border-b border-border/30">
+        <div className="p-3 border-b border-border/30 flex gap-2">
           <Button
             variant="outline"
             size="sm"
-            className="w-full gap-2 border-dashed"
+            className="flex-1 gap-2 border-dashed"
             onClick={() => { resetForm(); setShowForm(true); }}
           >
             <Plus size={14} /> Adicionar
           </Button>
+          {importCategory && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1 gap-2 border-dashed"
+              onClick={() => setShowImport(true)}
+              title="Importar talão, fatura ou recibo"
+            >
+              <Upload size={14} /> Importar
+            </Button>
+          )}
         </div>
+      )}
+
+      {importCategory && (
+        <ImportReceiptDialog
+          open={showImport}
+          onClose={() => setShowImport(false)}
+          defaultCategory={importCategory}
+          year={year}
+          month={month ?? null}
+          techId={techId ?? null}
+        />
       )}
 
       {/* Form */}

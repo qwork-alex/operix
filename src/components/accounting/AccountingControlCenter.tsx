@@ -495,6 +495,16 @@ const ActiveModulePanel = memo(function ActiveModulePanel({
   const { entries, total, isLoading, add, update, delete: del, allowAdd } =
     useAccountingModule(moduleKey, year, techId, month);
 
+  // Map module → financial_records category for receipt imports
+  const importCategoryMap: Record<ModuleKey, string> = {
+    rentals: "rent",
+    expenses: "other",
+    fuel: "travel",
+    purchases: "material",
+    government: "tax",
+    withdrawals: "salary",
+  };
+
   return (
     <ModulePanel
       title={label}
@@ -508,6 +518,10 @@ const ActiveModulePanel = memo(function ActiveModulePanel({
       onUpdate={update}
       onDelete={del}
       allowAdd={allowAdd}
+      importCategory={importCategoryMap[moduleKey]}
+      year={year}
+      month={month}
+      techId={techId}
     />
   );
 });
