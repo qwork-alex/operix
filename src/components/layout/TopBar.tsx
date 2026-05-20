@@ -1,5 +1,5 @@
-import { Bell, Globe, LogOut, Check, Trash2, FileText, CreditCard, AlertTriangle, Info, Clock, Sun, Moon } from "lucide-react";
-import { useTheme } from "@/hooks/useTheme";
+import { useNavigate } from "react-router-dom";
+import { Bell, LogOut, Check, Trash2, FileText, CreditCard, AlertTriangle, Info, Clock, User as UserIcon, Settings as SettingsIcon } from "lucide-react";
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { BrandLogo } from "@/components/BrandLogo";
 import { brandConfig } from "@/brand.config";
@@ -11,24 +11,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/useAuth";
 import { useRole } from "@/hooks/useRole";
-import { useLanguage, type LangCode } from "@/hooks/useLanguage";
+import { useLanguage } from "@/hooks/useLanguage";
 import { useNotifications } from "@/hooks/useNotifications";
+import { useWorkspace } from "@/hooks/useWorkspace";
+import { useUserProfile } from "@/hooks/useUserProfile";
 import { ScrollArea } from "@/components/ui/scroll-area";
-
-const languages: { code: LangCode; label: string }[] = [
-  { code: "fr", label: "Français" },
-  { code: "en", label: "English" },
-  { code: "pt", label: "Português" },
-  { code: "de", label: "Deutsch" },
-  { code: "es", label: "Español" },
-  { code: "it", label: "Italiano" },
-  { code: "ar", label: "العربية" },
-  { code: "zh", label: "中文" },
-  { code: "ja", label: "日本語" },
-  { code: "hi", label: "हिन्दी" },
-  { code: "pl", label: "Polski" },
-  { code: "ru", label: "Русский" },
-];
 
 const typeIcon: Record<string, typeof Info> = {
   service_order: FileText,
@@ -47,32 +34,20 @@ function timeAgo(dateStr: string, t: (k: string, fb?: string) => string): string
   return `${days}d`;
 }
 
-function ThemeToggleButton() {
-  const { theme, toggleTheme } = useTheme();
-  const Icon = theme === "dark" ? Sun : Moon;
-  return (
-    <Button
-      variant="ghost"
-      size="icon"
-      onClick={toggleTheme}
-      className="text-muted-foreground hover:text-foreground"
-      aria-label="Toggle theme"
-    >
-      <Icon className="h-4 w-4" />
-    </Button>
-  );
-}
-
 export function TopBar() {
+  const navigate = useNavigate();
   const { profile, signOut } = useAuth();
+  const { profile: userProfile } = useUserProfile();
   const { role } = useRole();
-  const { t, lang, setLang } = useLanguage();
+  const { t } = useLanguage();
+  const { workspaceName } = useWorkspace();
   const { notifications, unreadCount, markAsRead, markAllRead, clearAll } = useNotifications();
   const { data: agingAlerts = [] } = useAgingAlerts();
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const totalAlertCount = unreadCount + agingAlerts.length;
 
+  const avatarUrl = userProfile?.avatar_url || profile?.avatar_url || "";
   const initials = profile?.full_name
     ? profile.full_name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
     : "?";
@@ -99,26 +74,6 @@ export function TopBar() {
             {t(`role.${role}`, role)}
           </span>
         )}
-
-        {/* Language */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
-              <Globe className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="bg-card border-border">
-            {languages.map((l) => (
-              <DropdownMenuItem
-                key={l.code}
-                className={`text-sm cursor-pointer ${l.code === lang ? "bg-accent text-accent-foreground" : ""}`}
-                onClick={() => setLang(l.code)}
-              >
-                {l.label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
 
         {/* Notifications */}
         <DropdownMenu>
@@ -151,7 +106,6 @@ export function TopBar() {
             </div>
             <DropdownMenuSeparator />
             <ScrollArea className="max-h-[400px]">
-              {/* Aging Alerts */}
               {agingAlerts.length > 0 && (
                 <>
                   <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-amber-500 font-semibold bg-amber-500/5">
@@ -190,7 +144,6 @@ export function TopBar() {
                 </>
               )}
 
-              {/* Regular Notifications */}
               {notifications.length === 0 && agingAlerts.length === 0 ? (
                 <div className="py-8 text-center text-xs text-muted-foreground">{t("notif.empty")}</div>
               ) : (
@@ -227,21 +180,33 @@ export function TopBar() {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* Theme toggle */}
-        <ThemeToggleButton />
-
-        {/* User avatar */}
+        {/* User avatar + profile menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="ml-2 flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-semibold hover:bg-primary/30 transition-colors">
-              {initials}
+            <button className="ml-2 flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-semibold hover:bg-primary/30 transition-colors overflow-hidden">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
+              ) : (
+                <span>{initials}</span>
+              )}
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="bg-card border-border w-48">
+          <DropdownMenuContent align="end" className="bg-card border-border w-56">
             <div className="px-3 py-2">
               <p className="text-sm font-medium text-foreground truncate">{profile?.full_name || t("common.user")}</p>
-              <p className="text-xs text-muted-foreground truncate">{profile?.email}</p>
+              {workspaceName && (
+                <p className="text-[11px] text-muted-foreground truncate mt-0.5">{workspaceName}</p>
+              )}
             </div>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => navigate("/profile")} className="text-sm cursor-pointer">
+              <UserIcon className="h-3.5 w-3.5 mr-2" />
+              Perfil
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate("/settings")} className="text-sm cursor-pointer">
+              <SettingsIcon className="h-3.5 w-3.5 mr-2" />
+              Configurações
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={signOut} className="text-sm cursor-pointer text-destructive">
               <LogOut className="h-3.5 w-3.5 mr-2" />

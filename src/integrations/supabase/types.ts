@@ -681,14 +681,24 @@ export type Database = {
       company_settings: {
         Row: {
           address: string
+          bank_name: string | null
           brand_config: Json | null
+          city: string | null
+          company_email: string | null
           company_name: string
+          company_phone: string | null
           company_share: number
+          country: string | null
           created_at: string
+          iban: string | null
           id: string
           logo_url: string
           partner_share: number
+          postal_code: string | null
           siret: string
+          street_name: string | null
+          street_number: string | null
+          swift_bic: string | null
           tech_share: number
           tva_number: string
           updated_at: string
@@ -696,14 +706,24 @@ export type Database = {
         }
         Insert: {
           address?: string
+          bank_name?: string | null
           brand_config?: Json | null
+          city?: string | null
+          company_email?: string | null
           company_name?: string
+          company_phone?: string | null
           company_share?: number
+          country?: string | null
           created_at?: string
+          iban?: string | null
           id?: string
           logo_url?: string
           partner_share?: number
+          postal_code?: string | null
           siret?: string
+          street_name?: string | null
+          street_number?: string | null
+          swift_bic?: string | null
           tech_share?: number
           tva_number?: string
           updated_at?: string
@@ -711,14 +731,24 @@ export type Database = {
         }
         Update: {
           address?: string
+          bank_name?: string | null
           brand_config?: Json | null
+          city?: string | null
+          company_email?: string | null
           company_name?: string
+          company_phone?: string | null
           company_share?: number
+          country?: string | null
           created_at?: string
+          iban?: string | null
           id?: string
           logo_url?: string
           partner_share?: number
+          postal_code?: string | null
           siret?: string
+          street_name?: string | null
+          street_number?: string | null
+          swift_bic?: string | null
           tech_share?: number
           tva_number?: string
           updated_at?: string
@@ -2147,6 +2177,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          address: string | null
           avatar_url: string | null
           created_at: string
           display_code: string | null
@@ -2158,6 +2189,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          address?: string | null
           avatar_url?: string | null
           created_at?: string
           display_code?: string | null
@@ -2169,6 +2201,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          address?: string | null
           avatar_url?: string | null
           created_at?: string
           display_code?: string | null

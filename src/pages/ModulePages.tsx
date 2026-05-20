@@ -5,6 +5,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { BrandingCard } from "@/components/settings/BrandingCard";
+import { SystemPreferencesCard } from "@/components/settings/SystemPreferencesCard";
+import { CompanyDataCard } from "@/components/settings/CompanyDataCard";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -1837,45 +1839,10 @@ export function UsersPage() {
 
 // ─── SETTINGS ───
 export function SettingsPage() {
-  const { t } = useLanguage();
-  const { profile, user } = useAuth();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
-  const { settings, isLoading: settingsLoading, saveMutation: saveCompany } = useCompanySettings();
   const isOwner = user?.email === "qwork@qworkgroup.com";
   const [resetting, setResetting] = useState(false);
-  const [profileForm, setProfileForm] = useState({ full_name: "", email: "" });
-  const [companyForm, setCompanyForm] = useState({ company_name: "", siret: "", tva_number: "", address: "", logo_url: "" });
-
-  useEffect(() => {
-    if (profile) {
-      setProfileForm({ full_name: profile.full_name || "", email: profile.email || "" });
-    }
-  }, [profile]);
-
-  useEffect(() => {
-    if (settings) {
-      setCompanyForm({
-        company_name: settings.company_name || "",
-        siret: settings.siret || "",
-        tva_number: settings.tva_number || "",
-        address: settings.address || "",
-        logo_url: settings.logo_url || "",
-      });
-    }
-  }, [settings]);
-
-  const updateProfile = useMutation({
-    mutationFn: async () => {
-      if (!user) throw new Error("Not authenticated");
-      const { error } = await supabase.from("profiles").update({ full_name: profileForm.full_name }).eq("id", user.id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["all-profiles"] });
-      toast.success(t("toast.updated"));
-    },
-    onError: (err) => toast.error((err as Error).message),
-  });
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -1884,45 +1851,17 @@ export function SettingsPage() {
           <Settings className="h-5 w-5 text-primary" />
         </div>
         <div>
-          <h1 className="text-lg font-semibold text-foreground">{t("settings.title")}</h1>
-          <p className="text-xs text-muted-foreground">{t("settings.subtitle")}</p>
+          <h1 className="text-lg font-semibold text-foreground">Configurações</h1>
+          <p className="text-xs text-muted-foreground">Preferências do sistema, dados da empresa e branding</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <SystemPreferencesCard />
         <BrandingCard />
-        <Card className="border-border/50">
-          <CardHeader><CardTitle className="text-sm">{t("settings.company")}</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2"><Label className="text-xs">{t("settings.companyName")}</Label><Input value={companyForm.company_name} onChange={e => setCompanyForm(p => ({ ...p, company_name: e.target.value }))} /></div>
-            <div className="space-y-2"><Label className="text-xs">{t("settings.siret")}</Label><Input value={companyForm.siret} onChange={e => setCompanyForm(p => ({ ...p, siret: e.target.value }))} placeholder="XXX XXX XXX XXXXX" /></div>
-            <div className="space-y-2"><Label className="text-xs">{t("settings.tva")}</Label><Input value={companyForm.tva_number} onChange={e => setCompanyForm(p => ({ ...p, tva_number: e.target.value }))} placeholder="FRXX XXXXXXXXX" /></div>
-            <div className="space-y-2"><Label className="text-xs">{t("settings.address")}</Label><Input value={companyForm.address} onChange={e => setCompanyForm(p => ({ ...p, address: e.target.value }))} /></div>
-            <Button size="sm" onClick={() => saveCompany.mutate(companyForm)} disabled={saveCompany.isPending}>
-              {saveCompany.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
-              {t("settings.saveCompany")}
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/50">
-          <CardHeader><CardTitle className="text-sm">{t("settings.profile")}</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label className="text-xs">{t("settings.fullName")}</Label>
-              <Input value={profileForm.full_name} onChange={e => setProfileForm(p => ({ ...p, full_name: e.target.value }))} />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs">{t("label.email")}</Label>
-              <Input value={profileForm.email} disabled className="bg-muted/30" />
-            </div>
-            <Button size="sm" onClick={() => updateProfile.mutate()} disabled={updateProfile.isPending}>
-              {updateProfile.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
-              {t("settings.saveProfile")}
-            </Button>
-          </CardContent>
-        </Card>
       </div>
+
+      <CompanyDataCard />
 
       {isOwner && (
         <Card className="border-destructive/30 bg-destructive/5">
@@ -1957,7 +1896,7 @@ export function SettingsPage() {
                     onClick={async () => {
                       setResetting(true);
                       try {
-                        const { data, error } = await supabase.functions.invoke("reset-system");
+                        const { error } = await supabase.functions.invoke("reset-system");
                         if (error) throw error;
                         toast.success("Sistema resetado com sucesso");
                         queryClient.invalidateQueries();
@@ -1977,27 +1916,18 @@ export function SettingsPage() {
         </Card>
       )}
 
-      {/* ─── About — institutional / proprietary attribution ─── */}
       <Card className="border-border/40 bg-card/40">
         <CardHeader>
-          <CardTitle className="text-sm text-muted-foreground">
-            Sobre o Sistema
-          </CardTitle>
+          <CardTitle className="text-sm text-muted-foreground">Sobre o Sistema</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-xs text-muted-foreground">
-          <p className="text-sm font-medium text-foreground">
-            {SYSTEM_METADATA.trademark}
-          </p>
+          <p className="text-sm font-medium text-foreground">{SYSTEM_METADATA.trademark}</p>
           <p>{SYSTEM_METADATA.description}</p>
           <div className="pt-2">
-            <p className="text-[11px] uppercase tracking-wider opacity-70">
-              Arquitetura e direção de produto
-            </p>
+            <p className="text-[11px] uppercase tracking-wider opacity-70">Arquitetura e direção de produto</p>
             <p className="text-foreground/90">{SYSTEM_METADATA.system_architect}</p>
           </div>
-          <p className="pt-2 text-[11px] opacity-70">
-            © {SYSTEM_METADATA.year} · {SYSTEM_METADATA.proprietary_notice}.
-          </p>
+          <p className="pt-2 text-[11px] opacity-70">© {SYSTEM_METADATA.year} · {SYSTEM_METADATA.proprietary_notice}.</p>
         </CardContent>
       </Card>
     </div>
