@@ -4,9 +4,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
-import { BrandingCard } from "@/components/settings/BrandingCard";
 import { SystemPreferencesCard } from "@/components/settings/SystemPreferencesCard";
-import { CompanyDataCard } from "@/components/settings/CompanyDataCard";
+import { SecurityCard } from "@/components/settings/SecurityCard";
+import { TempCredentialsCard } from "@/components/settings/TempCredentialsCard";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -1852,16 +1852,16 @@ export function SettingsPage() {
         </div>
         <div>
           <h1 className="text-lg font-semibold text-foreground">Configurações</h1>
-          <p className="text-xs text-muted-foreground">Preferências do sistema, dados da empresa e branding</p>
+          <p className="text-xs text-muted-foreground">Preferências do sistema, segurança e credenciais</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <SystemPreferencesCard />
-        <BrandingCard />
+        <SecurityCard />
       </div>
 
-      <CompanyDataCard />
+      <TempCredentialsCard />
 
       {isOwner && (
         <Card className="border-destructive/30 bg-destructive/5">

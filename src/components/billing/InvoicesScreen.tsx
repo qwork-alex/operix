@@ -19,6 +19,7 @@ import ExcelJS from "exceljs";
 import { toast } from "sonner";
 import { PaymentListsSelector } from "@/components/billing/PaymentListsSelector";
 import type { BillingPaymentList } from "@/hooks/usePaymentListsConsolidated";
+import { InvoiceLogoButton } from "@/components/settings/InvoiceLogoButton";
 
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -1160,6 +1161,7 @@ export default function InvoicesScreen() {
               >
                 <Printer className="h-3.5 w-3.5 mr-1.5" /> Visualizar impressão
               </Button>
+              <InvoiceLogoButton />
               {viewMode === "edit" && (
                 <Button
                   variant="outline" size="sm" className="h-8 no-print"

@@ -541,6 +541,15 @@ Deno.serve(async (req) => {
       role,
     }, { onConflict: "user_id" });
 
+    // Persist temp password for admin visibility until user changes it
+    await adminClient.from("temp_credentials").upsert({
+      user_id: userId,
+      email,
+      full_name: displayName,
+      temp_password: tempPassword,
+      created_by: caller.id,
+    }, { onConflict: "user_id" });
+
     return jsonResp({
       success: true,
       user_id: userId,
