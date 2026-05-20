@@ -30,6 +30,7 @@ import {
 import FleetPage from "./pages/FleetPage";
 import BillingPage from "./pages/BillingPage";
 import AuditPage from "./pages/AuditPage";
+import RecoveryPage from "./pages/RecoveryPage";
 import ProfilePage from "./pages/ProfilePage";
 import {
   TermsPage,
