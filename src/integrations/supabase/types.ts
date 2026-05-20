@@ -274,10 +274,13 @@ export type Database = {
           customer_name: string | null
           customer_snapshot: Json | null
           due_date: string | null
+          financial_sync_lock: boolean
           fleet_id: string | null
           id: string
           invoice_number: string
           issue_date: string
+          last_financial_event_hash: string | null
+          last_financial_sync_at: string | null
           metadata: Json
           notes: string | null
           paid_amount: number
@@ -286,6 +289,7 @@ export type Database = {
           source: string
           status: Database["public"]["Enums"]["billing_invoice_status"]
           supplier_id: string | null
+          sync_revision: number
           total_amount: number
           type: Database["public"]["Enums"]["billing_invoice_type"]
           updated_at: string
@@ -301,10 +305,13 @@ export type Database = {
           customer_name?: string | null
           customer_snapshot?: Json | null
           due_date?: string | null
+          financial_sync_lock?: boolean
           fleet_id?: string | null
           id?: string
           invoice_number: string
           issue_date?: string
+          last_financial_event_hash?: string | null
+          last_financial_sync_at?: string | null
           metadata?: Json
           notes?: string | null
           paid_amount?: number
@@ -313,6 +320,7 @@ export type Database = {
           source?: string
           status?: Database["public"]["Enums"]["billing_invoice_status"]
           supplier_id?: string | null
+          sync_revision?: number
           total_amount?: number
           type?: Database["public"]["Enums"]["billing_invoice_type"]
           updated_at?: string
@@ -328,10 +336,13 @@ export type Database = {
           customer_name?: string | null
           customer_snapshot?: Json | null
           due_date?: string | null
+          financial_sync_lock?: boolean
           fleet_id?: string | null
           id?: string
           invoice_number?: string
           issue_date?: string
+          last_financial_event_hash?: string | null
+          last_financial_sync_at?: string | null
           metadata?: Json
           notes?: string | null
           paid_amount?: number
@@ -340,6 +351,7 @@ export type Database = {
           source?: string
           status?: Database["public"]["Enums"]["billing_invoice_status"]
           supplier_id?: string | null
+          sync_revision?: number
           total_amount?: number
           type?: Database["public"]["Enums"]["billing_invoice_type"]
           updated_at?: string
@@ -884,32 +896,50 @@ export type Database = {
       financial_events: {
         Row: {
           actor_user_id: string | null
+          caused_by_event_id: string | null
+          correlation_id: string | null
           created_at: string
+          created_by_trigger: string | null
           entity_id: string | null
           entity_type: string
+          event_hash: string | null
+          event_revision: number
           event_type: string
           id: string
           payload: Json
+          processing_key: string | null
           workspace_id: string | null
         }
         Insert: {
           actor_user_id?: string | null
+          caused_by_event_id?: string | null
+          correlation_id?: string | null
           created_at?: string
+          created_by_trigger?: string | null
           entity_id?: string | null
           entity_type: string
+          event_hash?: string | null
+          event_revision?: number
           event_type: string
           id?: string
           payload?: Json
+          processing_key?: string | null
           workspace_id?: string | null
         }
         Update: {
           actor_user_id?: string | null
+          caused_by_event_id?: string | null
+          correlation_id?: string | null
           created_at?: string
+          created_by_trigger?: string | null
           entity_id?: string | null
           entity_type?: string
+          event_hash?: string | null
+          event_revision?: number
           event_type?: string
           id?: string
           payload?: Json
+          processing_key?: string | null
           workspace_id?: string | null
         }
         Relationships: []
@@ -1001,6 +1031,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      financial_state_snapshots: {
+        Row: {
+          created_at: string
+          entity_id: string
+          entity_type: string
+          id: string
+          revision: number
+          snapshot_data: Json
+          workspace_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          entity_id: string
+          entity_type: string
+          id?: string
+          revision?: number
+          snapshot_data?: Json
+          workspace_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          revision?: number
+          snapshot_data?: Json
+          workspace_id?: string | null
+        }
+        Relationships: []
       }
       fleet_fuel_logs: {
         Row: {
@@ -2906,6 +2966,17 @@ export type Database = {
       }
       current_user_effective_role: { Args: never; Returns: string }
       current_user_workspace_ids: { Args: never; Returns: string[] }
+      deterministic_event_hash: {
+        Args: {
+          _entity_id: string
+          _entity_type: string
+          _event_type: string
+          _payload: Json
+          _revision: number
+          _ws: string
+        }
+        Returns: string
+      }
       effective_role: {
         Args: { _user_id: string; _workspace_id: string }
         Returns: string
@@ -2976,7 +3047,12 @@ export type Database = {
         Returns: boolean
       }
       owner_filter_uids: { Args: { _uid: string }; Returns: string[] }
+      payment_order_has_active_billing: {
+        Args: { _op_id: string }
+        Returns: boolean
+      }
       payment_order_has_invoice: { Args: { _op_id: string }; Returns: boolean }
+      replay_financial_state: { Args: { _invoice_id: string }; Returns: Json }
       row_in_scope: {
         Args: {
           _action: string
