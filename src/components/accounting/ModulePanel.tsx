@@ -82,15 +82,15 @@ export function ModulePanel({
   return (
     <div
       className={cn(
-        "fixed right-0 top-0 h-full w-[380px] z-50 border-l bg-card/95 backdrop-blur-md",
-        "animate-slide-in-right flex flex-col"
+        "h-full w-full max-w-full border-l bg-card/95 backdrop-blur-md",
+        "animate-slide-in-right flex flex-col overflow-hidden"
       )}
       style={{ borderColor: `hsl(${color} / 0.2)` }}
     >
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-border/50">
         <div>
-          <h2 className="text-lg font-semibold" style={{ color: `hsl(${color})` }}>
+          <h2 className="text-base font-semibold truncate" style={{ color: `hsl(${color})` }}>
             {title}
           </h2>
           <p className="text-2xl font-bold text-foreground mt-1">
