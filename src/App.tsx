@@ -84,7 +84,7 @@ const App = () => (
                             <Route path="/payment-orders" element={<PermissionGuard permission="payment_orders.view"><PaymentOrdersPage /></PermissionGuard>} />
                             <Route path="/financial" element={<PermissionGuard permission="financial.view"><FinancialPage /></PermissionGuard>} />
                             <Route path="/profit" element={<PermissionGuard permission="profit.view"><ProfitDistribution /></PermissionGuard>} />
-                            <Route path="/accounting" element={<PermissionGuard permission="accounting.view"><Accounting /></PermissionGuard>} />
+                            <Route path="/accounting" element={<Navigate to="/financial?tab=accounting" replace />} />
                             <Route path="/fleet" element={<PermissionGuard permission="fleet.view"><FleetPage /></PermissionGuard>} />
                             <Route path="/billing/*" element={<BillingPage />} />
                             <Route path="/documents" element={<PermissionGuard permission="documents.view"><Documents /></PermissionGuard>} />
