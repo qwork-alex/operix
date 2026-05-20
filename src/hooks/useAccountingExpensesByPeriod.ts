@@ -60,7 +60,8 @@ function dateToPeriodKey(d: Date): string {
 
 export type AccountingPeriodMap = Record<string, Partial<Record<AccountingBucketKey, number>>>;
 
-import { useWorkspace } from "@/hooks/useWorkspace";
+
+
 
 export function useAccountingExpensesByPeriod(year?: number) {
   const { workspaceId } = useWorkspace();
