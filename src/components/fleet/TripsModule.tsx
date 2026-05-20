@@ -159,6 +159,7 @@ async function calculateRouteSegment(
 /* ─── Component ─── */
 export default function TripsModule() {
   const qc = useQueryClient();
+  const ctxWs = useContextualWorkspace("fleet");
   const [open, setOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [form, setForm] = useState<TripForm>(defaultForm());
