@@ -13,6 +13,7 @@ Owner account (qwork@qworkgroup.com) is protected, has exclusive reset access. N
 
 ## Memories
 - [Workspace Context Phase 1](mem://auth/workspace-context-phase1) — workspace_id/year_reference/visibility_scope em todas tabelas críticas, workspace_module_permissions, resolvers SQL, hooks frontend opt-in (scopeQuery, useWorkspaceModules). Aditivo, sem quebra de RLS.
+- [Contextual Action Engine](mem://auth/contextual-action-engine) — useContextualWorkspace + ContextualWorkspacePicker (discreet chip) + treeGrouping helper. Auto-resolve quando 1 ws elegível, prompt mínimo quando 2+. Session-scoped.
 - [Data Visibility Flags](mem://features/auth/data-visibility-flags) — user_settings table + has_global_view() controlling SO/PO/financial SELECT scope
 - [RBAC Hardening Phase B2](mem://auth/hardening-phase-b2) — Single owner trigger per table (SO/PO/financial). assigned_user_id independent of user_id. Fixes assignment-loss bug.
 - [RBAC Hardening Phase B3.1b](mem://auth/hardening-phase-b3-1b) — Safe user deletion: get_user_ownership_map() RPC + edge function gates by NOT-NULL "blocking" only; nulls all 3 financial_records owner cols.
