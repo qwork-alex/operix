@@ -6,6 +6,7 @@ import {
   ShoppingCart,
   Landmark,
   Wallet,
+  Sparkles,
 } from "lucide-react";
 import { SpaceBackground } from "./SpaceBackground";
 import { Globe } from "./Globe";
@@ -15,6 +16,8 @@ import { cn } from "@/lib/utils";
 import { useFinancialYears, useWorkspaceTechnicians, MONTH_LABELS } from "@/hooks/useFinancialPeriods";
 import { useLanguage } from "@/hooks/useLanguage";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { FinancialAIAssistant } from "./FinancialAIAssistant";
 
 type ModuleKey = "rentals" | "expenses" | "fuel" | "purchases" | "government" | "withdrawals";
 
