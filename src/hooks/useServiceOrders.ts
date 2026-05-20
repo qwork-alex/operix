@@ -5,6 +5,8 @@ import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import { useAuth } from "./useAuth";
 import { useCan } from "./usePermission";
 import { applyScope, logScope } from "@/lib/applyScope";
+import { useWorkspace } from "./useWorkspace";
+import { scopeQuery } from "@/lib/workspaceScope";
 import { getCurrentUserId, logSaveError, logSavePayload } from "@/lib/authUser";
 import { toast } from "sonner";
 
