@@ -37,6 +37,11 @@ export function ConsentGate({ children }: { children: ReactNode }) {
     [accepted],
   );
 
+  // GDPR consent must NEVER block pre-auth, signup, logout or legal pages.
+  // Bypass first; only show the loading spinner once we actually have a user
+  // and are still resolving their consent record.
+  if (!user || isLegalRoute) return <>{children}</>;
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-3">
@@ -46,7 +51,7 @@ export function ConsentGate({ children }: { children: ReactNode }) {
     );
   }
 
-  if (hasConsented || isLegalRoute || !user) return <>{children}</>;
+  if (hasConsented) return <>{children}</>;
 
   const handleAccept = async () => {
     if (!allChecked || !user) return;
