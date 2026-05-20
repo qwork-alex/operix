@@ -185,7 +185,7 @@ export default function FuelLogsModule() {
   const startEdit = (l: any) => {
     setEditId(l.id);
     setForm({
-      vehicle_id: l.vehicle_id || "", date: l.date || new Date().toISOString().slice(0, 10),
+      vehicle_id: l.vehicle_id || "", driver_id: l.driver_id || "", date: l.date || new Date().toISOString().slice(0, 10),
       km_at_fuel: l.km_at_fuel ? String(l.km_at_fuel) : "", liters: l.liters ? String(l.liters) : "",
       total_cost: l.total_cost ? String(l.total_cost) : "", price_per_liter: l.price_per_liter ? String(l.price_per_liter) : "",
       notes: l.notes || "",
