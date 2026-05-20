@@ -12,6 +12,9 @@ import { SpaceBackground } from "./SpaceBackground";
 import { ModulePanel } from "./ModulePanel";
 import { useAccountingModule } from "./useAccountingModules";
 import { cn } from "@/lib/utils";
+import { useFinancialYears, useWorkspaceTechnicians, MONTH_LABELS } from "@/hooks/useFinancialPeriods";
+import { useLanguage } from "@/hooks/useLanguage";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type ModuleKey = "rentals" | "expenses" | "fuel" | "purchases" | "government" | "withdrawals";
 
