@@ -52,6 +52,7 @@ export default function PaymentOrdersPage() {
   const { data: technicians = [] } = useAssignableUsers();
   const { data: myAssignableUserId } = useMyAssignableUserId();
   const { isProcessing, addFiles } = useFileQueue();
+  const ctxWs = useContextualWorkspace("payment_orders");
 
   const [hCtx, setHCtx] = useState<HierarchyContext>(() =>
     loadHierarchyContext("hierarchy.payment_orders"),
