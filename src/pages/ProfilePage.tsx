@@ -53,16 +53,8 @@ export default function ProfilePage() {
   const setA = <K extends keyof AddrParts>(k: K, v: AddrParts[K]) => setAddr((p) => ({ ...p, [k]: v }));
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-          <User className="h-5 w-5 text-primary" />
-        </div>
-        <div>
-          <h1 className="text-lg font-semibold text-foreground">Perfil</h1>
-          <p className="text-xs text-muted-foreground">Dados da empresa e perfil pessoal</p>
-        </div>
-      </div>
+    <div className="module-shell">
+      <PageHeader icon={User} title="Perfil" subtitle="Dados da empresa e perfil pessoal" />
 
       {/* SECTION 1 — Company data */}
       <CompanyDataCard />
@@ -74,7 +66,7 @@ export default function ProfilePage() {
           <AvatarCard />
 
           {isLoading ? (
-            <div className="text-xs text-muted-foreground">A carregar…</div>
+            <LoadingState variant="form" rows={3} />
           ) : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
