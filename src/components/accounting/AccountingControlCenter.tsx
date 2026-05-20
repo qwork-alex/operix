@@ -417,6 +417,7 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
               moduleKey={activeMod.key}
               color={activeMod.color}
               label={activeMod.label}
+              year={selectedYear}
               onClose={() => setActiveModule(null)}
             />
           </div>
