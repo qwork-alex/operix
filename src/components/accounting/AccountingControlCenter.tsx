@@ -113,10 +113,11 @@ const OrbitButton = memo(function OrbitButton({ mod, x, y, isActive, onSelect }:
 export function AccountingControlCenter({ embedded = false }: { embedded?: boolean } = {}) {
   const { t } = useLanguage();
   const [activeModule, setActiveModule] = useState<ModuleKey | null>(null);
-  const { data: yearsList = [] } = useFinancialYears();
+  const [selectedTech, setSelectedTech] = useState<string>("all");
+  const techScope = selectedTech === "all" ? null : selectedTech;
+  const { data: yearsList = [] } = useFinancialYears(techScope);
   const { data: techList = [] } = useWorkspaceTechnicians();
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
-  const [selectedTech, setSelectedTech] = useState<string>("all");
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
 
   useEffect(() => {
