@@ -330,6 +330,9 @@ export type Database = {
           created_by: string | null
           customer_name: string | null
           customer_snapshot: Json | null
+          deleted_at: string | null
+          deleted_by: string | null
+          deleted_reason: string | null
           due_date: string | null
           financial_sync_lock: boolean
           fleet_id: string | null
@@ -361,6 +364,9 @@ export type Database = {
           created_by?: string | null
           customer_name?: string | null
           customer_snapshot?: Json | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
           due_date?: string | null
           financial_sync_lock?: boolean
           fleet_id?: string | null
@@ -392,6 +398,9 @@ export type Database = {
           created_by?: string | null
           customer_name?: string | null
           customer_snapshot?: Json | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
           due_date?: string | null
           financial_sync_lock?: boolean
           fleet_id?: string | null
@@ -637,6 +646,9 @@ export type Database = {
           contact_phone: string | null
           created_at: string
           created_by: string | null
+          deleted_at: string | null
+          deleted_by: string | null
+          deleted_reason: string | null
           display_code: string | null
           id: string
           name: string
@@ -652,6 +664,9 @@ export type Database = {
           contact_phone?: string | null
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
           display_code?: string | null
           id?: string
           name: string
@@ -667,6 +682,9 @@ export type Database = {
           contact_phone?: string | null
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
           display_code?: string | null
           id?: string
           name?: string
@@ -903,6 +921,9 @@ export type Database = {
           birth_date: string | null
           created_at: string
           created_by: string | null
+          deleted_at: string | null
+          deleted_by: string | null
+          deleted_reason: string | null
           email: string | null
           full_name: string
           id: string
@@ -920,6 +941,9 @@ export type Database = {
           birth_date?: string | null
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
           email?: string | null
           full_name: string
           id?: string
@@ -937,6 +961,9 @@ export type Database = {
           birth_date?: string | null
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
           email?: string | null
           full_name?: string
           id?: string
@@ -1149,6 +1176,9 @@ export type Database = {
           category: string | null
           created_at: string
           created_by: string | null
+          deleted_at: string | null
+          deleted_by: string | null
+          deleted_reason: string | null
           id: string
           label: string | null
           notes: string | null
@@ -1172,6 +1202,9 @@ export type Database = {
           category?: string | null
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
           id?: string
           label?: string | null
           notes?: string | null
@@ -1195,6 +1228,9 @@ export type Database = {
           category?: string | null
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
           id?: string
           label?: string | null
           notes?: string | null
@@ -1271,6 +1307,9 @@ export type Database = {
           created_at: string
           created_by: string | null
           date: string
+          deleted_at: string | null
+          deleted_by: string | null
+          deleted_reason: string | null
           driver_id: string | null
           id: string
           km_at_fuel: number | null
@@ -1286,6 +1325,9 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           date?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
           driver_id?: string | null
           id?: string
           km_at_fuel?: number | null
@@ -1301,6 +1343,9 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           date?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
           driver_id?: string | null
           id?: string
           km_at_fuel?: number | null
@@ -1384,6 +1429,9 @@ export type Database = {
           created_at: string
           created_by: string | null
           date: string
+          deleted_at: string | null
+          deleted_by: string | null
+          deleted_reason: string | null
           driver_id: string
           id: string
           km_end: number | null
@@ -1400,6 +1448,9 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           date?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
           driver_id: string
           id?: string
           km_end?: number | null
@@ -1416,6 +1467,9 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           date?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
           driver_id?: string
           id?: string
           km_end?: number | null
@@ -2057,6 +2111,9 @@ export type Database = {
           client_name: string | null
           created_at: string
           created_by: string | null
+          deleted_at: string | null
+          deleted_by: string | null
+          deleted_reason: string | null
           group_id: string | null
           id: string
           license_plate: string | null
@@ -2083,6 +2140,9 @@ export type Database = {
           client_name?: string | null
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
           group_id?: string | null
           id?: string
           license_plate?: string | null
@@ -2109,6 +2169,9 @@ export type Database = {
           client_name?: string | null
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
           group_id?: string | null
           id?: string
           license_plate?: string | null
@@ -2504,6 +2567,9 @@ export type Database = {
           client_name: string
           created_at: string
           created_by: string | null
+          deleted_at: string | null
+          deleted_by: string | null
+          deleted_reason: string | null
           distribution_snapshot: Json | null
           group_id: string | null
           id: string
@@ -2538,6 +2604,9 @@ export type Database = {
           client_name?: string
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
           distribution_snapshot?: Json | null
           group_id?: string | null
           id?: string
@@ -2572,6 +2641,9 @@ export type Database = {
           client_name?: string
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
           distribution_snapshot?: Json | null
           group_id?: string | null
           id?: string
@@ -3012,6 +3084,9 @@ export type Database = {
           brand: string | null
           created_at: string
           created_by: string | null
+          deleted_at: string | null
+          deleted_by: string | null
+          deleted_reason: string | null
           first_registration_date: string | null
           fuel_type: string | null
           id: string
@@ -3031,6 +3106,9 @@ export type Database = {
           brand?: string | null
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
           first_registration_date?: string | null
           fuel_type?: string | null
           id?: string
@@ -3050,6 +3128,9 @@ export type Database = {
           brand?: string | null
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
           first_registration_date?: string | null
           fuel_type?: string | null
           id?: string
@@ -3332,6 +3413,18 @@ export type Database = {
         }
         Relationships: []
       }
+      recoverable_items: {
+        Row: {
+          deleted_at: string | null
+          deleted_by: string | null
+          deleted_reason: string | null
+          entity_type: string | null
+          id: string | null
+          label: string | null
+          workspace_id: string | null
+        }
+        Relationships: []
+      }
       v_financial_integrity_summary: {
         Row: {
           critical_issues: number | null
@@ -3503,6 +3596,30 @@ export type Database = {
         Args: { _uid: string; _ws: string }
         Returns: boolean
       }
+      list_audit_events: {
+        Args: { _limit?: number; _table_filter?: string }
+        Returns: {
+          action: string
+          actor_user_id: string
+          created_at: string
+          id: string
+          payload: Json
+          row_id: string
+          table_name: string
+        }[]
+      }
+      list_recoverable_items: {
+        Args: never
+        Returns: {
+          deleted_at: string
+          deleted_by: string
+          deleted_reason: string
+          entity_type: string
+          id: string
+          label: string
+          workspace_id: string
+        }[]
+      }
       log_audit_event: {
         Args: {
           _new?: Json
@@ -3528,6 +3645,10 @@ export type Database = {
         Returns: string
       }
       restore_audit_record: { Args: { _audit_id: string }; Returns: Json }
+      restore_record: {
+        Args: { _row_id: string; _table: string }
+        Returns: Json
+      }
       row_in_scope: {
         Args: {
           _action: string
@@ -3540,6 +3661,10 @@ export type Database = {
       }
       run_financial_integrity_check: {
         Args: { _workspace_id?: string; _year?: number }
+        Returns: Json
+      }
+      soft_delete_record: {
+        Args: { _reason?: string; _row_id: string; _table: string }
         Returns: Json
       }
       sync_discrepancy_for_service_order: {
