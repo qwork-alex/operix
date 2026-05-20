@@ -3,17 +3,20 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useCan } from "./usePermission";
 import { applyScope, logScope } from "@/lib/applyScope";
+import { useWorkspace } from "./useWorkspace";
+import { scopeQuery } from "@/lib/workspaceScope";
 
 export function useDashboardStats() {
   const { user } = useAuth();
   const { can, isLoading: permsLoading } = useCan();
+  const { workspaceId } = useWorkspace();
   const soView = can("service_orders", "view");
   const poView = can("payment_orders", "view");
   const finView = can("financial", "view");
   const allowed = soView.allowed || poView.allowed || finView.allowed;
 
   return useQuery({
-    queryKey: ["dashboard-stats", allowed, soView.scope, poView.scope, finView.scope, user?.id],
+    queryKey: ["dashboard-stats", workspaceId, allowed, soView.scope, poView.scope, finView.scope, user?.id],
     enabled: !permsLoading && allowed && !!user?.id,
     queryFn: async () => {
       logScope("dashboard", "view", soView.scope, allowed);
