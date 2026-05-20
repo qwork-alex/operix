@@ -274,7 +274,7 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
   return (
     <div className="h-full flex flex-col min-w-0 w-full">
       {/* Header — responsive toolbar, viewport-safe */}
-      <div className="flex items-center justify-between mb-4 gap-2 flex-wrap min-w-0">
+      <div className="sticky top-0 z-20 flex items-center justify-between mb-4 gap-2 flex-wrap min-w-0 rounded-lg bg-background/80 py-1 backdrop-blur-sm">
         {embedded ? (
           <div />
         ) : (
@@ -283,12 +283,12 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
             <p className="text-sm text-muted-foreground truncate">{t("acc.subtitle")}</p>
           </div>
         )}
-        <div className="flex items-center gap-1.5 flex-wrap min-w-0 max-w-full">
+        <div className="flex items-center justify-end gap-1.5 flex-wrap min-w-0 max-w-full overflow-visible">
           <Select value={selectedTech} onValueChange={setSelectedTech}>
-            <SelectTrigger className="h-8 w-[130px] sm:w-[160px] text-xs">
+            <SelectTrigger className="h-8 w-[min(160px,42vw)] text-xs">
               <SelectValue placeholder={t("acc.allTechs")} />
             </SelectTrigger>
-            <SelectContent collisionPadding={8} className="max-w-[90vw]">
+            <SelectContent align="end" collisionPadding={12} className="w-[var(--radix-select-trigger-width)] max-w-[calc(100vw-24px)]">
               <SelectItem value="all">{t("acc.allTechs")}</SelectItem>
               {techList.map((tech) => (
                 <SelectItem key={tech.id} value={tech.id}>{tech.name}</SelectItem>
@@ -299,17 +299,17 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
             <SelectTrigger className="h-8 w-[90px] text-xs">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent collisionPadding={8} className="max-w-[90vw]">
+            <SelectContent align="end" collisionPadding={12} className="w-[var(--radix-select-trigger-width)] max-w-[calc(100vw-24px)]">
               {years.map((y) => (
                 <SelectItem key={y} value={String(y)}>{y}</SelectItem>
               ))}
             </SelectContent>
           </Select>
           <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-            <SelectTrigger className="h-8 w-[100px] text-xs">
+            <SelectTrigger className="h-8 w-[min(120px,34vw)] text-xs">
               <SelectValue placeholder={t("acc.allMonths")} />
             </SelectTrigger>
-            <SelectContent collisionPadding={8} className="max-w-[90vw]">
+            <SelectContent align="end" collisionPadding={12} className="w-[var(--radix-select-trigger-width)] max-w-[calc(100vw-24px)]">
               <SelectItem value="all">{t("acc.allMonths")}</SelectItem>
               {MONTH_LABELS.map((m, i) => (
                 <SelectItem key={m} value={String(i + 1)}>{m}</SelectItem>
