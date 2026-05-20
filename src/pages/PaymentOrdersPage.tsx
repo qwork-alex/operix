@@ -260,9 +260,12 @@ export default function PaymentOrdersPage() {
             <p className="text-[11px] text-muted-foreground truncate">{t("po.subtitle") || "Validação e conciliação documental de pagamentos"}</p>
           </div>
         </div>
-        <Can permission="payment_orders.create">
-          <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} compact />
-        </Can>
+        <div className="flex items-center gap-2">
+          <ContextualWorkspacePicker ctx={ctxWs} />
+          <Can permission="payment_orders.create">
+            <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} compact />
+          </Can>
+        </div>
       </header>
 
       <div className="flex flex-1 min-h-0 w-full gap-3">
