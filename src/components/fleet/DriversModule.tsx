@@ -9,8 +9,10 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Plus, Save, Trash2, Pencil, Loader2, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Plus, Save, Trash2, Pencil, Loader2, AlertTriangle, CheckCircle2, Link2 } from "lucide-react";
 import DocumentCapture from "./DocumentCapture";
+import { useWorkspaceTechnicians } from "@/hooks/useFinancialPeriods";
 
 interface DriverForm {
   full_name: string;
@@ -26,12 +28,14 @@ interface DriverForm {
   license_category: string;
   license_number: string;
   license_expiry_date: string;
+  linked_user_id: string; // optional link to workspace user
 }
 
 const emptyForm: DriverForm = {
   full_name: "", birth_date: "", phone: "", email: "",
   addr_number: "", addr_street: "", addr_postal_code: "", addr_city: "", addr_region: "", addr_country: "Portugal",
   license_category: "", license_number: "", license_expiry_date: "",
+  linked_user_id: "",
 };
 
 type ConfidenceLevel = "high" | "medium" | "low";
