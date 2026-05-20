@@ -43,7 +43,7 @@ export function AppSidebar() {
     { title: "Faturamento", url: "/billing", icon: Receipt, module: "accounting", action: "view" },
     { title: t("nav.financial"), url: "/financial", icon: TrendingUp, module: "financial", action: "view" },
     { title: t("nav.profit"), url: "/profit", icon: PieChart, module: "profit", action: "view" },
-    { title: t("nav.accounting"), url: "/accounting", icon: BookOpen, module: "accounting", action: "view" },
+    // Accounting is now embedded inside /financial as a tab; the standalone route stays as a redirect.
     { title: t("nav.fleet"), url: "/fleet", icon: Car, module: "fleet", action: "view" },
     { title: t("nav.documents"), url: "/documents", icon: FolderOpen, module: "documents", action: "view" },
     { title: t("nav.users"), url: "/users", icon: Users, module: "users", action: "view" },

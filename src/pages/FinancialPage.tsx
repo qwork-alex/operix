@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { RefreshCw, BarChart3, Bell, UserPlus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,8 @@ import HistoricoTab from "@/components/confronto/HistoricoTab";
 import TechnicianDetailTab from "@/components/financial/TechnicianDetailTab";
 import ParticipationTab from "@/components/financial/ParticipationTab";
 import FinancialAuditTab from "@/components/financial/FinancialAuditTab";
-import { Link2, AlertTriangle, Users, ShieldCheck } from "lucide-react";
+import { AccountingControlCenter } from "@/components/accounting/AccountingControlCenter";
+import { Link2, AlertTriangle, Users, ShieldCheck, BookOpen } from "lucide-react";
 
 export default function FinancialPage() {
   const { t } = useLanguage();
@@ -30,7 +32,12 @@ export default function FinancialPage() {
   const { data: aggregation } = useParticipantAggregation();
   const runMutation = useRunReconciliation();
   const [confrontoTab, setConfrontoTab] = useState("fusao");
-  const [mainTab, setMainTab] = useState("confronto");
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get("tab");
+  const validTabs = ["confronto", "breakdown", "participation", "audit", "accounting"];
+  const [mainTab, setMainTab] = useState(
+    initialTab && validTabs.includes(initialTab) ? initialTab : "confronto"
+  );
   const [showAddTech, setShowAddTech] = useState(false);
 
   // Financial alerts: unread discrepancy notifications
@@ -194,6 +201,9 @@ export default function FinancialPage() {
           <TabsTrigger value="audit">
             <ShieldCheck className="h-3.5 w-3.5 mr-1" /> {t("fin.tabs.audit")}
           </TabsTrigger>
+          <TabsTrigger value="accounting">
+            <BookOpen className="h-3.5 w-3.5 mr-1" /> {t("fin.tabs.accounting")}
+          </TabsTrigger>
         </TabsList>
 
 
@@ -238,6 +248,12 @@ export default function FinancialPage() {
 
         <TabsContent value="audit" className="space-y-4">
           <FinancialAuditTab />
+        </TabsContent>
+
+        <TabsContent value="accounting" className="space-y-4">
+          <div className="min-h-[600px]">
+            <AccountingControlCenter embedded />
+          </div>
         </TabsContent>
       </Tabs>
     </div>

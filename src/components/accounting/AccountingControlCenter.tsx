@@ -85,8 +85,9 @@ const OrbitButton = memo(function OrbitButton({ mod, x, y, isActive, onSelect }:
   );
 });
 
-export function AccountingControlCenter() {
+export function AccountingControlCenter({ embedded = false }: { embedded?: boolean } = {}) {
   const [activeModule, setActiveModule] = useState<ModuleKey | null>(null);
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
 
   // Orbit angle stored in ref; we mutate DOM/SVG directly to avoid React re-renders per frame
   const orbitAngleRef = useRef(0);
@@ -244,13 +245,38 @@ export function AccountingControlCenter() {
     });
   }, [centerX, centerY, orbitRadius]);
 
+  const years = useMemo(() => {
+    const now = new Date().getFullYear();
+    return [now - 2, now - 1, now, now + 1];
+  }, []);
+
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Centro de Controle</h1>
-          <p className="text-sm text-muted-foreground">Contabilidade interativa</p>
+        {embedded ? (
+          <div />
+        ) : (
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Centro de Controle</h1>
+            <p className="text-sm text-muted-foreground">Contabilidade interativa</p>
+          </div>
+        )}
+        <div className="flex items-center gap-1 rounded-lg border border-border/40 bg-card/40 p-1">
+          {years.map((y) => (
+            <button
+              key={y}
+              onClick={() => setSelectedYear(y)}
+              className={cn(
+                "px-2.5 py-1 text-xs rounded-md transition-colors",
+                selectedYear === y
+                  ? "bg-primary/15 text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {y}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -391,6 +417,7 @@ export function AccountingControlCenter() {
               moduleKey={activeMod.key}
               color={activeMod.color}
               label={activeMod.label}
+              year={selectedYear}
               onClose={() => setActiveModule(null)}
             />
           </div>
@@ -404,15 +431,17 @@ const ActiveModulePanel = memo(function ActiveModulePanel({
   moduleKey,
   color,
   label,
+  year,
   onClose,
 }: {
   moduleKey: ModuleKey;
   color: string;
   label: string;
+  year: number;
   onClose: () => void;
 }) {
   const { entries, total, isLoading, add, update, delete: del, allowAdd } =
-    useAccountingModule(moduleKey);
+    useAccountingModule(moduleKey, year);
 
   return (
     <ModulePanel
