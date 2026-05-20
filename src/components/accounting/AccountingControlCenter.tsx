@@ -517,7 +517,8 @@ const ActiveModulePanel = memo(function ActiveModulePanel({
   const importCategoryMap: Record<ModuleKey, string> = {
     rentals: "rent",
     expenses: "other",
-    fuel: "travel",
+    fuel: "fuel",
+    travel: "travel",
     purchases: "material",
     government: "tax",
     withdrawals: "salary",
