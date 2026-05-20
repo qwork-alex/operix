@@ -157,27 +157,9 @@ export default function FinancialPage() {
             </>
           )}
 
-          {/* Detalhamento-only: Add technician */}
-          {mainTab === "breakdown" && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => setShowAddTech(true)}
-                >
-                  <UserPlus className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{t("fin.addTech")}</TooltipContent>
-            </Tooltip>
-          )}
+          {/* Phase 5C: "Add technician" removed — techs derived only from workspace */}
         </div>
       </div>
-
-      {/* Debug strip removed — Financial values are derived from the
-          single source of truth (src/lib/distributionMath.ts). */}
 
       {/* No-data empty state */}
       {hasNoData && (
@@ -192,10 +174,16 @@ export default function FinancialPage() {
         </Card>
       )}
 
-      {/* TABS */}
+      {/* TABS — Phase 5C order */}
       <Tabs value={mainTab} onValueChange={setMainTab} className="space-y-4">
         <TabsList className="bg-muted">
           <TabsTrigger value="confronto">{t("fin.tabs.confronto")}</TabsTrigger>
+          <TabsTrigger value="distribution">
+            <PieChart className="h-3.5 w-3.5 mr-1" /> {t("fin.tabs.distribution")}
+          </TabsTrigger>
+          <TabsTrigger value="accounting">
+            <BookOpen className="h-3.5 w-3.5 mr-1" /> {t("fin.tabs.accounting")}
+          </TabsTrigger>
           <TabsTrigger value="breakdown">{t("fin.tabs.breakdown")}</TabsTrigger>
           <TabsTrigger value="participation">
             <Users className="h-3.5 w-3.5 mr-1" /> {t("fin.tabs.participation")}
@@ -203,15 +191,10 @@ export default function FinancialPage() {
           <TabsTrigger value="audit">
             <ShieldCheck className="h-3.5 w-3.5 mr-1" /> {t("fin.tabs.audit")}
           </TabsTrigger>
-          <TabsTrigger value="accounting">
-            <BookOpen className="h-3.5 w-3.5 mr-1" /> {t("fin.tabs.accounting")}
-          </TabsTrigger>
           <TabsTrigger value="integrity">
             <ShieldAlert className="h-3.5 w-3.5 mr-1" /> {t("fin.tabs.integrity")}
           </TabsTrigger>
         </TabsList>
-
-
 
         {/* CONFRONTO — UNTOUCHED */}
         <TabsContent value="confronto" className="space-y-4">
@@ -231,20 +214,24 @@ export default function FinancialPage() {
               <TabsTrigger value="historico">{t("fin.confronto.historico")}</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="fusao">
-              <FusaoManualTab />
-            </TabsContent>
-            <TabsContent value="pendentes">
-              <PendentesTab />
-            </TabsContent>
-            <TabsContent value="historico">
-              <HistoricoTab />
-            </TabsContent>
+            <TabsContent value="fusao"><FusaoManualTab /></TabsContent>
+            <TabsContent value="pendentes"><PendentesTab /></TabsContent>
+            <TabsContent value="historico"><HistoricoTab /></TabsContent>
           </Tabs>
         </TabsContent>
 
+        <TabsContent value="distribution" className="space-y-4">
+          <ProfitDistribution />
+        </TabsContent>
+
+        <TabsContent value="accounting" className="space-y-4">
+          <div className="min-h-[600px]">
+            <AccountingControlCenter embedded />
+          </div>
+        </TabsContent>
+
         <TabsContent value="breakdown" className="space-y-4">
-          <TechnicianDetailTab showAddModal={showAddTech} onShowAddModal={setShowAddTech} />
+          <TechnicianDetailTab />
         </TabsContent>
 
         <TabsContent value="participation" className="space-y-4">
@@ -253,12 +240,6 @@ export default function FinancialPage() {
 
         <TabsContent value="audit" className="space-y-4">
           <FinancialAuditTab />
-        </TabsContent>
-
-        <TabsContent value="accounting" className="space-y-4">
-          <div className="min-h-[600px]">
-            <AccountingControlCenter embedded />
-          </div>
         </TabsContent>
 
         <TabsContent value="integrity" className="space-y-4">
