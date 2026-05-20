@@ -27,6 +27,8 @@ import {
 } from "@/lib/pdfUtils";
 import { PaymentListsSelector } from "@/components/billing/PaymentListsSelector";
 import type { BillingPaymentList } from "@/hooks/usePaymentListsConsolidated";
+import { useContextualWorkspace } from "@/hooks/useContextualWorkspace";
+import { ContextualWorkspacePicker } from "@/components/workspace/ContextualWorkspacePicker";
 
 type Step = "upload" | "review";
 type Stage = "idle" | "uploading" | "rendering" | "ocr" | "extracting" | "validating" | "done" | "error";
@@ -75,6 +77,7 @@ export default function ImportInvoiceDialog({
   open, onOpenChange,
 }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const qc = useQueryClient();
+  const ctxWs = useContextualWorkspace("billing");
   const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<File | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -242,6 +245,7 @@ export default function ImportInvoiceDialog({
           linked_payment_order_ids,
           linked_payment_orders: linked_payment_order_ids, // legacy alias
         },
+        ...(ctxWs.resolvedWorkspaceId ? { workspace_id: ctxWs.resolvedWorkspaceId } : {}),
       };
 
       const { data: inv, error: invErr } = await (supabase as any)
@@ -255,6 +259,7 @@ export default function ImportInvoiceDialog({
         mime_type: file.type,
         size_bytes: file.size,
         uploaded_by: uid,
+        ...(ctxWs.resolvedWorkspaceId ? { workspace_id: ctxWs.resolvedWorkspaceId } : {}),
       });
       if (attErr) throw attErr;
     },
@@ -286,9 +291,12 @@ export default function ImportInvoiceDialog({
                 PDF / imagem / câmera / scan — OCR PT · FR · EN.
               </p>
             </div>
-            <Badge variant="outline" className="text-[10px] gap-1">
-              <Sparkles className="h-3 w-3 text-amber-400" /> Gemini OCR
-            </Badge>
+            <div className="flex items-center gap-2">
+              <ContextualWorkspacePicker ctx={ctxWs} />
+              <Badge variant="outline" className="text-[10px] gap-1">
+                <Sparkles className="h-3 w-3 text-amber-400" /> Gemini OCR
+              </Badge>
+            </div>
           </div>
         </DialogHeader>
 

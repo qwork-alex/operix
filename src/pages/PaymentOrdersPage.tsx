@@ -34,6 +34,8 @@ import type { Json } from "@/integrations/supabase/types";
 import { Can } from "@/components/Can";
 import { getCurrentUser } from "@/lib/authUser";
 import { supabase } from "@/integrations/supabase/client";
+import { useContextualWorkspace } from "@/hooks/useContextualWorkspace";
+import { ContextualWorkspacePicker } from "@/components/workspace/ContextualWorkspacePicker";
 
 export default function PaymentOrdersPage() {
   const { t, formatCurrency } = useLanguage();
@@ -50,6 +52,7 @@ export default function PaymentOrdersPage() {
   const { data: technicians = [] } = useAssignableUsers();
   const { data: myAssignableUserId } = useMyAssignableUserId();
   const { isProcessing, addFiles } = useFileQueue();
+  const ctxWs = useContextualWorkspace("payment_orders");
 
   const [hCtx, setHCtx] = useState<HierarchyContext>(() =>
     loadHierarchyContext("hierarchy.payment_orders"),
@@ -138,6 +141,7 @@ export default function PaymentOrdersPage() {
         total: r.total ?? null,
         status: "pending",
         group_id: r.list_name ?? ctxDefaults.week ?? null,
+        ...(ctxWs.resolvedWorkspaceId ? { workspace_id: ctxWs.resolvedWorkspaceId } : {}),
       };
       // Contexto operacional SEMPRE prevalece sobre o ano atual.
       if (ctxDefaults.year) {
@@ -256,9 +260,12 @@ export default function PaymentOrdersPage() {
             <p className="text-[11px] text-muted-foreground truncate">{t("po.subtitle") || "Validação e conciliação documental de pagamentos"}</p>
           </div>
         </div>
-        <Can permission="payment_orders.create">
-          <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} compact />
-        </Can>
+        <div className="flex items-center gap-2">
+          <ContextualWorkspacePicker ctx={ctxWs} />
+          <Can permission="payment_orders.create">
+            <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} compact />
+          </Can>
+        </div>
       </header>
 
       <div className="flex flex-1 min-h-0 w-full gap-3">

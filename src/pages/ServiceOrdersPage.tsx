@@ -34,6 +34,8 @@ import { useTechnicianEarnings, getTechEarnings } from "@/hooks/useTechnicianEar
 import { Can } from "@/components/Can";
 import { getCurrentUser } from "@/lib/authUser";
 import { supabase } from "@/integrations/supabase/client";
+import { useContextualWorkspace } from "@/hooks/useContextualWorkspace";
+import { ContextualWorkspacePicker } from "@/components/workspace/ContextualWorkspacePicker";
 
 export default function ServiceOrdersPage() {
   const { t, formatCurrency } = useLanguage();
@@ -52,6 +54,7 @@ export default function ServiceOrdersPage() {
   const { data: myAssignableUserId } = useMyAssignableUserId();
   const { data: earningsMap } = useTechnicianEarnings();
   const { isProcessing, addFiles } = useFileQueue();
+  const ctxWs = useContextualWorkspace("service_orders");
 
   const [hCtx, setHCtx] = useState<HierarchyContext>(() =>
     loadHierarchyContext("hierarchy.service_orders"),
@@ -152,6 +155,7 @@ export default function ServiceOrdersPage() {
         total: r.total ?? null,
         status: "draft",
         group_id: r.week ?? ctxDefaults.week ?? null,
+        ...(ctxWs.resolvedWorkspaceId ? { workspace_id: ctxWs.resolvedWorkspaceId } : {}),
       };
       // Contexto operacional SEMPRE prevalece sobre o ano atual.
       if (ctxDefaults.year) {
@@ -301,9 +305,12 @@ export default function ServiceOrdersPage() {
             <p className="text-[11px] text-muted-foreground truncate">{t("so.subtitle") || "Gestão e validação documental operacional"}</p>
           </div>
         </div>
-        <Can permission="service_orders.create">
-          <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} compact />
-        </Can>
+        <div className="flex items-center gap-2">
+          <ContextualWorkspacePicker ctx={ctxWs} />
+          <Can permission="service_orders.create">
+            <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} compact />
+          </Can>
+        </div>
       </header>
 
       {/* WORKSPACE — sidebar + canvas, both starting at the same baseline */}

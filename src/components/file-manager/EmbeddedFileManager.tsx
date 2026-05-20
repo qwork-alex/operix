@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useWorkspace } from "@/hooks/useWorkspace";
 import { useLanguage } from "@/hooks/useLanguage";
 import { toast } from "sonner";
 import {
@@ -148,6 +149,7 @@ async function fetchDocumentBlobUrl(
 export function EmbeddedFileManager({ entityType, module: moduleName = "orders", sessionFileNames = [], defaultCollapsed = false, year = null }: Props) {
   const { t, formatDate } = useLanguage();
   const { user } = useAuth();
+  const { workspaceId } = useWorkspace();
   const queryClient = useQueryClient();
   const collapseKey = `fm.collapsed.${entityType}.${moduleName}`;
   const [collapsed, setCollapsed] = useState<boolean>(() => {
@@ -252,6 +254,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
         uploaded_by: user?.id,
         entity_type: entityType,
         module: moduleName,
+        ...(workspaceId ? { workspace_id: workspaceId } : {}),
       });
       if (error) throw error;
     },
@@ -343,6 +346,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
         uploaded_by: user?.id,
         entity_type: entityType,
         module: moduleName,
+        ...(workspaceId ? { workspace_id: workspaceId } : {}),
       }).select("id").single();
       if (error) throw error;
       return data.id;

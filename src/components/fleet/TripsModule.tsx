@@ -12,6 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Save, Trash2, MapPin, Navigation, Loader2, CheckCircle, Locate, Plus, ArrowRight, Minus, Clock, ChevronDown, ChevronRight, Eye } from "lucide-react";
+import { useContextualWorkspace } from "@/hooks/useContextualWorkspace";
+import { ContextualWorkspacePicker } from "@/components/workspace/ContextualWorkspacePicker";
 
 /* ─── Types ─── */
 interface TripPoint {
@@ -157,6 +159,7 @@ async function calculateRouteSegment(
 /* ─── Component ─── */
 export default function TripsModule() {
   const qc = useQueryClient();
+  const ctxWs = useContextualWorkspace("fleet");
   const [open, setOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [form, setForm] = useState<TripForm>(defaultForm());
@@ -502,6 +505,7 @@ export default function TripsModule() {
         km_start: kmStart,
         status: "in_progress",
         notes: form.notes || null,
+        ...(ctxWs.resolvedWorkspaceId ? { workspace_id: ctxWs.resolvedWorkspaceId } : {}),
       }).select().single();
       if (error) throw new Error(`Falha ao criar trajeto: ${error.message}`);
 
@@ -866,7 +870,8 @@ export default function TripsModule() {
                   {isActiveSession ? "Continue a registar pontos. Distâncias calculadas automaticamente." : "Registe um novo trajeto com cálculo automático de rotas."}
                 </DialogDescription>
               </div>
-              <div className="flex gap-1">
+              <div className="flex items-center gap-1">
+                {!isActiveSession && <ContextualWorkspacePicker ctx={ctxWs} />}
                 {isActiveSession && (
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={minimizeDialog} title="Minimizar">
                     <Minus className="h-4 w-4" />
