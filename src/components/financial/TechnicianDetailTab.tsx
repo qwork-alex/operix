@@ -556,15 +556,22 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
     <>
       <Collapsible open={open} onOpenChange={setOpen}>
         <CollapsibleTrigger asChild>
-          <div className="group grid grid-cols-[1fr_auto_auto] items-center px-4 py-3 rounded-lg border border-border/40 cursor-pointer hover:border-primary/30 hover:bg-muted/20 transition-all">
+          <div className="group grid grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-4 py-3 rounded-lg border border-border/40 cursor-pointer hover:border-primary/30 hover:bg-muted/20 transition-all">
             <div className="flex items-center gap-3 min-w-0">
               <span className={`h-2 w-2 rounded-full shrink-0 ${isPositive ? "bg-emerald-400" : "bg-destructive"}`} />
               <span className="text-sm font-medium text-foreground truncate">{data.name}</span>
             </div>
-            <span className={`text-sm font-semibold tabular-nums justify-self-center ${isPositive ? "text-emerald-400" : "text-destructive"}`}>
+            <span className={`text-sm font-semibold tabular-nums justify-self-end ${isPositive ? "text-emerald-400" : "text-destructive"}`}>
               {globalResult < 0 ? "- " : ""}{formatCurrency(Math.abs(globalResult))}
             </span>
-            <div className="flex items-center gap-3 shrink-0 ml-4">
+            <div className="col-span-2 md:col-span-1 flex flex-wrap items-center justify-end gap-2 shrink-0 md:ml-1">
+              <div onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                <AddPeriodInline
+                  compact
+                  existingYears={yearBlocks.map((yb) => yb.year)}
+                  onAddYear={handleAddYear}
+                />
+              </div>
               <button
                 className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-destructive/10"
                 onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }}
@@ -598,11 +605,6 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
                 derivedAgg={getParticipantYearAgg(aggregation, data.name, yb.year)}
               />
             ))}
-            {/* Phase 5D — visible inline "+ Novo Período" with arbitrary year */}
-            <AddPeriodInline
-              existingYears={yearBlocks.map((yb) => yb.year)}
-              onAddYear={handleAddYear}
-            />
           </div>
         </CollapsibleContent>
       </Collapsible>
