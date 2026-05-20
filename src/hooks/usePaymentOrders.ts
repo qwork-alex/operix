@@ -45,10 +45,11 @@ export function usePaymentOrders(filters?: {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { can, isLoading: permsLoading } = useCan();
+  const { workspaceId } = useWorkspace();
   const { allowed, scope } = can("payment_orders", "view");
 
   const query = useQuery({
-    queryKey: ["payment_orders", filters, allowed, scope, user?.id],
+    queryKey: ["payment_orders", workspaceId, filters, allowed, scope, user?.id],
     enabled: !permsLoading && allowed && !!user?.id,
     queryFn: async () => {
       logScope("payment_orders", "view", scope, allowed);
@@ -60,6 +61,7 @@ export function usePaymentOrders(filters?: {
         .order("created_at", { ascending: false });
 
       q = applyScope(q, scope, user, "user_id");
+      q = scopeQuery(q, "payment_orders", workspaceId);
 
       if (filters?.client_id) q = q.eq("client_id", filters.client_id);
       if (filters?.platform) q = q.eq("platform", filters.platform);
