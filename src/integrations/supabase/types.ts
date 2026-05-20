@@ -1686,6 +1686,63 @@ export type Database = {
         }
         Relationships: []
       }
+      participation_diffs: {
+        Row: {
+          created_at: string
+          event_hash: string | null
+          id: string
+          ledger_id: string | null
+          new_expected: number | null
+          new_received: number | null
+          new_status: string | null
+          participant_name: string | null
+          participant_type: string | null
+          previous_expected: number | null
+          previous_received: number | null
+          previous_status: string | null
+          service_order_id: string | null
+          sync_revision: number | null
+          workspace_id: string | null
+          year_reference: number | null
+        }
+        Insert: {
+          created_at?: string
+          event_hash?: string | null
+          id?: string
+          ledger_id?: string | null
+          new_expected?: number | null
+          new_received?: number | null
+          new_status?: string | null
+          participant_name?: string | null
+          participant_type?: string | null
+          previous_expected?: number | null
+          previous_received?: number | null
+          previous_status?: string | null
+          service_order_id?: string | null
+          sync_revision?: number | null
+          workspace_id?: string | null
+          year_reference?: number | null
+        }
+        Update: {
+          created_at?: string
+          event_hash?: string | null
+          id?: string
+          ledger_id?: string | null
+          new_expected?: number | null
+          new_received?: number | null
+          new_status?: string | null
+          participant_name?: string | null
+          participant_type?: string | null
+          previous_expected?: number | null
+          previous_received?: number | null
+          previous_status?: string | null
+          service_order_id?: string | null
+          sync_revision?: number | null
+          workspace_id?: string | null
+          year_reference?: number | null
+        }
+        Relationships: []
+      }
       participation_ledger: {
         Row: {
           created_at: string
@@ -2984,6 +3041,74 @@ export type Database = {
       }
     }
     Views: {
+      financial_event_timeline_v: {
+        Row: {
+          actor_user_id: string | null
+          caused_by_event_id: string | null
+          correlation_id: string | null
+          created_at: string | null
+          entity_id: string | null
+          entity_type: string | null
+          event_hash: string | null
+          event_type: string | null
+          id: string | null
+          payload: Json | null
+          payload_summary: Json | null
+          revision: number | null
+          source: string | null
+          workspace_id: string | null
+          year_reference: number | null
+        }
+        Insert: {
+          actor_user_id?: string | null
+          caused_by_event_id?: string | null
+          correlation_id?: string | null
+          created_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_hash?: string | null
+          event_type?: string | null
+          id?: string | null
+          payload?: Json | null
+          payload_summary?: never
+          revision?: number | null
+          source?: string | null
+          workspace_id?: string | null
+          year_reference?: never
+        }
+        Update: {
+          actor_user_id?: string | null
+          caused_by_event_id?: string | null
+          correlation_id?: string | null
+          created_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_hash?: string | null
+          event_type?: string | null
+          id?: string | null
+          payload?: Json | null
+          payload_summary?: never
+          revision?: number | null
+          source?: string | null
+          workspace_id?: string | null
+          year_reference?: never
+        }
+        Relationships: []
+      }
+      v_financial_integrity_summary: {
+        Row: {
+          duplicate_hash_count: number | null
+          financial_sync_lock_hits: number | null
+          invalid_workspace_rows: number | null
+          missing_so_links: number | null
+          orphan_op_count: number | null
+          over_allocated_distributions: number | null
+          replay_collapses: number | null
+          skipped_diff_updates: number | null
+          workspace_id: string | null
+        }
+        Relationships: []
+      }
       v_participation_summary: {
         Row: {
           expected: number | null

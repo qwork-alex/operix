@@ -19,7 +19,8 @@ import HistoricoTab from "@/components/confronto/HistoricoTab";
 
 import TechnicianDetailTab from "@/components/financial/TechnicianDetailTab";
 import ParticipationTab from "@/components/financial/ParticipationTab";
-import { Link2, AlertTriangle, Users } from "lucide-react";
+import FinancialAuditTab from "@/components/financial/FinancialAuditTab";
+import { Link2, AlertTriangle, Users, ShieldCheck } from "lucide-react";
 
 export default function FinancialPage() {
   const { t } = useLanguage();
@@ -190,7 +191,11 @@ export default function FinancialPage() {
           <TabsTrigger value="participation">
             <Users className="h-3.5 w-3.5 mr-1" /> Participation
           </TabsTrigger>
+          <TabsTrigger value="audit">
+            <ShieldCheck className="h-3.5 w-3.5 mr-1" /> Audit
+          </TabsTrigger>
         </TabsList>
+
 
 
         {/* CONFRONTO — UNTOUCHED */}
@@ -229,6 +234,10 @@ export default function FinancialPage() {
 
         <TabsContent value="participation" className="space-y-4">
           <ParticipationTab />
+        </TabsContent>
+
+        <TabsContent value="audit" className="space-y-4">
+          <FinancialAuditTab />
         </TabsContent>
       </Tabs>
     </div>
