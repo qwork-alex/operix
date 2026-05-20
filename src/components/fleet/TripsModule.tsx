@@ -870,7 +870,8 @@ export default function TripsModule() {
                   {isActiveSession ? "Continue a registar pontos. Distâncias calculadas automaticamente." : "Registe um novo trajeto com cálculo automático de rotas."}
                 </DialogDescription>
               </div>
-              <div className="flex gap-1">
+              <div className="flex items-center gap-1">
+                {!isActiveSession && <ContextualWorkspacePicker ctx={ctxWs} />}
                 {isActiveSession && (
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={minimizeDialog} title="Minimizar">
                     <Minus className="h-4 w-4" />
