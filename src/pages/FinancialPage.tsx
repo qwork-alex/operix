@@ -226,6 +226,10 @@ export default function FinancialPage() {
         <TabsContent value="breakdown" className="space-y-4">
           <TechnicianDetailTab showAddModal={showAddTech} onShowAddModal={setShowAddTech} />
         </TabsContent>
+
+        <TabsContent value="participation" className="space-y-4">
+          <ParticipationTab />
+        </TabsContent>
       </Tabs>
     </div>
   );
