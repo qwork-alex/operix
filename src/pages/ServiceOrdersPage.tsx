@@ -34,6 +34,8 @@ import { useTechnicianEarnings, getTechEarnings } from "@/hooks/useTechnicianEar
 import { Can } from "@/components/Can";
 import { getCurrentUser } from "@/lib/authUser";
 import { supabase } from "@/integrations/supabase/client";
+import { useContextualWorkspace } from "@/hooks/useContextualWorkspace";
+import { ContextualWorkspacePicker } from "@/components/workspace/ContextualWorkspacePicker";
 
 export default function ServiceOrdersPage() {
   const { t, formatCurrency } = useLanguage();
