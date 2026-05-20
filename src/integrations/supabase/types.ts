@@ -822,6 +822,7 @@ export type Database = {
           license_category: string | null
           license_expiry_date: string | null
           license_number: string | null
+          linked_user_id: string | null
           phone: string | null
           status: string
           updated_at: string
@@ -838,6 +839,7 @@ export type Database = {
           license_category?: string | null
           license_expiry_date?: string | null
           license_number?: string | null
+          linked_user_id?: string | null
           phone?: string | null
           status?: string
           updated_at?: string
@@ -854,6 +856,7 @@ export type Database = {
           license_category?: string | null
           license_expiry_date?: string | null
           license_number?: string | null
+          linked_user_id?: string | null
           phone?: string | null
           status?: string
           updated_at?: string
@@ -1062,6 +1065,7 @@ export type Database = {
           id: string
           label: string | null
           notes: string | null
+          origin: string
           payment_order_id: string | null
           reference_id: string | null
           service_order_id: string | null
@@ -1070,6 +1074,7 @@ export type Database = {
           technician_id: string | null
           type: string
           user_id: string | null
+          vehicle_id: string | null
           visibility_scope: string
           workspace_id: string | null
           year_reference: number | null
@@ -1083,6 +1088,7 @@ export type Database = {
           id?: string
           label?: string | null
           notes?: string | null
+          origin?: string
           payment_order_id?: string | null
           reference_id?: string | null
           service_order_id?: string | null
@@ -1091,6 +1097,7 @@ export type Database = {
           technician_id?: string | null
           type: string
           user_id?: string | null
+          vehicle_id?: string | null
           visibility_scope?: string
           workspace_id?: string | null
           year_reference?: number | null
@@ -1104,6 +1111,7 @@ export type Database = {
           id?: string
           label?: string | null
           notes?: string | null
+          origin?: string
           payment_order_id?: string | null
           reference_id?: string | null
           service_order_id?: string | null
@@ -1112,6 +1120,7 @@ export type Database = {
           technician_id?: string | null
           type?: string
           user_id?: string | null
+          vehicle_id?: string | null
           visibility_scope?: string
           workspace_id?: string | null
           year_reference?: number | null
