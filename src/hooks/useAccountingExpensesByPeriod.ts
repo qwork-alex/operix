@@ -59,19 +59,33 @@ function dateToPeriodKey(d: Date): string {
 
 export type AccountingPeriodMap = Record<string, Partial<Record<AccountingBucketKey, number>>>;
 
-export function useAccountingExpensesByPeriod() {
+import { useWorkspace } from "@/hooks/useWorkspace";
+
+export function useAccountingExpensesByPeriod(year?: number) {
+  const { workspaceId } = useWorkspace();
   return useQuery({
-    queryKey: ["accounting-expenses-by-period"],
+    queryKey: ["accounting-expenses-by-period", workspaceId, year ?? null],
+    enabled: !!workspaceId,
     queryFn: async (): Promise<AccountingPeriodMap> => {
       // Fuel is sourced exclusively from fleet_fuel_logs (Frota = single source of truth)
+      let recordsQ = supabase
+        .from("financial_records")
+        .select("amount, category, source, type, created_at, year_reference")
+        .eq("type", "expense")
+        .eq("workspace_id", workspaceId!);
+      if (year) recordsQ = recordsQ.eq("year_reference", year);
+
+      let fuelQ = supabase
+        .from("fleet_fuel_logs")
+        .select("total_cost, date, created_at")
+        .eq("workspace_id", workspaceId!);
+      if (year) {
+        fuelQ = fuelQ.gte("date", `${year}-01-01`).lte("date", `${year}-12-31`);
+      }
+
       const [{ data: records, error: e1 }, { data: fuelLogs, error: e2 }] = await Promise.all([
-        supabase
-          .from("financial_records")
-          .select("amount, category, source, type, created_at")
-          .eq("type", "expense"),
-        supabase
-          .from("fleet_fuel_logs")
-          .select("total_cost, date, created_at"),
+        recordsQ,
+        fuelQ,
       ]);
       if (e1) throw e1;
       if (e2) throw e2;
