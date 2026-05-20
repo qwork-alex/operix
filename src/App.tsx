@@ -95,6 +95,7 @@ const App = () => (
                         </ErrorBoundary>
                       </AppLayout>
                       </RoleProvider>
+                      </WorkspaceProvider>
                       </ImpersonationProvider>
                     </ProtectedRoute>
                   }
