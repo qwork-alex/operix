@@ -1153,7 +1153,7 @@ function AddPeriodInline({
           onClick={() => setOpen(true)}
         >
           <Plus className="h-3.5 w-3.5" />
-          <span>Novo Período</span>
+          <span>+ Novo Período</span>
         </Button>
       ) : (
         <div className="flex flex-wrap items-center justify-end gap-1.5 rounded-md border border-primary/30 bg-muted/30 p-1.5 max-w-full">
