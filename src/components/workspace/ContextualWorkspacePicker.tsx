@@ -1,18 +1,20 @@
 /**
  * ContextualWorkspacePicker — discreet contextual workspace selector.
  *
- * Renders ONLY when the user is linked to 2+ workspaces eligible for the
- * current module (e.g. a technician shared between "Quality Work" and
- * "Sanches"). For single-workspace users it renders nothing — assignment
- * is silent and automatic.
+ * Visibility rules (strict):
+ *  - Admins NEVER see the picker — no icon, no dropdown, no workspace list.
+ *    Admin assignment is silent and global; exposing a selector would leak
+ *    workspace topology and break cross-workspace isolation.
+ *  - Only roles `tecnico`, `socio`, `cliente` may see it, AND only when
+ *    they belong to 2+ eligible workspaces for the current module.
+ *  - Single-workspace users see nothing — assignment is automatic.
  *
- * Visual: a single minimalist Users icon button. Clicking opens a popover
- * listing the user's workspaces by name. The selected workspace is the
- * destination for the action being performed (upload, OS, OP, etc.).
+ * Visual: a single minimalist icon button (no badges, no status dots).
+ * Clicking opens a popover listing the user's workspaces by name. The
+ * selected workspace is the destination for the action being performed
+ * (upload, OS, OP, etc.). This is NOT a global workspace switcher.
  *
- * This is NOT a global workspace switcher. It does not change the active
- * application context — it only picks the destination workspace for the
- * next assignment.
+ * All visible strings come from `useLanguage().t()` — no hardcoded labels.
  */
 import { Users2, Check } from "lucide-react";
 import {
@@ -22,16 +24,25 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import type { ContextualWorkspaceResult } from "@/hooks/useContextualWorkspace";
+import { useRole } from "@/hooks/useRole";
+import { useLanguage } from "@/hooks/useLanguage";
 
 interface Props {
   ctx: ContextualWorkspaceResult;
   className?: string;
-  /** Visual label is intentionally suppressed; kept for backward compat. */
+  /** Kept for backward compat; visual label is intentionally suppressed. */
   label?: string;
   autoCollapse?: boolean;
 }
 
 export function ContextualWorkspacePicker({ ctx, className }: Props) {
+  const { role, isAdmin } = useRole();
+  const { t } = useLanguage();
+
+  // Admins / owners: never render. Picker is restricted to tecnico/socio/cliente.
+  if (isAdmin) return null;
+  if (role !== "tecnico" && role !== "socio" && role !== "cliente") return null;
+
   // Single-workspace users: silent auto-assignment, no UI.
   if (ctx.eligibleWorkspaces.length <= 1) return null;
 
@@ -40,31 +51,24 @@ export function ContextualWorkspacePicker({ ctx, className }: Props) {
   );
   const needsPick = ctx.requireSelection || !ctx.resolvedWorkspaceId;
 
+  const triggerLabel = current
+    ? `${t("ws.picker.destination")}: ${current.name}`
+    : t("ws.picker.select");
+
   return (
     <Popover>
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label={
-            current
-              ? `Workspace de destino: ${current.name}`
-              : "Selecionar workspace de destino"
-          }
-          title={
-            current
-              ? `Destino: ${current.name}`
-              : "Selecionar workspace de destino"
-          }
+          aria-label={triggerLabel}
+          title={triggerLabel}
           className={cn(
-            "relative inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
+            "inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
             needsPick && "text-primary",
             className,
           )}
         >
           <Users2 className="h-3.5 w-3.5" />
-          {needsPick && (
-            <span className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
-          )}
         </button>
       </PopoverTrigger>
       <PopoverContent
@@ -74,7 +78,7 @@ export function ContextualWorkspacePicker({ ctx, className }: Props) {
         className="w-56 max-w-[calc(100vw-24px)] p-1"
       >
         <div className="px-2 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
-          Atribuir a
+          {t("ws.picker.assignTo")}
         </div>
         <div className="flex flex-col gap-0.5">
           {ctx.eligibleWorkspaces.map((w) => {

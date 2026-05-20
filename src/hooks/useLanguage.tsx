@@ -485,6 +485,11 @@ const translations: Record<string, Record<LangCode, string>> = {
   "audit.empty":           { fr: "Aucun évènement enregistré.", en: "No events recorded yet.", pt: "Nenhum evento registado.", de: "Noch keine Ereignisse aufgezeichnet.", es: "Aún no hay eventos.", it: "Nessun evento registrato.", ar: "لا توجد أحداث بعد.", zh: "尚未记录事件。", ja: "まだイベントはありません。", hi: "अभी तक कोई ईवेंट नहीं।", pl: "Brak zarejestrowanych zdarzeń.", ru: "Событий пока нет." },
   "audit.diffs.title":     { fr: "Diffs de participation", en: "Participation diffs", pt: "Diffs de participação", de: "Beteiligungs-Diffs", es: "Diffs de participación", it: "Diff di partecipazione", ar: "تباينات المشاركة", zh: "参与差异", ja: "参加差分", hi: "भागीदारी डिफ़", pl: "Diffy uczestnictwa", ru: "Разницы участия" },
   "audit.diffs.none":      { fr: "Aucun diff enregistré.", en: "No diffs captured yet.", pt: "Nenhum diff registado.", de: "Noch keine Diffs erfasst.", es: "Sin diffs capturados.", it: "Nessun diff registrato.", ar: "لا توجد diffs بعد.", zh: "尚未捕获差异。", ja: "差分はまだありません。", hi: "अभी तक कोई डिफ़ नहीं।", pl: "Brak zarejestrowanych diffów.", ru: "Diff пока нет." },
+
+  // Contextual workspace picker
+  "ws.picker.assignTo":    { fr: "Attribuer à", en: "Assign to", pt: "Atribuir a", de: "Zuweisen an", es: "Asignar a", it: "Assegna a", ar: "تعيين إلى", zh: "分配给", ja: "割り当て先", hi: "को असाइन करें", pl: "Przypisz do", ru: "Назначить" },
+  "ws.picker.destination": { fr: "Destination", en: "Destination", pt: "Destino", de: "Ziel", es: "Destino", it: "Destinazione", ar: "الوجهة", zh: "目标", ja: "宛先", hi: "गंतव्य", pl: "Cel", ru: "Назначение" },
+  "ws.picker.select":      { fr: "Sélectionner la destination", en: "Select destination", pt: "Selecionar destino", de: "Ziel auswählen", es: "Seleccionar destino", it: "Seleziona destinazione", ar: "اختر الوجهة", zh: "选择目标", ja: "宛先を選択", hi: "गंतव्य चुनें", pl: "Wybierz cel", ru: "Выберите назначение" },
 };
 
 interface LanguageContextType {
