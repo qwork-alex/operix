@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Users } from "lucide-react";
+import { useLanguage } from "@/hooks/useLanguage";
 
 const TYPE_COLORS: Record<string, string> = {
   technician: "bg-blue-500/10 text-blue-400 border-blue-500/30",
@@ -23,6 +24,7 @@ function fmt(n: number) {
 }
 
 export default function ParticipationTab() {
+  const { t } = useLanguage();
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState<number>(currentYear);
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -54,13 +56,17 @@ export default function ParticipationTab() {
     { expected: 0, received: 0, pending: 0 }
   ), [filtered]);
 
+  const typeLabel = (k: string) => t(`part.type.${k}`);
+  const statusLabel = (s: string) =>
+    s === "paid" ? t("part.status.paid") : s === "partial" ? t("part.status.partial") : t("part.status.pending");
+
   return (
     <div className="space-y-4">
       <Card className="bg-card/40 border-border/50">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <CardTitle className="flex items-center gap-2 text-base">
-              <Users className="h-4 w-4 text-primary" /> Participation
+              <Users className="h-4 w-4 text-primary" /> {t("part.title")}
             </CardTitle>
             <div className="flex items-center gap-2">
               <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
@@ -72,17 +78,17 @@ export default function ParticipationTab() {
               <Select value={typeFilter} onValueChange={setTypeFilter}>
                 <SelectTrigger className="w-[160px] h-8"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos os tipos</SelectItem>
-                  <SelectItem value="partner">Sócio (Partner)</SelectItem>
-                  <SelectItem value="company">Empresa</SelectItem>
-                  <SelectItem value="technician">Técnico</SelectItem>
-                  <SelectItem value="shareholder">Acionista</SelectItem>
-                  <SelectItem value="collaborator">Colaborador</SelectItem>
-                  <SelectItem value="other">Outro</SelectItem>
+                  <SelectItem value="all">{t("part.allTypes")}</SelectItem>
+                  <SelectItem value="partner">{typeLabel("partner")}</SelectItem>
+                  <SelectItem value="company">{typeLabel("company")}</SelectItem>
+                  <SelectItem value="technician">{typeLabel("technician")}</SelectItem>
+                  <SelectItem value="shareholder">{typeLabel("shareholder")}</SelectItem>
+                  <SelectItem value="collaborator">{typeLabel("collaborator")}</SelectItem>
+                  <SelectItem value="other">{typeLabel("other")}</SelectItem>
                 </SelectContent>
               </Select>
               <Input
-                placeholder="Buscar participante..."
+                placeholder={t("part.searchPh")}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-[200px] h-8"
@@ -94,19 +100,19 @@ export default function ParticipationTab() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
             <Card className="bg-muted/30 border-border/50">
               <CardContent className="p-3">
-                <div className="text-xs text-muted-foreground">Esperado total</div>
+                <div className="text-xs text-muted-foreground">{t("part.expected")}</div>
                 <div className="text-lg font-semibold">{fmt(totals.expected)}</div>
               </CardContent>
             </Card>
             <Card className="bg-muted/30 border-border/50">
               <CardContent className="p-3">
-                <div className="text-xs text-muted-foreground">Recebido total</div>
+                <div className="text-xs text-muted-foreground">{t("part.received")}</div>
                 <div className="text-lg font-semibold text-emerald-400">{fmt(totals.received)}</div>
               </CardContent>
             </Card>
             <Card className="bg-muted/30 border-border/50">
               <CardContent className="p-3">
-                <div className="text-xs text-muted-foreground">Pendente total</div>
+                <div className="text-xs text-muted-foreground">{t("part.pending")}</div>
                 <div className="text-lg font-semibold text-amber-400">{fmt(totals.pending)}</div>
               </CardContent>
             </Card>
@@ -118,20 +124,20 @@ export default function ParticipationTab() {
             </div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-12 text-sm text-muted-foreground">
-              Nenhum participante encontrado para os filtros selecionados.
+              {t("part.empty")}
             </div>
           ) : (
             <div className="rounded-md border border-border/50 overflow-hidden">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Participante</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead className="text-right">Esperado</TableHead>
-                    <TableHead className="text-right">Recebido</TableHead>
-                    <TableHead className="text-right">Pendente</TableHead>
-                    <TableHead className="text-center">Status (P/Par/Pag)</TableHead>
-                    <TableHead className="text-center">OS</TableHead>
+                    <TableHead>{t("part.col.participant")}</TableHead>
+                    <TableHead>{t("label.type")}</TableHead>
+                    <TableHead className="text-right">{t("part.expected")}</TableHead>
+                    <TableHead className="text-right">{t("part.received")}</TableHead>
+                    <TableHead className="text-right">{t("part.pending")}</TableHead>
+                    <TableHead className="text-center">{t("part.col.statusBreakdown")}</TableHead>
+                    <TableHead className="text-center">{t("part.col.os")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -144,7 +150,7 @@ export default function ParticipationTab() {
                       <TableCell className="font-medium">{r.participant_name}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className={TYPE_COLORS[r.participant_type] ?? TYPE_COLORS.other}>
-                          {r.participant_type}
+                          {typeLabel(r.participant_type)}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">{fmt(Number(r.expected))}</TableCell>
@@ -169,23 +175,23 @@ export default function ParticipationTab() {
             <SheetTitle>
               {selected?.participant_name}{" "}
               <Badge variant="outline" className={TYPE_COLORS[selected?.participant_type ?? "other"]}>
-                {selected?.participant_type}
+                {typeLabel(selected?.participant_type ?? "other")}
               </Badge>
             </SheetTitle>
           </SheetHeader>
           <div className="mt-4 space-y-2">
             <div className="text-xs text-muted-foreground">
-              {detail.length} ordens de serviço · ano {year}
+              {detail.length} {t("part.drawer.summary")} {year}
             </div>
             <div className="rounded-md border border-border/50">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>OS</TableHead>
+                    <TableHead>{t("part.col.os")}</TableHead>
                     <TableHead className="text-right">%</TableHead>
-                    <TableHead className="text-right">Esperado</TableHead>
-                    <TableHead className="text-right">Recebido</TableHead>
-                    <TableHead className="text-right">Status</TableHead>
+                    <TableHead className="text-right">{t("part.expected")}</TableHead>
+                    <TableHead className="text-right">{t("part.received")}</TableHead>
+                    <TableHead className="text-right">{t("label.status")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -203,7 +209,7 @@ export default function ParticipationTab() {
                           d.status === "partial" ? "text-amber-400 border-amber-500/30" :
                           "text-muted-foreground"
                         }>
-                          {d.status}
+                          {statusLabel(d.status)}
                         </Badge>
                       </TableCell>
                     </TableRow>
