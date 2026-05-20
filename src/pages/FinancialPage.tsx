@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { RefreshCw, BarChart3, Bell, UserPlus } from "lucide-react";
+import { RefreshCw, BarChart3, Bell } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,7 +23,8 @@ import ParticipationTab from "@/components/financial/ParticipationTab";
 import FinancialAuditTab from "@/components/financial/FinancialAuditTab";
 import FinancialIntegrityTab from "@/components/financial/FinancialIntegrityTab";
 import { AccountingControlCenter } from "@/components/accounting/AccountingControlCenter";
-import { Link2, AlertTriangle, Users, ShieldCheck, BookOpen, ShieldAlert } from "lucide-react";
+import ProfitDistribution from "@/components/profit/ProfitDistribution";
+import { Link2, AlertTriangle, Users, ShieldCheck, BookOpen, ShieldAlert, PieChart } from "lucide-react";
 
 export default function FinancialPage() {
   const { t } = useLanguage();
@@ -35,11 +36,11 @@ export default function FinancialPage() {
   const [confrontoTab, setConfrontoTab] = useState("fusao");
   const [searchParams] = useSearchParams();
   const initialTab = searchParams.get("tab");
-  const validTabs = ["confronto", "breakdown", "participation", "audit", "accounting", "integrity"];
+  // Phase 5C tab order: Confronto, Distribution, Accounting, Breakdown, Participation, Audit, Integrity
+  const validTabs = ["confronto", "distribution", "accounting", "breakdown", "participation", "audit", "integrity"];
   const [mainTab, setMainTab] = useState(
     initialTab && validTabs.includes(initialTab) ? initialTab : "confronto"
   );
-  const [showAddTech, setShowAddTech] = useState(false);
 
   // Financial alerts: unread discrepancy notifications
   const financialAlerts = notifications.filter(
