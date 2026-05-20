@@ -1109,7 +1109,7 @@ function DerivedCell({ label, value, formatCurrency, tone = "neutral" }: {
   );
 }
 
-/* ── Phase 5D: visible inline + Novo Período (arbitrary year) ── */
+/* ── Phase 5C refinement: minimalist hover-only "+" matching trash icon style ── */
 function AddPeriodInline({
   compact = false,
   existingYears,
@@ -1122,6 +1122,7 @@ function AddPeriodInline({
   const [open, setOpen] = useState(false);
   const [yearInput, setYearInput] = useState("");
   const currentYear = new Date().getFullYear();
+  void compact;
   const suggestions = useMemo(() => {
     const set = new Set<number>();
     set.add(currentYear - 1);
@@ -1143,20 +1144,25 @@ function AddPeriodInline({
   };
 
   return (
-    <div className={compact ? "flex flex-wrap items-center justify-end gap-1" : "flex flex-wrap items-center justify-center gap-2 py-2"}>
-      {!open ? (
-        <Button
+    <Popover open={open} onOpenChange={(v) => { setOpen(v); if (!v) setYearInput(""); }}>
+      <PopoverTrigger asChild>
+        <button
           type="button"
-          size="sm"
-          variant="outline"
-          className="h-7 px-2 sm:px-3 text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/10 hover:border-primary/50 whitespace-nowrap"
-          onClick={() => setOpen(true)}
+          aria-label="Novo período"
+          className="opacity-0 group-hover:opacity-100 focus:opacity-100 data-[state=open]:opacity-100 transition-opacity p-1 rounded hover:bg-primary/10"
+          onClick={(e) => e.stopPropagation()}
         >
-          <Plus className="h-3.5 w-3.5" />
-          <span>+ Novo Período</span>
-        </Button>
-      ) : (
-        <div className="flex flex-wrap items-center justify-end gap-1.5 rounded-md border border-primary/30 bg-muted/30 p-1.5 max-w-full">
+          <Plus className="h-3.5 w-3.5 text-muted-foreground hover:text-primary transition-colors" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        sideOffset={6}
+        collisionPadding={12}
+        className="w-auto max-w-[calc(100vw-24px)] p-2"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex flex-wrap items-center gap-1.5">
           <Input
             autoFocus
             className="h-7 w-24 text-xs"
@@ -1171,29 +1177,20 @@ function AddPeriodInline({
           <Button type="button" size="sm" className="h-7 px-2 text-xs" onClick={submit}>
             Criar
           </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="h-7 px-2 text-xs"
-            onClick={() => { setOpen(false); setYearInput(""); }}
-          >
-            Cancelar
-          </Button>
-          <div className="flex flex-wrap items-center gap-1 ml-1">
-            {suggestions.map((y) => (
-              <button
-                key={y}
-                type="button"
-                className="text-[10px] px-1.5 py-0.5 rounded bg-muted/40 hover:bg-primary/15 text-muted-foreground hover:text-primary transition-colors"
-                onClick={() => { setYearInput(String(y)); }}
-              >
-                {y}
-              </button>
-            ))}
-          </div>
         </div>
-      )}
-    </div>
+        <div className="flex flex-wrap items-center gap-1 mt-2">
+          {suggestions.map((y) => (
+            <button
+              key={y}
+              type="button"
+              className="text-[10px] px-1.5 py-0.5 rounded bg-muted/40 hover:bg-primary/15 text-muted-foreground hover:text-primary transition-colors"
+              onClick={() => setYearInput(String(y))}
+            >
+              {y}
+            </button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
