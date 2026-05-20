@@ -195,6 +195,9 @@ export default function FinancialPage() {
           <TabsTrigger value="audit">
             <ShieldCheck className="h-3.5 w-3.5 mr-1" /> {t("fin.tabs.audit")}
           </TabsTrigger>
+          <TabsTrigger value="accounting">
+            <BookOpen className="h-3.5 w-3.5 mr-1" /> {t("fin.tabs.accounting")}
+          </TabsTrigger>
         </TabsList>
 
 
