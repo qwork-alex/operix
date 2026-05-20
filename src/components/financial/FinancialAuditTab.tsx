@@ -18,6 +18,7 @@ import {
   useFinancialIntegritySummary,
   useParticipationDiffs,
 } from "@/hooks/useFinancialAudit";
+import { useLanguage } from "@/hooks/useLanguage";
 
 const EVENT_TYPES = [
   "all", "billing.payment.synced", "billing.invoice.updated",
