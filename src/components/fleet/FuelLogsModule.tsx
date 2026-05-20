@@ -16,6 +16,7 @@ import DocumentCapture from "./DocumentCapture";
 
 interface FuelForm {
   vehicle_id: string;
+  driver_id: string;
   date: string;
   km_at_fuel: string;
   liters: string;
@@ -24,7 +25,7 @@ interface FuelForm {
   notes: string;
 }
 
-const emptyForm: FuelForm = { vehicle_id: "", date: new Date().toISOString().slice(0, 10), km_at_fuel: "", liters: "", total_cost: "", price_per_liter: "", notes: "" };
+const emptyForm: FuelForm = { vehicle_id: "", driver_id: "", date: new Date().toISOString().slice(0, 10), km_at_fuel: "", liters: "", total_cost: "", price_per_liter: "", notes: "" };
 
 const ACTIVE_TRIP_KEY = "fleet_active_trips";
 
@@ -49,6 +50,14 @@ export default function FuelLogsModule() {
   const { data: vehicles = [] } = useQuery({
     queryKey: ["fleet_vehicles"],
     queryFn: async () => { const { data } = await supabase.from("vehicles").select("*").order("license_plate"); return data || []; },
+  });
+
+  const { data: drivers = [] } = useQuery({
+    queryKey: ["fleet_drivers_min"],
+    queryFn: async () => {
+      const { data } = await supabase.from("drivers").select("id, full_name, linked_user_id").order("full_name");
+      return (data || []) as any[];
+    },
   });
 
   const { data: fuelLogs = [], isLoading } = useQuery({
@@ -140,6 +149,7 @@ export default function FuelLogsModule() {
 
       const payload: any = {
         vehicle_id: form.vehicle_id,
+        driver_id: form.driver_id || null,
         date: form.date,
         km_at_fuel: form.km_at_fuel ? parseFloat(form.km_at_fuel) : null,
         liters,
@@ -183,7 +193,7 @@ export default function FuelLogsModule() {
   const startEdit = (l: any) => {
     setEditId(l.id);
     setForm({
-      vehicle_id: l.vehicle_id || "", date: l.date || new Date().toISOString().slice(0, 10),
+      vehicle_id: l.vehicle_id || "", driver_id: l.driver_id || "", date: l.date || new Date().toISOString().slice(0, 10),
       km_at_fuel: l.km_at_fuel ? String(l.km_at_fuel) : "", liters: l.liters ? String(l.liters) : "",
       total_cost: l.total_cost ? String(l.total_cost) : "", price_per_liter: l.price_per_liter ? String(l.price_per_liter) : "",
       notes: l.notes || "",
@@ -300,6 +310,23 @@ export default function FuelLogsModule() {
                 <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
                 <SelectContent>
                   {vehicles.map((v: any) => <SelectItem key={v.id} value={v.id}>{v.brand} {v.model} — {v.license_plate}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Condutor (opcional)</Label>
+              <Select
+                value={form.driver_id || "none"}
+                onValueChange={(v) => set("driver_id", v === "none" ? "" : v)}
+              >
+                <SelectTrigger><SelectValue placeholder="Sem condutor" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sem condutor</SelectItem>
+                  {drivers.map((d: any) => (
+                    <SelectItem key={d.id} value={d.id}>
+                      {d.full_name}{d.linked_user_id ? " 🔗" : ""}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

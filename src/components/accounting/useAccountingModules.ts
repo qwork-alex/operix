@@ -138,6 +138,7 @@ export function useAccountingModule(
       const payload: Record<string, unknown> = {
         type: config.type || "expense",
         source: "manual",
+        origin: "manual",
         category: config.category || "other",
         amount: entry.amount,
         label: entry.label,

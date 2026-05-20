@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, memo, useMemo } from "react";
 import {
   Home,
   Receipt,
-  Fuel,
+  Plane,
   ShoppingCart,
   Landmark,
   Wallet,
@@ -25,10 +25,12 @@ interface ModuleDef {
   color: string; // HSL string without hsl()
 }
 
+// "fuel" module is rebranded as "Viagens" (Travel). Data continues to mirror
+// fleet_fuel_logs internally — only the visible label/icon changes.
 const MODULES: ModuleDef[] = [
   { key: "rentals",     label: "Aluguéis",    icon: Home,         color: "43 85% 55%"  },
   { key: "expenses",    label: "Despesas",    icon: Receipt,      color: "0 72% 55%"   },
-  { key: "fuel",        label: "Combustível", icon: Fuel,         color: "210 80% 55%" },
+  { key: "fuel",        label: "Viagens",     icon: Plane,        color: "210 80% 55%" },
   { key: "purchases",   label: "Compras",     icon: ShoppingCart, color: "280 60% 60%" },
   { key: "government",  label: "Governo",     icon: Landmark,     color: "152 60% 45%" },
   { key: "withdrawals", label: "Retiradas",   icon: Wallet,       color: "28 92% 55%"  },
@@ -111,10 +113,11 @@ const OrbitButton = memo(function OrbitButton({ mod, x, y, isActive, onSelect }:
 export function AccountingControlCenter({ embedded = false }: { embedded?: boolean } = {}) {
   const { t } = useLanguage();
   const [activeModule, setActiveModule] = useState<ModuleKey | null>(null);
-  const { data: yearsList = [] } = useFinancialYears();
+  const [selectedTech, setSelectedTech] = useState<string>("all");
+  const techScope = selectedTech === "all" ? null : selectedTech;
+  const { data: yearsList = [] } = useFinancialYears(techScope);
   const { data: techList = [] } = useWorkspaceTechnicians();
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
-  const [selectedTech, setSelectedTech] = useState<string>("all");
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
 
   useEffect(() => {

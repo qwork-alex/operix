@@ -9,8 +9,10 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Plus, Save, Trash2, Pencil, Loader2, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Plus, Save, Trash2, Pencil, Loader2, AlertTriangle, CheckCircle2, Link2 } from "lucide-react";
 import DocumentCapture from "./DocumentCapture";
+import { useWorkspaceTechnicians } from "@/hooks/useFinancialPeriods";
 
 interface DriverForm {
   full_name: string;
@@ -26,12 +28,14 @@ interface DriverForm {
   license_category: string;
   license_number: string;
   license_expiry_date: string;
+  linked_user_id: string; // optional link to workspace user
 }
 
 const emptyForm: DriverForm = {
   full_name: "", birth_date: "", phone: "", email: "",
   addr_number: "", addr_street: "", addr_postal_code: "", addr_city: "", addr_region: "", addr_country: "Portugal",
   license_category: "", license_number: "", license_expiry_date: "",
+  linked_user_id: "",
 };
 
 type ConfidenceLevel = "high" | "medium" | "low";
@@ -106,6 +110,7 @@ export default function DriversModule() {
         license_expiry_date: form.license_expiry_date || null,
         phone: form.phone || null,
         email: form.email || null,
+        linked_user_id: form.linked_user_id || null,
       };
       if (editId) {
         const { error } = await supabase.from("drivers").update(payload).eq("id", editId);
@@ -132,6 +137,8 @@ export default function DriversModule() {
     onError: (e) => toast.error(`Erro ao remover condutor: ${(e as Error).message}`),
   });
 
+  const { data: workspaceUsers = [] } = useWorkspaceTechnicians();
+
   const closeDialog = () => {
     setOpen(false); setEditId(null); setForm(emptyForm);
     setConfidence({}); setOcrNotes(null);
@@ -148,6 +155,7 @@ export default function DriversModule() {
       addr_region: parsed.addr_region || "", addr_country: parsed.addr_country || "Portugal",
       license_category: d.license_category || "", license_number: d.license_number || "",
       license_expiry_date: d.license_expiry_date || "",
+      linked_user_id: d.linked_user_id || "",
     });
     setConfidence({});
     setOcrNotes(null);
@@ -341,6 +349,29 @@ export default function DriversModule() {
                   <Input type="date" value={form.license_expiry_date} onChange={e => set("license_expiry_date", e.target.value)} className={`text-sm ${confidenceRing(confidence.license_expiry_date)}`} />
                 </div>
               </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1">
+                <Link2 className="h-3 w-3" /> Vincular a Utilizador (opcional)
+              </p>
+              <Select
+                value={form.linked_user_id || "none"}
+                onValueChange={(v) => set("linked_user_id", v === "none" ? "" : v)}
+              >
+                <SelectTrigger className="text-sm">
+                  <SelectValue placeholder="Condutor independente" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Condutor independente</SelectItem>
+                  {workspaceUsers.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Eventos operacionais sincronizam automaticamente quando vinculado.
+              </p>
             </div>
           </div>
 

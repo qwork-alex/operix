@@ -13,19 +13,22 @@ import { useWorkspace } from "@/hooks/useWorkspace";
  * All downstream modules (Accounting, Participation, Integrity) MUST
  * use this hook instead of inventing standalone year lists.
  */
-export function useFinancialYears() {
+export function useFinancialYears(techId?: string | null) {
   const { workspaceId } = useWorkspace();
+  const tech = techId || null;
 
   return useQuery({
-    queryKey: ["financial-years", workspaceId],
+    queryKey: ["financial-years", workspaceId, tech],
     enabled: !!workspaceId,
     staleTime: 30_000,
     queryFn: async (): Promise<number[]> => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("financial_records")
         .select("year_reference")
         .eq("workspace_id", workspaceId!)
         .not("year_reference", "is", null);
+      if (tech) q = q.eq("assigned_user_id", tech);
+      const { data, error } = await q;
       if (error) throw error;
 
       const set = new Set<number>();
@@ -33,7 +36,9 @@ export function useFinancialYears() {
         const y = Number(r.year_reference);
         if (y && y > 1900 && y < 3000) set.add(y);
       });
-      set.add(new Date().getFullYear());
+      // When a specific technician is selected, scope strictly to their years.
+      // Otherwise include the current year so new periods can always be created.
+      if (!tech) set.add(new Date().getFullYear());
       return Array.from(set).sort((a, b) => a - b);
     },
   });
