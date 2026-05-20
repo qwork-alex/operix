@@ -6,6 +6,7 @@ import {
   ShoppingCart,
   Landmark,
   Wallet,
+  Sparkles,
 } from "lucide-react";
 import { SpaceBackground } from "./SpaceBackground";
 import { Globe } from "./Globe";
@@ -15,6 +16,8 @@ import { cn } from "@/lib/utils";
 import { useFinancialYears, useWorkspaceTechnicians, MONTH_LABELS } from "@/hooks/useFinancialPeriods";
 import { useLanguage } from "@/hooks/useLanguage";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { FinancialAIAssistant } from "./FinancialAIAssistant";
 
 type ModuleKey = "rentals" | "expenses" | "fuel" | "purchases" | "government" | "withdrawals";
 
@@ -119,6 +122,7 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
   const { data: techList = [] } = useWorkspaceTechnicians();
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
+  const [aiOpen, setAiOpen] = useState(false);
 
   useEffect(() => {
     if (yearsList.length === 0) return;
@@ -288,6 +292,15 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
           </div>
         )}
         <div className="flex items-center justify-end gap-1.5 flex-wrap min-w-0 max-w-full overflow-visible">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-primary hover:bg-primary/10"
+            title="Assistente financeiro"
+            onClick={() => setAiOpen(true)}
+          >
+            <Sparkles size={14} />
+          </Button>
           <Select value={selectedTech} onValueChange={setSelectedTech}>
             <SelectTrigger className="h-8 w-[min(160px,42vw)] text-xs">
               <SelectValue placeholder={t("acc.allTechs")} />
@@ -471,6 +484,8 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
           </div>
         )}
       </div>
+
+      <FinancialAIAssistant open={aiOpen} onClose={() => setAiOpen(false)} year={selectedYear} />
     </div>
   );
 }
