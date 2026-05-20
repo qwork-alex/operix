@@ -87,6 +87,7 @@ export type Database = {
           storage_path: string
           supplier_id: string | null
           uploaded_by: string | null
+          workspace_id: string | null
         }
         Insert: {
           billing_client_id?: string | null
@@ -100,6 +101,7 @@ export type Database = {
           storage_path: string
           supplier_id?: string | null
           uploaded_by?: string | null
+          workspace_id?: string | null
         }
         Update: {
           billing_client_id?: string | null
@@ -113,6 +115,7 @@ export type Database = {
           storage_path?: string
           supplier_id?: string | null
           uploaded_by?: string | null
+          workspace_id?: string | null
         }
         Relationships: [
           {
@@ -162,6 +165,8 @@ export type Database = {
           tax_id: string | null
           tva_intracom: string | null
           updated_at: string
+          visibility_scope: string
+          workspace_id: string | null
         }
         Insert: {
           address?: string | null
@@ -186,6 +191,8 @@ export type Database = {
           tax_id?: string | null
           tva_intracom?: string | null
           updated_at?: string
+          visibility_scope?: string
+          workspace_id?: string | null
         }
         Update: {
           address?: string | null
@@ -210,6 +217,8 @@ export type Database = {
           tax_id?: string | null
           tva_intracom?: string | null
           updated_at?: string
+          visibility_scope?: string
+          workspace_id?: string | null
         }
         Relationships: []
       }
@@ -281,6 +290,9 @@ export type Database = {
           type: Database["public"]["Enums"]["billing_invoice_type"]
           updated_at: string
           vehicle_id: string | null
+          visibility_scope: string
+          workspace_id: string | null
+          year_reference: number | null
         }
         Insert: {
           billing_client_id?: string | null
@@ -305,6 +317,9 @@ export type Database = {
           type?: Database["public"]["Enums"]["billing_invoice_type"]
           updated_at?: string
           vehicle_id?: string | null
+          visibility_scope?: string
+          workspace_id?: string | null
+          year_reference?: number | null
         }
         Update: {
           billing_client_id?: string | null
@@ -329,6 +344,9 @@ export type Database = {
           type?: Database["public"]["Enums"]["billing_invoice_type"]
           updated_at?: string
           vehicle_id?: string | null
+          visibility_scope?: string
+          workspace_id?: string | null
+          year_reference?: number | null
         }
         Relationships: [
           {
@@ -391,6 +409,7 @@ export type Database = {
           reference: string | null
           status: Database["public"]["Enums"]["billing_payment_status"]
           updated_at: string
+          workspace_id: string | null
         }
         Insert: {
           amount?: number
@@ -405,6 +424,7 @@ export type Database = {
           reference?: string | null
           status?: Database["public"]["Enums"]["billing_payment_status"]
           updated_at?: string
+          workspace_id?: string | null
         }
         Update: {
           amount?: number
@@ -419,6 +439,7 @@ export type Database = {
           reference?: string | null
           status?: Database["public"]["Enums"]["billing_payment_status"]
           updated_at?: string
+          workspace_id?: string | null
         }
         Relationships: [
           {
@@ -455,6 +476,7 @@ export type Database = {
           status: Database["public"]["Enums"]["billing_reconciliation_status"]
           total_amount: number
           updated_at: string
+          workspace_id: string | null
         }
         Insert: {
           created_at?: string
@@ -466,6 +488,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["billing_reconciliation_status"]
           total_amount?: number
           updated_at?: string
+          workspace_id?: string | null
         }
         Update: {
           created_at?: string
@@ -477,6 +500,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["billing_reconciliation_status"]
           total_amount?: number
           updated_at?: string
+          workspace_id?: string | null
         }
         Relationships: []
       }
@@ -497,6 +521,7 @@ export type Database = {
           phone: string | null
           tax_id: string | null
           updated_at: string
+          workspace_id: string | null
         }
         Insert: {
           address?: string | null
@@ -514,6 +539,7 @@ export type Database = {
           phone?: string | null
           tax_id?: string | null
           updated_at?: string
+          workspace_id?: string | null
         }
         Update: {
           address?: string | null
@@ -531,6 +557,7 @@ export type Database = {
           phone?: string | null
           tax_id?: string | null
           updated_at?: string
+          workspace_id?: string | null
         }
         Relationships: []
       }
@@ -547,6 +574,8 @@ export type Database = {
           notes: string | null
           updated_at: string
           user_id: string | null
+          visibility_scope: string
+          workspace_id: string | null
         }
         Insert: {
           address?: string | null
@@ -560,6 +589,8 @@ export type Database = {
           notes?: string | null
           updated_at?: string
           user_id?: string | null
+          visibility_scope?: string
+          workspace_id?: string | null
         }
         Update: {
           address?: string | null
@@ -573,6 +604,8 @@ export type Database = {
           notes?: string | null
           updated_at?: string
           user_id?: string | null
+          visibility_scope?: string
+          workspace_id?: string | null
         }
         Relationships: []
       }
@@ -635,6 +668,7 @@ export type Database = {
           resolved: boolean
           resolved_at: string | null
           service_order_id: string | null
+          workspace_id: string | null
         }
         Insert: {
           created_at?: string
@@ -646,6 +680,7 @@ export type Database = {
           resolved?: boolean
           resolved_at?: string | null
           service_order_id?: string | null
+          workspace_id?: string | null
         }
         Update: {
           created_at?: string
@@ -657,6 +692,7 @@ export type Database = {
           resolved?: boolean
           resolved_at?: string | null
           service_order_id?: string | null
+          workspace_id?: string | null
         }
         Relationships: [
           {
@@ -694,6 +730,7 @@ export type Database = {
           updated_at: string
           uploaded_by: string | null
           validated: boolean
+          visibility_scope: string
           visual_state: Json
           workspace_id: string | null
           zoom: number
@@ -716,6 +753,7 @@ export type Database = {
           updated_at?: string
           uploaded_by?: string | null
           validated?: boolean
+          visibility_scope?: string
           visual_state?: Json
           workspace_id?: string | null
           zoom?: number
@@ -738,6 +776,7 @@ export type Database = {
           updated_at?: string
           uploaded_by?: string | null
           validated?: boolean
+          visibility_scope?: string
           visual_state?: Json
           workspace_id?: string | null
           zoom?: number
@@ -774,6 +813,7 @@ export type Database = {
           phone: string | null
           status: string
           updated_at: string
+          workspace_id: string | null
         }
         Insert: {
           address?: string | null
@@ -789,6 +829,7 @@ export type Database = {
           phone?: string | null
           status?: string
           updated_at?: string
+          workspace_id?: string | null
         }
         Update: {
           address?: string | null
@@ -804,6 +845,7 @@ export type Database = {
           phone?: string | null
           status?: string
           updated_at?: string
+          workspace_id?: string | null
         }
         Relationships: []
       }
@@ -857,6 +899,9 @@ export type Database = {
           technician_id: string | null
           type: string
           user_id: string | null
+          visibility_scope: string
+          workspace_id: string | null
+          year_reference: number | null
         }
         Insert: {
           amount?: number
@@ -875,6 +920,9 @@ export type Database = {
           technician_id?: string | null
           type: string
           user_id?: string | null
+          visibility_scope?: string
+          workspace_id?: string | null
+          year_reference?: number | null
         }
         Update: {
           amount?: number
@@ -893,6 +941,9 @@ export type Database = {
           technician_id?: string | null
           type?: string
           user_id?: string | null
+          visibility_scope?: string
+          workspace_id?: string | null
+          year_reference?: number | null
         }
         Relationships: [
           {
@@ -932,6 +983,7 @@ export type Database = {
           receipt_storage_path: string | null
           total_cost: number
           vehicle_id: string
+          workspace_id: string | null
         }
         Insert: {
           created_at?: string
@@ -946,6 +998,7 @@ export type Database = {
           receipt_storage_path?: string | null
           total_cost?: number
           vehicle_id: string
+          workspace_id?: string | null
         }
         Update: {
           created_at?: string
@@ -960,6 +1013,7 @@ export type Database = {
           receipt_storage_path?: string | null
           total_cost?: number
           vehicle_id?: string
+          workspace_id?: string | null
         }
         Relationships: [
           {
@@ -1043,6 +1097,7 @@ export type Database = {
           total_duration: number | null
           updated_at: string
           vehicle_id: string
+          workspace_id: string | null
         }
         Insert: {
           created_at?: string
@@ -1058,6 +1113,7 @@ export type Database = {
           total_duration?: number | null
           updated_at?: string
           vehicle_id: string
+          workspace_id?: string | null
         }
         Update: {
           created_at?: string
@@ -1073,6 +1129,7 @@ export type Database = {
           total_duration?: number | null
           updated_at?: string
           vehicle_id?: string
+          workspace_id?: string | null
         }
         Relationships: [
           {
@@ -1232,6 +1289,7 @@ export type Database = {
           severity: string
           status: string
           updated_at: string
+          workspace_id: string | null
         }
         Insert: {
           city?: string | null
@@ -1254,6 +1312,7 @@ export type Database = {
           severity?: string
           status?: string
           updated_at?: string
+          workspace_id?: string | null
         }
         Update: {
           city?: string | null
@@ -1276,6 +1335,7 @@ export type Database = {
           severity?: string
           status?: string
           updated_at?: string
+          workspace_id?: string | null
         }
         Relationships: [
           {
@@ -1505,6 +1565,7 @@ export type Database = {
           title: string
           type: string
           user_id: string
+          workspace_id: string | null
         }
         Insert: {
           created_at?: string
@@ -1516,6 +1577,7 @@ export type Database = {
           title: string
           type?: string
           user_id: string
+          workspace_id?: string | null
         }
         Update: {
           created_at?: string
@@ -1527,6 +1589,7 @@ export type Database = {
           title?: string
           type?: string
           user_id?: string
+          workspace_id?: string | null
         }
         Relationships: []
       }
@@ -1579,6 +1642,9 @@ export type Database = {
           total: number | null
           updated_at: string
           user_id: string
+          visibility_scope: string
+          workspace_id: string | null
+          year_reference: number | null
         }
         Insert: {
           amount_paid?: number
@@ -1602,6 +1668,9 @@ export type Database = {
           total?: number | null
           updated_at?: string
           user_id: string
+          visibility_scope?: string
+          workspace_id?: string | null
+          year_reference?: number | null
         }
         Update: {
           amount_paid?: number
@@ -1625,6 +1694,9 @@ export type Database = {
           total?: number | null
           updated_at?: string
           user_id?: string
+          visibility_scope?: string
+          workspace_id?: string | null
+          year_reference?: number | null
         }
         Relationships: [
           {
@@ -2022,8 +2094,10 @@ export type Database = {
           total: number | null
           updated_at: string
           user_id: string
+          visibility_scope: string
           week: string | null
           workspace_id: string | null
+          year_reference: number | null
         }
         Insert: {
           assigned_user_id: string
@@ -2054,8 +2128,10 @@ export type Database = {
           total?: number | null
           updated_at?: string
           user_id: string
+          visibility_scope?: string
           week?: string | null
           workspace_id?: string | null
+          year_reference?: number | null
         }
         Update: {
           assigned_user_id?: string
@@ -2086,8 +2162,10 @@ export type Database = {
           total?: number | null
           updated_at?: string
           user_id?: string
+          visibility_scope?: string
           week?: string | null
           workspace_id?: string | null
+          year_reference?: number | null
         }
         Relationships: [
           {
@@ -2669,6 +2747,44 @@ export type Database = {
         }
         Relationships: []
       }
+      workspace_module_permissions: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: string
+          module: string
+          settings: Json
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          module: string
+          settings?: Json
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          module?: string
+          settings?: Json
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_module_permissions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspaces: {
         Row: {
           created_at: string
@@ -2769,6 +2885,15 @@ export type Database = {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
       }
+      get_user_workspaces: {
+        Args: { _uid?: string }
+        Returns: {
+          is_owner: boolean
+          role: string
+          workspace_id: string
+          workspace_name: string
+        }[]
+      }
       has_global_view: { Args: { _user_id: string }; Returns: boolean }
       has_permission: {
         Args: { _action: string; _module: string; _user_id: string }
@@ -2809,6 +2934,14 @@ export type Database = {
       sync_discrepancy_for_service_order: {
         Args: { _service_order_id: string }
         Returns: undefined
+      }
+      user_can_access_module: {
+        Args: { _module: string; _uid: string; _ws_id: string }
+        Returns: boolean
+      }
+      user_can_access_workspace: {
+        Args: { _uid: string; _ws_id: string }
+        Returns: boolean
       }
     }
     Enums: {
