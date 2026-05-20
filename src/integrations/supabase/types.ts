@@ -44,6 +44,63 @@ export type Database = {
         }
         Relationships: []
       }
+      audit_log: {
+        Row: {
+          actor_email: string | null
+          actor_user_id: string | null
+          changed_fields: string[] | null
+          created_at: string
+          id: string
+          ip_address: unknown
+          new_values: Json | null
+          old_values: Json | null
+          operation: string
+          origin: string
+          reason: string | null
+          row_id: string | null
+          session_id: string | null
+          table_name: string
+          user_agent: string | null
+          workspace_id: string | null
+        }
+        Insert: {
+          actor_email?: string | null
+          actor_user_id?: string | null
+          changed_fields?: string[] | null
+          created_at?: string
+          id?: string
+          ip_address?: unknown
+          new_values?: Json | null
+          old_values?: Json | null
+          operation: string
+          origin?: string
+          reason?: string | null
+          row_id?: string | null
+          session_id?: string | null
+          table_name: string
+          user_agent?: string | null
+          workspace_id?: string | null
+        }
+        Update: {
+          actor_email?: string | null
+          actor_user_id?: string | null
+          changed_fields?: string[] | null
+          created_at?: string
+          id?: string
+          ip_address?: unknown
+          new_values?: Json | null
+          old_values?: Json | null
+          operation?: string
+          origin?: string
+          reason?: string | null
+          row_id?: string | null
+          session_id?: string | null
+          table_name?: string
+          user_agent?: string | null
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
       backend_event_logs: {
         Row: {
           action: string
@@ -3251,6 +3308,7 @@ export type Database = {
       }
     }
     Functions: {
+      _audit_extract_workspace: { Args: { _rec: Json }; Returns: string }
       active_user_ids: {
         Args: never
         Returns: {
@@ -3278,6 +3336,7 @@ export type Database = {
         }[]
       }
       assert_active: { Args: { _uid: string }; Returns: undefined }
+      audit_log_purge_older_than: { Args: { _days: number }; Returns: number }
       billing_recalc_invoice: {
         Args: { _invoice_id: string }
         Returns: undefined
@@ -3380,6 +3439,19 @@ export type Database = {
         Args: { _uid: string; _ws: string }
         Returns: boolean
       }
+      log_audit_event: {
+        Args: {
+          _new?: Json
+          _old?: Json
+          _operation: string
+          _origin?: string
+          _reason?: string
+          _row_id?: string
+          _table: string
+          _workspace?: string
+        }
+        Returns: string
+      }
       owner_filter_uids: { Args: { _uid: string }; Returns: string[] }
       payment_order_has_active_billing: {
         Args: { _op_id: string }
@@ -3391,6 +3463,7 @@ export type Database = {
         Args: { _participant_type: string; _rule_id: string }
         Returns: string
       }
+      restore_audit_record: { Args: { _audit_id: string }; Returns: Json }
       row_in_scope: {
         Args: {
           _action: string

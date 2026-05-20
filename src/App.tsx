@@ -29,6 +29,7 @@ import {
 } from "./pages/ModulePages";
 import FleetPage from "./pages/FleetPage";
 import BillingPage from "./pages/BillingPage";
+import AuditPage from "./pages/AuditPage";
 import {
   TermsPage,
   PrivacyPage,
@@ -90,6 +91,7 @@ const App = () => (
                             <Route path="/documents" element={<PermissionGuard permission="documents.view"><Documents /></PermissionGuard>} />
                             <Route path="/users" element={<PermissionGuard permission="users.view"><UsersPage /></PermissionGuard>} />
                             <Route path="/settings" element={<SettingsPage />} />
+                            <Route path="/audit" element={<AuditPage />} />
                             <Route path="*" element={<NotFound />} />
                           </Routes>
                         </ErrorBoundary>
