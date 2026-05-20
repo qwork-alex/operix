@@ -141,6 +141,7 @@ export default function PaymentOrdersPage() {
         total: r.total ?? null,
         status: "pending",
         group_id: r.list_name ?? ctxDefaults.week ?? null,
+        ...(ctxWs.resolvedWorkspaceId ? { workspace_id: ctxWs.resolvedWorkspaceId } : {}),
       };
       // Contexto operacional SEMPRE prevalece sobre o ano atual.
       if (ctxDefaults.year) {
