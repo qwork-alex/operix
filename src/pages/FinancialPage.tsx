@@ -21,8 +21,9 @@ import HistoricoTab from "@/components/confronto/HistoricoTab";
 import TechnicianDetailTab from "@/components/financial/TechnicianDetailTab";
 import ParticipationTab from "@/components/financial/ParticipationTab";
 import FinancialAuditTab from "@/components/financial/FinancialAuditTab";
+import FinancialIntegrityTab from "@/components/financial/FinancialIntegrityTab";
 import { AccountingControlCenter } from "@/components/accounting/AccountingControlCenter";
-import { Link2, AlertTriangle, Users, ShieldCheck, BookOpen } from "lucide-react";
+import { Link2, AlertTriangle, Users, ShieldCheck, BookOpen, ShieldAlert } from "lucide-react";
 
 export default function FinancialPage() {
   const { t } = useLanguage();
