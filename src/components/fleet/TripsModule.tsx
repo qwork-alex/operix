@@ -505,6 +505,7 @@ export default function TripsModule() {
         km_start: kmStart,
         status: "in_progress",
         notes: form.notes || null,
+        ...(ctxWs.resolvedWorkspaceId ? { workspace_id: ctxWs.resolvedWorkspaceId } : {}),
       }).select().single();
       if (error) throw new Error(`Falha ao criar trajeto: ${error.message}`);
 
