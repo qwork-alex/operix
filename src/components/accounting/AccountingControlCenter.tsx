@@ -86,8 +86,20 @@ const OrbitButton = memo(function OrbitButton({ mod, x, y, isActive, onSelect }:
 });
 
 export function AccountingControlCenter({ embedded = false }: { embedded?: boolean } = {}) {
+  const { t } = useLanguage();
   const [activeModule, setActiveModule] = useState<ModuleKey | null>(null);
+  const { data: yearsList = [] } = useFinancialYears();
+  const { data: techList = [] } = useWorkspaceTechnicians();
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [selectedTech, setSelectedTech] = useState<string>("all");
+  const [selectedMonth, setSelectedMonth] = useState<string>("all");
+
+  useEffect(() => {
+    if (yearsList.length === 0) return;
+    if (!yearsList.includes(selectedYear)) {
+      setSelectedYear(yearsList[yearsList.length - 1]);
+    }
+  }, [yearsList, selectedYear]);
 
   // Orbit angle stored in ref; we mutate DOM/SVG directly to avoid React re-renders per frame
   const orbitAngleRef = useRef(0);
