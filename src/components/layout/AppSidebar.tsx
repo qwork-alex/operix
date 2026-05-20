@@ -101,24 +101,8 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      {showSettings && (
-        <SidebarFooter className="border-t border-border/50">
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild>
-                <NavLink
-                  to="/settings"
-                  className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                  activeClassName="bg-sidebar-accent text-primary font-medium"
-                >
-                  <Settings className="h-4 w-4 shrink-0" />
-                  {!collapsed && <span>{t("nav.settings")}</span>}
-                </NavLink>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarFooter>
-      )}
+      {/* Settings moved into the profile dropdown (top-right). */}
+
     </Sidebar>
   );
 }
