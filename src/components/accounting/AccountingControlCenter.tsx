@@ -7,7 +7,6 @@ import {
   Landmark,
   Wallet,
 } from "lucide-react";
-import { Globe } from "./Globe";
 import { SpaceBackground } from "./SpaceBackground";
 import { ModulePanel } from "./ModulePanel";
 import { useAccountingModule } from "./useAccountingModules";
@@ -33,6 +32,26 @@ const MODULES: ModuleDef[] = [
   { key: "government",  label: "Governo",     icon: Landmark,     color: "152 60% 45%" },
   { key: "withdrawals", label: "Retiradas",   icon: Wallet,       color: "28 92% 55%"  },
 ];
+
+function StaticAccountingGlobe({ size }: { size: number }) {
+  return (
+    <div
+      className="relative rounded-full border border-primary/20 shadow-[0_0_60px_hsl(var(--primary)/0.20)]"
+      style={{
+        width: size,
+        height: size,
+        background:
+          "radial-gradient(circle at 34% 30%, hsl(var(--primary) / 0.62), hsl(var(--primary) / 0.26) 30%, hsl(var(--card) / 0.72) 62%, hsl(var(--background)) 100%)",
+      }}
+      aria-hidden
+    >
+      <div className="absolute inset-[12%] rounded-full border border-primary/15" />
+      <div className="absolute left-[18%] top-[28%] h-[12%] w-[34%] rounded-full bg-primary/25 blur-[1px]" />
+      <div className="absolute right-[18%] top-[48%] h-[10%] w-[28%] rounded-full bg-primary/20 blur-[1px]" />
+      <div className="absolute inset-0 rounded-full shadow-[inset_-24px_-28px_55px_hsl(var(--background)/0.78)]" />
+    </div>
+  );
+}
 
 // ---------- Memoized orbital button (GPU transform only) ----------
 interface OrbitButtonProps {
@@ -186,28 +205,13 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
     applyOrbitToDom();
   }, [applyOrbitToDom]);
 
-  // Animation loop — pure DOM updates, no React state in hot path
+  // Stabilized Phase 5D: no continuous render loop in the mounted financial route.
   useEffect(() => {
-    const loop = () => {
-      if (!draggingRef.current && !activeModule) {
-        if (Math.abs(velocityRef.current) > 0.00005) {
-          orbitAngleRef.current += velocityRef.current;
-          velocityRef.current *= 0.94;
-          applyOrbitToDom();
-        } else if (velocityRef.current !== 0) {
-          velocityRef.current = 0;
-        } else {
-          orbitAngleRef.current += 0.0008;
-          applyOrbitToDom();
-        }
-      }
-      rafRef.current = requestAnimationFrame(loop);
-    };
-    rafRef.current = requestAnimationFrame(loop);
+    applyOrbitToDom();
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [activeModule, applyOrbitToDom]);
+  }, [applyOrbitToDom]);
 
   // Pointer drag handlers
   const onPointerDown = useCallback((e: React.PointerEvent) => {
@@ -270,7 +274,7 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
   return (
     <div className="h-full flex flex-col min-w-0 w-full">
       {/* Header — responsive toolbar, viewport-safe */}
-      <div className="flex items-center justify-between mb-4 gap-2 flex-wrap min-w-0">
+      <div className="sticky top-0 z-20 flex items-center justify-between mb-4 gap-2 flex-wrap min-w-0 rounded-lg bg-background/80 py-1 backdrop-blur-sm">
         {embedded ? (
           <div />
         ) : (
@@ -279,12 +283,12 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
             <p className="text-sm text-muted-foreground truncate">{t("acc.subtitle")}</p>
           </div>
         )}
-        <div className="flex items-center gap-1.5 flex-wrap min-w-0 max-w-full">
+        <div className="flex items-center justify-end gap-1.5 flex-wrap min-w-0 max-w-full overflow-visible">
           <Select value={selectedTech} onValueChange={setSelectedTech}>
-            <SelectTrigger className="h-8 w-[130px] sm:w-[160px] text-xs">
+            <SelectTrigger className="h-8 w-[min(160px,42vw)] text-xs">
               <SelectValue placeholder={t("acc.allTechs")} />
             </SelectTrigger>
-            <SelectContent collisionPadding={8} className="max-w-[90vw]">
+            <SelectContent align="end" collisionPadding={12} className="w-[var(--radix-select-trigger-width)] max-w-[calc(100vw-24px)]">
               <SelectItem value="all">{t("acc.allTechs")}</SelectItem>
               {techList.map((tech) => (
                 <SelectItem key={tech.id} value={tech.id}>{tech.name}</SelectItem>
@@ -295,17 +299,17 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
             <SelectTrigger className="h-8 w-[90px] text-xs">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent collisionPadding={8} className="max-w-[90vw]">
+            <SelectContent align="end" collisionPadding={12} className="w-[var(--radix-select-trigger-width)] max-w-[calc(100vw-24px)]">
               {years.map((y) => (
                 <SelectItem key={y} value={String(y)}>{y}</SelectItem>
               ))}
             </SelectContent>
           </Select>
           <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-            <SelectTrigger className="h-8 w-[100px] text-xs">
+            <SelectTrigger className="h-8 w-[min(120px,34vw)] text-xs">
               <SelectValue placeholder={t("acc.allMonths")} />
             </SelectTrigger>
-            <SelectContent collisionPadding={8} className="max-w-[90vw]">
+            <SelectContent align="end" collisionPadding={12} className="w-[var(--radix-select-trigger-width)] max-w-[calc(100vw-24px)]">
               <SelectItem value="all">{t("acc.allMonths")}</SelectItem>
               {MONTH_LABELS.map((m, i) => (
                 <SelectItem key={m} value={String(i + 1)}>{m}</SelectItem>
@@ -319,7 +323,7 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
 
 
       {/* Main split area */}
-      <div className="relative flex-1 min-h-[500px] rounded-xl border border-border/30 overflow-hidden flex">
+      <div className="relative flex-none h-[clamp(520px,65vh,680px)] min-h-[520px] rounded-xl border border-border/30 overflow-hidden flex">
         {/* Cinematic space backdrop (full container, behind everything) */}
         <div className="absolute inset-0 z-0">
           <SpaceBackground />
@@ -328,8 +332,8 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
         {/* Globe stage */}
         <div
           ref={stageRef}
-          className="relative z-10 transition-[width] duration-300 ease-out"
-          style={{ width: panelOpen ? "70%" : "100%", height: "100%" }}
+            className="relative z-10 h-full min-w-0 transition-[width] duration-300 ease-out"
+            style={{ width: panelOpen ? "70%" : "100%" }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
@@ -371,7 +375,7 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
             })}
           </svg>
 
-          {/* Globe — overflow visible so the atmospheric halo isn't clipped */}
+          {/* Static center planet — avoids extra WebGL contexts in the mounted financial route */}
           <div
             className="absolute z-10 pointer-events-none left-0 top-0"
             style={{
@@ -380,7 +384,7 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
               overflow: "visible",
             }}
           >
-            <Globe size={globeSize} />
+            <StaticAccountingGlobe size={globeSize} />
           </div>
 
           {/* Orbital module buttons (positions mutated directly in DOM) */}
@@ -444,7 +448,7 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
         {/* Side panel */}
         {activeMod && (
           <div
-            className="relative z-10 animate-slide-in-right border-l bg-card/40 backdrop-blur-md"
+            className="relative z-10 h-full min-w-[280px] animate-slide-in-right border-l bg-card/40 backdrop-blur-md"
             style={{
               width: "30%",
               borderColor: `hsl(${activeMod.color} / 0.35)`,

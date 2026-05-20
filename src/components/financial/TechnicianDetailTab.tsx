@@ -556,15 +556,22 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
     <>
       <Collapsible open={open} onOpenChange={setOpen}>
         <CollapsibleTrigger asChild>
-          <div className="group grid grid-cols-[1fr_auto_auto] items-center px-4 py-3 rounded-lg border border-border/40 cursor-pointer hover:border-primary/30 hover:bg-muted/20 transition-all">
+          <div className="group grid grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-4 py-3 rounded-lg border border-border/40 cursor-pointer hover:border-primary/30 hover:bg-muted/20 transition-all">
             <div className="flex items-center gap-3 min-w-0">
               <span className={`h-2 w-2 rounded-full shrink-0 ${isPositive ? "bg-emerald-400" : "bg-destructive"}`} />
               <span className="text-sm font-medium text-foreground truncate">{data.name}</span>
             </div>
-            <span className={`text-sm font-semibold tabular-nums justify-self-center ${isPositive ? "text-emerald-400" : "text-destructive"}`}>
+            <span className={`text-sm font-semibold tabular-nums justify-self-end ${isPositive ? "text-emerald-400" : "text-destructive"}`}>
               {globalResult < 0 ? "- " : ""}{formatCurrency(Math.abs(globalResult))}
             </span>
-            <div className="flex items-center gap-3 shrink-0 ml-4">
+            <div className="col-span-2 md:col-span-1 flex flex-wrap items-center justify-end gap-2 shrink-0 md:ml-1">
+              <div onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                <AddPeriodInline
+                  compact
+                  existingYears={yearBlocks.map((yb) => yb.year)}
+                  onAddYear={handleAddYear}
+                />
+              </div>
               <button
                 className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-destructive/10"
                 onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }}
@@ -598,11 +605,6 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
                 derivedAgg={getParticipantYearAgg(aggregation, data.name, yb.year)}
               />
             ))}
-            {/* Phase 5D — visible inline "+ Novo Período" with arbitrary year */}
-            <AddPeriodInline
-              existingYears={yearBlocks.map((yb) => yb.year)}
-              onAddYear={handleAddYear}
-            />
           </div>
         </CollapsibleContent>
       </Collapsible>
@@ -1109,9 +1111,11 @@ function DerivedCell({ label, value, formatCurrency, tone = "neutral" }: {
 
 /* ── Phase 5D: visible inline + Novo Período (arbitrary year) ── */
 function AddPeriodInline({
+  compact = false,
   existingYears,
   onAddYear,
 }: {
+  compact?: boolean;
   existingYears: string[];
   onAddYear: (year?: number) => void;
 }) {
@@ -1139,20 +1143,20 @@ function AddPeriodInline({
   };
 
   return (
-    <div className="flex flex-wrap items-center justify-center gap-2 py-2">
+    <div className={compact ? "flex flex-wrap items-center justify-end gap-1" : "flex flex-wrap items-center justify-center gap-2 py-2"}>
       {!open ? (
         <Button
           type="button"
           size="sm"
           variant="outline"
-          className="h-7 px-3 text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/10 hover:border-primary/50"
+          className="h-7 px-2 sm:px-3 text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/10 hover:border-primary/50 whitespace-nowrap"
           onClick={() => setOpen(true)}
         >
           <Plus className="h-3.5 w-3.5" />
           <span>+ Novo Período</span>
         </Button>
       ) : (
-        <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-primary/30 bg-muted/30 p-1.5">
+        <div className="flex flex-wrap items-center justify-end gap-1.5 rounded-md border border-primary/30 bg-muted/30 p-1.5 max-w-full">
           <Input
             autoFocus
             className="h-7 w-24 text-xs"
