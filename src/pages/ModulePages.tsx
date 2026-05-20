@@ -1852,16 +1852,16 @@ export function SettingsPage() {
         </div>
         <div>
           <h1 className="text-lg font-semibold text-foreground">Configurações</h1>
-          <p className="text-xs text-muted-foreground">Preferências do sistema, dados da empresa e branding</p>
+          <p className="text-xs text-muted-foreground">Preferências do sistema, segurança e credenciais</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <SystemPreferencesCard />
-        <BrandingCard />
+        <SecurityCard />
       </div>
 
-      <CompanyDataCard />
+      <TempCredentialsCard />
 
       {isOwner && (
         <Card className="border-destructive/30 bg-destructive/5">
