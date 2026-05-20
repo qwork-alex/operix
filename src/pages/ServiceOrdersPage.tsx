@@ -54,6 +54,7 @@ export default function ServiceOrdersPage() {
   const { data: myAssignableUserId } = useMyAssignableUserId();
   const { data: earningsMap } = useTechnicianEarnings();
   const { isProcessing, addFiles } = useFileQueue();
+  const ctxWs = useContextualWorkspace("service_orders");
 
   const [hCtx, setHCtx] = useState<HierarchyContext>(() =>
     loadHierarchyContext("hierarchy.service_orders"),
