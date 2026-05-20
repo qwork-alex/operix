@@ -12,7 +12,7 @@ import { useWorkspace } from "@/hooks/useWorkspace";
  *   { [periodKey: "Mon/YY"]: { [bucketKey]: number } }
  *
  * Bucket keys (must match ACCOUNTING_COLUMNS in ExpenseSpreadsheet):
- *   acc_gov | acc_purchases | acc_fuel | acc_expenses | acc_withdrawals | acc_rentals
+ *   acc_gov | acc_purchases | acc_fuel | acc_travel | acc_expenses | acc_withdrawals | acc_rentals
  */
 
 const MONTH_LABELS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
@@ -21,6 +21,7 @@ export type AccountingBucketKey =
   | "acc_gov"
   | "acc_purchases"
   | "acc_fuel"
+  | "acc_travel"
   | "acc_expenses"
   | "acc_withdrawals"
   | "acc_rentals";
@@ -35,6 +36,7 @@ export const ACCOUNTING_COLUMNS: AccountingColumnDef[] = [
   { id: "acc_gov",         label: "Governo",     color: "152 60% 45%" },
   { id: "acc_purchases",   label: "Compras",     color: "280 60% 60%" },
   { id: "acc_fuel",        label: "Combustível", color: "210 80% 55%" },
+  { id: "acc_travel",      label: "Viagens",     color: "190 75% 55%" },
   { id: "acc_expenses",    label: "Despesas",    color: "0 72% 55%"  },
   { id: "acc_withdrawals", label: "Retiradas",   color: "28 92% 55%"  },
   { id: "acc_rentals",     label: "Aluguéis",    color: "43 85% 55%"  },
@@ -45,6 +47,7 @@ function categoryToBucket(category: string | null | undefined): AccountingBucket
     case "tax":      return "acc_gov";
     case "material": return "acc_purchases";
     case "fuel":     return "acc_fuel";
+    case "travel":   return "acc_travel";
     case "salary":   return "acc_withdrawals";
     case "rent":     return "acc_rentals";
     case "other":    return "acc_expenses";
