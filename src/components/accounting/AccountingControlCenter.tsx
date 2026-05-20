@@ -245,13 +245,38 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
     });
   }, [centerX, centerY, orbitRadius]);
 
+  const years = useMemo(() => {
+    const now = new Date().getFullYear();
+    return [now - 2, now - 1, now, now + 1];
+  }, []);
+
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Centro de Controle</h1>
-          <p className="text-sm text-muted-foreground">Contabilidade interativa</p>
+        {embedded ? (
+          <div />
+        ) : (
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Centro de Controle</h1>
+            <p className="text-sm text-muted-foreground">Contabilidade interativa</p>
+          </div>
+        )}
+        <div className="flex items-center gap-1 rounded-lg border border-border/40 bg-card/40 p-1">
+          {years.map((y) => (
+            <button
+              key={y}
+              onClick={() => setSelectedYear(y)}
+              className={cn(
+                "px-2.5 py-1 text-xs rounded-md transition-colors",
+                selectedYear === y
+                  ? "bg-primary/15 text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {y}
+            </button>
+          ))}
         </div>
       </div>
 
