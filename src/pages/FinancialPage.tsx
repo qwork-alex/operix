@@ -187,6 +187,9 @@ export default function FinancialPage() {
         <TabsList className="bg-muted">
           <TabsTrigger value="confronto">Confronto OS x OP</TabsTrigger>
           <TabsTrigger value="breakdown">Detalhamento</TabsTrigger>
+          <TabsTrigger value="participation">
+            <Users className="h-3.5 w-3.5 mr-1" /> Participation
+          </TabsTrigger>
         </TabsList>
 
 
