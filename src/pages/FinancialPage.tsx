@@ -32,7 +32,12 @@ export default function FinancialPage() {
   const { data: aggregation } = useParticipantAggregation();
   const runMutation = useRunReconciliation();
   const [confrontoTab, setConfrontoTab] = useState("fusao");
-  const [mainTab, setMainTab] = useState("confronto");
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get("tab");
+  const validTabs = ["confronto", "breakdown", "participation", "audit", "accounting"];
+  const [mainTab, setMainTab] = useState(
+    initialTab && validTabs.includes(initialTab) ? initialTab : "confronto"
+  );
   const [showAddTech, setShowAddTech] = useState(false);
 
   // Financial alerts: unread discrepancy notifications
