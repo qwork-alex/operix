@@ -454,6 +454,8 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
               color={activeMod.color}
               label={activeMod.label}
               year={selectedYear}
+              techId={selectedTech === "all" ? null : selectedTech}
+              month={selectedMonth === "all" ? null : Number(selectedMonth)}
               onClose={() => setActiveModule(null)}
             />
           </div>
@@ -468,16 +470,20 @@ const ActiveModulePanel = memo(function ActiveModulePanel({
   color,
   label,
   year,
+  techId,
+  month,
   onClose,
 }: {
   moduleKey: ModuleKey;
   color: string;
   label: string;
   year: number;
+  techId: string | null;
+  month: number | null;
   onClose: () => void;
 }) {
   const { entries, total, isLoading, add, update, delete: del, allowAdd } =
-    useAccountingModule(moduleKey, year);
+    useAccountingModule(moduleKey, year, techId, month);
 
   return (
     <ModulePanel
