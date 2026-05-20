@@ -76,3 +76,4 @@ Owner account (qwork@qworkgroup.com) is protected, has exclusive reset access. N
 - [Reconciliation Engine](mem://logic/financeiro/motor-de-reconciliacao) — Edge function, groups by placa|plataforma|cliente, 80% string match rule
 - [Operational Hierarchy](mem://features/operational-hierarchy) — Phase 1A: SO/PO left-side tree (Year→Client→Unit→Week→Tech) with view/expand, persisted state, new operational_unit DB column
 - [Hard Isolation Phase 2.5](mem://auth/phase-2-5-hard-isolation) — Additive ws_scope_* RLS + scopeQuery on top hooks. Admin-global still passes via legacy policies until Phase 3.
+- [Participation Engine](mem://features/financeiro/participation-engine) — Phase 4 ledger: participant rows from snapshot+billing, workspace/year isolated, new ParticipationTab

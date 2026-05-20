@@ -18,7 +18,8 @@ import PendentesTab from "@/components/confronto/PendentesTab";
 import HistoricoTab from "@/components/confronto/HistoricoTab";
 
 import TechnicianDetailTab from "@/components/financial/TechnicianDetailTab";
-import { Link2, AlertTriangle } from "lucide-react";
+import ParticipationTab from "@/components/financial/ParticipationTab";
+import { Link2, AlertTriangle, Users } from "lucide-react";
 
 export default function FinancialPage() {
   const { t } = useLanguage();
@@ -186,6 +187,9 @@ export default function FinancialPage() {
         <TabsList className="bg-muted">
           <TabsTrigger value="confronto">Confronto OS x OP</TabsTrigger>
           <TabsTrigger value="breakdown">Detalhamento</TabsTrigger>
+          <TabsTrigger value="participation">
+            <Users className="h-3.5 w-3.5 mr-1" /> Participation
+          </TabsTrigger>
         </TabsList>
 
 
@@ -221,6 +225,10 @@ export default function FinancialPage() {
 
         <TabsContent value="breakdown" className="space-y-4">
           <TechnicianDetailTab showAddModal={showAddTech} onShowAddModal={setShowAddTech} />
+        </TabsContent>
+
+        <TabsContent value="participation" className="space-y-4">
+          <ParticipationTab />
         </TabsContent>
       </Tabs>
     </div>
