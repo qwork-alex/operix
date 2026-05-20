@@ -52,6 +52,14 @@ export default function FuelLogsModule() {
     queryFn: async () => { const { data } = await supabase.from("vehicles").select("*").order("license_plate"); return data || []; },
   });
 
+  const { data: drivers = [] } = useQuery({
+    queryKey: ["fleet_drivers_min"],
+    queryFn: async () => {
+      const { data } = await supabase.from("drivers").select("id, full_name, linked_user_id").order("full_name");
+      return (data || []) as any[];
+    },
+  });
+
   const { data: fuelLogs = [], isLoading } = useQuery({
     queryKey: ["fleet_fuel_logs"],
     queryFn: async () => {
