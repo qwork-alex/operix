@@ -296,6 +296,7 @@ export default function ImportInvoiceDialog({
               <Badge variant="outline" className="text-[10px] gap-1">
                 <Sparkles className="h-3 w-3 text-amber-400" /> Gemini OCR
               </Badge>
+            </div>
           </div>
         </DialogHeader>
 
