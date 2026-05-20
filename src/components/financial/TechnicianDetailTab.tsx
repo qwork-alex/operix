@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import {
   ChevronDown, ChevronRight, Plus, TrendingUp, TrendingDown,
   Users, Calendar, Trash2, Building2,
