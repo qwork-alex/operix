@@ -155,6 +155,7 @@ export default function ServiceOrdersPage() {
         total: r.total ?? null,
         status: "draft",
         group_id: r.week ?? ctxDefaults.week ?? null,
+        ...(ctxWs.resolvedWorkspaceId ? { workspace_id: ctxWs.resolvedWorkspaceId } : {}),
       };
       // Contexto operacional SEMPRE prevalece sobre o ano atual.
       if (ctxDefaults.year) {
