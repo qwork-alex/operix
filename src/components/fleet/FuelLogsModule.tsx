@@ -16,6 +16,7 @@ import DocumentCapture from "./DocumentCapture";
 
 interface FuelForm {
   vehicle_id: string;
+  driver_id: string;
   date: string;
   km_at_fuel: string;
   liters: string;
@@ -24,7 +25,7 @@ interface FuelForm {
   notes: string;
 }
 
-const emptyForm: FuelForm = { vehicle_id: "", date: new Date().toISOString().slice(0, 10), km_at_fuel: "", liters: "", total_cost: "", price_per_liter: "", notes: "" };
+const emptyForm: FuelForm = { vehicle_id: "", driver_id: "", date: new Date().toISOString().slice(0, 10), km_at_fuel: "", liters: "", total_cost: "", price_per_liter: "", notes: "" };
 
 const ACTIVE_TRIP_KEY = "fleet_active_trips";
 
