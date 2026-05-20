@@ -175,9 +175,9 @@ export default function FinancialPage() {
         <Card className="border-border/50 bg-muted/30">
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <BarChart3 className="h-12 w-12 text-muted-foreground/40 mb-4" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">Sem dados para análise</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-2">{t("fin.empty.title")}</h3>
             <p className="text-sm text-muted-foreground max-w-md">
-              Nenhuma ordem de serviço ou pagamento encontrada. Importe dados nas respetivas páginas.
+              {t("fin.empty.desc")}
             </p>
           </CardContent>
         </Card>
