@@ -944,6 +944,114 @@ export type Database = {
         }
         Relationships: []
       }
+      financial_integrity_issues: {
+        Row: {
+          created_at: string
+          created_by_system: string
+          details_json: Json
+          detected_at: string
+          entity_id: string | null
+          entity_type: string | null
+          hash: string | null
+          id: string
+          issue_type: Database["public"]["Enums"]["integrity_issue_type"]
+          reference_id: string | null
+          resolved_at: string | null
+          severity: Database["public"]["Enums"]["integrity_severity"]
+          status: Database["public"]["Enums"]["integrity_status"]
+          updated_at: string
+          workspace_id: string | null
+          year_reference: number | null
+        }
+        Insert: {
+          created_at?: string
+          created_by_system?: string
+          details_json?: Json
+          detected_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          hash?: string | null
+          id?: string
+          issue_type: Database["public"]["Enums"]["integrity_issue_type"]
+          reference_id?: string | null
+          resolved_at?: string | null
+          severity?: Database["public"]["Enums"]["integrity_severity"]
+          status?: Database["public"]["Enums"]["integrity_status"]
+          updated_at?: string
+          workspace_id?: string | null
+          year_reference?: number | null
+        }
+        Update: {
+          created_at?: string
+          created_by_system?: string
+          details_json?: Json
+          detected_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          hash?: string | null
+          id?: string
+          issue_type?: Database["public"]["Enums"]["integrity_issue_type"]
+          reference_id?: string | null
+          resolved_at?: string | null
+          severity?: Database["public"]["Enums"]["integrity_severity"]
+          status?: Database["public"]["Enums"]["integrity_status"]
+          updated_at?: string
+          workspace_id?: string | null
+          year_reference?: number | null
+        }
+        Relationships: []
+      }
+      financial_integrity_snapshots: {
+        Row: {
+          created_at: string
+          id: string
+          snapshot_hash: string | null
+          snapshot_type: string
+          total_distributed: number
+          total_expected: number
+          total_expenses: number
+          total_op: number
+          total_os: number
+          total_pending: number
+          total_profit: number
+          total_received: number
+          workspace_id: string | null
+          year_reference: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          snapshot_hash?: string | null
+          snapshot_type?: string
+          total_distributed?: number
+          total_expected?: number
+          total_expenses?: number
+          total_op?: number
+          total_os?: number
+          total_pending?: number
+          total_profit?: number
+          total_received?: number
+          workspace_id?: string | null
+          year_reference: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          snapshot_hash?: string | null
+          snapshot_type?: string
+          total_distributed?: number
+          total_expected?: number
+          total_expenses?: number
+          total_op?: number
+          total_os?: number
+          total_pending?: number
+          total_profit?: number
+          total_received?: number
+          workspace_id?: string | null
+          year_reference?: number
+        }
+        Relationships: []
+      }
       financial_records: {
         Row: {
           amount: number
@@ -3097,15 +3205,15 @@ export type Database = {
       }
       v_financial_integrity_summary: {
         Row: {
-          duplicate_hash_count: number | null
-          financial_sync_lock_hits: number | null
-          invalid_workspace_rows: number | null
-          missing_so_links: number | null
-          orphan_op_count: number | null
-          over_allocated_distributions: number | null
-          replay_collapses: number | null
-          skipped_diff_updates: number | null
+          critical_issues: number | null
+          drift_count: number | null
+          last_detected_at: string | null
+          open_issues: number | null
+          orphan_count: number | null
+          resolved_issues: number | null
+          warning_issues: number | null
           workspace_id: string | null
+          year_reference: number | null
         }
         Relationships: []
       }
@@ -3284,6 +3392,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      run_financial_integrity_check: {
+        Args: { _workspace_id?: string; _year?: number }
+        Returns: Json
+      }
       sync_discrepancy_for_service_order: {
         Args: { _service_order_id: string }
         Returns: undefined
@@ -3328,6 +3440,24 @@ export type Database = {
         | "rejected"
         | "divergent"
         | "analyzing"
+      integrity_issue_type:
+        | "duplicate_event"
+        | "orphan_record"
+        | "mismatch_total"
+        | "invalid_distribution"
+        | "stale_summary"
+        | "workspace_leak"
+        | "year_leak"
+        | "negative_balance"
+        | "missing_reference"
+        | "broken_sync"
+        | "invalid_participation"
+        | "impossible_amount"
+        | "duplicate_hash"
+        | "reconciliation_failure"
+        | "drift_detected"
+      integrity_severity: "info" | "warning" | "critical"
+      integrity_status: "open" | "investigating" | "ignored" | "resolved"
       membership_role: "admin" | "tecnico" | "cliente" | "socio"
       membership_status: "active" | "pending"
       permission_scope: "own" | "team" | "all"
@@ -3477,6 +3607,25 @@ export const Constants = {
         "divergent",
         "analyzing",
       ],
+      integrity_issue_type: [
+        "duplicate_event",
+        "orphan_record",
+        "mismatch_total",
+        "invalid_distribution",
+        "stale_summary",
+        "workspace_leak",
+        "year_leak",
+        "negative_balance",
+        "missing_reference",
+        "broken_sync",
+        "invalid_participation",
+        "impossible_amount",
+        "duplicate_hash",
+        "reconciliation_failure",
+        "drift_detected",
+      ],
+      integrity_severity: ["info", "warning", "critical"],
+      integrity_status: ["open", "investigating", "ignored", "resolved"],
       membership_role: ["admin", "tecnico", "cliente", "socio"],
       membership_status: ["active", "pending"],
       permission_scope: ["own", "team", "all"],
