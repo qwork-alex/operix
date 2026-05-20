@@ -105,6 +105,7 @@ function EventRow({ ev, onSelect }: { ev: any; onSelect: (e: any) => void }) {
 }
 
 function DiffPanel({ event, onClose }: { event: any | null; onClose: () => void }) {
+  const { t } = useLanguage();
   const ledgerId =
     event?.payload?.ledger_id ||
     event?.payload?.participation_ledger_id ||
@@ -116,7 +117,7 @@ function DiffPanel({ event, onClose }: { event: any | null; onClose: () => void 
       <SheetContent className="w-[520px] sm:max-w-[520px] overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
-            <GitCompare className="h-4 w-4" /> Participation diffs
+            <GitCompare className="h-4 w-4" /> {t("audit.diffs.title")}
           </SheetTitle>
           <SheetDescription className="font-mono text-[10px] break-all">
             ledger {ledgerId ?? "—"}
@@ -125,7 +126,7 @@ function DiffPanel({ event, onClose }: { event: any | null; onClose: () => void 
         <div className="mt-4 space-y-2">
           {isLoading && <Skeleton className="h-24" />}
           {!isLoading && diffs.length === 0 && (
-            <p className="text-xs text-muted-foreground">No diffs captured yet.</p>
+            <p className="text-xs text-muted-foreground">{t("audit.diffs.none")}</p>
           )}
           {diffs.map((d: any) => (
             <Card key={d.id} className="border-border/50">
@@ -139,15 +140,15 @@ function DiffPanel({ event, onClose }: { event: any | null; onClose: () => void 
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-[11px]">
                   <div>
-                    <p className="text-muted-foreground">Expected</p>
+                    <p className="text-muted-foreground">{t("part.expected")}</p>
                     <p className="font-mono">{Number(d.previous_expected).toFixed(2)} → <span className="text-foreground font-semibold">{Number(d.new_expected).toFixed(2)}</span></p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Received</p>
+                    <p className="text-muted-foreground">{t("part.received")}</p>
                     <p className="font-mono">{Number(d.previous_received).toFixed(2)} → <span className="text-foreground font-semibold">{Number(d.new_received).toFixed(2)}</span></p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Status</p>
+                    <p className="text-muted-foreground">{t("label.status")}</p>
                     <p className="font-mono">{d.previous_status} → <span className="text-foreground font-semibold">{d.new_status}</span></p>
                   </div>
                 </div>
