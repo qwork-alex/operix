@@ -141,6 +141,7 @@ export default function FuelLogsModule() {
 
       const payload: any = {
         vehicle_id: form.vehicle_id,
+        driver_id: form.driver_id || null,
         date: form.date,
         km_at_fuel: form.km_at_fuel ? parseFloat(form.km_at_fuel) : null,
         liters,
