@@ -390,7 +390,7 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
             })}
           </svg>
 
-          {/* Globe — overflow visible so the atmospheric halo isn't clipped */}
+          {/* Static center planet — avoids extra WebGL contexts in the mounted financial route */}
           <div
             className="absolute z-10 pointer-events-none left-0 top-0"
             style={{
@@ -399,7 +399,7 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
               overflow: "visible",
             }}
           >
-            <Globe size={globeSize} />
+            <StaticAccountingGlobe size={globeSize} />
           </div>
 
           {/* Orbital module buttons (positions mutated directly in DOM) */}
