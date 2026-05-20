@@ -77,6 +77,7 @@ export default function ImportInvoiceDialog({
   open, onOpenChange,
 }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const qc = useQueryClient();
+  const ctxWs = useContextualWorkspace("billing");
   const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<File | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
