@@ -186,13 +186,13 @@ export default function FinancialPage() {
       {/* TABS */}
       <Tabs value={mainTab} onValueChange={setMainTab} className="space-y-4">
         <TabsList className="bg-muted">
-          <TabsTrigger value="confronto">Confronto OS x OP</TabsTrigger>
-          <TabsTrigger value="breakdown">Detalhamento</TabsTrigger>
+          <TabsTrigger value="confronto">{t("fin.tabs.confronto")}</TabsTrigger>
+          <TabsTrigger value="breakdown">{t("fin.tabs.breakdown")}</TabsTrigger>
           <TabsTrigger value="participation">
-            <Users className="h-3.5 w-3.5 mr-1" /> Participation
+            <Users className="h-3.5 w-3.5 mr-1" /> {t("fin.tabs.participation")}
           </TabsTrigger>
           <TabsTrigger value="audit">
-            <ShieldCheck className="h-3.5 w-3.5 mr-1" /> Audit
+            <ShieldCheck className="h-3.5 w-3.5 mr-1" /> {t("fin.tabs.audit")}
           </TabsTrigger>
         </TabsList>
 
@@ -203,17 +203,17 @@ export default function FinancialPage() {
           <Tabs value={confrontoTab} onValueChange={setConfrontoTab}>
             <TabsList className="bg-muted/50">
               <TabsTrigger value="fusao">
-                <Link2 className="h-3.5 w-3.5 mr-1" /> Fusão manual
+                <Link2 className="h-3.5 w-3.5 mr-1" /> {t("fin.confronto.fusao")}
               </TabsTrigger>
               <TabsTrigger value="pendentes" className="relative">
-                <AlertTriangle className="h-3.5 w-3.5 mr-1" /> Pendentes
+                <AlertTriangle className="h-3.5 w-3.5 mr-1" /> {t("fin.confronto.pendentes")}
                 {pendingItems.length > 0 && (
                   <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive/20 text-destructive text-[9px] px-1">
                     {pendingItems.length}
                   </span>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="historico">Histórico</TabsTrigger>
+              <TabsTrigger value="historico">{t("fin.confronto.historico")}</TabsTrigger>
             </TabsList>
 
             <TabsContent value="fusao">
