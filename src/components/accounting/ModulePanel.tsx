@@ -46,12 +46,17 @@ export function ModulePanel({
   onUpdate,
   onDelete,
   allowAdd = true,
+  importCategory,
+  year,
+  month,
+  techId,
 }: ModulePanelProps) {
   const { formatCurrency } = useLanguage();
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState({ label: "", amount: "", notes: "" });
   const [saving, setSaving] = useState(false);
+  const [showImport, setShowImport] = useState(false);
 
   const resetForm = () => {
     setForm({ label: "", amount: "", notes: "" });
