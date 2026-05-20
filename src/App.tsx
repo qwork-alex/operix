@@ -95,6 +95,7 @@ const App = () => (
                             <Route path="/settings" element={<SettingsPage />} />
                             <Route path="/profile" element={<ProfilePage />} />
                             <Route path="/audit" element={<AuditPage />} />
+                            <Route path="/recovery" element={<RecoveryPage />} />
                             <Route path="*" element={<NotFound />} />
                           </Routes>
                         </ErrorBoundary>
