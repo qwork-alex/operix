@@ -1,199 +1,82 @@
-# Fase 1 — Rearquitetura do Motor Climático-Operacional
+# Workspace Context Engine — Fase 1 (Backend + Compat Layer)
 
-Plataforma climática operacional modular, estável e viva. Sem efeito "dashboard bonito": núcleo de decisão real, layers apenas renderizam, tudo escalável para Command Center multi-monitor.
+Refatoração arquitetural para multi-workspace **sem quebrar nada existente**. Esta fase é puramente backend/compat: nenhum redesign visual, nenhuma mudança em fluxos OS↔OP↔Billing↔Financial.
 
-## Princípios travados
+## Estado atual (já existe)
 
-1. **Single source of truth**: um `WeatherEventEngine` consolida radar, hail, reports, forecasts e estado temporal. Layers nunca decidem lógica — apenas leem snapshots normalizados e desenham.
-2. **Mapa imperativo, não reativo**: o componente React do mapa monta uma vez. Atualizações vão por refs + APIs MapLibre (`setData`, `setPaintProperty`, `setTiles`). Zero re-render React por frame.
-3. **Hail engine operacional**: cada célula tem direção, velocidade, intensidade, derivada (crescendo/perdendo), ETA por cidade, raio de impacto, score operacional.
-4. **PDR Intel = motor de decisão**: ranking ponderado de oportunidades, não heatmap decorativo.
-5. **Cartografia cinematográfica**: hierarquia oceano → país → região → cidade → vila com glow controlado e labels refinadas.
-6. **Timeline premium**: scrub suave, autoplay, velocidades, ghost trails.
-7. **Pronto para Command Center**: fullscreen, auto-cycling, auto-focus em severos, alertas sonoros, dispatch mode — arquitetura preparada desde já.
-8. **Higiene de GPU**: cleanup rigoroso, FPS/memory monitor, anti-thrashing.
-9. **Prioridade**: estabilidade > fidelidade > fluidez > inteligência > arquitetura. Features novas depois.
-10. **Validação cruzada**: cada PR comparado a Windy / RainViewer / Zoom Earth / RadarScope antes de fechar.
+- Tabela `workspaces` (4 workspaces ativos) com `owner_user_id`.
+- Tabela `memberships(user_id, workspace_id, role, status)` — base já correta.
+- Colunas `workspace_id` parciais em: `app_users`, `documents`, `invites`, `service_orders`, `technicians`, `memberships`.
+- Hooks: `useWorkspace`, `useUserContext`, `useImpersonation`, `useRole`.
 
-## Arquitetura alvo
+## O que falta (foco desta fase)
 
-```text
-src/components/dashboard/operational-map/
-├── OperationalMap.tsx          // shell React (monta 1x), error boundary, controles
-├── core/
-│   ├── MapEngine.ts            // init MapLibre, WebGL probe, retry, lifecycle
-│   ├── LayerRegistry.ts        // mount/unmount/visibility isolados, ordem estável
-│   ├── TemporalEngine.ts       // clock global rAF, frames, interpolação, playback
-│   ├── safeOps.ts              // setData/setPaintProperty seguros
-│   ├── PerfMonitor.ts          // FPS, drawCalls, memória, tile thrashing
-│   └── CommandBus.ts           // eventos: focus(event), alert(severity), dispatch(team→event)
-├── engine/
-│   ├── WeatherEventEngine.ts   // SOURCE OF TRUTH — consolida tudo, emite snapshots
-│   ├── HailEngine.ts           // direção, velocidade, derivada, ETA, raio, score
-│   ├── ConfidenceEngine.ts     // score meteorológico + comunitário
-│   ├── PdrDecisionEngine.ts    // ranking operacional ponderado
-│   └── ForecastEngine.ts       // hotspots futuros, probabilidade
-├── data/
-│   ├── useRadarFrames.ts
-│   ├── useHailIngest.ts
-│   ├── useCommunityReports.ts  // realtime
-│   ├── useOrdersGeo.ts
-│   ├── useTeamsGeo.ts
-│   └── useCityIndex.ts         // catálogo de cidades p/ ETA
-├── layers/
-│   ├── radarLayer.ts
-│   ├── hailForecastLayer.ts
-│   ├── hailActiveLayer.ts      // inclui ghost trail
-│   ├── hailConfirmedLayer.ts
-│   ├── stormLayer.ts
-│   ├── ordersLayer.ts
-│   ├── operationsLayer.ts
-│   ├── teamsLayer.ts
-│   ├── pdrIntelLayer.ts
-│   └── reportsLayer.ts
-├── ui/
-│   ├── LayerToggleBar.tsx
-│   ├── MapLegend.tsx
-│   ├── TimelineControl.tsx     // scrub, play, 0.5x/1x/2x/4x, replay
-│   ├── HailReportButton.tsx
-│   ├── OpportunityRanking.tsx  // saída do PdrDecisionEngine
-│   ├── DiagnosticBadge.tsx     // provider, frames, FPS, mem, layers
-│   └── CommandCenterShell.tsx  // fullscreen, auto-cycle, auto-focus
-└── style/
-    └── premiumDark.ts          // oceano gradiente, fronteiras hierárquicas, halos
-```
+### 1. DB — Migração aditiva (NÃO destrutiva)
 
-### Contratos
+Adicionar colunas **nullable** com default sensato (sem backfill obrigatório que quebre RLS):
 
-```ts
-// SOURCE OF TRUTH — emite snapshots imutáveis
-interface WeatherSnapshot {
-  t: number;                    // tempo do clock
-  radar: RadarFrame[];
-  hail: HailCell[];             // já enriquecidas pela HailEngine
-  reports: CommunityReport[];   // já com confidence
-  forecast: ForecastHotspot[];
-  opportunities: Opportunity[]; // já rankeadas
-}
-class WeatherEventEngine {
-  subscribe(fn: (snap: WeatherSnapshot) => void): Unsubscribe;
-  setTime(t: number): void;
-  current(): WeatherSnapshot;
-}
+- `workspace_id uuid` em: `payment_orders`, `financial_records`, `billing_invoices`, `billing_payments`, `billing_clients`, `billing_suppliers`, `clients`, `notifications`, `fleet_trips`, `fleet_fuel_logs`, `drivers`, `hail_reports`, `discrepancies`.
+- `year_reference int` (default `extract(year from created_at)`) em: `service_orders`, `payment_orders`, `financial_records`, `billing_invoices`.
+- `visibility_scope text` em entidades operacionais críticas (default `'workspace'`, valores: `'private'|'workspace'|'global'`).
+- `created_by_user_id uuid` apenas onde **não existe** `created_by`/`user_id`/`uploaded_by` equivalente.
 
-// LAYER — só renderiza, recebe slice do snapshot
-interface MapLayer<K extends keyof WeatherSnapshot> {
-  id: string;
-  category: LayerCategory;
-  select(snap: WeatherSnapshot): WeatherSnapshot[K];
-  mount(map: Map): void;
-  unmount(map: Map): void;
-  apply(slice: WeatherSnapshot[K], t: number): void;  // imperativo
-  setVisible(v: boolean): void;
-}
-```
+Backfill em UPDATE separado (não no ALTER):
+- workspace_id = workspace do `created_by` via `app_users.workspace_id`, fallback `Default Workspace`.
+- year_reference = `extract(year from created_at)::int`.
 
-### HailCell enriquecida
+Índices: `(workspace_id)` em todas as tabelas alteradas, `(workspace_id, year_reference)` nas operacionais.
 
-```ts
-interface HailCell {
-  id: string;
-  lat: number; lng: number;
-  velocityKts: number;          // intensidade meteorológica
-  bearingDeg: number;           // direção
-  speedKmh: number;             // deslocamento
-  derivative: "growing" | "steady" | "decaying";
-  radiusKm: number;
-  hailSizeMm: number | null;
-  severity: Severity;
-  status: "forecast" | "active" | "confirmed";
-  etaToCities: Array<{ cityId: string; eta: number; distanceKm: number }>;
-  operationalScore: number;     // 0..100, alimenta PDR
-  trail: Array<{ t: number; lat: number; lng: number }>; // ghost
-}
-```
+Tabela nova: `workspace_module_permissions(workspace_id, module text, enabled bool, settings jsonb)` — define quais módulos estão ativos por workspace (ex: RH bloqueia `financial`).
 
-### PdrDecisionEngine — ranking ponderado
+### 2. Camada SQL — Resolvers
 
-Score = soma normalizada de:
-- severidade climática (peso 0.25)
-- demanda prevista da região (0.20)
-- densidade de veículos / renda média (0.15)
-- distância das equipes disponíveis (0.15)
-- trânsito estimado (0.05)
-- histórico de conversão da região (0.10)
-- potencial financeiro (ticket médio × volume) (0.10)
+Novas funções `SECURITY DEFINER` (não tocam policies existentes):
 
-Saída: `Opportunity[]` ordenada, com breakdown por fator (explicabilidade) → exibido no painel atual `OperationalOpportunities`.
+- `get_user_workspaces(_uid uuid)` — retorna `[{workspace_id, role, modules_enabled[]}]`.
+- `user_can_access_workspace(_uid, _ws_id)` — bool.
+- `user_can_access_module(_uid, _ws_id, _module)` — combina membership + `workspace_module_permissions`.
+- `current_workspace_id()` — lê de header/setting; fallback ao primeiro membership ativo.
 
-## Estilo cartográfico (premiumDark.ts)
+Estas funções **convivem** com `has_role`/`can_do` atuais. Policies só serão migradas em fases futuras (não agora).
 
-- **Oceano**: gradiente radial `#06223f` centro → `#0a2e55` borda, leve textura via raster overlay opacidade 0.04.
-- **Países**: linha `#3aa0ff` α0.35, `line-blur 1.2`, halo via duplicate layer α0.12 width×3.
-- **Regiões**: `#a78bfa` α0.22.
-- **Cidades**: label `#e6f2ff`, `text-halo-color #0b1f3d`, `text-halo-blur 1.5`, weight por população.
-- **Vilas**: `#9fb3c8`, halo 0.8.
-- **Hierarquia por zoom**: cada nível aparece em range definido para evitar poluição.
+### 3. Frontend — Context Engine
 
-## Timeline premium (TemporalEngine + TimelineControl)
+- `WorkspaceContextProvider` (extensão do `useWorkspace` atual, **sem renomeação**):
+  - expõe `workspaceId`, `workspaces[]`, `modulesEnabledByWs`, `switchWorkspace()`, `canAccessModule(module)`.
+  - persiste workspace ativo em `localStorage` (já existe via `selected_workspace_id`).
+- `PermissionResolver` (`src/lib/workspaceScope.ts`):
+  - `resolveModuleAccess(user, workspaces, module)` — union: módulo aparece no menu se **algum** ws permitir.
+  - `scopeQuery(qb, workspaceId)` — helper para adicionar `.eq('workspace_id', wsId)` quando coluna existir (no-op em tabelas legadas).
+- `AppSidebar` / menu: filtrar items por `canAccessModule` agregado.
+- `WorkspaceSelector` (já existe): manter, só aparece se `workspaces.length > 1`. ✓
+- Dentro de cada módulo: hooks (`useServiceOrders`, `usePaymentOrders`, etc.) **ganham filtro opcional** `workspace_id` quando a coluna existe — usando `scopeQuery` para evitar regressão em tabelas sem a coluna ainda.
 
-- Clock global em rAF, `t ∈ [t0, t1]`.
-- Frames discretos (radar, hail) + interpolação contínua (posição de células ativas, opacidade de fade).
-- Controles: scrub, play/pause, 0.5x/1x/2x/4x, replay, "live".
-- Ghost trail: layer dedicada com últimos N pontos da `HailCell.trail`, opacidade decrescente.
-- Throttling adaptativo: se FPS < 30, reduz frequência de interpolação.
+### 4. Compatibilidade
 
-## Command Center (preparação)
+- Todas mudanças DB são **aditivas**. Zero `DROP`, zero `NOT NULL` em colunas novas até backfill completo + validação.
+- Policies RLS atuais permanecem inalteradas. Workspace isolation entra como **filtro adicional** no client primeiro; RLS por workspace é Fase 2.
+- Comunicação OS↔OP↔Billing↔Financial usa relações existentes (`group_id`, `list_name`, `service_order_id`); workspace_id é metadata adicional.
 
-- `CommandCenterShell` envolve o mapa quando `?mode=command`.
-- Hooks expostos: `focusEvent(id)`, `cycleEvents(intervalMs)`, `onSeverityAlert(cb)`.
-- `CommandBus` desacopla UI de motor → futuro dispatch automático e WhatsApp/push só assinam o bus.
+## Validação
 
-## Performance & GPU
+Após migração + deploy:
 
-- `PerfMonitor`: FPS rolling avg, JS heap (quando disponível), tiles em vôo, layers montadas.
-- Diff hash em `setData` para evitar upload redundante à GPU.
-- Cleanup contratual: `unmount` remove sources + layers + listeners + intervals + rAF.
-- Detector de "tile thrashing": se mesma URL pedida >3x em 5s, pausa playback.
-- Lazy mount: layer só sobe na primeira ativação.
+1. `SELECT count(*) FROM service_orders WHERE workspace_id IS NULL` → 0 esperado após backfill.
+2. Login com user multi-workspace → `WorkspaceSelector` aparece, troca recarrega dados.
+3. Login com user single-workspace → selector escondido.
+4. Comparar contagem de SO/PO antes/depois do filtro de workspace → idêntica para user dentro do mesmo ws.
+5. Smoke: criar OS, gerar OP, criar Invoice, registrar Payment → fluxo intacto.
 
-## Mudanças de banco
+## Fora de escopo (fases futuras)
 
-- `hail_reports`: adicionar `photo_thumb_url text`.
-- Nova tabela `hail_report_confirmations(id, report_id, user_id, created_at)` + RLS.
-- Trigger `recompute_hail_confidence()` recalcula `confidence_score` e `status` no insert/delete.
-- Catálogo `weather_cities(id, name, country, lat, lng, population)` para ETA (seed PT/FR/ES).
+- Migrar policies RLS para `workspace_id` (Fase 2).
+- Workspace switching no UI de configurações.
+- Permissões granulares por usuário+workspace+módulo (Fase 3 — usa `workspace_module_permissions` como base).
+- Backfill de tabelas legadas (`mileage_logs`, `fuel_receipts`, `partner_clients`, etc.).
 
-## Pipeline "Relatar Granizo" v2
+## Detalhes técnicos resumidos
 
-Compressão client-side (canvas → webp 1024px q0.8) + thumbnail (256px q0.7) → upload para `hail-reports/full/` e `hail-reports/thumbs/` → `photo_url` + `photo_thumb_url` persistidos → preview no dialog → popup do mapa usa thumb → clique abre modal expandido.
-
-## Roadmap incremental (PRs pequenos, sem regressão)
-
-| PR | Escopo | Critério de pronto |
-|----|--------|--------------------|
-| PR1 | Scaffold pasta + `MapEngine` + `LayerRegistry` + `TemporalEngine` + `safeOps` + `PerfMonitor` stub. `OperationalMap` continua funcional, delega init. | Mapa abre, FPS visível, nada quebrou |
-| PR2 | `WeatherEventEngine` + migração de radar e hail (forecast/active/confirmed) para layers isoladas | Paridade visual com hoje, eventos > 0 |
-| PR3 | `HailEngine` enriquecido (direção, velocidade, ETA, score) + ghost trail | Células se movem com vetor real |
-| PR4 | Migrar orders/ops/teams/pdr/reports → toggles funcionais | Cada botão liga/desliga sem efeito colateral |
-| PR5 | `PdrDecisionEngine` + ranking explicável no painel | Top-5 com breakdown de fatores |
-| PR6 | `TimelineControl` premium (scrub, velocidades, replay) | Comparação Windy/RainViewer aprovada |
-| PR7 | Relatar granizo v2 (compressão, thumb, preview, modal) + `ConfidenceEngine` + trigger SQL | Foto carrega, score atualiza ao confirmar |
-| PR8 | `premiumDark.ts` (oceano, fronteiras, labels, halos) | Comparação Zoom Earth aprovada |
-| PR9 | `CommandCenterShell` + `CommandBus` + auto-focus/auto-cycle | `?mode=command` funcional em fullscreen |
-| PR10 | Performance pass final + memory diagnostics + anti-thrashing | 60 FPS sustentados com 200+ eventos |
-
-Cada PR fecha com checklist visual lado-a-lado contra Windy/RainViewer/Zoom Earth/RadarScope.
-
-## Fora desta fase
-
-- Provedores meteorológicos pagos (continua RainViewer + ingest atual).
-- IA preditiva avançada e dispatch automático real (arquitetura preparada via `CommandBus`).
-- WhatsApp/push/email (assinarão o bus depois).
-
-## Riscos e mitigações
-
-- **Regressão visual durante migração** → PRs pequenos + screenshots comparativos.
-- **GPU pressure no playback** → throttle adaptativo + tile diff hash.
-- **Drift entre engine e layer** → snapshots imutáveis, layers stateless.
-- **Layers órfãs em HMR** → `LayerRegistry` mantém inventário e força cleanup no dispose.
+- Migração: 1 arquivo SQL, ~200 linhas, idempotente (`ADD COLUMN IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`).
+- Funções: schema `public`, `SECURITY DEFINER`, `SET search_path=public`.
+- Frontend: 1 hook novo (`useWorkspaceModules`), 1 lib (`workspaceScope.ts`), edits pequenos em ~5 hooks.
+- Sem mudança em edge functions nesta fase.
