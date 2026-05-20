@@ -17,7 +17,7 @@ export interface TimelineFilters {
 }
 
 export function useFinancialEventTimeline(filters: TimelineFilters = {}) {
-  const { currentWorkspaceId } = useWorkspace();
+  const { workspaceId: currentWorkspaceId } = useWorkspace();
   const { year, eventType, entityType, entityId, hash, limit = 200 } = filters;
 
   return useQuery({
@@ -49,7 +49,7 @@ export function useFinancialEventTimeline(filters: TimelineFilters = {}) {
 }
 
 export function useFinancialIntegritySummary() {
-  const { currentWorkspaceId } = useWorkspace();
+  const { workspaceId: currentWorkspaceId } = useWorkspace();
   return useQuery({
     queryKey: ["financial_integrity_summary", currentWorkspaceId],
     enabled: !!currentWorkspaceId,
@@ -76,7 +76,7 @@ export function useFinancialIntegritySummary() {
 }
 
 export function useParticipationDiffs(ledgerId?: string | null, limit = 100) {
-  const { currentWorkspaceId } = useWorkspace();
+  const { workspaceId: currentWorkspaceId } = useWorkspace();
   return useQuery({
     queryKey: ["participation_diffs", currentWorkspaceId, ledgerId, limit],
     enabled: !!currentWorkspaceId,
