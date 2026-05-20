@@ -6,12 +6,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { invalidateAccountingDownstream } from "@/lib/financialSync";
 import type { ModuleEntry } from "./ModulePanel";
 
-type ModuleKey = "rentals" | "expenses" | "fuel" | "purchases" | "government" | "withdrawals";
+type ModuleKey = "rentals" | "expenses" | "fuel" | "travel" | "purchases" | "government" | "withdrawals";
 
 const CATEGORY_MAP: Record<ModuleKey, { type: string; category?: string; source?: string }> = {
   rentals: { type: "expense", category: "rent" },
   expenses: { type: "expense" },
   fuel: { type: "expense", category: "fuel" },
+  travel: { type: "expense", category: "travel" },
   purchases: { type: "expense", category: "material" },
   government: { type: "expense", category: "tax" },
   withdrawals: { type: "expense", category: "salary" },
