@@ -254,6 +254,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
         uploaded_by: user?.id,
         entity_type: entityType,
         module: moduleName,
+        ...(workspaceId ? { workspace_id: workspaceId } : {}),
       });
       if (error) throw error;
     },
