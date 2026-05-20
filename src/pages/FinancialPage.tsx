@@ -176,8 +176,8 @@ export default function FinancialPage() {
       )}
 
       {/* TABS — Phase 5C order */}
-      <Tabs value={mainTab} onValueChange={setMainTab} className="space-y-4">
-        <TabsList className="bg-muted">
+      <Tabs value={mainTab} onValueChange={setMainTab} className="space-y-4 min-w-0 max-w-full w-full">
+        <TabsList className="bg-muted flex flex-wrap h-auto max-w-full">
           <TabsTrigger value="confronto">{t("fin.tabs.confronto")}</TabsTrigger>
           <TabsTrigger value="distribution">
             <PieChart className="h-3.5 w-3.5 mr-1" /> {t("fin.tabs.distribution")}
