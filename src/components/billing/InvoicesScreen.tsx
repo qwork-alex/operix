@@ -15,7 +15,7 @@ import { getPaymentTermLabel } from "@/i18n/invoices";
 import { SendInvoiceDialog } from "./SendInvoiceDialog";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { toast } from "sonner";
 import { PaymentListsSelector } from "@/components/billing/PaymentListsSelector";
 import type { BillingPaymentList } from "@/hooks/usePaymentListsConsolidated";
@@ -777,10 +777,22 @@ export default function InvoicesScreen() {
       Vencimento: fmtDate(r.due_date),
       Estado: STATUS_META[r.status].label,
     }));
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Faturas");
-    XLSX.writeFile(wb, `faturas_${format(new Date(), "yyyyMMdd_HHmm")}.xlsx`);
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("Faturas");
+    if (rows.length > 0) {
+      ws.columns = Object.keys(rows[0]).map((key) => ({ header: key, key }));
+      ws.addRows(rows);
+    }
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `faturas_${format(new Date(), "yyyyMMdd_HHmm")}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
     toast.success("Excel exportado");
   };
 
