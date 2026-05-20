@@ -28,6 +28,10 @@ interface ModulePanelProps {
   onUpdate: (id: string, entry: { label: string; amount: number; notes: string }) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   allowAdd?: boolean;
+  importCategory?: string;
+  year?: number;
+  month?: number | null;
+  techId?: string | null;
 }
 
 export function ModulePanel({
