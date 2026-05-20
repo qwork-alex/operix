@@ -90,7 +90,7 @@ export function useServiceOrders(filters?: {
   // Real-time: refresh service orders when payment_orders change (status sync via trigger)
   useEffect(() => {
     const channel = supabase
-      .channel('so-po-sync')
+      .channel(`so-po-sync:${workspaceId ?? 'global'}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'payment_orders' },
@@ -101,7 +101,7 @@ export function useServiceOrders(filters?: {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [queryClient]);
+  }, [queryClient, workspaceId]);
 
   const saveMutation = useMutation({
     mutationFn: async (orders: ServiceOrderInsert[]) => {
