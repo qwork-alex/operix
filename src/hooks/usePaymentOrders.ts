@@ -318,13 +318,14 @@ export function useDiscrepancies() {
 export function useFinancialSummary() {
   const { user } = useAuth();
   const { can, isLoading: permsLoading } = useCan();
+  const { workspaceId } = useWorkspace();
   const finView = can("financial", "view");
   const soView = can("service_orders", "view");
   const poView = can("payment_orders", "view");
   const allowed = finView.allowed || soView.allowed || poView.allowed;
 
   return useQuery({
-    queryKey: ["financial-summary", allowed, soView.scope, poView.scope, user?.id],
+    queryKey: ["financial-summary", workspaceId, allowed, soView.scope, poView.scope, user?.id],
     enabled: !permsLoading && allowed && !!user?.id,
     queryFn: async () => {
       logScope("financial", "summary", finView.scope, allowed);
@@ -340,6 +341,8 @@ export function useFinancialSummary() {
       let poQ: any = supabase.from("payment_orders").select("total, status, client_id, platform, clients(name)");
       soQ = applyScope(soQ, soView.allowed ? soView.scope : "own", user);
       poQ = applyScope(poQ, poView.allowed ? poView.scope : "own", user);
+      soQ = scopeQuery(soQ, "service_orders", workspaceId);
+      poQ = scopeQuery(poQ, "payment_orders", workspaceId);
 
       const [soRes, poRes, discRes] = await Promise.all([
         soQ,
