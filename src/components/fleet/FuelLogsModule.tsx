@@ -313,6 +313,22 @@ export default function FuelLogsModule() {
                 </SelectContent>
               </Select>
             </div>
+            <div>
+              <Label>Condutor (opcional)</Label>
+              <Select
+                value={form.driver_id || "none"}
+                onValueChange={(v) => set("driver_id", v === "none" ? "" : v)}
+              >
+                <SelectTrigger><SelectValue placeholder="Sem condutor" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sem condutor</SelectItem>
+                  {drivers.map((d: any) => (
+                    <SelectItem key={d.id} value={d.id}>
+                      {d.full_name}{d.linked_user_id ? " 🔗" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Data</Label>
