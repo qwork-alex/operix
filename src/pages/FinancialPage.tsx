@@ -23,7 +23,7 @@ import ParticipationTab from "@/components/financial/ParticipationTab";
 import FinancialAuditTab from "@/components/financial/FinancialAuditTab";
 import FinancialIntegrityTab from "@/components/financial/FinancialIntegrityTab";
 import { AccountingControlCenter } from "@/components/accounting/AccountingControlCenter";
-import ProfitDistribution from "@/components/profit/ProfitDistribution";
+import { ProfitDistribution } from "@/components/profit/ProfitDistribution";
 import { Link2, AlertTriangle, Users, ShieldCheck, BookOpen, ShieldAlert, PieChart } from "lucide-react";
 
 export default function FinancialPage() {
