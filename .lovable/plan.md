@@ -1,55 +1,117 @@
-# Phase 4C — Stabilization Validation + i18n Hardening
+# Accounting Refactor — Safe Migration into Financial
 
-Read-only validation pass across all major routes + a structural i18n hardening layer. No new features, no schema migrations, no changes to billing / participation / distribution / matching logic.
+Move the standalone Accounting module inside the Financial page as a new tab, and enforce strict per-user / per-workspace / per-year isolation for every accounting record.
 
-## Part 1 — Validation Sweep (read-only)
+## New Financial structure
 
-Scope: confirm every major route renders without ErrorBoundary, hook-context, or undefined-property crashes after Phases 3B / 3C / 4A / 4.5.
+```text
+Financial
+├── Confronto          (existing)
+├── Detalhamento       (existing — Technician Detail)
+├── Participação       (existing)
+├── Auditoria          (existing)
+└── Contabilidade      (NEW — embeds AccountingControlCenter)
+```
 
-Routes audited:
-- `/` (dashboard)
-- `/service-orders`, `/payment-orders`, `/billing`
-- `/financial` (+ Participation tab, + Audit tab)
-- `/profit-distribution`, `/documents`, `/users`, `/fleet`
+`/profit-distribution` ("Distribution") stays as its own route — the spec lists it under Financial in concept, but it already lives outside and removing it would be a destructive change. We keep the existing route untouched and only add a cross-link from the new Accounting tab.
 
-Method:
-1. Static audit — grep for direct `.property` access on possibly-undefined query data; verify each page wraps async data with loading + empty states; verify hooks live inside their required providers (`WorkspaceProvider`, `RoleProvider`, `LanguageProvider`).
-2. Runtime audit — open the preview, navigate each route, capture console + network. Log findings.
-3. Database sanity — run `SELECT`-only diagnostics on `participation_ledger`, `v_participation_summary`, `financial_event_timeline_v`, `v_financial_integrity_summary` to confirm: no duplicate `(workspace_id, service_order_id, participant_id)` rows, no duplicate `event_hash`, no orphan FK.
+## Isolation contract (the core of this phase)
 
-Deliverable: `/mnt/documents/phase_4c_validation_report.md` listing every route's status + any defects (file + line) + fixes applied. Only surgical fixes (null-guards, missing `LoadingSkeleton`, hook-order issues) are applied — no logic rewrites.
+Every row in `financial_records` written through the Accounting UI MUST carry:
 
-## Part 2 — i18n Hardening (structural, non-destructive)
+- `workspace_id` = current active workspace (from `WorkspaceProvider`)
+- `user_id` = `auth.uid()` of the creator (already enforced by `force_financial_records_auth_owner` trigger)
+- `year_reference` = year of the entry's effective date (NEW: auto-filled from `created_at` if missing)
+- `visibility_scope` = `'private'` by default for manual entries (existing column, currently unused for accounting)
 
-Goal: enforce that every visible string flows through `useLanguage().t(...)` and that switching language live updates the entire app without refresh.
+Read paths (`useAccountingModule`, `useAccountingExpensesByPeriod`) must filter by:
 
-Steps:
-1. **Inventory** — scripted scan (`scripts/i18n-audit.mjs`) listing every `.tsx` file with hardcoded user-visible literals (JSX text, `placeholder=`, `title=`, `aria-label=`, `toast({title|description})`). Output saved to `/mnt/documents/i18n_audit.md`.
-2. **Dictionary expansion** — add missing keys to `src/hooks/useLanguage.tsx` grouped by module (`fin.*`, `participation.*`, `audit.*`, `so.*`, `po.*`, `fleet.*`, `users.*`, `common.*`). All 12 languages, PT as primary, with Brazilian Portuguese variants where they differ from European Portuguese (the existing `pt` slot is reused; no new lang code added in this phase).
-3. **Refactor** — replace literals in the highest-traffic shells first:
-   - `FinancialPage.tsx` tabs (`Confronto OS x OP`, `Detalhamento`, `Participation`, `Audit`)
-   - `ParticipationTab.tsx`, `FinancialAuditTab.tsx` (KPI labels, status pills, drawer headings, empty/loading states)
-   - `AppSidebar.tsx`, `TopBar.tsx`, `ErrorBoundary.tsx`, common `BulkDeleteDialog`, `SectionPlaceholder`
-   - Toast notifications across financial hooks
-4. **Guard rule** — add `eslint`-style note in `.lovable/memory/style/i18n-rule.md` so future phases respect "no inline literals in components; always `t('key')`". Memory index updated.
-5. **Live switch validation** — open preview, switch language from the top bar, confirm all refactored areas update without reload.
+```
+workspace_id = activeWorkspaceId
+AND (
+  user_id = auth.uid()               -- own entries
+  OR has_role(auth.uid(),'admin')    -- admins see all in workspace
+  OR has_role(auth.uid(),'partner')  -- partners see all in workspace
+)
+AND (year_reference = selectedYear OR selectedYear IS NULL)
+```
 
-## Out of scope (explicitly NOT touched)
-- Billing calculations, participation math, OS↔OP matching, distribution snapshot logic
-- RLS / multi-workspace policies
-- SO ↔ OP sync flow
-- Mutation paths for participation / audit (stay read-only)
-- New language codes (no `pt-BR` slot added — Brazilian variants go in the existing `pt` strings where applicable)
+This guarantees a technician never sees another technician's expenses, fuel, withdrawals, etc. — even within the same workspace.
+
+## Technical plan
+
+### 1. Database (single migration)
+
+- Backfill `year_reference` for existing `financial_records` rows where NULL (`extract(year from created_at)`).
+- Add trigger `set_financial_records_year_reference` BEFORE INSERT/UPDATE: if NULL, set to `extract(year from coalesce(NEW.created_at, now()))`.
+- Add trigger `set_financial_records_workspace` BEFORE INSERT: if `workspace_id` is NULL, resolve from the caller's active workspace via `app_users.workspace_id` (best-effort; raise if still NULL for accounting `source IN ('manual','manual_financial')`).
+- Tighten SELECT RLS: add a new policy `financial_records_accounting_isolation` that, for rows with `source IN ('manual','manual_financial')` and `category IN ('rent','fuel','material','tax','salary','other')`, requires `user_id = auth.uid()` unless caller is admin/partner. Existing `ws_scope_select` continues to enforce the workspace boundary.
+- Index `(workspace_id, user_id, category, year_reference)` for the new filtered reads.
+
+### 2. Frontend — Financial tab integration
+
+- `src/pages/FinancialPage.tsx`: add a 5th `<TabsTrigger value="accounting">` with `BookOpen` icon and i18n key `fin.tabs.accounting`. New `<TabsContent value="accounting">` renders `<AccountingControlCenter embedded />`.
+- `src/components/accounting/AccountingControlCenter.tsx`: accept an `embedded?: boolean` prop. When `embedded`, drop the page header ("Centro de Controle") so it sits cleanly inside the Financial shell. Add a year selector chip (current year default) wired to the new `year` query param.
+- `src/hooks/useLanguage.tsx`: add `fin.tabs.accounting` for all 12 locales.
+
+### 3. Frontend — isolation enforcement in hooks
+
+- `src/components/accounting/useAccountingModules.ts`:
+  - import `useWorkspace` + `useAuth`; bail out gracefully if no `workspaceId`.
+  - All SELECTs add `.eq('workspace_id', wsId)` + year filter; insert payloads now include `workspace_id` and `year_reference` (driven by selected year).
+  - Query key extended with `[wsId, year]` so caches don't leak across workspaces / years / users.
+- `src/hooks/useAccountingExpensesByPeriod.ts`: same scoping — adds `workspace_id` and `user_id` (when non-admin) filters; query key keyed on `[wsId, role]`.
+
+### 4. Sync into the rest of Financial
+
+No new code needed — existing flows already react:
+
+- Technician Detail (`useTechnicianEarnings`) already reads `financial_records` filtered by `assigned_user_id`; the new trigger guarantees that column is the owner.
+- Participation (`useParticipationLedger`) reads `participation_ledger` derived from `service_order_distributions` — unaffected.
+- Financial summaries (`useReconciliationSummary` → `s.expenses`) already aggregates `financial_records`; with the workspace filter applied at the RLS level it stays correct per workspace.
+
+We add a single helper `src/lib/financialSync.ts` that exposes `invalidateAccountingDownstream(qc)` and is called from every Accounting mutation success so Technician Detail / Overview / Participation charts refresh in the same tick.
+
+### 5. Legacy `/accounting` route
+
+- Keep the standalone route as a thin redirect to `/financial?tab=accounting` (preserves bookmarks).
+- Sidebar entry `t("nav.accounting")` is removed; Financial entry stays.
+
+### 6. Logging & validation
+
+- New trigger logs every accounting INSERT/UPDATE/DELETE to `backend_event_logs` with `table_name='financial_records'`, `action='ACCOUNTING_*'`, payload including `{workspace_id, user_id, year_reference, category, amount}`.
+- After migration, run the audit script `/mnt/documents/accounting_isolation_report.md`:
+  - count rows missing `workspace_id` / `year_reference`
+  - confirm zero cross-user leakage by simulating two users with `set local request.jwt.claim.sub`
+  - confirm summary totals match pre-migration totals per workspace
+
+## Files touched
+
+```text
+supabase/migrations/<ts>_accounting_isolation.sql           [NEW]
+src/pages/FinancialPage.tsx                                  [edit]
+src/components/accounting/AccountingControlCenter.tsx        [edit — add embedded prop + year selector]
+src/components/accounting/useAccountingModules.ts            [edit — workspace/year/user scoping]
+src/hooks/useAccountingExpensesByPeriod.ts                   [edit — workspace/user scoping]
+src/hooks/useLanguage.tsx                                    [edit — fin.tabs.accounting + year labels]
+src/lib/financialSync.ts                                     [NEW — shared invalidator]
+src/App.tsx                                                  [edit — /accounting → redirect]
+src/components/layout/AppSidebar.tsx                         [edit — remove top-level Contabilidade]
+.lovable/memory/features/financeiro/accounting-isolation.md  [NEW — rule]
+.lovable/memory/index.md                                     [edit — add reference]
+```
+
+## Guardrails (will NOT change)
+
+- Billing calculations, OS↔OP matching, participation math, distribution snapshots.
+- Existing RLS on `service_orders` / `payment_orders` / `billing_invoices`.
+- Operational modules (Fleet, Service Orders, Payment Orders).
+- The single source of truth in `src/lib/distributionMath.ts`.
 
 ## Deliverables
-- `/mnt/documents/phase_4c_validation_report.md`
-- `/mnt/documents/i18n_audit.md`
-- Surgical fixes for any defect found
-- Expanded `useLanguage.tsx` dictionary
-- Refactored shell components above
-- `.lovable/memory/style/i18n-rule.md` + index update
 
-## Technical notes
-- Translation lookup remains synchronous (`t(key)`); no async loader change.
-- Refactor uses pure search/replace inside JSX; no prop-shape changes to components.
-- All edits are additive; rollback = revert the dictionary + component edits.
+1. Migration applied with backfill + triggers + new RLS policy.
+2. New Accounting tab inside Financial with year selector.
+3. Hooks scoped to workspace + user + year.
+4. Isolation audit report at `/mnt/documents/accounting_isolation_report.md`.
+5. Memory rule documenting the new contract.
