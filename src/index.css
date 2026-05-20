@@ -1,9 +1,9 @@
+@import "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
 
 @layer base {
   /* ===== LIGHT THEME (default) ===== */
