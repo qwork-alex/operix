@@ -74,6 +74,7 @@ const App = () => (
                   element={
                     <ProtectedRoute>
                       <ImpersonationProvider>
+                      <WorkspaceProvider>
                       <RoleProvider>
                       <AppLayout>
                         <ErrorBoundary>
