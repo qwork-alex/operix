@@ -502,9 +502,15 @@ function TechnicianRow({ data, formatCurrency }: { data: TechData; formatCurrenc
     toast.success(`Período ${finalPeriod} criado`);
   }, [localSpreadsheet, data.id, data.name, saveSpreadsheet]);
 
-  const handleAddYear = useCallback(() => {
+  const handleAddYear = useCallback((targetYear?: number) => {
     const existingYears = yearBlocks.map((yb) => parseInt(yb.year)).filter((y) => !isNaN(y));
-    const nextYear = existingYears.length > 0 ? Math.max(...existingYears) + 1 : new Date().getFullYear();
+    const nextYear = typeof targetYear === "number" && !isNaN(targetYear)
+      ? targetYear
+      : (existingYears.length > 0 ? Math.max(...existingYears) + 1 : new Date().getFullYear());
+    if (nextYear < 1900 || nextYear > 2999) {
+      toast.error("Ano inválido");
+      return;
+    }
     const yy = String(nextYear).slice(2);
     const firstPeriod = `Jan/${yy}`;
     if (localSpreadsheet.rows.some((r) => r.period === firstPeriod)) {
