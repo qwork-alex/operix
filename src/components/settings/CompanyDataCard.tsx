@@ -11,19 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { getCurrentUserId, logSaveError, logSavePayload } from "@/lib/authUser";
 import { toast } from "sonner";
 
-const COUNTRIES = [
-  { code: "FR", label: "🇫🇷 França" },
-  { code: "PT", label: "🇵🇹 Portugal" },
-  { code: "ES", label: "🇪🇸 Espanha" },
-  { code: "IT", label: "🇮🇹 Itália" },
-  { code: "DE", label: "🇩🇪 Alemanha" },
-  { code: "BE", label: "🇧🇪 Bélgica" },
-  { code: "LU", label: "🇱🇺 Luxemburgo" },
-  { code: "CH", label: "🇨🇭 Suíça" },
-  { code: "GB", label: "🇬🇧 Reino Unido" },
-  { code: "US", label: "🇺🇸 EUA" },
-  { code: "BR", label: "🇧🇷 Brasil" },
-];
+import { COUNTRIES } from "@/lib/countries";
 
 type Form = {
   company_name: string;
