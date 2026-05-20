@@ -29,6 +29,7 @@ import {
 } from "./pages/ModulePages";
 import FleetPage from "./pages/FleetPage";
 import BillingPage from "./pages/BillingPage";
+import AuditPage from "./pages/AuditPage";
 import {
   TermsPage,
   PrivacyPage,
