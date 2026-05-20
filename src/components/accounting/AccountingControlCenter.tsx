@@ -431,15 +431,17 @@ const ActiveModulePanel = memo(function ActiveModulePanel({
   moduleKey,
   color,
   label,
+  year,
   onClose,
 }: {
   moduleKey: ModuleKey;
   color: string;
   label: string;
+  year: number;
   onClose: () => void;
 }) {
   const { entries, total, isLoading, add, update, delete: del, allowAdd } =
-    useAccountingModule(moduleKey);
+    useAccountingModule(moduleKey, year);
 
   return (
     <ModulePanel
