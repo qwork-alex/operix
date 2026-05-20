@@ -35,7 +35,7 @@ export default function FinancialPage() {
   const [confrontoTab, setConfrontoTab] = useState("fusao");
   const [searchParams] = useSearchParams();
   const initialTab = searchParams.get("tab");
-  const validTabs = ["confronto", "breakdown", "participation", "audit", "accounting"];
+  const validTabs = ["confronto", "breakdown", "participation", "audit", "accounting", "integrity"];
   const [mainTab, setMainTab] = useState(
     initialTab && validTabs.includes(initialTab) ? initialTab : "confronto"
   );
@@ -205,6 +205,9 @@ export default function FinancialPage() {
           <TabsTrigger value="accounting">
             <BookOpen className="h-3.5 w-3.5 mr-1" /> {t("fin.tabs.accounting")}
           </TabsTrigger>
+          <TabsTrigger value="integrity">
+            <ShieldAlert className="h-3.5 w-3.5 mr-1" /> {t("fin.tabs.integrity")}
+          </TabsTrigger>
         </TabsList>
 
 
@@ -255,6 +258,10 @@ export default function FinancialPage() {
           <div className="min-h-[600px]">
             <AccountingControlCenter embedded />
           </div>
+        </TabsContent>
+
+        <TabsContent value="integrity" className="space-y-4">
+          <FinancialIntegrityTab />
         </TabsContent>
       </Tabs>
     </div>
