@@ -1,82 +1,91 @@
-# Workspace Context Engine — Fase 1 (Backend + Compat Layer)
+# Plug Multi-Workspace Context Engine into Real Modules
 
-Refatoração arquitetural para multi-workspace **sem quebrar nada existente**. Esta fase é puramente backend/compat: nenhum redesign visual, nenhuma mudança em fluxos OS↔OP↔Billing↔Financial.
+Conectar a infraestrutura já existente (`useContextualWorkspace`,
+`ContextualWorkspacePicker`, `scopeQuery`, triggers DB
+`set_workspace_id_from_creator` + `set_year_reference`) nos pontos de
+**criação** de cada módulo, sem tocar em lógica, RLS, cálculos ou UI
+existente.
 
-## Estado atual (já existe)
+## Princípio de segurança
 
-- Tabela `workspaces` (4 workspaces ativos) com `owner_user_id`.
-- Tabela `memberships(user_id, workspace_id, role, status)` — base já correta.
-- Colunas `workspace_id` parciais em: `app_users`, `documents`, `invites`, `service_orders`, `technicians`, `memberships`.
-- Hooks: `useWorkspace`, `useUserContext`, `useImpersonation`, `useRole`.
+- O DB **já** preenche `workspace_id` e `year_reference` via triggers
+  quando o insert não trouxer esses campos. Logo: se o hook não estiver
+  carregado/decidido, o sistema continua funcionando como hoje.
+- Picker só aparece quando o usuário tem **2+ workspaces** com acesso
+  ao módulo. Usuário single-workspace: zero diferença visual.
+- Nenhuma query existente, RLS, função ou trigger é alterada.
 
-## O que falta (foco desta fase)
+## Mudanças por módulo (todas aditivas)
 
-### 1. DB — Migração aditiva (NÃO destrutiva)
+### 1. Ordens de Serviço (criação / upload)
+- `src/components/service-orders/FileUploadZone.tsx` (ou wrapper de upload)
+  - `const ctx = useContextualWorkspace("service_orders")`
+  - Renderizar `<ContextualWorkspacePicker ctx={ctx} />` no header do uploader.
+  - No insert do hook `useServiceOrders.create`, anexar `workspace_id: ctx.resolvedWorkspaceId ?? undefined` via prop opcional. Fallback: trigger.
 
-Adicionar colunas **nullable** com default sensato (sem backfill obrigatório que quebre RLS):
+### 2. Ordens de Pagamento
+- `src/hooks/usePaymentOrders.ts` → aceitar `workspaceId?` opcional em payload.
+- `src/components/payment-orders/*` (tela de criação) → montar picker `"payment_orders"`.
 
-- `workspace_id uuid` em: `payment_orders`, `financial_records`, `billing_invoices`, `billing_payments`, `billing_clients`, `billing_suppliers`, `clients`, `notifications`, `fleet_trips`, `fleet_fuel_logs`, `drivers`, `hail_reports`, `discrepancies`.
-- `year_reference int` (default `extract(year from created_at)`) em: `service_orders`, `payment_orders`, `financial_records`, `billing_invoices`.
-- `visibility_scope text` em entidades operacionais críticas (default `'workspace'`, valores: `'private'|'workspace'|'global'`).
-- `created_by_user_id uuid` apenas onde **não existe** `created_by`/`user_id`/`uploaded_by` equivalente.
+### 3. Faturamento (invoices + listas)
+- `src/components/billing/ImportInvoiceDialog.tsx`
+  - Picker `"billing"` no topo do dialog.
+  - Passar `workspace_id` no insert de `billing_invoices` (linhas 248) e `billing_attachments` (251).
 
-Backfill em UPDATE separado (não no ALTER):
-- workspace_id = workspace do `created_by` via `app_users.workspace_id`, fallback `Default Workspace`.
-- year_reference = `extract(year from created_at)::int`.
+### 4. Financeiro / Despesas (Contabilidade)
+- `src/components/financial/ExpenseSpreadsheet.tsx` (ou modal de nova despesa)
+  - Picker `"financial"` na linha de criação.
+  - Anexar `workspace_id` no insert de `financial_records`.
 
-Índices: `(workspace_id)` em todas as tabelas alteradas, `(workspace_id, year_reference)` nas operacionais.
+### 5. Frota — Trajetos
+- `src/components/fleet/TripsModule.tsx`
+  - Picker `"fleet"` no botão "Iniciar trajeto".
+  - Anexar `workspace_id` no insert de `fleet_trips` (linha 498).
 
-Tabela nova: `workspace_module_permissions(workspace_id, module text, enabled bool, settings jsonb)` — define quais módulos estão ativos por workspace (ex: RH bloqueia `financial`).
+### 6. Documentos / Uploads gerais
+- `src/components/file-manager/EmbeddedFileManager.tsx`
+  - Picker `"documents"` no toolbar quando estamos em escopo global (não em SO/OP filhos).
+  - Anexar `workspace_id` nos 3 inserts em `documents`.
 
-### 2. Camada SQL — Resolvers
+## Compatibilidade
 
-Novas funções `SECURITY DEFINER` (não tocam policies existentes):
+- Todos os campos novos são **opcionais**; quando ausentes, o trigger
+  `set_workspace_id_from_creator` preenche via `app_users.workspace_id`
+  do criador (comportamento atual).
+- Nenhuma policy, função, view, índice ou cálculo é alterado.
+- Não toca: `useServiceOrders.update`, OS↔OP sync, status engine,
+  reconciliação, distribution math, billing totals.
 
-- `get_user_workspaces(_uid uuid)` — retorna `[{workspace_id, role, modules_enabled[]}]`.
-- `user_can_access_workspace(_uid, _ws_id)` — bool.
-- `user_can_access_module(_uid, _ws_id, _module)` — combina membership + `workspace_module_permissions`.
-- `current_workspace_id()` — lê de header/setting; fallback ao primeiro membership ativo.
+## Validação pós-implementação
 
-Estas funções **convivem** com `has_role`/`can_do` atuais. Policies só serão migradas em fases futuras (não agora).
+Smoke manual (sem migrations):
+1. Login com usuário single-workspace → nenhum picker visível, criar
+   OS / OP / invoice / despesa / trip / upload funciona.
+2. Login com usuário multi-workspace → picker aparece nos 6 fluxos;
+   após confirmar, picker colapsa para chip discreto.
+3. Verificar via `select workspace_id from <tabela> order by created_at
+   desc limit 5` que novos registros carregam o ws escolhido.
+4. Garantir que OS↔OP↔Faturamento↔Financeiro continuam sincronizando
+   (status engine intacto).
 
-### 3. Frontend — Context Engine
+## Fora do escopo
 
-- `WorkspaceContextProvider` (extensão do `useWorkspace` atual, **sem renomeação**):
-  - expõe `workspaceId`, `workspaces[]`, `modulesEnabledByWs`, `switchWorkspace()`, `canAccessModule(module)`.
-  - persiste workspace ativo em `localStorage` (já existe via `selected_workspace_id`).
-- `PermissionResolver` (`src/lib/workspaceScope.ts`):
-  - `resolveModuleAccess(user, workspaces, module)` — union: módulo aparece no menu se **algum** ws permitir.
-  - `scopeQuery(qb, workspaceId)` — helper para adicionar `.eq('workspace_id', wsId)` quando coluna existir (no-op em tabelas legadas).
-- `AppSidebar` / menu: filtrar items por `canAccessModule` agregado.
-- `WorkspaceSelector` (já existe): manter, só aparece se `workspaces.length > 1`. ✓
-- Dentro de cada módulo: hooks (`useServiceOrders`, `usePaymentOrders`, etc.) **ganham filtro opcional** `workspace_id` quando a coluna existe — usando `scopeQuery` para evitar regressão em tabelas sem a coluna ainda.
+- Não reorganiza árvores visuais (`groupByYearWorkspaceUser` continua
+  disponível para refator futuro).
+- Não migra dados antigos.
+- Não troca RLS para filtrar por `workspace_id` (Fase 3 separada).
+- Não altera contabilidade / globe / módulos de leitura.
 
-### 4. Compatibilidade
+## Arquivos tocados (estimado)
 
-- Todas mudanças DB são **aditivas**. Zero `DROP`, zero `NOT NULL` em colunas novas até backfill completo + validação.
-- Policies RLS atuais permanecem inalteradas. Workspace isolation entra como **filtro adicional** no client primeiro; RLS por workspace é Fase 2.
-- Comunicação OS↔OP↔Billing↔Financial usa relações existentes (`group_id`, `list_name`, `service_order_id`); workspace_id é metadata adicional.
+- `src/hooks/useServiceOrders.ts` (assinatura create + 1 linha payload)
+- `src/hooks/usePaymentOrders.ts` (assinatura create + 1 linha)
+- `src/components/service-orders/FileUploadZone.tsx`
+- `src/components/payment-orders/*` (entry de criação)
+- `src/components/billing/ImportInvoiceDialog.tsx`
+- `src/components/financial/ExpenseSpreadsheet.tsx`
+- `src/components/fleet/TripsModule.tsx`
+- `src/components/file-manager/EmbeddedFileManager.tsx`
+- `.lovable/memory/auth/contextual-action-engine.md` (notas de wiring)
 
-## Validação
-
-Após migração + deploy:
-
-1. `SELECT count(*) FROM service_orders WHERE workspace_id IS NULL` → 0 esperado após backfill.
-2. Login com user multi-workspace → `WorkspaceSelector` aparece, troca recarrega dados.
-3. Login com user single-workspace → selector escondido.
-4. Comparar contagem de SO/PO antes/depois do filtro de workspace → idêntica para user dentro do mesmo ws.
-5. Smoke: criar OS, gerar OP, criar Invoice, registrar Payment → fluxo intacto.
-
-## Fora de escopo (fases futuras)
-
-- Migrar policies RLS para `workspace_id` (Fase 2).
-- Workspace switching no UI de configurações.
-- Permissões granulares por usuário+workspace+módulo (Fase 3 — usa `workspace_module_permissions` como base).
-- Backfill de tabelas legadas (`mileage_logs`, `fuel_receipts`, `partner_clients`, etc.).
-
-## Detalhes técnicos resumidos
-
-- Migração: 1 arquivo SQL, ~200 linhas, idempotente (`ADD COLUMN IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`).
-- Funções: schema `public`, `SECURITY DEFINER`, `SET search_path=public`.
-- Frontend: 1 hook novo (`useWorkspaceModules`), 1 lib (`workspaceScope.ts`), edits pequenos em ~5 hooks.
-- Sem mudança em edge functions nesta fase.
+Nenhuma migration. Nenhuma edge function alterada.
