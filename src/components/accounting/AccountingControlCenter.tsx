@@ -292,6 +292,15 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
           </div>
         )}
         <div className="flex items-center justify-end gap-1.5 flex-wrap min-w-0 max-w-full overflow-visible">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-primary hover:bg-primary/10"
+            title="Assistente financeiro"
+            onClick={() => setAiOpen(true)}
+          >
+            <Sparkles size={14} />
+          </Button>
           <Select value={selectedTech} onValueChange={setSelectedTech}>
             <SelectTrigger className="h-8 w-[min(160px,42vw)] text-xs">
               <SelectValue placeholder={t("acc.allTechs")} />
