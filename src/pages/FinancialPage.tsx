@@ -243,6 +243,12 @@ export default function FinancialPage() {
         <TabsContent value="audit" className="space-y-4">
           <FinancialAuditTab />
         </TabsContent>
+
+        <TabsContent value="accounting" className="space-y-4">
+          <div className="min-h-[600px]">
+            <AccountingControlCenter embedded />
+          </div>
+        </TabsContent>
       </Tabs>
     </div>
   );
