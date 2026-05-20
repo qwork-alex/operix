@@ -42,8 +42,8 @@ export function AppSidebar() {
     { title: t("nav.paymentOrders"), url: "/payment-orders", icon: CreditCard, module: "payment_orders", action: "view" },
     { title: "Faturamento", url: "/billing", icon: Receipt, module: "accounting", action: "view" },
     { title: t("nav.financial"), url: "/financial", icon: TrendingUp, module: "financial", action: "view" },
-    { title: t("nav.profit"), url: "/profit", icon: PieChart, module: "profit", action: "view" },
-    // Accounting is now embedded inside /financial as a tab; the standalone route stays as a redirect.
+    // Phase 5C: Profit Distribution is now embedded in /financial?tab=distribution.
+    // Standalone /profit route is preserved for backward compat but removed from sidebar.
     { title: t("nav.fleet"), url: "/fleet", icon: Car, module: "fleet", action: "view" },
     { title: t("nav.documents"), url: "/documents", icon: FolderOpen, module: "documents", action: "view" },
     { title: t("nav.users"), url: "/users", icon: Users, module: "users", action: "view" },
