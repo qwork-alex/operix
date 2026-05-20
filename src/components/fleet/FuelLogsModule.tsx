@@ -329,6 +329,7 @@ export default function FuelLogsModule() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Data</Label>
