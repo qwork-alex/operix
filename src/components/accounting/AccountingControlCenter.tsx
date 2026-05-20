@@ -12,6 +12,9 @@ import { SpaceBackground } from "./SpaceBackground";
 import { ModulePanel } from "./ModulePanel";
 import { useAccountingModule } from "./useAccountingModules";
 import { cn } from "@/lib/utils";
+import { useFinancialYears, useWorkspaceTechnicians, MONTH_LABELS } from "@/hooks/useFinancialPeriods";
+import { useLanguage } from "@/hooks/useLanguage";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type ModuleKey = "rentals" | "expenses" | "fuel" | "purchases" | "government" | "withdrawals";
 
@@ -86,8 +89,20 @@ const OrbitButton = memo(function OrbitButton({ mod, x, y, isActive, onSelect }:
 });
 
 export function AccountingControlCenter({ embedded = false }: { embedded?: boolean } = {}) {
+  const { t } = useLanguage();
   const [activeModule, setActiveModule] = useState<ModuleKey | null>(null);
+  const { data: yearsList = [] } = useFinancialYears();
+  const { data: techList = [] } = useWorkspaceTechnicians();
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [selectedTech, setSelectedTech] = useState<string>("all");
+  const [selectedMonth, setSelectedMonth] = useState<string>("all");
+
+  useEffect(() => {
+    if (yearsList.length === 0) return;
+    if (!yearsList.includes(selectedYear)) {
+      setSelectedYear(yearsList[yearsList.length - 1]);
+    }
+  }, [yearsList, selectedYear]);
 
   // Orbit angle stored in ref; we mutate DOM/SVG directly to avoid React re-renders per frame
   const orbitAngleRef = useRef(0);
@@ -245,40 +260,61 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
     });
   }, [centerX, centerY, orbitRadius]);
 
+  // Phase 5C: years are derived from the Detalhamento temporal source of truth.
   const years = useMemo(() => {
+    if (yearsList.length > 0) return yearsList;
     const now = new Date().getFullYear();
-    return [now - 2, now - 1, now, now + 1];
-  }, []);
+    return [now];
+  }, [yearsList]);
 
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
         {embedded ? (
           <div />
         ) : (
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Centro de Controle</h1>
-            <p className="text-sm text-muted-foreground">Contabilidade interativa</p>
+            <h1 className="text-2xl font-bold text-foreground">{t("acc.controlCenter")}</h1>
+            <p className="text-sm text-muted-foreground">{t("acc.subtitle")}</p>
           </div>
         )}
-        <div className="flex items-center gap-1 rounded-lg border border-border/40 bg-card/40 p-1">
-          {years.map((y) => (
-            <button
-              key={y}
-              onClick={() => setSelectedYear(y)}
-              className={cn(
-                "px-2.5 py-1 text-xs rounded-md transition-colors",
-                selectedYear === y
-                  ? "bg-primary/15 text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {y}
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          <Select value={selectedTech} onValueChange={setSelectedTech}>
+            <SelectTrigger className="h-8 w-[160px] text-xs">
+              <SelectValue placeholder={t("acc.allTechs")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t("acc.allTechs")}</SelectItem>
+              {techList.map((tech) => (
+                <SelectItem key={tech.id} value={tech.id}>{tech.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(Number(v))}>
+            <SelectTrigger className="h-8 w-[100px] text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {years.map((y) => (
+                <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+            <SelectTrigger className="h-8 w-[110px] text-xs">
+              <SelectValue placeholder={t("acc.allMonths")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t("acc.allMonths")}</SelectItem>
+              {MONTH_LABELS.map((m, i) => (
+                <SelectItem key={m} value={String(i + 1)}>{m}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
+
 
       {/* Main split area */}
       <div className="relative flex-1 min-h-[500px] rounded-xl border border-border/30 overflow-hidden flex">
@@ -418,6 +454,8 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
               color={activeMod.color}
               label={activeMod.label}
               year={selectedYear}
+              techId={selectedTech === "all" ? null : selectedTech}
+              month={selectedMonth === "all" ? null : Number(selectedMonth)}
               onClose={() => setActiveModule(null)}
             />
           </div>
@@ -432,16 +470,20 @@ const ActiveModulePanel = memo(function ActiveModulePanel({
   color,
   label,
   year,
+  techId,
+  month,
   onClose,
 }: {
   moduleKey: ModuleKey;
   color: string;
   label: string;
   year: number;
+  techId: string | null;
+  month: number | null;
   onClose: () => void;
 }) {
   const { entries, total, isLoading, add, update, delete: del, allowAdd } =
-    useAccountingModule(moduleKey, year);
+    useAccountingModule(moduleKey, year, techId, month);
 
   return (
     <ModulePanel
