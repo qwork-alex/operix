@@ -1686,6 +1686,81 @@ export type Database = {
         }
         Relationships: []
       }
+      participation_ledger: {
+        Row: {
+          created_at: string
+          expected_amount: number
+          id: string
+          last_event_hash: string | null
+          participant_name: string
+          participant_type: string
+          participant_user_id: string | null
+          pending_amount: number | null
+          percentage: number
+          received_amount: number
+          rule_item_id: string | null
+          service_order_id: string
+          status: string
+          sync_revision: number
+          updated_at: string
+          workspace_id: string | null
+          year_reference: number | null
+        }
+        Insert: {
+          created_at?: string
+          expected_amount?: number
+          id?: string
+          last_event_hash?: string | null
+          participant_name: string
+          participant_type?: string
+          participant_user_id?: string | null
+          pending_amount?: number | null
+          percentage?: number
+          received_amount?: number
+          rule_item_id?: string | null
+          service_order_id: string
+          status?: string
+          sync_revision?: number
+          updated_at?: string
+          workspace_id?: string | null
+          year_reference?: number | null
+        }
+        Update: {
+          created_at?: string
+          expected_amount?: number
+          id?: string
+          last_event_hash?: string | null
+          participant_name?: string
+          participant_type?: string
+          participant_user_id?: string | null
+          pending_amount?: number | null
+          percentage?: number
+          received_amount?: number
+          rule_item_id?: string | null
+          service_order_id?: string
+          status?: string
+          sync_revision?: number
+          updated_at?: string
+          workspace_id?: string | null
+          year_reference?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "participation_ledger_rule_item_id_fkey"
+            columns: ["rule_item_id"]
+            isOneToOne: false
+            referencedRelation: "profit_rule_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "participation_ledger_service_order_id_fkey"
+            columns: ["service_order_id"]
+            isOneToOne: false
+            referencedRelation: "service_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       partner_clients: {
         Row: {
           client_id: string
@@ -2909,6 +2984,23 @@ export type Database = {
       }
     }
     Views: {
+      v_participation_summary: {
+        Row: {
+          expected: number | null
+          os_count: number | null
+          paid_count: number | null
+          partial_count: number | null
+          participant_name: string | null
+          participant_type: string | null
+          participant_user_id: string | null
+          pending: number | null
+          pending_count: number | null
+          received: number | null
+          workspace_id: string | null
+          year_reference: number | null
+        }
+        Relationships: []
+      }
       v_user_context_self: {
         Row: {
           ctx: Json | null
@@ -3053,6 +3145,10 @@ export type Database = {
       }
       payment_order_has_invoice: { Args: { _op_id: string }; Returns: boolean }
       replay_financial_state: { Args: { _invoice_id: string }; Returns: Json }
+      resolve_participant_user_id: {
+        Args: { _participant_type: string; _rule_id: string }
+        Returns: string
+      }
       row_in_scope: {
         Args: {
           _action: string
@@ -3069,6 +3165,14 @@ export type Database = {
       }
       sync_financial_received_from_billing: {
         Args: { _invoice_id: string }
+        Returns: undefined
+      }
+      sync_participation_for_invoice: {
+        Args: { _invoice_id: string }
+        Returns: undefined
+      }
+      sync_participation_for_so: {
+        Args: { _service_order_id: string }
         Returns: undefined
       }
       user_can_access_module: {
