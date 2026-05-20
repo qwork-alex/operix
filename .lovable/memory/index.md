@@ -63,6 +63,7 @@ Owner account (qwork@qworkgroup.com) is protected, has exclusive reset access. N
 - [Camera Capture](mem://features/upload/camera-capture) — Native photo/scan with 1.3x canvas contrast for OCR
 - [Profit Engine](mem://features/lucros/motor-de-calculo) — Rules tied to group_ids (no tech_id needed), semantic participant colors
 - [Status Syncing](mem://features/financeiro/status-sync-group-id) — PO triggers SO status via group_id. Text colors used for status
+- [Billing Master Authority](mem://features/financeiro/billing-master-authority) — Phase 3: Billing invoices drive paid/partial/pending; triggers propagate to OP/SO/Financial Received; financial_events log
 - [Form Reliability](mem://ux/form-reliability-patterns) — ID binding with text fallback, diffing updates
 - [Profit Colors](mem://style/profit-distribution-colors) — Semantic colors: Yellow (Client), Blue (Tech), Green (Partner), Purple (Company)
 - [Profit Safety](mem://ux/profit-distribution-safety) — Deleting rules needs AlertDialog confirmation

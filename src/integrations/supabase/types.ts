@@ -881,6 +881,39 @@ export type Database = {
           },
         ]
       }
+      financial_events: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string
+          event_type: string
+          id: string
+          payload: Json
+          workspace_id: string | null
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type: string
+          event_type: string
+          id?: string
+          payload?: Json
+          workspace_id?: string | null
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string
+          event_type?: string
+          id?: string
+          payload?: Json
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
       financial_records: {
         Row: {
           amount: number
@@ -2877,6 +2910,16 @@ export type Database = {
         Args: { _user_id: string; _workspace_id: string }
         Returns: string
       }
+      emit_financial_event: {
+        Args: {
+          _entity_id: string
+          _entity_type: string
+          _event_type: string
+          _payload: Json
+          _workspace_id: string
+        }
+        Returns: undefined
+      }
       get_my_role: { Args: never; Returns: string }
       get_my_technician_id: { Args: never; Returns: string }
       get_user_context: { Args: { _workspace_id?: string }; Returns: Json }
@@ -2933,6 +2976,7 @@ export type Database = {
         Returns: boolean
       }
       owner_filter_uids: { Args: { _uid: string }; Returns: string[] }
+      payment_order_has_invoice: { Args: { _op_id: string }; Returns: boolean }
       row_in_scope: {
         Args: {
           _action: string
@@ -2945,6 +2989,10 @@ export type Database = {
       }
       sync_discrepancy_for_service_order: {
         Args: { _service_order_id: string }
+        Returns: undefined
+      }
+      sync_financial_received_from_billing: {
+        Args: { _invoice_id: string }
         Returns: undefined
       }
       user_can_access_module: {
