@@ -1,98 +1,96 @@
-# Fase 3 — Billing como Autoridade Financeira Master
+# Phase 4 — Participation Engine (Safe Extension)
 
-## Objetivo
+## Goal
+Add a true **participant-level financial engine** on top of the existing distribution system, without altering current distribution logic, OS↔OP matching, billing master flow, or RLS isolation.
 
-Reverter o sentido de propagação atual:
-- **Antes:** OP define status (paid/partial/pending) → SO espelha. Billing é opcional.
-- **Depois:** **Billing** é a fonte da verdade de pagamento real. Billing → OP → SO. Financial "Recebido" só vem de Billing.
+Participants (partner, company, technician, shareholder, collaborator) get their own expected / received / pending / partial tracking, scoped by `workspace_id` + `year_reference` + `user_id`.
 
-Sem quebrar cálculos atuais, comunicação OS↔OP, distribuição de lucro, participação ou isolamento multi-workspace (Fase 2.5).
+Clients are explicitly excluded.
 
-## Arquitetura final
+## Current state (preserved, untouched)
+- `profit_rules` (group_ids[], technician_id, assigned_user_id)
+- `profit_rule_items` (participant_name, percentage, participant_type)
+- `service_order_distributions` (frozen snapshot per OS, with calculated_value)
+- Billing → OP → Financial sync from Phase 3/3B remains the only writer of `source='billing'` financial_records.
 
-```text
-SO (criada)         → Expected (Financial)
-   │
-   └─ OP (importada) → vincula a SO (group_id / plate+week)
-         │
-         └─ Billing Invoice (criada a partir de 1+ OPs)
-                │  paid_amount, total_amount
-                ├─ status auto: pending|partial|paid  (já existe: billing_invoices_autostatus)
-                ├─ propaga → OP.status               (já existe: billing_invoices_propagate_status)
-                ├─ propaga → SO.status               (já existe: sync_so_status_from_po cascateia)
-                ├─ propaga → Financial.Received      (NOVO: usar Billing, não OP, como fonte)
-                └─ recalcula Distribution/Participação sobre valor REAL pago
-```
+## New database objects
 
-## Mudanças
+### 1. `participation_ledger` (new table)
+Per-OS, per-participant, per-status ledger. One row per `(service_order_id, rule_item_id, participant_name)` — recomputed from snapshot + billing realization.
 
-### 1. Banco (migration aditiva, não destrutiva)
+Columns:
+- `id`, `workspace_id`, `year_reference`
+- `service_order_id`, `rule_item_id` (nullable, FK SET NULL)
+- `participant_name`, `participant_type` (`partner|company|technician|shareholder|collaborator|other`)
+- `participant_user_id` (nullable — resolved from `profit_rules.assigned_user_id` / `technicians.user_id` when participant_type matches)
+- `percentage` (numeric, from snapshot)
+- `expected_amount` (snapshot `calculated_value`)
+- `received_amount` (proportional from billing payments via OP→OS link)
+- `pending_amount` (generated: expected − received)
+- `status` (`pending|partial|paid`, derived)
+- `last_event_hash`, `sync_revision`, timestamps
+- Unique `(service_order_id, COALESCE(rule_item_id, '00…'), participant_name)`
 
-**1a. Tabela `financial_events` (log de eventos)**
-- `id, workspace_id, event_type, entity_type, entity_id, payload jsonb, created_at, actor_user_id`
-- event_type: `invoice.created | invoice.updated | invoice.payment.updated | invoice.status.updated | op.status.synced | so.status.synced | financial.received.updated`
-- RLS: select por workspace member; insert via security definer.
+RLS: workspace_member SELECT + admin/partner ALL. **No client visibility.**
 
-**1b. Função `emit_financial_event(...)`** security definer — insere em `financial_events`.
+### 2. `v_participation_summary` (view, security_invoker)
+Aggregated per `(workspace_id, year_reference, participant_name, participant_type, participant_user_id)`:
+`expected`, `received`, `pending`, `partial_count`, `paid_count`, `os_count`.
 
-**1c. Ajustar `billing_invoices_propagate_status`** para também:
-- Emitir eventos (`invoice.status.updated`, `op.status.synced`).
-- Manter lógica atual de UPDATE em payment_orders.
+### 3. Helper functions
+- `resolve_participant_user_id(rule_id, participant_type)` → uuid
+- `sync_participation_for_so(service_order_id)` — recompute ledger rows for one OS:
+  1. Read frozen `distribution_snapshot` (authoritative percentages/expected)
+  2. Compute `received_ratio` = received share for this OS coming from billing (sum of `financial_records.amount` where `source='billing'` AND `service_order_id=this OS` AND status='paid' or partial) ÷ OS total
+  3. For each snapshot entry: `received = expected * received_ratio` (rounded 2dp)
+  4. UPSERT ledger rows, derive status
+  5. Emit `financial_events` (`participation.updated`) using `deterministic_event_hash` (idempotent)
+- `sync_participation_for_invoice(invoice_id)` — fan-out: for each linked OP → its OS → call `sync_participation_for_so`.
 
-**1d. Nova função `sync_financial_received_from_billing(invoice_id)`**
-- Para cada OP linkada na `metadata->linked_payment_orders`:
-  - Calcula `received = sum(billing.paid_amount * (op.total / billing.total_amount))` proporcional, OU usa `paid_amount` direto quando 1 OP = 1 invoice.
-- Faz UPSERT em `financial_records` (type='revenue', source='billing'):
-  - `amount = received_real` (apenas pagos)
-  - `status = invoice.status`
-  - `notes = 'Auto-synced from billing invoice'`
-- **NÃO toca** registros `source='service_orders'` (Expected) nem `source='payment_orders'` legacy.
-- Emite `financial.received.updated`.
+### 4. Triggers
+- AFTER INSERT on `service_order_distributions` → `sync_participation_for_so(NEW.service_order_id)`
+- AFTER UPDATE of `total` on `service_orders` → recompute
+- AFTER INSERT/UPDATE on `financial_records` WHERE `source='billing'` → `sync_participation_for_so(NEW.service_order_id)`
+- Reentrancy guarded via existing `financial_sync_lock` pattern at invoice level.
 
-**1e. Trigger `trg_billing_sync_financial`** AFTER INSERT/UPDATE de `paid_amount|total_amount|status` em `billing_invoices` → chama `sync_financial_received_from_billing(NEW.id)`.
+### 5. Year isolation
+Ledger inherits `year_reference` from `service_orders.year_reference`. Rules with `group_ids` already encode year context (e.g. `2024-W12`); no schema change to `profit_rules` required.
 
-**1f. Neutralizar OP→Financial (manter compat de leitura)**
-- `sync_financial_records_from_orders` continua existindo para SO (Expected), mas **deixa de criar/atualizar** registros `source='payment_orders'` quando existir invoice cobrindo essa OP. Fallback: se OP não está em nenhuma invoice, mantém comportamento antigo (transição segura).
+## Frontend
 
-**1g. View `v_financial_summary` (opcional, aditiva)**
-- Por workspace + year: `expected` (sum SO totals), `received` (sum billing.paid_amount), `pending = expected - received`.
+### New tab: **Participation** (inside Financial module)
+File: `src/components/financial/ParticipationTab.tsx`
+- Lives alongside existing tabs (Visão Geral, Análise Técnica, Confronto). **No removal/redesign of existing tabs.**
+- Reads from `v_participation_summary` filtered by current workspace + selected year.
+- Displays a table grouped by `participant_type` then `participant_name`:
+  - Expected | Received | Pending | Status mix (paid/partial/pending counts) | OS count
+  - Click row → detail drawer listing the per-OS ledger entries.
+- Filters: year (default current), participant_type, search by name.
+- Hook: `src/hooks/useParticipationLedger.ts` (workspace+year scoped, TanStack Query).
 
-### 2. Frontend (mínimo, sem mudar UI)
+### Constraints
+- **No changes** to `ProfitDistribution.tsx`, distribution math, OS/OP forms, billing UI.
+- Clients never appear (filter out `participant_type='client'` defensively even though rules don't produce them).
 
-**2a. Bloquear edição manual de status em OP quando vinculada a invoice**
-- `PaymentOrdersPage` / dialog de edição: se a OP tem invoice ligada (`billing_invoice_id` via metadata reverso ou nova coluna virtual), desabilitar o select de status com tooltip "Status gerenciado por Faturamento".
-- Cálculos/distribuição **inalterados**.
+## Validation steps (post-migration, before close)
+1. Create OS with snapshot → ledger rows appear with `expected=calculated_value`, `received=0`, status=pending.
+2. Create invoice paying linked OP fully → ledger `received=expected`, status=paid.
+3. Partial payment (50%) → ledger `received≈50% expected`, status=partial.
+4. Cross-workspace query as workspace B user → 0 rows from workspace A.
+5. 2024 OS doesn't leak into 2025 view (year filter).
+6. Replay: emit duplicate trigger → no duplicate rows, no double counting (hash dedup).
+7. Logs in `financial_events` show `participation.updated` events with revisions.
 
-**2b. Hook `useFinancialEvents(workspaceId)`** (novo, opcional)
-- Lê últimos N eventos de `financial_events` para painel de auditoria. Não obrigatório para esta fase — apenas a infra fica pronta.
+## Not changed
+- Distribution rules / items / snapshot logic
+- OS↔OP matching
+- Billing Master flow (Phase 3/3B)
+- RLS workspace isolation (Phase 2.5)
+- Profit distribution UI
+- Client tables (no participation for clients)
 
-**2c. Queries de "Received" em Financial**
-- Onde hoje somam `financial_records WHERE source='payment_orders'`, passar a somar `source='billing'` (com fallback OR `source='payment_orders'` para registros legacy sem invoice).
-
-### 3. Preservação
-
-- ❌ Sem mudanças em: `apply_order_owner`, RLS de fase 2.5, OS↔OP matching, `profit_distribution_*`, `sync_so_status_from_po` (continua funcionando), UI principal.
-- ✅ Tudo aditivo. Migration reversível.
-
-## Validações pós-implementação
-
-1. Criar SO → Expected aparece, Received=0.
-2. Importar OP → Expected/Received inalterados (sem invoice ainda).
-3. Criar Billing Invoice com `paid_amount=0` → status=pending → OP=pending → SO=pending.
-4. Atualizar `paid_amount=parcial` → status=partial → OP/SO=partial → Financial Received = parcial.
-5. `paid_amount = total` → tudo paid; Received = total real.
-6. Editar manualmente status OP vinculada → bloqueado na UI.
-7. Cross-workspace: invoice do WS-A não afeta OP/SO do WS-B (RLS + scope).
-8. `financial_events` registra cada transição.
-9. Sem dupla contagem: Received só por `source='billing'`.
-
-## Riscos
-
-- **Registros legacy** com `source='payment_orders'` precisam ou ser migrados ou continuar coexistindo com filtro. **Plano:** coexistência via OR durante transição; migração explícita em fase futura.
-- **OPs sem invoice** continuam usando fluxo antigo (fallback). Aceitável.
-
-## Não inclui
-
-- Migração destrutiva de dados antigos.
-- Mudança de UI/UX visível além do disable do select.
-- Mudança em regras de distribuição/participação (apenas o **input** muda: valor real pago).
+## Deliverables
+- 1 migration (table + view + 3 functions + 3 triggers + RLS)
+- 1 hook (`useParticipationLedger`)
+- 1 component (`ParticipationTab`) wired into `FinancialPage`
+- Validation report in `/mnt/documents/phase_4_participation_engine_report.md`
