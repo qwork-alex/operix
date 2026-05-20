@@ -305,9 +305,12 @@ export default function ServiceOrdersPage() {
             <p className="text-[11px] text-muted-foreground truncate">{t("so.subtitle") || "Gestão e validação documental operacional"}</p>
           </div>
         </div>
-        <Can permission="service_orders.create">
-          <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} compact />
-        </Can>
+        <div className="flex items-center gap-2">
+          <ContextualWorkspacePicker ctx={ctxWs} />
+          <Can permission="service_orders.create">
+            <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} compact />
+          </Can>
+        </div>
       </header>
 
       {/* WORKSPACE — sidebar + canvas, both starting at the same baseline */}
