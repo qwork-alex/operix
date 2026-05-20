@@ -18,7 +18,8 @@ import PendentesTab from "@/components/confronto/PendentesTab";
 import HistoricoTab from "@/components/confronto/HistoricoTab";
 
 import TechnicianDetailTab from "@/components/financial/TechnicianDetailTab";
-import { Link2, AlertTriangle } from "lucide-react";
+import ParticipationTab from "@/components/financial/ParticipationTab";
+import { Link2, AlertTriangle, Users } from "lucide-react";
 
 export default function FinancialPage() {
   const { t } = useLanguage();
