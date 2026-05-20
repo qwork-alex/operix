@@ -130,7 +130,12 @@ export function useAccountingModule(
       if (!workspaceId) throw new Error("Workspace ativa não encontrada");
       const currentUserId = await getCurrentUserId();
       const yr = selectedYear ?? new Date().getFullYear();
-      const payload = {
+      // Phase 5C: scope new accounting entries to the active (year, month, tech)
+      // so the temporal source of truth from Detalhamento is respected.
+      const createdAt = selectedMonth
+        ? new Date(Date.UTC(yr, selectedMonth - 1, 15)).toISOString()
+        : undefined;
+      const payload: Record<string, unknown> = {
         type: config.type || "expense",
         source: "manual",
         category: config.category || "other",
@@ -141,6 +146,8 @@ export function useAccountingModule(
         workspace_id: workspaceId,
         year_reference: yr,
       };
+      if (selectedTech) payload.assigned_user_id = selectedTech;
+      if (createdAt) payload.created_at = createdAt;
       logSavePayload("AccountingModule:insert", currentUserId, payload);
       const { error } = await (supabase as any).from("financial_records").insert(payload);
       if (error) {
