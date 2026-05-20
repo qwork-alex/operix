@@ -2682,6 +2682,36 @@ export type Database = {
         }
         Relationships: []
       }
+      temp_credentials: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          email: string
+          expires_at: string
+          full_name: string | null
+          temp_password: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          email: string
+          expires_at?: string
+          full_name?: string | null
+          temp_password: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          email?: string
+          expires_at?: string
+          full_name?: string | null
+          temp_password?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_consents: {
         Row: {
           accepted_data_storage: boolean
@@ -3390,6 +3420,7 @@ export type Database = {
           scope: Database["public"]["Enums"]["permission_scope"]
         }[]
       }
+      clear_my_temp_credential: { Args: never; Returns: undefined }
       current_user_effective_role: { Args: never; Returns: string }
       current_user_workspace_ids: { Args: never; Returns: string[] }
       deterministic_event_hash: {
