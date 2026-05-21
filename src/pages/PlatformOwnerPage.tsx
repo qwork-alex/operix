@@ -1,19 +1,61 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Navigate } from "react-router-dom";
-import { Shield, Building2, AlertCircle, Clock, CheckCircle2 } from "lucide-react";
+import {
+  Shield, Building2, AlertCircle, Clock, CheckCircle2,
+  Landmark, CreditCard, Receipt, Percent, Webhook, Activity,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { LoadingState } from "@/components/shared/LoadingState";
 import { useIsPlatformOwner } from "@/hooks/useSubscription";
+import { toast } from "sonner";
 
 export default function PlatformOwnerPage() {
   const { data: isOwner, isLoading: ownerLoading } = useIsPlatformOwner();
 
+  if (ownerLoading) return <div className="module-shell"><LoadingState variant="cards" /></div>;
+  if (!isOwner) return <Navigate to="/" replace />;
+
+  return (
+    <div className="module-shell space-y-6">
+      <PageHeader icon={Shield} title="Plataforma" subtitle="Centro de billing interno — owner only" />
+
+      <Tabs defaultValue="overview" className="w-full">
+        <TabsList className="flex flex-wrap h-auto bg-muted/30 p-1">
+          <TabsTrigger value="overview"><Activity className="h-3.5 w-3.5 mr-1.5" />Visão geral</TabsTrigger>
+          <TabsTrigger value="banks"><Landmark className="h-3.5 w-3.5 mr-1.5" />Contas bancárias</TabsTrigger>
+          <TabsTrigger value="subscriptions"><Building2 className="h-3.5 w-3.5 mr-1.5" />Subscrições</TabsTrigger>
+          <TabsTrigger value="payments"><CreditCard className="h-3.5 w-3.5 mr-1.5" />Pagamentos</TabsTrigger>
+          <TabsTrigger value="vat"><Percent className="h-3.5 w-3.5 mr-1.5" />IVA</TabsTrigger>
+          <TabsTrigger value="invoices"><Receipt className="h-3.5 w-3.5 mr-1.5" />Faturas</TabsTrigger>
+          <TabsTrigger value="webhooks"><Webhook className="h-3.5 w-3.5 mr-1.5" />Webhooks</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="mt-6"><OverviewTab /></TabsContent>
+        <TabsContent value="banks" className="mt-6"><BankAccountsTab /></TabsContent>
+        <TabsContent value="subscriptions" className="mt-6"><SubscriptionsTab /></TabsContent>
+        <TabsContent value="payments" className="mt-6"><PaymentsTab /></TabsContent>
+        <TabsContent value="vat" className="mt-6"><VatTab /></TabsContent>
+        <TabsContent value="invoices" className="mt-6"><InvoicesTab /></TabsContent>
+        <TabsContent value="webhooks" className="mt-6"><WebhooksTab /></TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Overview — KPIs + tenants table (preserved from previous version)
+// ---------------------------------------------------------------------------
+function OverviewTab() {
   const { data: rows = [], isLoading } = useQuery({
-    queryKey: ["platform-subscriptions"],
-    enabled: !!isOwner,
+    queryKey: ["platform-subscriptions-overview"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("workspace_subscriptions")
@@ -24,22 +66,14 @@ export default function PlatformOwnerPage() {
     },
   });
 
-  if (ownerLoading) return <div className="module-shell"><LoadingState variant="cards" /></div>;
-  if (!isOwner) return <Navigate to="/" replace />;
-
-  const counts = rows.reduce(
-    (acc, r: any) => {
-      acc.total++;
-      acc[r.status] = (acc[r.status] ?? 0) + 1;
-      return acc;
-    },
-    { total: 0 } as Record<string, number>,
-  );
+  const counts = rows.reduce((acc, r: any) => {
+    acc.total++;
+    acc[r.status] = (acc[r.status] ?? 0) + 1;
+    return acc;
+  }, { total: 0 } as Record<string, number>);
 
   return (
-    <div className="module-shell space-y-6">
-      <PageHeader icon={Shield} title="Plataforma" subtitle="Visão global de todas as workspaces" />
-
+    <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {[
           { label: "Workspaces", value: counts.total, icon: Building2, tone: "text-foreground" },
@@ -49,7 +83,7 @@ export default function PlatformOwnerPage() {
           { label: "Suspensas", value: counts.suspended ?? 0, icon: AlertCircle, tone: "text-red-500" },
         ].map((k) => (
           <Card key={k.label} className="p-4 surface-card">
-            <div className={`flex items-center gap-2 text-xs text-muted-foreground mb-2`}>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
               <k.icon className={`h-3.5 w-3.5 ${k.tone}`} /> {k.label}
             </div>
             <p className="text-2xl font-semibold">{k.value}</p>
@@ -61,9 +95,7 @@ export default function PlatformOwnerPage() {
         <div className="px-4 py-3 border-b border-border/40">
           <h3 className="text-sm font-semibold">Tenants</h3>
         </div>
-        {isLoading ? (
-          <div className="p-6"><LoadingState variant="table" /></div>
-        ) : (
+        {isLoading ? <div className="p-6"><LoadingState variant="table" /></div> : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-xs text-muted-foreground bg-muted/30">
@@ -87,9 +119,7 @@ export default function PlatformOwnerPage() {
                     <td className="px-4 py-2 text-xs text-muted-foreground">
                       {r.current_period_end
                         ? new Date(r.current_period_end).toLocaleDateString("pt-PT")
-                        : r.trial_ends_at
-                          ? `Trial → ${new Date(r.trial_ends_at).toLocaleDateString("pt-PT")}`
-                          : "—"}
+                        : r.trial_ends_at ? `Trial → ${new Date(r.trial_ends_at).toLocaleDateString("pt-PT")}` : "—"}
                     </td>
                   </tr>
                 ))}
@@ -102,5 +132,375 @@ export default function PlatformOwnerPage() {
         )}
       </Card>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Bank accounts
+// ---------------------------------------------------------------------------
+function BankAccountsTab() {
+  const qc = useQueryClient();
+  const { data: accounts = [], isLoading } = useQuery({
+    queryKey: ["platform-bank-accounts"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from("platform_bank_accounts")
+        .select("*").order("is_primary", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const update = useMutation({
+    mutationFn: async ({ id, patch }: { id: string; patch: any }) => {
+      const { error } = await (supabase as any).from("platform_bank_accounts").update(patch).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => { toast.success("Conta atualizada"); qc.invalidateQueries({ queryKey: ["platform-bank-accounts"] }); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  if (isLoading) return <LoadingState variant="cards" />;
+
+  return (
+    <div className="space-y-4">
+      {accounts.map((a: any) => (
+        <Card key={a.id} className="surface-card p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <Landmark className="h-4 w-4 text-primary" />
+                <h3 className="font-semibold">{a.account_name}</h3>
+                {a.is_primary && <Badge className="text-[10px]">Primary</Badge>}
+                <Badge variant="outline" className="text-[10px]">{a.currency}</Badge>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">{a.bank_name} · {a.country} · {a.account_type}</p>
+            </div>
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-muted-foreground">Ativa</span>
+              <Switch checked={a.active} onCheckedChange={(v) => update.mutate({ id: a.id, patch: { active: v } })} />
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] text-muted-foreground">IBAN</label>
+              <Input defaultValue={a.iban ?? ""} placeholder="FR76 ..."
+                onBlur={(e) => e.target.value !== (a.iban ?? "") && update.mutate({ id: a.id, patch: { iban: e.target.value || null } })} />
+            </div>
+            <div>
+              <label className="text-[11px] text-muted-foreground">BIC / SWIFT</label>
+              <Input defaultValue={a.bic ?? ""} placeholder="CMCIFRPP"
+                onBlur={(e) => e.target.value !== (a.bic ?? "") && update.mutate({ id: a.id, patch: { bic: e.target.value || null } })} />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {(a.supported_methods ?? []).map((m: string) => (
+              <Badge key={m} variant="secondary" className="text-[10px]">{m}</Badge>
+            ))}
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Subscriptions (workspace_subscriptions, read-only here)
+// ---------------------------------------------------------------------------
+function SubscriptionsTab() {
+  const { data: rows = [], isLoading } = useQuery({
+    queryKey: ["platform-subs-full"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("workspace_subscriptions")
+        .select("*, workspaces(name)")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  if (isLoading) return <LoadingState variant="table" />;
+  return (
+    <Card className="surface-card overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="text-xs text-muted-foreground bg-muted/30">
+            <tr>
+              <th className="text-left px-4 py-2">Workspace</th>
+              <th className="text-left px-4 py-2">Estado</th>
+              <th className="text-left px-4 py-2">Ciclo</th>
+              <th className="text-right px-4 py-2">Técnicos</th>
+              <th className="text-right px-4 py-2">Preço/mês</th>
+              <th className="text-left px-4 py-2">Trial termina</th>
+              <th className="text-left px-4 py-2">Período atual</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r: any) => (
+              <tr key={r.id} className="border-t border-border/40">
+                <td className="px-4 py-2 font-medium">{r.workspaces?.name ?? r.workspace_id}</td>
+                <td className="px-4 py-2"><Badge variant="outline" className="text-[10px]">{r.status}</Badge></td>
+                <td className="px-4 py-2 text-xs">{r.billing_cycle}</td>
+                <td className="px-4 py-2 text-right">{r.technician_count}</td>
+                <td className="px-4 py-2 text-right">{Number(r.current_price).toFixed(2)} €</td>
+                <td className="px-4 py-2 text-xs">{r.trial_ends_at ? new Date(r.trial_ends_at).toLocaleDateString("pt-PT") : "—"}</td>
+                <td className="px-4 py-2 text-xs">{r.current_period_end ? new Date(r.current_period_end).toLocaleDateString("pt-PT") : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Payments (manual entry placeholder until Stripe phase)
+// ---------------------------------------------------------------------------
+function PaymentsTab() {
+  const { data: rows = [], isLoading } = useQuery({
+    queryKey: ["platform-payments"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from("platform_subscription_payments")
+        .select("*").order("created_at", { ascending: false }).limit(200);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  if (isLoading) return <LoadingState variant="table" />;
+  return (
+    <Card className="surface-card overflow-hidden">
+      <div className="px-4 py-3 border-b border-border/40 flex items-center justify-between">
+        <h3 className="text-sm font-semibold">Pagamentos registados</h3>
+        <span className="text-[11px] text-muted-foreground">Stripe será integrado na próxima fase</span>
+      </div>
+      {rows.length === 0 ? (
+        <div className="p-8 text-center text-xs text-muted-foreground">Sem pagamentos ainda.</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-xs text-muted-foreground bg-muted/30">
+              <tr>
+                <th className="text-left px-4 py-2">Data</th>
+                <th className="text-left px-4 py-2">Workspace</th>
+                <th className="text-left px-4 py-2">Método</th>
+                <th className="text-right px-4 py-2">Valor</th>
+                <th className="text-left px-4 py-2">Estado</th>
+                <th className="text-left px-4 py-2">Ref. externa</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((p: any) => (
+                <tr key={p.id} className="border-t border-border/40">
+                  <td className="px-4 py-2 text-xs">{new Date(p.created_at).toLocaleString("pt-PT")}</td>
+                  <td className="px-4 py-2 text-xs font-mono">{p.workspace_id.slice(0, 8)}…</td>
+                  <td className="px-4 py-2 text-xs">{p.method}</td>
+                  <td className="px-4 py-2 text-right">{Number(p.amount).toFixed(2)} {p.currency}</td>
+                  <td className="px-4 py-2"><Badge variant="outline" className="text-[10px]">{p.status}</Badge></td>
+                  <td className="px-4 py-2 text-xs text-muted-foreground">{p.external_ref ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// VAT tab — rules + live calculator
+// ---------------------------------------------------------------------------
+function VatTab() {
+  const { data: rules = [], isLoading } = useQuery({
+    queryKey: ["platform-vat-rules"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from("platform_vat_rules")
+        .select("*").order("country");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const [country, setCountry] = useState("FR");
+  const [isBusiness, setIsBusiness] = useState(false);
+  const [vatNumber, setVatNumber] = useState("");
+  const [result, setResult] = useState<any>(null);
+
+  const calc = async () => {
+    const { data, error } = await (supabase as any).rpc("calculate_vat", {
+      _country: country, _is_business: isBusiness, _vat_number: vatNumber || null,
+    });
+    if (error) return toast.error(error.message);
+    setResult(data);
+  };
+
+  return (
+    <div className="grid md:grid-cols-2 gap-4">
+      <Card className="surface-card p-5">
+        <h3 className="text-sm font-semibold mb-3 flex items-center gap-2"><Percent className="h-4 w-4" />Calculadora de IVA</h3>
+        <div className="space-y-3">
+          <div>
+            <label className="text-[11px] text-muted-foreground">País (ISO-2)</label>
+            <Input value={country} onChange={(e) => setCountry(e.target.value.toUpperCase())} maxLength={2} />
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-xs">Empresa (B2B)</span>
+            <Switch checked={isBusiness} onCheckedChange={setIsBusiness} />
+          </div>
+          <div>
+            <label className="text-[11px] text-muted-foreground">Nº IVA (opcional)</label>
+            <Input value={vatNumber} onChange={(e) => setVatNumber(e.target.value)} placeholder="FR12345678901" />
+          </div>
+          <Button onClick={calc} className="w-full">Calcular</Button>
+          {result && (
+            <div className="rounded border border-border/40 p-3 text-xs space-y-1 bg-muted/20">
+              <div>Taxa: <span className="font-semibold">{result.rate}%</span></div>
+              <div>Reverse charge: <span className="font-semibold">{result.reverse_charge ? "Sim" : "Não"}</span></div>
+              <div>Isenção: <span className="font-semibold">{result.exemption_reason ?? "—"}</span></div>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      <Card className="surface-card overflow-hidden">
+        <div className="px-4 py-3 border-b border-border/40">
+          <h3 className="text-sm font-semibold">Regras por país</h3>
+        </div>
+        {isLoading ? <div className="p-6"><LoadingState variant="table" /></div> : (
+          <table className="w-full text-sm">
+            <thead className="text-xs text-muted-foreground bg-muted/30">
+              <tr>
+                <th className="text-left px-4 py-2">País</th>
+                <th className="text-right px-4 py-2">Taxa</th>
+                <th className="text-center px-4 py-2">UE</th>
+                <th className="text-center px-4 py-2">Reverse B2B</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rules.map((r: any) => (
+                <tr key={r.id} className="border-t border-border/40">
+                  <td className="px-4 py-2 font-mono text-xs">{r.country}</td>
+                  <td className="px-4 py-2 text-right">{Number(r.standard_rate).toFixed(2)}%</td>
+                  <td className="px-4 py-2 text-center">{r.eu_member ? "✓" : "—"}</td>
+                  <td className="px-4 py-2 text-center">{r.reverse_charge_when_business ? "✓" : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Invoices
+// ---------------------------------------------------------------------------
+function InvoicesTab() {
+  const { data: rows = [], isLoading } = useQuery({
+    queryKey: ["platform-invoices"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from("platform_invoices")
+        .select("*").order("issue_date", { ascending: false }).limit(200);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  if (isLoading) return <LoadingState variant="table" />;
+  return (
+    <Card className="surface-card overflow-hidden">
+      <div className="px-4 py-3 border-b border-border/40">
+        <h3 className="text-sm font-semibold">Faturas internas (workspaces)</h3>
+      </div>
+      {rows.length === 0 ? (
+        <div className="p-8 text-center text-xs text-muted-foreground">Sem faturas emitidas.</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-xs text-muted-foreground bg-muted/30">
+              <tr>
+                <th className="text-left px-4 py-2">Número</th>
+                <th className="text-left px-4 py-2">Emissão</th>
+                <th className="text-left px-4 py-2">Venc.</th>
+                <th className="text-left px-4 py-2">Cliente</th>
+                <th className="text-right px-4 py-2">Subtotal</th>
+                <th className="text-right px-4 py-2">IVA</th>
+                <th className="text-right px-4 py-2">Total</th>
+                <th className="text-left px-4 py-2">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((i: any) => (
+                <tr key={i.id} className="border-t border-border/40">
+                  <td className="px-4 py-2 font-mono text-xs">{i.invoice_number}</td>
+                  <td className="px-4 py-2 text-xs">{i.issue_date}</td>
+                  <td className="px-4 py-2 text-xs">{i.due_date}</td>
+                  <td className="px-4 py-2 text-xs">{i.customer_name ?? "—"}</td>
+                  <td className="px-4 py-2 text-right">{Number(i.subtotal).toFixed(2)} {i.currency}</td>
+                  <td className="px-4 py-2 text-right">{Number(i.vat_amount).toFixed(2)}</td>
+                  <td className="px-4 py-2 text-right font-semibold">{Number(i.total).toFixed(2)}</td>
+                  <td className="px-4 py-2"><Badge variant="outline" className="text-[10px]">{i.status}</Badge></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Webhooks
+// ---------------------------------------------------------------------------
+function WebhooksTab() {
+  const { data: rows = [], isLoading } = useQuery({
+    queryKey: ["platform-webhooks"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from("platform_webhook_events")
+        .select("*").order("created_at", { ascending: false }).limit(200);
+      if (error) throw error;
+      return data ?? [];
+    },
+    refetchInterval: 15_000,
+  });
+  if (isLoading) return <LoadingState variant="table" />;
+  return (
+    <Card className="surface-card overflow-hidden">
+      <div className="px-4 py-3 border-b border-border/40 flex items-center justify-between">
+        <h3 className="text-sm font-semibold">Fila de eventos internos</h3>
+        <span className="text-[11px] text-muted-foreground">Auto-refresh 15s</span>
+      </div>
+      {rows.length === 0 ? (
+        <div className="p-8 text-center text-xs text-muted-foreground">Sem eventos.</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-xs text-muted-foreground bg-muted/30">
+              <tr>
+                <th className="text-left px-4 py-2">Quando</th>
+                <th className="text-left px-4 py-2">Tipo</th>
+                <th className="text-left px-4 py-2">Estado</th>
+                <th className="text-right px-4 py-2">Tentativas</th>
+                <th className="text-left px-4 py-2">Erro</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((e: any) => (
+                <tr key={e.id} className="border-t border-border/40">
+                  <td className="px-4 py-2 text-xs">{new Date(e.created_at).toLocaleString("pt-PT")}</td>
+                  <td className="px-4 py-2 text-xs font-mono">{e.event_type}</td>
+                  <td className="px-4 py-2"><Badge variant="outline" className="text-[10px]">{e.status}</Badge></td>
+                  <td className="px-4 py-2 text-right text-xs">{e.attempts}</td>
+                  <td className="px-4 py-2 text-xs text-muted-foreground truncate max-w-[200px]">{e.last_error ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
   );
 }
