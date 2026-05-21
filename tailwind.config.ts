@@ -14,7 +14,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['Sora', 'Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        sans: ['Inter', 'Plus Jakarta Sans', 'system-ui', '-apple-system', 'sans-serif'],
+        display: ['Space Grotesk', 'Sora', 'Inter', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",
