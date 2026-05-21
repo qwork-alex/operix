@@ -101,6 +101,206 @@ export type Database = {
         }
         Relationships: []
       }
+      automation_dead_letter: {
+        Row: {
+          attempts: number
+          created_at: string
+          event_type: string | null
+          id: string
+          last_error: string | null
+          payload: Json
+          queue_id: string | null
+          rule_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          event_type?: string | null
+          id?: string
+          last_error?: string | null
+          payload?: Json
+          queue_id?: string | null
+          rule_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          event_type?: string | null
+          id?: string
+          last_error?: string | null
+          payload?: Json
+          queue_id?: string | null
+          rule_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      automation_executions: {
+        Row: {
+          actions_log: Json
+          attempt: number
+          created_at: string
+          dry_run: boolean
+          error: string | null
+          finished_at: string | null
+          id: string
+          queue_id: string | null
+          rule_id: string | null
+          started_at: string
+          status: string
+          workspace_id: string
+        }
+        Insert: {
+          actions_log?: Json
+          attempt?: number
+          created_at?: string
+          dry_run?: boolean
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          queue_id?: string | null
+          rule_id?: string | null
+          started_at?: string
+          status: string
+          workspace_id: string
+        }
+        Update: {
+          actions_log?: Json
+          attempt?: number
+          created_at?: string
+          dry_run?: boolean
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          queue_id?: string | null
+          rule_id?: string | null
+          started_at?: string
+          status?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      automation_queue: {
+        Row: {
+          attempts: number
+          created_at: string
+          depth: number
+          entity_id: string | null
+          entity_type: string | null
+          event_type: string
+          id: string
+          last_error: string | null
+          payload: Json
+          rule_id: string | null
+          scheduled_at: string
+          source_correlation_id: string | null
+          status: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          depth?: number
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type: string
+          id?: string
+          last_error?: string | null
+          payload?: Json
+          rule_id?: string | null
+          scheduled_at?: string
+          source_correlation_id?: string | null
+          status?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          depth?: number
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type?: string
+          id?: string
+          last_error?: string | null
+          payload?: Json
+          rule_id?: string | null
+          scheduled_at?: string
+          source_correlation_id?: string | null
+          status?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_queue_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "automation_rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      automation_rules: {
+        Row: {
+          actions: Json
+          conditions: Json
+          created_at: string
+          created_by: string | null
+          delay_seconds: number
+          description: string | null
+          enabled: boolean
+          id: string
+          max_retries: number
+          name: string
+          retry_backoff_seconds: number
+          safe_mode: boolean
+          trigger_config: Json
+          trigger_type: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          actions?: Json
+          conditions?: Json
+          created_at?: string
+          created_by?: string | null
+          delay_seconds?: number
+          description?: string | null
+          enabled?: boolean
+          id?: string
+          max_retries?: number
+          name: string
+          retry_backoff_seconds?: number
+          safe_mode?: boolean
+          trigger_config?: Json
+          trigger_type: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          actions?: Json
+          conditions?: Json
+          created_at?: string
+          created_by?: string | null
+          delay_seconds?: number
+          description?: string | null
+          enabled?: boolean
+          id?: string
+          max_retries?: number
+          name?: string
+          retry_backoff_seconds?: number
+          safe_mode?: boolean
+          trigger_config?: Json
+          trigger_type?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       backend_event_logs: {
         Row: {
           action: string
@@ -5382,6 +5582,16 @@ export type Database = {
         }
         Relationships: []
       }
+      v_automation_engine_stats: {
+        Row: {
+          dry_run_24h: number | null
+          executions_24h: number | null
+          failed_24h: number | null
+          success_24h: number | null
+          workspace_id: string | null
+        }
+        Relationships: []
+      }
       v_financial_integrity_summary: {
         Row: {
           critical_issues: number | null
@@ -5542,6 +5752,19 @@ export type Database = {
       }
       emit_platform_webhook_event: {
         Args: { _event_type: string; _payload?: Json }
+        Returns: string
+      }
+      enqueue_automation_event: {
+        Args: {
+          _correlation?: string
+          _delay_seconds?: number
+          _depth?: number
+          _entity_id: string
+          _entity_type: string
+          _event_type: string
+          _payload: Json
+          _workspace_id: string
+        }
         Returns: string
       }
       generate_platform_invoice: {
