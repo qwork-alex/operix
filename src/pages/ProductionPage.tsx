@@ -34,9 +34,9 @@ export default function ProductionPage() {
 
       <Tabs defaultValue="board">
         <TabsList>
-          <TabsTrigger value="board"><LayoutGrid className="h-4 w-4 mr-2" /> Kanban</TabsTrigger>
+          <TabsTrigger value="board"><LayoutGrid className="h-4 w-4 mr-2" /> Pipeline</TabsTrigger>
           <TabsTrigger value="my"><Wrench className="h-4 w-4 mr-2" /> Minhas Ordens</TabsTrigger>
-          <TabsTrigger value="dashboard"><BarChart3 className="h-4 w-4 mr-2" /> Dashboard</TabsTrigger>
+          <TabsTrigger value="dashboard"><BarChart3 className="h-4 w-4 mr-2" /> Painel de Bordo</TabsTrigger>
         </TabsList>
         <TabsContent value="board" className="mt-4">
           <ProductionBoard onOpen={setOpen} />
