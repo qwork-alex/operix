@@ -128,8 +128,28 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'Sora', 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: 'Inter', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
     font-feature-settings: 'cv11', 'ss01', 'ss03';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Branding / display headings use Sora + Space Grotesk */
+  h1, h2, h3, .font-display {
+    font-family: 'Space Grotesk', 'Sora', 'Inter', sans-serif;
+    letter-spacing: -0.01em;
+  }
+
+  /* Ambient atmospheric backdrop for the dark theme — extremely subtle */
+  .dark body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+      radial-gradient(1200px 600px at 80% -10%, hsl(190 90% 55% / 0.05), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, hsl(142 71% 48% / 0.05), transparent 60%);
   }
 
   /* Smooth theme transitions for common surfaces */
