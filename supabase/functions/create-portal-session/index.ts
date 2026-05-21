@@ -29,7 +29,12 @@ Deno.serve(async (req) => {
       .eq("workspace_id", workspace_id)
       .maybeSingle();
 
-    if (!sub?.stripe_customer_id) throw new Error("No Stripe customer for this workspace");
+    if (!sub?.stripe_customer_id) {
+      return new Response(
+        JSON.stringify({ url: null, requires_checkout: true, message: "Nenhuma subscrição ativa para gerir. Inicie uma subscrição primeiro." }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     const stripe = createStripeClient(environment as StripeEnv);
     const portal = await stripe.billingPortal.sessions.create({
