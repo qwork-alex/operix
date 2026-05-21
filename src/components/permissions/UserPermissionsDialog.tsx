@@ -313,6 +313,40 @@ const CATALOG: CatalogModule[] = [
       { label: "Ver compliance", m: "platform", a: "view_compliance" },
     ],
   },
+  {
+    key: "settings",
+    label: "Configurações",
+    items: [
+      { label: "Ver configurações", m: "settings", a: "view" },
+      { label: "Editar configurações", m: "settings", a: "edit" },
+      { label: "Alterar idioma", m: "settings", a: "change_language" },
+      { label: "Alterar tema", m: "settings", a: "change_theme" },
+      { label: "Alterar senha", m: "settings", a: "change_password" },
+      { label: "Reset password", m: "settings", a: "reset_password" },
+      { label: "Ver senhas temporárias", m: "settings", a: "view_temp_credentials" },
+      { label: "Reset do sistema", m: "settings", a: "reset_system" },
+    ],
+  },
+  {
+    key: "profile",
+    label: "Perfil",
+    items: [
+      { label: "Ver perfil", m: "profile", a: "view" },
+      { label: "Editar perfil", m: "profile", a: "edit" },
+      { label: "Exportar perfil", m: "profile", a: "export" },
+      { label: "Apagar perfil", m: "profile", a: "delete" },
+    ],
+  },
+  {
+    key: "notifications",
+    label: "Notificações",
+    items: [
+      { label: "Ver notificações", m: "notifications", a: "view" },
+      { label: "Ver alertas críticos", m: "notifications", a: "view_critical" },
+      { label: "Marcar como lido", m: "notifications", a: "mark_read" },
+      { label: "Apagar notificações", m: "notifications", a: "delete" },
+    ],
+  },
 ];
 
 export function UserPermissionsDialog({
