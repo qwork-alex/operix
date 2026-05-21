@@ -206,6 +206,7 @@ export default function SubscriptionPage() {
         </div>
       </Card>
 
+      <BillingIntelligencePanel />
       <SubscriptionTimeline />
 
       <Card className="p-4 surface-card text-xs text-muted-foreground">
