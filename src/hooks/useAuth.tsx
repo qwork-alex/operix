@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useRef } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { logSecurityEvent } from "@/lib/securityLog";
 
 interface AuthContextType {
   session: Session | null;
@@ -86,6 +87,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           ? { email, reason: error.message } as any
           : { email } as any,
       }).then(() => {}, (err) => console.error("[Auth] Log error:", err));
+      // Phase 5 — security trail
+      logSecurityEvent({
+        type: error ? "login_failed" : "login",
+        severity: error ? "warn" : "info",
+        metadata: { email, reason: error?.message ?? null },
+        riskScore: error ? 30 : 0,
+      });
       return { error: error as Error | null };
     } catch (err) {
       console.error("[Auth] signIn error:", err);
