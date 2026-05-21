@@ -55,6 +55,11 @@ export function OrderDetailDialog({ order, onClose }: Props) {
                 {PRIORITY_META[order.priority].label}
               </Badge>
             )}
+            {locked && (
+              <Badge variant="outline" className="gap-1 text-emerald-500 border-emerald-500/30">
+                <Lock className="h-3 w-3" /> Finalizado · somente leitura
+              </Badge>
+            )}
           </DialogTitle>
         </DialogHeader>
 
@@ -66,6 +71,7 @@ export function OrderDetailDialog({ order, onClose }: Props) {
           </TabsList>
 
           <TabsContent value="info" className="space-y-4 pt-4">
+            <fieldset disabled={locked} className="space-y-4 disabled:opacity-80">
             <div className="grid grid-cols-2 gap-3">
               <Field label="Cliente"><Input value={form.client_name ?? ""} onChange={e => set("client_name", e.target.value)} /></Field>
               <Field label="Plataforma"><Input value={form.platform ?? ""} onChange={e => set("platform", e.target.value)} /></Field>
@@ -74,7 +80,7 @@ export function OrderDetailDialog({ order, onClose }: Props) {
               <Field label="Marca"><Input value={form.brand ?? ""} onChange={e => set("brand", e.target.value)} /></Field>
               <Field label="Modelo"><Input value={form.model ?? ""} onChange={e => set("model", e.target.value)} /></Field>
               <Field label="Cor"><Input value={form.color ?? ""} onChange={e => set("color", e.target.value)} /></Field>
-              <Field label="Seguradora / Cliente"><Input value={form.insurer ?? ""} onChange={e => set("insurer", e.target.value)} /></Field>
+              <Field label="Seguradora"><Input value={form.insurer ?? ""} onChange={e => set("insurer", e.target.value)} /></Field>
 
               <Field label="Status">
                 <Select value={form.status ?? "new_vehicle"} onValueChange={(v) => set("status", v as ProductionStatus)}>
@@ -99,7 +105,6 @@ export function OrderDetailDialog({ order, onClose }: Props) {
                   placeholder="Digite o nome do técnico"
                   onChange={(e) => {
                     set("technician_name", e.target.value || null);
-                    // Free-text mode: clear any legacy linked user ID
                     if (form.technician_user_id) set("technician_user_id", null);
                   }}
                 />
@@ -113,9 +118,10 @@ export function OrderDetailDialog({ order, onClose }: Props) {
             <Field label="Observações">
               <Textarea value={form.notes ?? ""} onChange={e => set("notes", e.target.value)} rows={3} />
             </Field>
+            </fieldset>
 
             <div className="flex justify-between pt-2">
-              {!isNew ? (
+              {!isNew && !locked ? (
                 <Button variant="destructive" size="sm"
                   onClick={async () => {
                     if (confirm("Remover esta ordem?")) { await remove.mutateAsync(order.id); onClose(); }
@@ -124,25 +130,27 @@ export function OrderDetailDialog({ order, onClose }: Props) {
                 </Button>
               ) : <span />}
               <div className="flex gap-2">
-                <Button variant="outline" onClick={onClose}>Cancelar</Button>
-                <Button onClick={save} disabled={update.isPending || create.isPending}>
-                  <Save className="h-4 w-4 mr-2" /> Salvar
-                </Button>
+                <Button variant="outline" onClick={onClose}>{locked ? "Fechar" : "Cancelar"}</Button>
+                {!locked && (
+                  <Button onClick={save} disabled={update.isPending || create.isPending}>
+                    <Save className="h-4 w-4 mr-2" /> Salvar
+                  </Button>
+                )}
               </div>
             </div>
           </TabsContent>
 
           <TabsContent value="photos" className="pt-4 space-y-6">
             <section className="space-y-2">
-              <h4 className="text-sm font-semibold text-foreground">Antes do Serviço</h4>
-              <p className="text-xs text-muted-foreground">Registo inicial do veículo antes da intervenção.</p>
-              <PhotoUploader orderId={order.id} fixedCategory="before" hideOthers />
+              <h4 className="text-sm font-semibold text-foreground">Veículo na entrada</h4>
+              <p className="text-xs text-muted-foreground">Fotos obrigatórias do estado inicial.</p>
+              <PhotoUploader orderId={order.id} fixedCategory="before" hideOthers readOnly={locked} />
             </section>
             <div className="h-px bg-border/60" />
             <section className="space-y-2">
-              <h4 className="text-sm font-semibold text-foreground">Depois do Serviço</h4>
-              <p className="text-xs text-muted-foreground">Resultado final para comparação visual.</p>
-              <PhotoUploader orderId={order.id} fixedCategory="after" hideOthers />
+              <h4 className="text-sm font-semibold text-foreground">Veículo finalizado</h4>
+              <p className="text-xs text-muted-foreground">Registro do resultado final após o serviço.</p>
+              <PhotoUploader orderId={order.id} fixedCategory="after" hideOthers readOnly={locked} />
             </section>
           </TabsContent>
           <TabsContent value="timeline" className="pt-4">
