@@ -4469,6 +4469,10 @@ export type Database = {
     }
     Functions: {
       _audit_extract_workspace: { Args: { _rec: Json }; Returns: string }
+      activate_workspace_subscription: {
+        Args: { _cycle: string; _plan_code: string; _workspace_id: string }
+        Returns: Json
+      }
       active_user_ids: {
         Args: never
         Returns: {
@@ -4565,6 +4569,17 @@ export type Database = {
       emit_platform_webhook_event: {
         Args: { _event_type: string; _payload?: Json }
         Returns: string
+      }
+      generate_platform_invoice: {
+        Args: {
+          _amount?: number
+          _bank_account_id?: string
+          _cycle: string
+          _plan_code: string
+          _vat_mode: string
+          _workspace_id: string
+        }
+        Returns: Json
       }
       get_my_role: { Args: never; Returns: string }
       get_my_technician_id: { Args: never; Returns: string }
