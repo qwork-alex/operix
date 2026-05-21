@@ -516,7 +516,9 @@ export default function CheckoutPage() {
             <p className="text-sm text-muted-foreground">
               {payKind === "manual_transfer"
                 ? "Transferência declarada — aguarda revisão manual."
-                : "Pagamento simulado registado (gateway real em breve)."}
+                : payKind === "stripe"
+                ? "Stripe confirmou o pagamento. Webhook a sincronizar a subscrição."
+                : "Método de pagamento registado."}
             </p>
             <p className="text-xs text-muted-foreground">Continua para ativar a assinatura.</p>
           </section>
