@@ -18,6 +18,7 @@ import { LoadingState } from "@/components/shared/LoadingState";
 import { PlatformFinancialDashboard } from "@/components/billing/PlatformFinancialDashboard";
 import { SmartMetricsCards } from "@/components/billing/SmartMetricsCards";
 import { AutomationPanel } from "@/components/billing/AutomationPanel";
+import { SecurityDashboard } from "@/components/platform/SecurityDashboard";
 import { useIsPlatformOwner } from "@/hooks/useSubscription";
 import { toast } from "sonner";
 
@@ -43,6 +44,7 @@ export default function PlatformOwnerPage() {
           <TabsTrigger value="lifecycle"><Power className="h-3.5 w-3.5 mr-1.5" />Ciclo de vida</TabsTrigger>
           <TabsTrigger value="automation"><Brain className="h-3.5 w-3.5 mr-1.5" />Automação</TabsTrigger>
           <TabsTrigger value="audit"><ScrollText className="h-3.5 w-3.5 mr-1.5" />Auditoria</TabsTrigger>
+          <TabsTrigger value="security"><Shield className="h-3.5 w-3.5 mr-1.5" />Segurança</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-6 space-y-6">
@@ -61,6 +63,7 @@ export default function PlatformOwnerPage() {
           <SmartMetricsCards />
         </TabsContent>
         <TabsContent value="audit" className="mt-6"><AuditTab /></TabsContent>
+        <TabsContent value="security" className="mt-6"><SecurityDashboard /></TabsContent>
       </Tabs>
     </div>
   );
