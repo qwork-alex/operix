@@ -14,6 +14,285 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_action_log: {
+        Row: {
+          action: string
+          created_at: string
+          error: string | null
+          id: string
+          payload: Json | null
+          recommendation_id: string | null
+          result: Json | null
+          status: string
+          user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          payload?: Json | null
+          recommendation_id?: string | null
+          result?: Json | null
+          status: string
+          user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          payload?: Json | null
+          recommendation_id?: string | null
+          result?: Json | null
+          status?: string
+          user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      ai_alerts: {
+        Row: {
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          alert_type: string
+          confidence: number | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          message: string | null
+          model: string | null
+          reasoning: Json | null
+          severity: string
+          status: string
+          title: string
+          workspace_id: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          alert_type: string
+          confidence?: number | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          message?: string | null
+          model?: string | null
+          reasoning?: Json | null
+          severity?: string
+          status?: string
+          title: string
+          workspace_id: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          alert_type?: string
+          confidence?: number | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          message?: string | null
+          model?: string | null
+          reasoning?: Json | null
+          severity?: string
+          status?: string
+          title?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      ai_cache: {
+        Row: {
+          confidence: number | null
+          context_hash: string
+          created_at: string
+          expires_at: string
+          explanation: Json | null
+          id: string
+          model: string
+          result: Json
+          task: string
+          tokens_in: number | null
+          tokens_out: number | null
+          workspace_id: string
+        }
+        Insert: {
+          confidence?: number | null
+          context_hash: string
+          created_at?: string
+          expires_at?: string
+          explanation?: Json | null
+          id?: string
+          model: string
+          result: Json
+          task: string
+          tokens_in?: number | null
+          tokens_out?: number | null
+          workspace_id: string
+        }
+        Update: {
+          confidence?: number | null
+          context_hash?: string
+          created_at?: string
+          expires_at?: string
+          explanation?: Json | null
+          id?: string
+          model?: string
+          result?: Json
+          task?: string
+          tokens_in?: number | null
+          tokens_out?: number | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      ai_insights: {
+        Row: {
+          confidence: number | null
+          created_at: string
+          data: Json | null
+          id: string
+          kind: string
+          model: string | null
+          reasoning: Json | null
+          scope: string | null
+          severity: string
+          summary: string | null
+          title: string
+          workspace_id: string
+        }
+        Insert: {
+          confidence?: number | null
+          created_at?: string
+          data?: Json | null
+          id?: string
+          kind: string
+          model?: string | null
+          reasoning?: Json | null
+          scope?: string | null
+          severity?: string
+          summary?: string | null
+          title: string
+          workspace_id: string
+        }
+        Update: {
+          confidence?: number | null
+          created_at?: string
+          data?: Json | null
+          id?: string
+          kind?: string
+          model?: string | null
+          reasoning?: Json | null
+          scope?: string | null
+          severity?: string
+          summary?: string | null
+          title?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      ai_recommendations: {
+        Row: {
+          applied_at: string | null
+          applied_by: string | null
+          body: string | null
+          category: string
+          confidence: number | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          model: string | null
+          reasoning: Json | null
+          status: string
+          title: string
+          workspace_id: string
+        }
+        Insert: {
+          applied_at?: string | null
+          applied_by?: string | null
+          body?: string | null
+          category: string
+          confidence?: number | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          model?: string | null
+          reasoning?: Json | null
+          status?: string
+          title: string
+          workspace_id: string
+        }
+        Update: {
+          applied_at?: string | null
+          applied_by?: string | null
+          body?: string | null
+          category?: string
+          confidence?: number | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          model?: string | null
+          reasoning?: Json | null
+          status?: string
+          title?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      ai_scores: {
+        Row: {
+          band: string | null
+          confidence: number | null
+          created_at: string
+          id: string
+          metric: string
+          model: string | null
+          reasoning: Json | null
+          score: number
+          subject_id: string | null
+          subject_label: string | null
+          subject_type: string
+          workspace_id: string
+        }
+        Insert: {
+          band?: string | null
+          confidence?: number | null
+          created_at?: string
+          id?: string
+          metric: string
+          model?: string | null
+          reasoning?: Json | null
+          score: number
+          subject_id?: string | null
+          subject_label?: string | null
+          subject_type: string
+          workspace_id: string
+        }
+        Update: {
+          band?: string | null
+          confidence?: number | null
+          created_at?: string
+          id?: string
+          metric?: string
+          model?: string | null
+          reasoning?: Json | null
+          score?: number
+          subject_id?: string | null
+          subject_label?: string | null
+          subject_type?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       app_users: {
         Row: {
           auth_user_id: string | null

@@ -32,6 +32,7 @@ import FleetPage from "./pages/FleetPage";
 import BillingPage from "./pages/BillingPage";
 import AuditPage from "./pages/AuditPage";
 import AutomationsPage from "./pages/AutomationsPage";
+import AIPage from "./pages/AIPage";
 import RecoveryPage from "./pages/RecoveryPage";
 import ProfilePage from "./pages/ProfilePage";
 import SubscriptionPage from "./pages/SubscriptionPage";
@@ -106,6 +107,7 @@ const App = () => (
                             <Route path="/profile" element={<ProfilePage />} />
                             <Route path="/audit" element={<AuditPage />} />
                             <Route path="/automations" element={<PermissionGuard permission="settings.edit"><AutomationsPage /></PermissionGuard>} />
+                            <Route path="/ai" element={<AIPage />} />
                             <Route path="/recovery" element={<RecoveryPage />} />
                             <Route path="/subscription" element={<SubscriptionPage />} />
                             <Route path="/checkout" element={<CheckoutPage />} />
