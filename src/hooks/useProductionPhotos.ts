@@ -28,7 +28,9 @@ export const PHOTO_CATEGORIES: { value: PhotoCategory; label: string }[] = [
 async function compress(file: File, maxDim = 1600, quality = 0.82): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
     img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
       const ratio = Math.min(1, maxDim / Math.max(img.width, img.height));
       const w = Math.round(img.width * ratio);
       const h = Math.round(img.height * ratio);
@@ -39,8 +41,11 @@ async function compress(file: File, maxDim = 1600, quality = 0.82): Promise<Blob
       ctx.drawImage(img, 0, 0, w, h);
       canvas.toBlob((b) => b ? resolve(b) : reject(new Error("Blob error")), "image/jpeg", quality);
     };
-    img.onerror = reject;
-    img.src = URL.createObjectURL(file);
+    img.onerror = (err) => {
+      URL.revokeObjectURL(objectUrl);
+      reject(err);
+    };
+    img.src = objectUrl;
   });
 }
 
@@ -86,6 +91,7 @@ export function useProductionPhotos(orderId: string | null) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["production_photos", orderId] });
+      qc.invalidateQueries({ queryKey: ["production_events", orderId] });
       toast.success("Foto enviada");
     },
     onError: (e: any) => toast.error(e.message),
