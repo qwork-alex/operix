@@ -19,6 +19,7 @@ import { PlatformFinancialDashboard } from "@/components/billing/PlatformFinanci
 import { SmartMetricsCards } from "@/components/billing/SmartMetricsCards";
 import { AutomationPanel } from "@/components/billing/AutomationPanel";
 import { SecurityDashboard } from "@/components/platform/SecurityDashboard";
+import { ComplianceDashboard } from "@/components/platform/ComplianceDashboard";
 import { useIsPlatformOwner } from "@/hooks/useSubscription";
 import { toast } from "sonner";
 
