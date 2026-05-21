@@ -32,6 +32,7 @@ import FleetPage from "./pages/FleetPage";
 import BillingPage from "./pages/BillingPage";
 import AuditPage from "./pages/AuditPage";
 import AutomationsPage from "./pages/AutomationsPage";
+import AIPage from "./pages/AIPage";
 import RecoveryPage from "./pages/RecoveryPage";
 import ProfilePage from "./pages/ProfilePage";
 import SubscriptionPage from "./pages/SubscriptionPage";
