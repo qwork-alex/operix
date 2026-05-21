@@ -36,6 +36,7 @@ import ProfilePage from "./pages/ProfilePage";
 import SubscriptionPage from "./pages/SubscriptionPage";
 import PlatformOwnerPage from "./pages/PlatformOwnerPage";
 import CheckoutPage from "./pages/CheckoutPage";
+import ProductionPage from "./pages/ProductionPage";
 import {
   TermsPage,
   PrivacyPage,
