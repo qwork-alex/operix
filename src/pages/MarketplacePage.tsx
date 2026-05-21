@@ -32,7 +32,7 @@ export default function MarketplacePage() {
     <div className="space-y-6 p-4 md:p-6">
       <PageHeader
         title="Marketplace"
-        description="Anuncie e descubra veículos, peças, serviços e equipamentos."
+        subtitle="Anuncie e descubra veículos, peças, serviços e equipamentos."
         icon={Store}
         actions={
           <Button onClick={() => setFormOpen(true)}>
