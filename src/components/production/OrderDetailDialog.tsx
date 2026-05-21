@@ -92,18 +92,15 @@ export function OrderDetailDialog({ order, onClose }: Props) {
               </Field>
 
               <Field label="Técnico Responsável">
-                <Select value={form.technician_user_id ?? "__none__"}
-                  onValueChange={(v) => {
-                    const u = users.find(x => x.user_id === v);
-                    set("technician_user_id", v === "__none__" ? null : v as any);
-                    set("technician_name", u?.name ?? null);
-                  }}>
-                  <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">Sem técnico</SelectItem>
-                    {users.map(u => <SelectItem key={u.user_id} value={u.user_id}>{u.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Input
+                  value={form.technician_name ?? ""}
+                  placeholder="Digite o nome do técnico"
+                  onChange={(e) => {
+                    set("technician_name", e.target.value || null);
+                    // Free-text mode: clear any legacy linked user ID
+                    if (form.technician_user_id) set("technician_user_id", null);
+                  }}
+                />
               </Field>
               <Field label="Prazo">
                 <Input type="datetime-local"
