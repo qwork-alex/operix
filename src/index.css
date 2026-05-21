@@ -60,21 +60,26 @@
     --chart-5: 0 72% 50%;
   }
 
-  /* ===== DARK THEME — Premium Graphite ===== */
+  /* ===== DARK THEME — Premium Graphite (Phase 3 palette) =====
+     Hierarchy:
+       primary  = electric blue (data / actions)
+       accent   = violet (AI / intelligence)
+       warning  = amber (billing / financial)
+       success  = green (positive states only)
+       destructive = soft red (risk) */
   .dark {
-    /* Layered graphite, not pure black */
-    --background: 220 26% 7%;       /* #0B0F14 */
+    --background: 220 26% 7%;
     --foreground: 210 20% 94%;
 
-    --card: 220 24% 10%;            /* elevated surface */
+    --card: 220 24% 10%;
     --card-foreground: 210 20% 94%;
 
     --popover: 220 26% 9%;
     --popover-foreground: 210 20% 94%;
 
-    /* Elegant vivid green */
-    --primary: 142 71% 48%;         /* #22C55E-ish */
-    --primary-foreground: 220 30% 6%;
+    /* Electric blue — primary data / actions */
+    --primary: 212 100% 60%;
+    --primary-foreground: 220 40% 8%;
 
     --secondary: 220 18% 14%;
     --secondary-foreground: 210 16% 86%;
@@ -82,38 +87,40 @@
     --muted: 220 18% 12%;
     --muted-foreground: 220 10% 58%;
 
-    /* Soft electric cyan */
-    --accent: 190 90% 55%;          /* #22D3EE */
-    --accent-foreground: 220 40% 8%;
+    /* Violet — AI / intelligence */
+    --accent: 268 84% 66%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 72% 55%;
+    /* Soft red — risk */
+    --destructive: 0 70% 58%;
     --destructive-foreground: 0 0% 98%;
 
-    --success: 152 65% 48%;
+    /* Green reserved for positive states only */
+    --success: 152 62% 46%;
     --success-foreground: 152 80% 95%;
 
-    /* Tech amber/gold */
-    --warning: 38 92% 56%;
+    /* Amber — billing / financial */
+    --warning: 38 95% 58%;
     --warning-foreground: 38 100% 10%;
 
     --border: 220 16% 17%;
     --input: 220 16% 17%;
-    --ring: 142 71% 48%;
+    --ring: 212 100% 60%;
 
     --sidebar-background: 220 28% 6%;
     --sidebar-foreground: 210 16% 78%;
-    --sidebar-primary: 142 71% 48%;
-    --sidebar-primary-foreground: 220 30% 6%;
+    --sidebar-primary: 212 100% 60%;
+    --sidebar-primary-foreground: 220 40% 8%;
     --sidebar-accent: 220 22% 11%;
     --sidebar-accent-foreground: 210 20% 96%;
     --sidebar-border: 220 18% 13%;
-    --sidebar-ring: 142 71% 48%;
+    --sidebar-ring: 212 100% 60%;
 
-    --chart-1: 43 92% 58%;
-    --chart-2: 190 90% 55%;
-    --chart-3: 142 65% 50%;
-    --chart-4: 270 70% 65%;
-    --chart-5: 0 72% 58%;
+    --chart-1: 212 100% 60%;
+    --chart-2: 38 95% 58%;
+    --chart-3: 268 84% 66%;
+    --chart-4: 152 62% 46%;
+    --chart-5: 0 70% 58%;
   }
 }
 
@@ -148,9 +155,9 @@
     pointer-events: none;
     z-index: 0;
     background:
-      radial-gradient(1200px 700px at 85% -15%, hsl(38 92% 56% / 0.07), transparent 65%),
-      radial-gradient(900px 600px at -10% 110%, hsl(142 71% 48% / 0.06), transparent 60%),
-      radial-gradient(700px 500px at 50% 50%, hsl(190 90% 55% / 0.025), transparent 70%);
+      radial-gradient(1200px 700px at 85% -15%, hsl(212 100% 60% / 0.06), transparent 65%),
+      radial-gradient(900px 600px at -10% 110%, hsl(268 84% 66% / 0.05), transparent 60%),
+      radial-gradient(700px 500px at 50% 50%, hsl(38 95% 58% / 0.02), transparent 70%);
   }
 
   /* Smooth theme transitions for common surfaces */
