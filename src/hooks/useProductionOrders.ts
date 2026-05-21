@@ -81,8 +81,9 @@ export function useProductionOrders(filters?: { technicianOnly?: boolean; status
 
   useEffect(() => {
     if (!workspaceId) return;
+    const channelId = `production:${workspaceId}:${Math.random().toString(36).slice(2, 10)}`;
     const ch = supabase
-      .channel(`production:${workspaceId}`)
+      .channel(channelId)
       .on("postgres_changes", { event: "*", schema: "public", table: "production_orders" }, () => {
         qc.invalidateQueries({ queryKey: ["production_orders"] });
         qc.invalidateQueries({ queryKey: ["production_kpis"] });
@@ -90,6 +91,7 @@ export function useProductionOrders(filters?: { technicianOnly?: boolean; status
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [qc, workspaceId]);
+
 
   const create = useMutation({
     mutationFn: async (payload: Partial<ProductionOrder>) => {
