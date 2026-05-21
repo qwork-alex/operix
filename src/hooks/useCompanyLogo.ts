@@ -3,6 +3,13 @@ import { supabase } from "@/integrations/supabase/client";
 import type { BrandConfig } from "@/components/layout/BrandNameEditor";
 import { getCurrentUserId, logSaveError, logSavePayload } from "@/lib/authUser";
 
+/**
+ * Procedural branding store.
+ *
+ * The platform uses LETTER-BASED procedural branding only — there is no
+ * raster logo upload. This hook persists the editable brand_config
+ * (name, color, font, glow, etc.) used by <BrandLogo /> and the sidebar.
+ */
 export function useCompanyLogo() {
   const queryClient = useQueryClient();
 
@@ -11,67 +18,15 @@ export function useCompanyLogo() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("company_settings")
-        .select("logo_url, brand_config")
+        .select("brand_config")
         .limit(1)
         .maybeSingle();
       if (error) throw error;
       return {
-        logoUrl: data?.logo_url || "",
         brandConfig: (data?.brand_config as BrandConfig | null) || {},
       };
     },
     staleTime: 5 * 60 * 1000,
-  });
-
-  const uploadMutation = useMutation({
-    mutationFn: async (file: File) => {
-      const currentUserId = await getCurrentUserId();
-      const ext = file.name.split(".").pop() || "png";
-      const path = `company-logo-${Date.now()}.${ext}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from("logos")
-        .upload(path, file, { upsert: true, contentType: file.type });
-      if (uploadError) throw uploadError;
-
-      const { data: urlData } = supabase.storage.from("logos").getPublicUrl(path);
-      const publicUrl = urlData.publicUrl;
-
-      const { data: existing } = await supabase
-        .from("company_settings")
-        .select("id, user_id")
-        .limit(1)
-        .maybeSingle();
-
-      if (existing) {
-        const payload = { logo_url: publicUrl, updated_at: new Date().toISOString() };
-        logSavePayload("CompanyLogo:update", currentUserId, payload);
-        const { error } = await (supabase as any)
-          .from("company_settings")
-          .update(payload)
-          .eq("id", existing.id);
-        if (error) {
-          logSaveError("CompanyLogo:update", error);
-          throw error;
-        }
-      } else {
-        const payload = { logo_url: publicUrl };
-        logSavePayload("CompanyLogo:insert", currentUserId, payload);
-        const { error } = await (supabase as any)
-          .from("company_settings")
-          .insert(payload);
-        if (error) {
-          logSaveError("CompanyLogo:insert", error);
-          throw error;
-        }
-      }
-
-      return publicUrl;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["company-brand"] });
-      queryClient.invalidateQueries({ queryKey: ["company-settings"] });
-    },
   });
 
   const brandMutation = useMutation({
@@ -112,54 +67,10 @@ export function useCompanyLogo() {
     },
   });
 
-  const removeMutation = useMutation({
-    mutationFn: async () => {
-      const currentUserId = await getCurrentUserId();
-      const { data: existing } = await supabase
-        .from("company_settings")
-        .select("id, logo_url")
-        .limit(1)
-        .maybeSingle();
-      if (!existing) return;
-
-      // Best-effort: remove old file from storage if it lives in the "logos" bucket
-      if (existing.logo_url) {
-        try {
-          const marker = "/storage/v1/object/public/logos/";
-          const idx = existing.logo_url.indexOf(marker);
-          if (idx >= 0) {
-            const path = existing.logo_url.substring(idx + marker.length);
-            await supabase.storage.from("logos").remove([path]);
-          }
-        } catch { /* ignore */ }
-      }
-
-      const payload = { logo_url: null, updated_at: new Date().toISOString() };
-      logSavePayload("CompanyLogo:remove", currentUserId, payload);
-      const { error } = await (supabase as any)
-        .from("company_settings")
-        .update(payload)
-        .eq("id", existing.id);
-      if (error) {
-        logSaveError("CompanyLogo:remove", error);
-        throw error;
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["company-brand"] });
-      queryClient.invalidateQueries({ queryKey: ["company-settings"] });
-    },
-  });
-
   return {
-    logoUrl: data?.logoUrl || "",
     brandConfig: data?.brandConfig || {},
     isLoading,
-    uploadLogo: uploadMutation.mutateAsync,
-    isUploading: uploadMutation.isPending,
     saveBrandConfig: brandMutation.mutateAsync,
     isSavingBrand: brandMutation.isPending,
-    removeLogo: removeMutation.mutateAsync,
-    isRemoving: removeMutation.isPending,
   };
 }
