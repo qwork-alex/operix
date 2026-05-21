@@ -890,6 +890,129 @@ export type Database = {
         }
         Relationships: []
       }
+      consent_logs: {
+        Row: {
+          action: Database["public"]["Enums"]["consent_action"]
+          consent_key: string
+          created_at: string
+          id: string
+          ip_address: string | null
+          locale: string | null
+          metadata: Json
+          terms_version: string | null
+          user_agent: string | null
+          user_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: Database["public"]["Enums"]["consent_action"]
+          consent_key: string
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          locale?: string | null
+          metadata?: Json
+          terms_version?: string | null
+          user_agent?: string | null
+          user_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: Database["public"]["Enums"]["consent_action"]
+          consent_key?: string
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          locale?: string | null
+          metadata?: Json
+          terms_version?: string | null
+          user_agent?: string | null
+          user_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      data_export_requests: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error: string | null
+          expires_at: string | null
+          file_path: string | null
+          format: string
+          id: string
+          scope: string
+          size_bytes: number | null
+          status: Database["public"]["Enums"]["export_status"]
+          user_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error?: string | null
+          expires_at?: string | null
+          file_path?: string | null
+          format?: string
+          id?: string
+          scope?: string
+          size_bytes?: number | null
+          status?: Database["public"]["Enums"]["export_status"]
+          user_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error?: string | null
+          expires_at?: string | null
+          file_path?: string | null
+          format?: string
+          id?: string
+          scope?: string
+          size_bytes?: number | null
+          status?: Database["public"]["Enums"]["export_status"]
+          user_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      data_retention_rules: {
+        Row: {
+          action: string
+          created_at: string
+          enabled: boolean
+          entity: string
+          id: string
+          notes: string | null
+          retention_days: number
+          updated_at: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action?: string
+          created_at?: string
+          enabled?: boolean
+          entity: string
+          id?: string
+          notes?: string | null
+          retention_days: number
+          updated_at?: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          enabled?: boolean
+          entity?: string
+          id?: string
+          notes?: string | null
+          retention_days?: number
+          updated_at?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
       discrepancies: {
         Row: {
           created_at: string
@@ -1660,6 +1783,60 @@ export type Database = {
           },
         ]
       }
+      fraud_signals: {
+        Row: {
+          country: string | null
+          created_at: string
+          device_fingerprint: string | null
+          id: string
+          ip_address: string | null
+          metadata: Json
+          resolved_at: string | null
+          resolved_by: string | null
+          risk_score: number
+          severity: Database["public"]["Enums"]["fraud_severity"]
+          signal_type: string
+          status: Database["public"]["Enums"]["fraud_status"]
+          user_agent: string | null
+          user_id: string | null
+          workspace_id: string | null
+        }
+        Insert: {
+          country?: string | null
+          created_at?: string
+          device_fingerprint?: string | null
+          id?: string
+          ip_address?: string | null
+          metadata?: Json
+          resolved_at?: string | null
+          resolved_by?: string | null
+          risk_score?: number
+          severity?: Database["public"]["Enums"]["fraud_severity"]
+          signal_type: string
+          status?: Database["public"]["Enums"]["fraud_status"]
+          user_agent?: string | null
+          user_id?: string | null
+          workspace_id?: string | null
+        }
+        Update: {
+          country?: string | null
+          created_at?: string
+          device_fingerprint?: string | null
+          id?: string
+          ip_address?: string | null
+          metadata?: Json
+          resolved_at?: string | null
+          resolved_by?: string | null
+          risk_score?: number
+          severity?: Database["public"]["Enums"]["fraud_severity"]
+          signal_type?: string
+          status?: Database["public"]["Enums"]["fraud_status"]
+          user_agent?: string | null
+          user_id?: string | null
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
       fuel_receipts: {
         Row: {
           amount: number
@@ -1858,6 +2035,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      immutable_audit_logs: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          category: string
+          created_at: string
+          id: string
+          ip_address: string | null
+          metadata: Json
+          prev_hash: string | null
+          resource: string | null
+          resource_id: string | null
+          row_hash: string | null
+          user_agent: string | null
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          category: string
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json
+          prev_hash?: string | null
+          resource?: string | null
+          resource_id?: string | null
+          row_hash?: string | null
+          user_agent?: string | null
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          category?: string
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json
+          prev_hash?: string | null
+          resource?: string | null
+          resource_id?: string | null
+          row_hash?: string | null
+          user_agent?: string | null
+          workspace_id?: string | null
+        }
+        Relationships: []
       }
       invites: {
         Row: {
@@ -3317,6 +3542,42 @@ export type Database = {
           },
         ]
       }
+      security_policies: {
+        Row: {
+          enforce_strong_password: boolean
+          ip_allowlist: string[] | null
+          lockout_minutes: number
+          max_login_attempts: number
+          mfa_required: boolean
+          rotate_session_on_privilege_change: boolean
+          session_timeout_minutes: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          enforce_strong_password?: boolean
+          ip_allowlist?: string[] | null
+          lockout_minutes?: number
+          max_login_attempts?: number
+          mfa_required?: boolean
+          rotate_session_on_privilege_change?: boolean
+          session_timeout_minutes?: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          enforce_strong_password?: boolean
+          ip_allowlist?: string[] | null
+          lockout_minutes?: number
+          max_login_attempts?: number
+          mfa_required?: boolean
+          rotate_session_on_privilege_change?: boolean
+          session_timeout_minutes?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       service_order_distributions: {
         Row: {
           calculated_value: number
@@ -3757,6 +4018,57 @@ export type Database = {
         }
         Relationships: []
       }
+      user_devices: {
+        Row: {
+          browser: string | null
+          city: string | null
+          country: string | null
+          created_at: string
+          device_fingerprint: string
+          device_type: string | null
+          id: string
+          ip_address: string | null
+          last_seen_at: string
+          os: string | null
+          revoked_at: string | null
+          trusted: boolean
+          user_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          browser?: string | null
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          device_fingerprint: string
+          device_type?: string | null
+          id?: string
+          ip_address?: string | null
+          last_seen_at?: string
+          os?: string | null
+          revoked_at?: string | null
+          trusted?: boolean
+          user_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          browser?: string | null
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          device_fingerprint?: string
+          device_type?: string | null
+          id?: string
+          ip_address?: string | null
+          last_seen_at?: string
+          os?: string | null
+          revoked_at?: string | null
+          trusted?: boolean
+          user_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
       user_permissions: {
         Row: {
           allow: boolean
@@ -3794,6 +4106,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_privacy_settings: {
+        Row: {
+          ai_training_optin: boolean
+          analytics_tracking: boolean
+          marketing_emails: boolean
+          preferred_locale: string | null
+          share_usage_data: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ai_training_optin?: boolean
+          analytics_tracking?: boolean
+          marketing_emails?: boolean
+          preferred_locale?: string | null
+          share_usage_data?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ai_training_optin?: boolean
+          analytics_tracking?: boolean
+          marketing_emails?: boolean
+          preferred_locale?: string | null
+          share_usage_data?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       user_roles: {
         Row: {
@@ -4212,6 +4554,51 @@ export type Database = {
         }
         Relationships: []
       }
+      workspace_deletion_requests: {
+        Row: {
+          cancelled_at: string | null
+          cancelled_by: string | null
+          completed_at: string | null
+          created_at: string
+          id: string
+          metadata: Json
+          reason: string | null
+          requested_by: string
+          retention_until: string
+          scheduled_for: string | null
+          status: Database["public"]["Enums"]["deletion_status"]
+          workspace_id: string
+        }
+        Insert: {
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          reason?: string | null
+          requested_by: string
+          retention_until?: string
+          scheduled_for?: string | null
+          status?: Database["public"]["Enums"]["deletion_status"]
+          workspace_id: string
+        }
+        Update: {
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          reason?: string | null
+          requested_by?: string
+          retention_until?: string
+          scheduled_for?: string | null
+          status?: Database["public"]["Enums"]["deletion_status"]
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       workspace_limit_snapshots: {
         Row: {
           created_at: string
@@ -4593,6 +4980,10 @@ export type Database = {
         Returns: boolean
       }
       can_manage_all_orders: { Args: { _user_id: string }; Returns: boolean }
+      cancel_workspace_deletion: {
+        Args: { _request_id: string }
+        Returns: undefined
+      }
       check_permission: {
         Args: { _action: string; _module: string; _user_id: string }
         Returns: {
@@ -4606,8 +4997,10 @@ export type Database = {
         Args: { _workspace_id: string }
         Returns: Json
       }
+      compute_compliance_overview: { Args: never; Returns: Json }
       compute_platform_smart_metrics: { Args: never; Returns: Json }
       compute_security_metrics: { Args: never; Returns: Json }
+      compute_user_risk_score: { Args: { _user_id: string }; Returns: Json }
       current_user_effective_role: { Args: never; Returns: string }
       current_user_workspace_ids: { Args: never; Returns: string[] }
       deterministic_event_hash: {
@@ -4709,6 +5102,7 @@ export type Database = {
         Returns: boolean
       }
       is_platform_owner: { Args: { _uid?: string }; Returns: boolean }
+      is_system_owner_jwt: { Args: never; Returns: boolean }
       is_user_active: { Args: { _user_id: string }; Returns: boolean }
       is_workspace_admin: {
         Args: { _uid?: string; _workspace_id: string }
@@ -4816,7 +5210,56 @@ export type Database = {
         Args: { _workspace_id: string }
         Returns: Json
       }
+      record_consent: {
+        Args: {
+          _action: Database["public"]["Enums"]["consent_action"]
+          _consent_key: string
+          _ip?: string
+          _locale?: string
+          _metadata?: Json
+          _terms_version?: string
+          _user_agent?: string
+          _workspace_id?: string
+        }
+        Returns: string
+      }
+      record_fraud_signal: {
+        Args: {
+          _country?: string
+          _device_fingerprint?: string
+          _ip?: string
+          _metadata?: Json
+          _risk_score?: number
+          _severity?: Database["public"]["Enums"]["fraud_severity"]
+          _signal_type: string
+          _user_agent?: string
+          _user_id?: string
+          _workspace_id?: string
+        }
+        Returns: string
+      }
+      register_device: {
+        Args: {
+          _browser?: string
+          _city?: string
+          _country?: string
+          _device_type?: string
+          _fingerprint: string
+          _ip?: string
+          _os?: string
+          _workspace_id?: string
+        }
+        Returns: string
+      }
       replay_financial_state: { Args: { _invoice_id: string }; Returns: Json }
+      request_data_export: {
+        Args: { _format?: string; _scope?: string; _workspace_id?: string }
+        Returns: string
+      }
+      request_workspace_deletion: {
+        Args: { _reason?: string; _workspace_id: string }
+        Returns: string
+      }
       resolve_participant_user_id: {
         Args: { _participant_type: string; _rule_id: string }
         Returns: string
@@ -4826,6 +5269,8 @@ export type Database = {
         Args: { _row_id: string; _table: string }
         Returns: Json
       }
+      revoke_all_devices: { Args: never; Returns: number }
+      revoke_device: { Args: { _device_id: string }; Returns: undefined }
       row_in_scope: {
         Args: {
           _action: string
@@ -4888,6 +5333,19 @@ export type Database = {
         Returns: boolean
       }
       user_workspace_ids: { Args: { _uid: string }; Returns: string[] }
+      write_immutable_log: {
+        Args: {
+          _action: string
+          _category: string
+          _ip?: string
+          _metadata?: Json
+          _resource?: string
+          _resource_id?: string
+          _user_agent?: string
+          _workspace_id?: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       app_role: "admin" | "partner" | "technician" | "client"
@@ -4908,6 +5366,16 @@ export type Database = {
         | "rejected"
         | "divergent"
         | "analyzing"
+      consent_action: "granted" | "withdrawn" | "updated"
+      deletion_status:
+        | "pending"
+        | "scheduled"
+        | "executing"
+        | "completed"
+        | "cancelled"
+      export_status: "queued" | "processing" | "ready" | "failed" | "expired"
+      fraud_severity: "info" | "low" | "medium" | "high" | "critical"
+      fraud_status: "open" | "reviewing" | "cleared" | "blocked"
       integrity_issue_type:
         | "duplicate_event"
         | "orphan_record"
@@ -5085,6 +5553,17 @@ export const Constants = {
         "divergent",
         "analyzing",
       ],
+      consent_action: ["granted", "withdrawn", "updated"],
+      deletion_status: [
+        "pending",
+        "scheduled",
+        "executing",
+        "completed",
+        "cancelled",
+      ],
+      export_status: ["queued", "processing", "ready", "failed", "expired"],
+      fraud_severity: ["info", "low", "medium", "high", "critical"],
+      fraud_status: ["open", "reviewing", "cleared", "blocked"],
       integrity_issue_type: [
         "duplicate_event",
         "orphan_record",

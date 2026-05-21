@@ -11,6 +11,7 @@ import { useUserProfile } from "@/hooks/useUserProfile";
 import { COUNTRIES } from "@/lib/countries";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { LoadingState } from "@/components/shared/LoadingState";
+import { PrivacyAndSessionsCard } from "@/components/settings/PrivacyAndSessionsCard";
 
 interface AddrParts { street_number: string; street_name: string; postal_code: string; city: string; country: string; }
 const EMPTY_ADDR: AddrParts = { street_number: "", street_name: "", postal_code: "", city: "", country: "" };
@@ -129,6 +130,9 @@ export default function ProfilePage() {
           )}
         </CardContent>
       </Card>
+
+      {/* SECTION 3 — Privacy, sessions & GDPR (Phase 5.5) */}
+      <PrivacyAndSessionsCard />
     </div>
   );
 }

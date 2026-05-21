@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode, useRef } fro
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { logSecurityEvent } from "@/lib/securityLog";
+import { registerCurrentDevice } from "@/lib/deviceFingerprint";
 
 interface AuthContextType {
   session: Session | null;
@@ -47,7 +48,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!mounted.current) return;
       setSession(s);
       setUser(s?.user ?? null);
-      if (s?.user) fetchUserData(s.user.id);
+      if (s?.user) {
+        fetchUserData(s.user.id);
+        // Phase 5.5 — register device fingerprint (silent, best-effort)
+        registerCurrentDevice();
+      }
       setLoading(false);
     }).catch((err) => {
       console.error("[Auth] getSession error:", err);
@@ -61,8 +66,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(s);
         setUser(s?.user ?? null);
         if (s?.user) {
-          // Fire-and-forget profile fetch (no await)
-          setTimeout(() => fetchUserData(s.user.id), 0);
+          // Fire-and-forget profile fetch + device register (no await)
+          setTimeout(() => {
+            fetchUserData(s.user.id);
+            registerCurrentDevice();
+          }, 0);
         } else {
           setProfile(null);
         }

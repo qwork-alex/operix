@@ -4,7 +4,7 @@ import { Navigate } from "react-router-dom";
 import {
   Shield, Building2, AlertCircle, Clock, CheckCircle2,
   Landmark, CreditCard, Receipt, Percent, Webhook, Activity,
-  ScrollText, Power, Brain,
+  ScrollText, Power, Brain, ShieldCheck,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -19,6 +19,7 @@ import { PlatformFinancialDashboard } from "@/components/billing/PlatformFinanci
 import { SmartMetricsCards } from "@/components/billing/SmartMetricsCards";
 import { AutomationPanel } from "@/components/billing/AutomationPanel";
 import { SecurityDashboard } from "@/components/platform/SecurityDashboard";
+import { ComplianceDashboard } from "@/components/platform/ComplianceDashboard";
 import { useIsPlatformOwner } from "@/hooks/useSubscription";
 import { toast } from "sonner";
 
@@ -45,6 +46,7 @@ export default function PlatformOwnerPage() {
           <TabsTrigger value="automation"><Brain className="h-3.5 w-3.5 mr-1.5" />Automação</TabsTrigger>
           <TabsTrigger value="audit"><ScrollText className="h-3.5 w-3.5 mr-1.5" />Auditoria</TabsTrigger>
           <TabsTrigger value="security"><Shield className="h-3.5 w-3.5 mr-1.5" />Segurança</TabsTrigger>
+          <TabsTrigger value="compliance"><ShieldCheck className="h-3.5 w-3.5 mr-1.5" />Compliance</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-6 space-y-6">
@@ -64,6 +66,7 @@ export default function PlatformOwnerPage() {
         </TabsContent>
         <TabsContent value="audit" className="mt-6"><AuditTab /></TabsContent>
         <TabsContent value="security" className="mt-6"><SecurityDashboard /></TabsContent>
+        <TabsContent value="compliance" className="mt-6"><ComplianceDashboard /></TabsContent>
       </Tabs>
     </div>
   );
