@@ -185,7 +185,6 @@ export function useProductionKpis() {
 }
 
 export function useProductionTimeline(orderId: string | null) {
-  const qc = useQueryClient();
   const query = useQuery({
     queryKey: ["production_events", orderId],
     enabled: !!orderId,
@@ -199,20 +198,6 @@ export function useProductionTimeline(orderId: string | null) {
       return data ?? [];
     },
   });
-
-  useEffect(() => {
-    if (!orderId) return;
-    const channelId = `prod-events:${orderId}:${Math.random().toString(36).slice(2, 10)}`;
-    const ch = supabase
-      .channel(channelId)
-      .on("postgres_changes",
-        { event: "INSERT", schema: "public", table: "production_events", filter: `production_order_id=eq.${orderId}` },
-        () => qc.invalidateQueries({ queryKey: ["production_events", orderId] })
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [qc, orderId]);
-
 
   return query;
 }

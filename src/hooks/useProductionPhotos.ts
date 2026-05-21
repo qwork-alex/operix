@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useWorkspace } from "./useWorkspace";
 import { toast } from "sonner";
@@ -68,18 +67,6 @@ export function useProductionPhotos(orderId: string | null) {
       return list;
     },
   });
-
-  useEffect(() => {
-    if (!orderId) return;
-    const ch = supabase
-      .channel(`prod-photos:${orderId}`)
-      .on("postgres_changes",
-        { event: "*", schema: "public", table: "production_photos", filter: `production_order_id=eq.${orderId}` },
-        () => qc.invalidateQueries({ queryKey: ["production_photos", orderId] })
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [qc, orderId]);
 
   const upload = useMutation({
     mutationFn: async ({ file, category, caption }: { file: File; category: PhotoCategory; caption?: string }) => {
