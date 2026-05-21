@@ -72,7 +72,7 @@ export function OrderDetailDialog({ order, onClose }: Props) {
               <Field label="Marca"><Input value={form.brand ?? ""} onChange={e => set("brand", e.target.value)} /></Field>
               <Field label="Modelo"><Input value={form.model ?? ""} onChange={e => set("model", e.target.value)} /></Field>
               <Field label="Cor"><Input value={form.color ?? ""} onChange={e => set("color", e.target.value)} /></Field>
-              <Field label="Seguradora"><Input value={form.insurer ?? ""} onChange={e => set("insurer", e.target.value)} /></Field>
+              <Field label="Seguradora / Cliente"><Input value={form.insurer ?? ""} onChange={e => set("insurer", e.target.value)} /></Field>
 
               <Field label="Status">
                 <Select value={form.status ?? "new_vehicle"} onValueChange={(v) => set("status", v as ProductionStatus)}>
