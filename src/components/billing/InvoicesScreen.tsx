@@ -19,7 +19,7 @@ import ExcelJS from "exceljs";
 import { toast } from "sonner";
 import { PaymentListsSelector } from "@/components/billing/PaymentListsSelector";
 import type { BillingPaymentList } from "@/hooks/usePaymentListsConsolidated";
-import { InvoiceLogoButton } from "@/components/settings/InvoiceLogoButton";
+import { BrandLogo } from "@/components/BrandLogo";
 
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -1161,7 +1161,7 @@ export default function InvoicesScreen() {
               >
                 <Printer className="h-3.5 w-3.5 mr-1.5" /> Visualizar impressão
               </Button>
-              <InvoiceLogoButton />
+              
               {viewMode === "edit" && (
                 <Button
                   variant="outline" size="sm" className="h-8 no-print"
@@ -2086,8 +2086,6 @@ function InvoicePreview({
   const companyAddr = company?.address || "";
   const companySiret = company?.siret || "";
   const companyTva = company?.tva_number || "";
-  const companyLogo = company?.logo_url || BRAND.logo;
-
   const docTitle = opt.show_doc_title ? (opt.doc_title || "Fatura") : "Fatura";
   const paymentLabel = PAYMENT_TERMS.find((p) => p.value === form.payment_term)?.label ?? "—";
 
@@ -2109,14 +2107,7 @@ function InvoicePreview({
       <header className="flex items-start justify-between gap-8 pb-6 border-b-2 border-zinc-900">
         {/* Company - left */}
         <div className="flex items-start gap-3 min-w-0 flex-1">
-          {companyLogo && (
-            <img
-              src={companyLogo}
-              alt={companyName}
-              className="h-14 w-14 object-contain shrink-0"
-              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-            />
-          )}
+          <BrandLogo size={56} nameOverride={companyName} disableGlow />
           <div className="min-w-0">
             <p className="text-lg font-bold tracking-tight text-zinc-900">{companyName}</p>
             {companyAddr && (
