@@ -25,6 +25,7 @@ export function AppSidebar() {
   const { t } = useLanguage();
   const { can, isLoading: permsLoading } = useCan();
   const { brandConfig, saveBrandConfig } = useCompanyLogo();
+  const { data: isPlatformOwner } = useIsPlatformOwner();
 
   const handleBrandSave = async (config: BrandConfig) => {
     try {
@@ -101,9 +102,46 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        <SidebarGroup className="mt-auto">
+          <SidebarGroupLabel className="text-muted-foreground/60 text-[10px] uppercase tracking-widest">
+            Conta
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <NavLink
+                    to="/subscription"
+                    className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+                    activeClassName="bg-sidebar-accent text-primary font-medium"
+                  >
+                    <CreditCard className="h-4 w-4 shrink-0" />
+                    {!collapsed && <span>Assinaturas</span>}
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              {isPlatformOwner && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <NavLink
+                      to="/platform"
+                      className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+                      activeClassName="bg-sidebar-accent text-primary font-medium"
+                    >
+                      <Shield className="h-4 w-4 shrink-0" />
+                      {!collapsed && <span>Plataforma</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
 
       {/* Settings moved into the profile dropdown (top-right). */}
+
 
     </Sidebar>
   );
