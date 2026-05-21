@@ -2146,6 +2146,97 @@ export type Database = {
           },
         ]
       }
+      invoice_email_queue: {
+        Row: {
+          attempts: number
+          created_at: string
+          id: string
+          invoice_id: string
+          last_error: string | null
+          recipient: string
+          scheduled_at: string
+          sent_at: string | null
+          status: string
+          template: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          id?: string
+          invoice_id: string
+          last_error?: string | null
+          recipient: string
+          scheduled_at?: string
+          sent_at?: string | null
+          status?: string
+          template?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          id?: string
+          invoice_id?: string
+          last_error?: string | null
+          recipient?: string
+          scheduled_at?: string
+          sent_at?: string | null
+          status?: string
+          template?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_email_queue_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "platform_invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoice_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          event_type: string
+          id: string
+          invoice_id: string
+          payload: Json
+          workspace_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          invoice_id: string
+          payload?: Json
+          workspace_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          invoice_id?: string
+          payload?: Json
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_events_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "platform_invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoice_send_log: {
         Row: {
           body: string | null
@@ -2895,6 +2986,7 @@ export type Database = {
       }
       platform_invoices: {
         Row: {
+          bank_snapshot: Json | null
           created_at: string
           currency: string
           customer_address: Json | null
@@ -2909,6 +3001,8 @@ export type Database = {
           issue_date: string
           metadata: Json
           paid_at: string | null
+          pdf_generated_at: string | null
+          pdf_path: string | null
           pdf_url: string | null
           status: string
           subscription_id: string | null
@@ -2917,11 +3011,13 @@ export type Database = {
           updated_at: string
           vat_amount: number
           vat_exemption_reason: string | null
+          vat_mode: string | null
           vat_rate: number
           vat_reverse_charge: boolean
           workspace_id: string
         }
         Insert: {
+          bank_snapshot?: Json | null
           created_at?: string
           currency?: string
           customer_address?: Json | null
@@ -2936,6 +3032,8 @@ export type Database = {
           issue_date?: string
           metadata?: Json
           paid_at?: string | null
+          pdf_generated_at?: string | null
+          pdf_path?: string | null
           pdf_url?: string | null
           status?: string
           subscription_id?: string | null
@@ -2944,11 +3042,13 @@ export type Database = {
           updated_at?: string
           vat_amount?: number
           vat_exemption_reason?: string | null
+          vat_mode?: string | null
           vat_rate?: number
           vat_reverse_charge?: boolean
           workspace_id: string
         }
         Update: {
+          bank_snapshot?: Json | null
           created_at?: string
           currency?: string
           customer_address?: Json | null
@@ -2963,6 +3063,8 @@ export type Database = {
           issue_date?: string
           metadata?: Json
           paid_at?: string | null
+          pdf_generated_at?: string | null
+          pdf_path?: string | null
           pdf_url?: string | null
           status?: string
           subscription_id?: string | null
@@ -2971,6 +3073,7 @@ export type Database = {
           updated_at?: string
           vat_amount?: number
           vat_exemption_reason?: string | null
+          vat_mode?: string | null
           vat_rate?: number
           vat_reverse_charge?: boolean
           workspace_id?: string
