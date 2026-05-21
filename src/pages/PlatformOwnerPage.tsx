@@ -14,6 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { LoadingState } from "@/components/shared/LoadingState";
+import { PlatformFinancialDashboard } from "@/components/billing/PlatformFinancialDashboard";
 import { useIsPlatformOwner } from "@/hooks/useSubscription";
 import { toast } from "sonner";
 
@@ -73,7 +74,8 @@ function OverviewTab() {
   }, { total: 0 } as Record<string, number>);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      <PlatformFinancialDashboard />
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {[
           { label: "Workspaces", value: counts.total, icon: Building2, tone: "text-foreground" },

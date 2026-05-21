@@ -10,6 +10,7 @@ import { LoadingState } from "@/components/shared/LoadingState";
 import { useSubscription, useIsPlatformOwner, type SubscriptionStatus } from "@/hooks/useSubscription";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { Link } from "react-router-dom";
+import { SubscriptionTimeline } from "@/components/billing/SubscriptionTimeline";
 
 const STATUS_META: Record<SubscriptionStatus, { label: string; tone: string; icon: typeof CheckCircle2 }> = {
   trial:        { label: "Em avaliação", tone: "bg-amber-500/10 text-amber-500 border-amber-500/30",  icon: Clock },
@@ -85,11 +86,16 @@ export default function SubscriptionPage() {
         title="Assinatura"
         subtitle={workspaceName ?? undefined}
         actions={
-          isPlatformOwner ? (
-            <Button asChild variant="outline" size="sm">
-              <Link to="/platform">Painel Plataforma</Link>
+          <div className="flex gap-2">
+            <Button asChild size="sm">
+              <Link to={`/checkout?plan=${plan.code}&cycle=${subscription.billing_cycle}`}>Checkout</Link>
             </Button>
-          ) : null
+            {isPlatformOwner ? (
+              <Button asChild variant="outline" size="sm">
+                <Link to="/platform">Painel Plataforma</Link>
+              </Button>
+            ) : null}
+          </div>
         }
       />
 
@@ -199,9 +205,10 @@ export default function SubscriptionPage() {
         </div>
       </Card>
 
+      <SubscriptionTimeline />
+
       <Card className="p-4 surface-card text-xs text-muted-foreground">
-        Pagamento online ainda não está activo — esta página mostra apenas a arquitectura de subscrição.
-        Para alterar o plano contacte a equipa.
+        Gateway de pagamento ainda não está activo — esta página gere a arquitectura de subscrição e checkout interno.
       </Card>
     </div>
   );

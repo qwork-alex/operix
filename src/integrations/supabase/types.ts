@@ -543,6 +543,65 @@ export type Database = {
           },
         ]
       }
+      billing_profiles: {
+        Row: {
+          billing_address: string | null
+          billing_email: string
+          city: string | null
+          company_name: string | null
+          country: string
+          created_at: string
+          id: string
+          is_business: boolean
+          legal_name: string
+          postal_code: string | null
+          preferred_currency: string
+          updated_at: string
+          vat_number: string | null
+          workspace_id: string
+        }
+        Insert: {
+          billing_address?: string | null
+          billing_email: string
+          city?: string | null
+          company_name?: string | null
+          country?: string
+          created_at?: string
+          id?: string
+          is_business?: boolean
+          legal_name: string
+          postal_code?: string | null
+          preferred_currency?: string
+          updated_at?: string
+          vat_number?: string | null
+          workspace_id: string
+        }
+        Update: {
+          billing_address?: string | null
+          billing_email?: string
+          city?: string | null
+          company_name?: string | null
+          country?: string
+          created_at?: string
+          id?: string
+          is_business?: boolean
+          legal_name?: string
+          postal_code?: string | null
+          preferred_currency?: string
+          updated_at?: string
+          vat_number?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_profiles_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       billing_reconciliations: {
         Row: {
           created_at: string
@@ -977,6 +1036,51 @@ export type Database = {
           workspace_id?: string | null
         }
         Relationships: []
+      }
+      dunning_events: {
+        Row: {
+          days_overdue: number
+          id: string
+          invoice_id: string | null
+          notified: boolean
+          stage: string
+          triggered_at: string
+          workspace_id: string
+        }
+        Insert: {
+          days_overdue: number
+          id?: string
+          invoice_id?: string | null
+          notified?: boolean
+          stage: string
+          triggered_at?: string
+          workspace_id: string
+        }
+        Update: {
+          days_overdue?: number
+          id?: string
+          invoice_id?: string | null
+          notified?: boolean
+          stage?: string
+          triggered_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dunning_events_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "platform_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dunning_events_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       financial_entries: {
         Row: {
@@ -1813,6 +1917,70 @@ export type Database = {
           },
         ]
       }
+      manual_bank_transfers: {
+        Row: {
+          amount: number
+          bank_account_id: string | null
+          currency: string
+          declared_at: string
+          id: string
+          invoice_id: string | null
+          reference_code: string
+          reviewed_at: string | null
+          reviewer_notes: string | null
+          status: string
+          workspace_id: string
+        }
+        Insert: {
+          amount: number
+          bank_account_id?: string | null
+          currency?: string
+          declared_at?: string
+          id?: string
+          invoice_id?: string | null
+          reference_code: string
+          reviewed_at?: string | null
+          reviewer_notes?: string | null
+          status?: string
+          workspace_id: string
+        }
+        Update: {
+          amount?: number
+          bank_account_id?: string | null
+          currency?: string
+          declared_at?: string
+          id?: string
+          invoice_id?: string | null
+          reference_code?: string
+          reviewed_at?: string | null
+          reviewer_notes?: string | null
+          status?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "manual_bank_transfers_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "platform_bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manual_bank_transfers_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "platform_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manual_bank_transfers_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       memberships: {
         Row: {
           created_at: string
@@ -2098,6 +2266,107 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_attempts: {
+        Row: {
+          attempt_number: number
+          attempted_at: string | null
+          created_at: string
+          failure_reason: string | null
+          id: string
+          invoice_id: string | null
+          scheduled_at: string
+          status: string
+          workspace_id: string
+        }
+        Insert: {
+          attempt_number?: number
+          attempted_at?: string | null
+          created_at?: string
+          failure_reason?: string | null
+          id?: string
+          invoice_id?: string | null
+          scheduled_at: string
+          status?: string
+          workspace_id: string
+        }
+        Update: {
+          attempt_number?: number
+          attempted_at?: string | null
+          created_at?: string
+          failure_reason?: string | null
+          id?: string
+          invoice_id?: string | null
+          scheduled_at?: string
+          status?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_attempts_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "platform_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_attempts_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_methods: {
+        Row: {
+          brand: string | null
+          created_at: string
+          holder_name: string | null
+          iban_masked: string | null
+          id: string
+          is_default: boolean
+          kind: string
+          last4: string | null
+          provider: string
+          provider_ref: string | null
+          workspace_id: string
+        }
+        Insert: {
+          brand?: string | null
+          created_at?: string
+          holder_name?: string | null
+          iban_masked?: string | null
+          id?: string
+          is_default?: boolean
+          kind: string
+          last4?: string | null
+          provider?: string
+          provider_ref?: string | null
+          workspace_id: string
+        }
+        Update: {
+          brand?: string | null
+          created_at?: string
+          holder_name?: string | null
+          iban_masked?: string | null
+          id?: string
+          is_default?: boolean
+          kind?: string
+          last4?: string | null
+          provider?: string
+          provider_ref?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_methods_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
             referencedColumns: ["id"]
           },
         ]
@@ -4232,6 +4501,16 @@ export type Database = {
         }
         Returns: string
       }
+      log_subscription_event: {
+        Args: {
+          _event_type: string
+          _message?: string
+          _metadata?: Json
+          _severity?: string
+          _workspace_id: string
+        }
+        Returns: string
+      }
       next_platform_invoice_number: { Args: never; Returns: string }
       owner_filter_uids: { Args: { _uid: string }; Returns: string[] }
       payment_order_has_active_billing: {
@@ -4259,12 +4538,21 @@ export type Database = {
         }
         Returns: boolean
       }
+      run_dunning_check: { Args: never; Returns: number }
       run_financial_integrity_check: {
         Args: { _workspace_id?: string; _year?: number }
         Returns: Json
       }
+      schedule_payment_retries: {
+        Args: { _invoice_id: string }
+        Returns: number
+      }
       soft_delete_record: {
         Args: { _reason?: string; _row_id: string; _table: string }
+        Returns: Json
+      }
+      start_workspace_checkout: {
+        Args: { _cycle?: string; _plan_code: string; _workspace_id: string }
         Returns: Json
       }
       sync_discrepancy_for_service_order: {

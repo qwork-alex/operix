@@ -34,6 +34,7 @@ import RecoveryPage from "./pages/RecoveryPage";
 import ProfilePage from "./pages/ProfilePage";
 import SubscriptionPage from "./pages/SubscriptionPage";
 import PlatformOwnerPage from "./pages/PlatformOwnerPage";
+import CheckoutPage from "./pages/CheckoutPage";
 import {
   TermsPage,
   PrivacyPage,
@@ -99,6 +100,7 @@ const App = () => (
                             <Route path="/audit" element={<AuditPage />} />
                             <Route path="/recovery" element={<RecoveryPage />} />
                             <Route path="/subscription" element={<SubscriptionPage />} />
+                            <Route path="/checkout" element={<CheckoutPage />} />
                             <Route path="/platform" element={<PlatformOwnerPage />} />
                             <Route path="*" element={<NotFound />} />
                           </Routes>
