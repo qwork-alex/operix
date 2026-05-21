@@ -2238,6 +2238,27 @@ export type Database = {
         }
         Relationships: []
       }
+      platform_owners: {
+        Row: {
+          created_at: string
+          email: string
+          notes: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          notes?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          notes?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           address: string | null
@@ -2687,6 +2708,90 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      subscription_events: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          event_type: string
+          id: string
+          payload: Json
+          subscription_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          payload?: Json
+          subscription_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          payload?: Json
+          subscription_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_events_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_events_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subscription_plans: {
+        Row: {
+          base_price_monthly: number
+          base_tech_included: number
+          code: string
+          created_at: string
+          extra_block_price: number
+          extra_block_size: number
+          id: string
+          is_active: boolean
+          name: string
+          yearly_discount_months: number
+        }
+        Insert: {
+          base_price_monthly?: number
+          base_tech_included?: number
+          code: string
+          created_at?: string
+          extra_block_price?: number
+          extra_block_size?: number
+          id?: string
+          is_active?: boolean
+          name: string
+          yearly_discount_months?: number
+        }
+        Update: {
+          base_price_monthly?: number
+          base_tech_included?: number
+          code?: string
+          created_at?: string
+          extra_block_price?: number
+          extra_block_size?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          yearly_discount_months?: number
+        }
+        Relationships: []
       }
       technician_clients: {
         Row: {
@@ -3328,6 +3433,78 @@ export type Database = {
           },
         ]
       }
+      workspace_subscriptions: {
+        Row: {
+          billing_cycle: Database["public"]["Enums"]["billing_cycle"]
+          cancelled_at: string | null
+          created_at: string
+          current_period_end: string | null
+          current_period_start: string | null
+          current_price: number
+          grace_until: string | null
+          id: string
+          metadata: Json
+          plan_id: string
+          status: Database["public"]["Enums"]["subscription_status"]
+          technician_count: number
+          trial_ends_at: string
+          trial_started_at: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          billing_cycle?: Database["public"]["Enums"]["billing_cycle"]
+          cancelled_at?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          current_price?: number
+          grace_until?: string | null
+          id?: string
+          metadata?: Json
+          plan_id: string
+          status?: Database["public"]["Enums"]["subscription_status"]
+          technician_count?: number
+          trial_ends_at?: string
+          trial_started_at?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          billing_cycle?: Database["public"]["Enums"]["billing_cycle"]
+          cancelled_at?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          current_price?: number
+          grace_until?: string | null
+          id?: string
+          metadata?: Json
+          plan_id?: string
+          status?: Database["public"]["Enums"]["subscription_status"]
+          technician_count?: number
+          trial_ends_at?: string
+          trial_started_at?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workspace_subscriptions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspaces: {
         Row: {
           created_at: string
@@ -3497,6 +3674,14 @@ export type Database = {
         Args: { _invoice_id: string }
         Returns: undefined
       }
+      calc_subscription_price: {
+        Args: {
+          _cycle?: Database["public"]["Enums"]["billing_cycle"]
+          _plan_code?: string
+          _tech_count: number
+        }
+        Returns: number
+      }
       can_access_client: {
         Args: { _client_id: string; _user_id: string }
         Returns: boolean
@@ -3558,6 +3743,10 @@ export type Database = {
           workspace_name: string
         }[]
       }
+      get_workspace_subscription: {
+        Args: { _workspace_id: string }
+        Returns: Json
+      }
       has_global_view: { Args: { _user_id: string }; Returns: boolean }
       has_permission: {
         Args: { _action: string; _module: string; _user_id: string }
@@ -3591,7 +3780,12 @@ export type Database = {
         Args: { _uid: string; _user_id: string }
         Returns: boolean
       }
+      is_platform_owner: { Args: { _uid?: string }; Returns: boolean }
       is_user_active: { Args: { _user_id: string }; Returns: boolean }
+      is_workspace_admin: {
+        Args: { _uid?: string; _workspace_id: string }
+        Returns: boolean
+      }
       is_workspace_member: {
         Args: { _uid: string; _ws: string }
         Returns: boolean
@@ -3695,6 +3889,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "partner" | "technician" | "client"
+      billing_cycle: "monthly" | "yearly"
       billing_invoice_status:
         | "draft"
         | "pending"
@@ -3732,6 +3927,13 @@ export type Database = {
       membership_role: "admin" | "tecnico" | "cliente" | "socio"
       membership_status: "active" | "pending"
       permission_scope: "own" | "team" | "all"
+      subscription_status:
+        | "trial"
+        | "active"
+        | "grace_period"
+        | "overdue"
+        | "suspended"
+        | "cancelled"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3860,6 +4062,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "partner", "technician", "client"],
+      billing_cycle: ["monthly", "yearly"],
       billing_invoice_status: [
         "draft",
         "pending",
@@ -3900,6 +4103,14 @@ export const Constants = {
       membership_role: ["admin", "tecnico", "cliente", "socio"],
       membership_status: ["active", "pending"],
       permission_scope: ["own", "team", "all"],
+      subscription_status: [
+        "trial",
+        "active",
+        "grace_period",
+        "overdue",
+        "suspended",
+        "cancelled",
+      ],
     },
   },
 } as const
