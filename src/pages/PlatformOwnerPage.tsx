@@ -18,6 +18,7 @@ import { LoadingState } from "@/components/shared/LoadingState";
 import { PlatformFinancialDashboard } from "@/components/billing/PlatformFinancialDashboard";
 import { SmartMetricsCards } from "@/components/billing/SmartMetricsCards";
 import { AutomationPanel } from "@/components/billing/AutomationPanel";
+import { ManualPaymentsReview } from "@/components/billing/ManualPaymentsReview";
 import { SecurityDashboard } from "@/components/platform/SecurityDashboard";
 import { ComplianceDashboard } from "@/components/platform/ComplianceDashboard";
 import { useIsPlatformOwner } from "@/hooks/useSubscription";
@@ -293,10 +294,12 @@ function PaymentsTab() {
   });
   if (isLoading) return <LoadingState variant="table" />;
   return (
+    <div className="space-y-6">
+      <ManualPaymentsReview />
     <Card className="surface-card overflow-hidden">
       <div className="px-4 py-3 border-b border-border/40 flex items-center justify-between">
         <h3 className="text-sm font-semibold">Pagamentos registados</h3>
-        <span className="text-[11px] text-muted-foreground">Stripe será integrado na próxima fase</span>
+        <span className="text-[11px] text-muted-foreground">Histórico consolidado (Stripe + manual)</span>
       </div>
       {rows.length === 0 ? (
         <div className="p-8 text-center text-xs text-muted-foreground">Sem pagamentos ainda.</div>
@@ -329,6 +332,7 @@ function PaymentsTab() {
         </div>
       )}
     </Card>
+    </div>
   );
 }
 
