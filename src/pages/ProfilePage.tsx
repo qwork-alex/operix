@@ -130,6 +130,9 @@ export default function ProfilePage() {
           )}
         </CardContent>
       </Card>
+
+      {/* SECTION 3 — Privacy, sessions & GDPR (Phase 5.5) */}
+      <PrivacyAndSessionsCard />
     </div>
   );
 }
