@@ -4,11 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useProductionPhotos, PHOTO_CATEGORIES, type PhotoCategory } from "@/hooks/useProductionPhotos";
 
-interface Props { orderId: string; }
+interface Props { orderId: string; fixedCategory?: PhotoCategory; hideOthers?: boolean; }
 
-export function PhotoUploader({ orderId }: Props) {
-  const { data: photos = [], upload, remove } = useProductionPhotos(orderId);
-  const [category, setCategory] = useState<PhotoCategory>("before");
+export function PhotoUploader({ orderId, fixedCategory, hideOthers }: Props) {
+  const { data: allPhotos = [], upload, remove } = useProductionPhotos(orderId);
+  const [category, setCategory] = useState<PhotoCategory>(fixedCategory ?? "before");
+  const photos = hideOthers && fixedCategory ? allPhotos.filter(p => p.category === fixedCategory) : allPhotos;
   const [dragOver, setDragOver] = useState(false);
 
   const handleFiles = async (files: FileList | File[]) => {
