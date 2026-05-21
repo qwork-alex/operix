@@ -15,19 +15,25 @@ export function PhotoUploader({ orderId, fixedCategory, hideOthers }: Props) {
   const handleFiles = async (files: FileList | File[]) => {
     for (const file of Array.from(files)) {
       if (!file.type.startsWith("image/")) continue;
-      await upload.mutateAsync({ file, category });
+      try {
+        await upload.mutateAsync({ file, category });
+      } catch (err) {
+        console.error("[PhotoUploader] upload failed", err);
+      }
     }
   };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <Select value={category} onValueChange={(v) => setCategory(v as PhotoCategory)}>
-          <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {PHOTO_CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        {!fixedCategory && (
+          <Select value={category} onValueChange={(v) => setCategory(v as PhotoCategory)}>
+            <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {PHOTO_CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
         <label className="flex-1">
           <input type="file" accept="image/*" multiple className="hidden"
             onChange={(e) => e.target.files && handleFiles(e.target.files)} />
