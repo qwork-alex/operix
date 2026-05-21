@@ -82,3 +82,4 @@ i18n rule: every visible string MUST flow through useLanguage().t(key) — no in
 - [Hard Isolation Phase 2.5](mem://auth/phase-2-5-hard-isolation) — Additive ws_scope_* RLS + scopeQuery on top hooks. Admin-global still passes via legacy policies until Phase 3.
 - [Participation Engine](mem://features/financeiro/participation-engine) — Phase 4 ledger: participant rows from snapshot+billing, workspace/year isolated, new ParticipationTab
 - [Financial Audit Layer](mem://features/financeiro/audit-layer) — Phase 4.5 read-only: timeline view, integrity KPIs, participation_diffs trigger, FinancialAuditTab
+- [Compliance & GDPR](mem://features/security/phase-5-5-compliance) — Phase 5.5: consent_logs, immutable_audit_logs (sha256 chain), fraud_signals, user_devices, data exports, workspace deletion lifecycle, security_policies
