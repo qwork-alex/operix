@@ -142,6 +142,15 @@ export function HierarchicalOrdersView<R extends HierarchyRecord>({
     } catch { /* ignore */ }
   }, [open, storageKey]);
 
+  const [activeMap, setActiveMap] = useState<Record<string, boolean>>(() => readActiveMap());
+  const togglePlatformActive = useCallback((key: string) => {
+    setActiveMap(prev => {
+      const next = { ...prev, [key]: !prev[key] };
+      writeActiveMap(next);
+      return next;
+    });
+  }, []);
+
   const toggle = useCallback((k: string) => {
     setOpen(prev => {
       const next = new Set(prev);
