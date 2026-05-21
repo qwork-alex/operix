@@ -28,7 +28,11 @@ export function StripePortalButton({ variant = "outline", size = "sm", label = "
           environment: getStripeEnvironment(),
         },
       });
-      if (error || !data?.url) throw new Error(error?.message || data?.error || "Sem portal disponível");
+      if (error) throw new Error(error.message || "Sem portal disponível");
+      if (data?.requires_checkout || !data?.url) {
+        toast.info(data?.message || "Sem subscrição ativa para gerir.");
+        return;
+      }
       window.open(data.url, "_blank", "noopener,noreferrer");
     } catch (e: any) {
       toast.error(e.message ?? "Não foi possível abrir o portal");
