@@ -717,6 +717,36 @@ export function UserPermissionsDialog({
                 </label>
               </div>
 
+              {/* Presets — populate matrix from a role's default permissions.
+                  Existing overrides for keys NOT in the preset are preserved. */}
+              <div className="rounded-lg border border-border/60 bg-background/40 p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <div className="text-sm font-medium">Presets de função</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      Carrega as permissões padrão da função escolhida sobre esta matriz.
+                      Não remove permissões individuais já existentes.
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(["admin", "socio", "tecnico", "cliente"] as const).map((r) => (
+                    <Button
+                      key={r}
+                      variant="outline"
+                      size="sm"
+                      disabled={applyPresetMutation.isPending}
+                      onClick={() => applyPresetMutation.mutate(r)}
+                      className="text-xs h-7 capitalize"
+                    >
+                      {r}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+
+
               {loading ? (
                 <div className="space-y-2">
                   {Array.from({ length: 6 }).map((_, i) => (
