@@ -1,129 +1,110 @@
-# Fase 6C — Customer Portal + Billing Experience
+# Fase 6D — Real Invoices + TVA + PDF (Safe Mode)
 
-Objetivo: Transformar `/subscription` num **Portal Financeiro premium** completo, sem quebrar a arquitetura SaaS interna nem o módulo `/billing` (este é operacional de clientes). Usa Stripe apenas como gateway, mantém planos e lifecycle internos como fonte de verdade.
+Implementação **incremental, defensiva, aditiva**. Nenhuma rota, provider, hook ou lifecycle existente é alterado. Todas as peças novas vivem em ficheiros isolados e tabelas complementares. Após cada passo validamos o preview antes de avançar.
 
 ---
 
-## 1. Estrutura — novo Portal Financeiro
+## Princípios
 
-Reorganizar `SubscriptionPage` em **5 abas internas premium** (Tabs dentro do mesmo route `/subscription`):
+- **Aditivo apenas.** Nada de reescrever Subscription Engine, Stripe lifecycle, autenticação, rotas ou layout.
+- **Reaproveitar `billing_invoices`** (já existe) — só adicionamos colunas + novas tabelas auxiliares.
+- **Falha isolada.** Erros em PDF/email/export NUNCA derrubam UI nem checkout.
+- **Idempotência** em geração, numeração e envio.
+- **Rollback fácil:** cada passo é uma migration + ficheiros novos, removíveis sem efeitos colaterais.
+
+---
+
+## Arquitetura
 
 ```text
-[ Visão geral ] [ Faturas ] [ Pagamento ] [ Faturação ] [ Histórico ]
+                  ┌──────────────────────┐
+   evento ───►    │  invoice_engine (RPC)│ ──► billing_invoices (+ items, events)
+ (renew/upgrade/  └──────────┬───────────┘
+  payment/active)            │
+                             ├──► tva_engine (calc com_iva / sem_iva / reverse_charge)
+                             ├──► bank_snapshot (Wise pessoal vs empresa)
+                             ├──► pdf_service  (edge function isolada)
+                             └──► email_queue  (tabela + dispatcher cron)
 ```
 
-- **Visão geral** — KPIs vivos (preço, técnicos, próximo escalão), banner de status, simulador, alertas inteligentes, próxima renovação.
-- **Faturas** — Invoice Center.
-- **Pagamento** — métodos de pagamento + portal Stripe.
-- **Faturação** — perfil fiscal + modo TVA.
-- **Histórico** — timeline detalhada.
+---
 
-Layout cinematográfico: glow refinado, gradientes dark luxury, micro-animações, status vivos.
+## Passos (executados um de cada vez, com validação de preview entre eles)
+
+### PASSO 1 — Schema base (migration)
+
+- `billing_invoices`: adicionar colunas (nullable, defaults seguros)
+  `vat_mode`, `vat_rate`, `subtotal_amount`, `vat_amount`, `bank_snapshot jsonb`, `pdf_path`, `pdf_generated_at`, `sequence_year`, `sequence_number`.
+- `invoice_items` (novo): id, invoice_id, description, quantity, unit_amount, vat_rate, line_total.
+- `invoice_events` (novo): id, invoice_id, type (`generated|sent|downloaded|status_changed|pdf_regenerated`), payload jsonb, actor_id, created_at.
+- `invoice_email_queue` (novo): id, invoice_id, recipient, status (`pending|sent|failed|dlq`), attempts, last_error, scheduled_at.
+- `invoice_sequences` (novo): year int PK, last_number bigint — para numeração segura.
+- RPC `next_invoice_number(year)` (SECURITY DEFINER, locking) → devolve `INV-YYYY-000001`.
+- RPC `generate_invoice(workspace_id, kind, source_ref, items[], vat_mode)` idempotente por `(workspace_id, source_ref, kind)`.
+- RLS: workspace members leem; só service role escreve em items/events/queue/sequences.
+
+### PASSO 2 — Invoice Engine (TS)
+
+- `src/lib/invoices/invoiceEngine.ts` — wrapper client das RPC.
+- `src/lib/invoices/tvaEngine.ts` — cálculo: `with_vat` (20% FR default por workspace country), `no_vat`, `reverse_charge` (mostra menção legal "Reverse charge – Article 196 EU VAT Directive 2006/112/EC", IVA 0).
+- `src/lib/invoices/bankSnapshot.ts` — regra: `no_vat → wise_personal`, `with_vat|reverse_charge → company_account`. Lê de `company_settings` + fallback config.
+- Hook `useGenerateInvoice()` (TanStack) que envolve a RPC.
+
+### PASSO 3 — Triggers de geração
+
+Edge function existente `payments-webhook` chama `generate_invoice` no evento `invoice.payment_succeeded` (idempotente). Adicionalmente um helper client invoca após upgrade/ativação manual. Nada do lifecycle Stripe muda.
+
+### PASSO 4 — PDF service (edge function isolada)
+
+- `supabase/functions/generate-invoice-pdf/index.ts` (verify_jwt = true).
+- Gera PDF com `jspdf` (Deno-compatível) ou HTML→PDF via `npm:@react-pdf/renderer`. Decisão: jsPDF (zero-deps Deno).
+- Layout: header com `company_settings` (logo, nome, branding tokens), bloco emissor, bloco cliente (`billing_profiles`), tabela items, subtotal, TVA, total, menção legal TVA, snapshot bancário, footer com invoice number + datas.
+- Upload para storage bucket `invoice-pdfs` (criar privado, RLS por workspace).
+- Grava `pdf_path` + `pdf_generated_at` + `invoice_events('pdf_regenerated' | 'generated')`.
+
+### PASSO 5 — Email queue
+
+- Cron `process-invoice-emails` (a cada 1 min, pg_cron + pg_net) que processa `invoice_email_queue` em lotes pequenos.
+- Edge function `send-invoice-notification` consome a fila, usa Lovable Emails (template novo `invoice-issued`) e regista `invoice_events('sent')`.
+- UI não bloqueia: enfileira e devolve toast otimista.
+
+### PASSO 6 — UI Invoice Center (aditivo)
+
+- `WorkspaceInvoiceCenter` (já existe) — só estendemos para mostrar botão **Descarregar PDF** que chama signed URL, e botão **Regenerar PDF** (admin).
+- Componente novo `InvoiceDetailsDrawer.tsx` (drawer lateral) com items, TVA, snapshot bancário, timeline (`invoice_events`).
+- Sem mudar tabs, layout ou rotas.
+
+### PASSO 7 — Exportação
+
+- Hook `useExportInvoices(format: 'pdf'|'csv'|'json')`.
+- PDF: zip de PDFs existentes (ou regenera em falta).
+- CSV/JSON: client-side, a partir de `billing_invoices` + `invoice_items` já carregados.
+- Botão único no header do Invoice Center.
 
 ---
 
-## 2. Invoice Center (aba **Faturas**)
+## Validação entre passos
 
-Mostra faturas da workspace (`billing_invoices` com `workspace_id = ws` e marcador interno) filtradas por estado:
-
-- **Pagas** (verde glow)
-- **Pendentes** (âmbar pulsante)
-- **Falhadas** (vermelho)
-- **Vencidas** (laranja)
-
-Cada linha: número, data, valor, estado, ações (ver, descarregar PDF se `stripe_invoice_id` → link Stripe hosted invoice).
-
-Hook novo: `useWorkspaceInvoices()` — query a `billing_invoices`.
+Após cada passo:
+1. `cloud_status` se passo tocou DB.
+2. Verificar preview (`/subscription` carrega, sem erros consola).
+3. Verificar que rotas `/billing`, `/checkout`, `/platform`, `/dashboard` continuam intactas.
+4. Se quebrar → rollback do passo (drop tabelas adicionadas ou apagar ficheiros novos) e parar.
 
 ---
 
-## 3. Self-Service (aba **Pagamento**)
+## Ficheiros previstos
 
-- **Métodos de pagamento** já existentes (`payment_methods` table) — lista com brand/last4.
-- **Trocar cartão** → abre Stripe Customer Portal (botão já existe `StripePortalButton`, agora promovido a card primário).
-- **Botão Cancelar Subscrição** → confirm dialog → chama portal Stripe (cancelamento é gerido lá).
-- **Upgrade / Downgrade** → CTA leva a `/checkout?plan=…` (fluxo já existe).
-
----
-
-## 4. TVA Mode (aba **Faturação**)
-
-Atualizar `billing_profiles` para suportar 3 modos:
-
-```sql
-ALTER TABLE billing_profiles
-  ADD COLUMN vat_mode text NOT NULL DEFAULT 'with_vat'
-  CHECK (vat_mode IN ('with_vat','no_vat','reverse_charge'));
-```
-
-UI: card editável com:
-- Nome legal, NIF/VAT, morada, país, cidade, código postal.
-- Selector "Modo TVA": Com TVA / Sem TVA / Reverse charge (UE).
-- Email de faturação.
-
-Hook existente `useBillingProfile` + `useSaveBillingProfile` — só estende campos.
+**Migrations:** 1 por passo (1, 4-bucket, 5-cron).
+**Novos:** `src/lib/invoices/*`, `src/hooks/useGenerateInvoice.ts`, `src/hooks/useExportInvoices.ts`, `src/components/billing/InvoiceDetailsDrawer.tsx`, `supabase/functions/generate-invoice-pdf/`, `supabase/functions/send-invoice-notification/`.
+**Editados (mínimo):** `WorkspaceInvoiceCenter.tsx` (botões PDF/export), `payments-webhook/index.ts` (chamar `generate_invoice`).
 
 ---
 
-## 5. Subscription Timeline (aba **Histórico**)
+## Fora de scope (explicitamente)
 
-Componente `SubscriptionTimeline` já existe — expandir:
-
-- Eventos de `subscription_events` ordenados por data desc.
-- Ícones por tipo: `trial_started`, `payment_succeeded`, `payment_failed`, `upgrade`, `downgrade`, `renewal`, `card_expiring`, `cancelled`.
-- Glow por severidade (info/warning/error).
-- Agrupado por mês.
-
----
-
-## 6. Alertas inteligentes (banner topo da Visão geral)
-
-Componente novo `BillingAlerts.tsx` — calcula client-side a partir do snapshot:
-
-- **Trial a terminar** (≤ 5 dias) — âmbar.
-- **Cobrança falhou** (status `overdue` / `grace_period`) — vermelho.
-- **Cartão a expirar** (metadata Stripe, se disponível) — âmbar.
-- **Upgrade sugerido** (técnicos ≥ 80% do escalão) — azul.
-
-Cada alerta tem CTA dedicado (Renovar, Atualizar cartão, Upgrade).
-
----
-
-## 7. Experiência Premium
-
-- Glow refinado nos KPI cards (já usa semantic tokens — sem hardcode).
-- Loading states com skeletons cinematográficos (não spinners).
-- Toasts elegantes (sonner já configurado).
-- Transições suaves entre tabs (framer-motion light).
-- Indicadores vivos: pulse em estados warning/error, gradientes dark.
-
----
-
-## 8. O que NÃO é alterado
-
-- `/billing` (módulo operacional clientes) — intocado.
-- Schema `workspace_subscriptions`, `subscription_plans`, lifecycle, RPCs (`get_workspace_subscription`, `start_workspace_checkout`, `activate_workspace_subscription`) — intocados.
-- Edge functions Stripe (`create-checkout`, `payments-webhook`, `create-portal-session`) — intocadas (já feitas na 6B).
-- Branding, layout global, sidebar, providers React — intocados.
-
----
-
-## Arquivos a criar / editar
-
-**Migration:**
-- `…_vat_mode.sql` — adiciona `vat_mode` a `billing_profiles`.
-
-**Componentes novos (`src/components/billing/`):**
-- `BillingAlerts.tsx`
-- `WorkspaceInvoiceCenter.tsx`
-- `WorkspacePaymentMethods.tsx`
-- `BillingProfileCard.tsx`
-- `SubscriptionOverviewTab.tsx`
-
-**Hooks novos (`src/hooks/`):**
-- `useWorkspaceInvoices.ts`
-
-**Editado:**
-- `src/pages/SubscriptionPage.tsx` — reestruturação em Tabs (mantém conteúdo atual na aba Visão geral).
-- `src/hooks/useBilling.ts` — estender `BillingProfile` com `vat_mode`.
-- `src/components/billing/SubscriptionTimeline.tsx` — visual upgrade.
+- Substituir checkout Stripe.
+- Mexer em `workspace_subscriptions`, `subscription_plans`, lifecycle, RPCs existentes.
+- Alterar `/billing` operacional.
+- Customer Portal (já existe botão; não tocado).
+- Branding, sidebar, providers React.
