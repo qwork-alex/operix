@@ -37,6 +37,7 @@ import SubscriptionPage from "./pages/SubscriptionPage";
 import PlatformOwnerPage from "./pages/PlatformOwnerPage";
 import CheckoutPage from "./pages/CheckoutPage";
 import ProductionPage from "./pages/ProductionPage";
+import MarketplacePage from "./pages/MarketplacePage";
 import {
   TermsPage,
   PrivacyPage,
@@ -99,6 +100,7 @@ const App = () => (
                             <Route path="/billing/*" element={<BillingPage />} />
                             <Route path="/documents" element={<PermissionGuard permission="documents.view"><Documents /></PermissionGuard>} />
                             <Route path="/users" element={<PermissionGuard permission="users.view"><UsersPage /></PermissionGuard>} />
+                            <Route path="/marketplace" element={<MarketplacePage />} />
                             <Route path="/settings" element={<SettingsPage />} />
                             <Route path="/profile" element={<ProfilePage />} />
                             <Route path="/audit" element={<AuditPage />} />

@@ -2390,6 +2390,178 @@ export type Database = {
           },
         ]
       }
+      marketplace_favorites: {
+        Row: {
+          created_at: string
+          id: string
+          listing_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          listing_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          listing_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketplace_favorites_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketplace_listing_photos: {
+        Row: {
+          created_at: string
+          id: string
+          listing_id: string
+          order_index: number
+          storage_path: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          listing_id: string
+          order_index?: number
+          storage_path: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          listing_id?: string
+          order_index?: number
+          storage_path?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketplace_listing_photos_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketplace_listing_views: {
+        Row: {
+          created_at: string
+          id: string
+          listing_id: string
+          viewer_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          listing_id: string
+          viewer_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          listing_id?: string
+          viewer_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketplace_listing_views_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketplace_listings: {
+        Row: {
+          category: Database["public"]["Enums"]["marketplace_category"]
+          condition: Database["public"]["Enums"]["marketplace_condition"] | null
+          cover_photo_path: string | null
+          created_at: string
+          created_by: string
+          currency: string
+          description: string | null
+          favorite_count: number
+          id: string
+          location: string | null
+          manufacturer: string | null
+          metadata: Json
+          model: string | null
+          price: number | null
+          published_at: string | null
+          status: Database["public"]["Enums"]["marketplace_status"]
+          title: string
+          updated_at: string
+          view_count: number
+          visibility: Database["public"]["Enums"]["marketplace_visibility"]
+          workspace_id: string | null
+          year: number | null
+        }
+        Insert: {
+          category?: Database["public"]["Enums"]["marketplace_category"]
+          condition?:
+            | Database["public"]["Enums"]["marketplace_condition"]
+            | null
+          cover_photo_path?: string | null
+          created_at?: string
+          created_by: string
+          currency?: string
+          description?: string | null
+          favorite_count?: number
+          id?: string
+          location?: string | null
+          manufacturer?: string | null
+          metadata?: Json
+          model?: string | null
+          price?: number | null
+          published_at?: string | null
+          status?: Database["public"]["Enums"]["marketplace_status"]
+          title: string
+          updated_at?: string
+          view_count?: number
+          visibility?: Database["public"]["Enums"]["marketplace_visibility"]
+          workspace_id?: string | null
+          year?: number | null
+        }
+        Update: {
+          category?: Database["public"]["Enums"]["marketplace_category"]
+          condition?:
+            | Database["public"]["Enums"]["marketplace_condition"]
+            | null
+          cover_photo_path?: string | null
+          created_at?: string
+          created_by?: string
+          currency?: string
+          description?: string | null
+          favorite_count?: number
+          id?: string
+          location?: string | null
+          manufacturer?: string | null
+          metadata?: Json
+          model?: string | null
+          price?: number | null
+          published_at?: string | null
+          status?: Database["public"]["Enums"]["marketplace_status"]
+          title?: string
+          updated_at?: string
+          view_count?: number
+          visibility?: Database["public"]["Enums"]["marketplace_visibility"]
+          workspace_id?: string | null
+          year?: number | null
+        }
+        Relationships: []
+      }
       memberships: {
         Row: {
           created_at: string
@@ -5340,6 +5512,7 @@ export type Database = {
       compute_platform_smart_metrics: { Args: never; Returns: Json }
       compute_security_metrics: { Args: never; Returns: Json }
       compute_user_risk_score: { Args: { _user_id: string }; Returns: Json }
+      current_app_user_id: { Args: never; Returns: string }
       current_user_effective_role: { Args: never; Returns: string }
       current_user_workspace_ids: { Args: never; Returns: string[] }
       deterministic_event_hash: {
@@ -5758,6 +5931,21 @@ export type Database = {
         | "drift_detected"
       integrity_severity: "info" | "warning" | "critical"
       integrity_status: "open" | "investigating" | "ignored" | "resolved"
+      marketplace_category:
+        | "vehicles"
+        | "parts"
+        | "services"
+        | "tools"
+        | "equipment"
+        | "other"
+      marketplace_condition: "new" | "like_new" | "good" | "fair" | "for_parts"
+      marketplace_status: "draft" | "active" | "sold" | "archived"
+      marketplace_visibility:
+        | "public"
+        | "private"
+        | "workspace"
+        | "clients"
+        | "team"
       membership_role: "admin" | "tecnico" | "cliente" | "socio"
       membership_status: "active" | "pending"
       permission_scope: "own" | "team" | "all"
@@ -5963,6 +6151,23 @@ export const Constants = {
       ],
       integrity_severity: ["info", "warning", "critical"],
       integrity_status: ["open", "investigating", "ignored", "resolved"],
+      marketplace_category: [
+        "vehicles",
+        "parts",
+        "services",
+        "tools",
+        "equipment",
+        "other",
+      ],
+      marketplace_condition: ["new", "like_new", "good", "fair", "for_parts"],
+      marketplace_status: ["draft", "active", "sold", "archived"],
+      marketplace_visibility: [
+        "public",
+        "private",
+        "workspace",
+        "clients",
+        "team",
+      ],
       membership_role: ["admin", "tecnico", "cliente", "socio"],
       membership_status: ["active", "pending"],
       permission_scope: ["own", "team", "all"],
