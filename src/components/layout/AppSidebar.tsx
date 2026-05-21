@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import {
   LayoutDashboard, FileText, CreditCard, TrendingUp, PieChart,
-  BookOpen, Car, FolderOpen, Users, Settings, Receipt, Shield, Wrench, Store,
+  BookOpen, Car, FolderOpen, Users, Settings, Receipt, Shield, Wrench, Store, Zap,
 } from "lucide-react";
 import { useIsPlatformOwner } from "@/hooks/useSubscription";
 import {
@@ -54,6 +54,7 @@ export function AppSidebar() {
     { title: t("nav.fleet"), url: "/fleet", icon: Car, module: "fleet", action: "view" },
     { title: t("nav.documents"), url: "/documents", icon: FolderOpen, module: "documents", action: "view" },
     { title: t("nav.users"), url: "/users", icon: Users, module: "users", action: "view" },
+    { title: "Automações", url: "/automations", icon: Zap, module: "settings", action: "edit" },
   ];
 
   const mainNav = permsLoading ? [] : allNav.filter((item) => can(item.module, item.action).allowed);
