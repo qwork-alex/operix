@@ -14,6 +14,7 @@ import { NavLink } from "@/components/NavLink";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useCan } from "@/hooks/usePermission";
 import { useCompanyLogo } from "@/hooks/useCompanyLogo";
+import { useWorkspace } from "@/hooks/useWorkspace";
 import { BrandNameEditor, type BrandConfig } from "@/components/layout/BrandNameEditor";
 import { BrandLogo } from "@/components/BrandLogo";
 import { brandConfig as appBrand } from "@/brand.config";
@@ -25,6 +26,7 @@ export function AppSidebar() {
   const { t } = useLanguage();
   const { can, isLoading: permsLoading } = useCan();
   const { brandConfig, saveBrandConfig } = useCompanyLogo();
+  const { workspaceName } = useWorkspace();
   const { data: isPlatformOwner } = useIsPlatformOwner();
 
   const handleBrandSave = async (config: BrandConfig) => {
@@ -36,7 +38,8 @@ export function AppSidebar() {
     }
   };
 
-  const displayName = brandConfig.name || appBrand.appName;
+  // Dynamic display name: explicit brand override → workspace name → app default
+  const displayName = brandConfig.name || workspaceName || appBrand.appName;
 
   // Single source of truth — useCan() resolves everything (admin, override, role, deny).
   const allNav = [
@@ -60,19 +63,40 @@ export function AppSidebar() {
 
       <div className={`flex h-14 items-center border-b border-border/50 ${collapsed ? "justify-center px-0" : "px-4"}`}>
         {!collapsed && (
-          <div className="flex items-center gap-2 overflow-hidden">
-            <BrandLogo size={28} />
-            {can("settings", "edit").allowed ? (
-              <BrandNameEditor config={brandConfig} onSave={handleBrandSave}>
-                <button className="overflow-hidden hover:opacity-80 transition-opacity cursor-pointer text-left" title={t("brand.editTooltip")}>
-                  <span className="text-sm font-semibold text-foreground">{displayName}</span>
-                </button>
-              </BrandNameEditor>
-            ) : (
-              <Link to="/" className="overflow-hidden">
-                <span className="text-sm font-semibold text-foreground">{displayName}</span>
-              </Link>
-            )}
+          <div className="flex items-center gap-2.5 overflow-hidden">
+            <BrandLogo size={brandConfig.logoSizeNum ?? 30} />
+            {(() => {
+              const nameStyle: import("react").CSSProperties = {
+                fontFamily: brandConfig.fontFamily || undefined,
+                color: brandConfig.color || undefined,
+                fontSize: brandConfig.fontSize || undefined,
+                fontWeight: brandConfig.bold ? 700 : 600,
+                fontStyle: brandConfig.italic ? "italic" : undefined,
+                textShadow:
+                  (brandConfig.glowIntensity ?? 0) > 0
+                    ? `0 0 ${brandConfig.glowIntensity}px ${brandConfig.color || "hsl(var(--primary))"}`
+                    : undefined,
+                letterSpacing: "-0.01em",
+              };
+              return can("settings", "edit").allowed ? (
+                <BrandNameEditor config={brandConfig} onSave={handleBrandSave}>
+                  <button
+                    className="overflow-hidden hover:opacity-80 transition-opacity cursor-pointer text-left font-display"
+                    title={t("brand.editTooltip")}
+                  >
+                    <span className="text-sm text-foreground truncate" style={nameStyle}>
+                      {displayName}
+                    </span>
+                  </button>
+                </BrandNameEditor>
+              ) : (
+                <Link to="/" className="overflow-hidden font-display">
+                  <span className="text-sm text-foreground truncate" style={nameStyle}>
+                    {displayName}
+                  </span>
+                </Link>
+              );
+            })()}
           </div>
         )}
       </div>

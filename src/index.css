@@ -140,7 +140,7 @@
     letter-spacing: -0.01em;
   }
 
-  /* Ambient atmospheric backdrop for the dark theme — extremely subtle */
+  /* Ambient atmospheric backdrop for the dark theme — warm + cinematic */
   .dark body::before {
     content: "";
     position: fixed;
@@ -148,139 +148,137 @@
     pointer-events: none;
     z-index: 0;
     background:
-      radial-gradient(1200px 600px at 80% -10%, hsl(190 90% 55% / 0.05), transparent 60%),
-      radial-gradient(900px 500px at -10% 110%, hsl(142 71% 48% / 0.05), transparent 60%);
+      radial-gradient(1200px 700px at 85% -15%, hsl(38 92% 56% / 0.07), transparent 65%),
+      radial-gradient(900px 600px at -10% 110%, hsl(142 71% 48% / 0.06), transparent 60%),
+      radial-gradient(700px 500px at 50% 50%, hsl(190 90% 55% / 0.025), transparent 70%);
   }
 
   /* Smooth theme transitions for common surfaces */
   button, a, input, textarea, select,
   [class*="bg-"], [class*="border-"], [class*="text-"] {
-    transition-property: background-color, border-color, color, box-shadow;
+    transition-property: background-color, border-color, color, box-shadow, transform;
     transition-duration: 180ms;
-    transition-timing-function: ease;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   /* Custom scrollbar */
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  ::-webkit-scrollbar-track {
-    background: hsl(var(--background));
-  }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: hsl(var(--background)); }
   ::-webkit-scrollbar-thumb {
     background: hsl(var(--border));
     border-radius: 3px;
   }
-  ::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground));
-  }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground)); }
 }
 
 @layer utilities {
-  .glow-gold {
-    box-shadow: 0 0 20px hsl(142 71% 45% / 0.18), 0 0 40px hsl(142 71% 45% / 0.06);
-  }
-  .glow-blue {
-    box-shadow: 0 0 20px hsl(210 80% 55% / 0.15), 0 0 40px hsl(210 80% 55% / 0.05);
-  }
-  .glow-green {
-    box-shadow: 0 0 20px hsl(152 60% 45% / 0.15), 0 0 40px hsl(152 60% 45% / 0.05);
-  }
-  .glow-purple {
-    box-shadow: 0 0 20px hsl(270 70% 60% / 0.18), 0 0 40px hsl(270 70% 60% / 0.06);
-  }
-  .glow-red {
-    box-shadow: 0 0 20px hsl(0 72% 55% / 0.15), 0 0 40px hsl(0 72% 55% / 0.05);
-  }
-  .glow-white {
-    box-shadow: 0 0 20px hsl(0 0% 100% / 0.06), 0 0 40px hsl(0 0% 100% / 0.03);
-  }
+  .glow-gold   { box-shadow: 0 0 20px hsl(38 92% 55% / 0.20), 0 0 40px hsl(38 92% 55% / 0.07); }
+  .glow-blue   { box-shadow: 0 0 20px hsl(210 80% 55% / 0.15), 0 0 40px hsl(210 80% 55% / 0.05); }
+  .glow-green  { box-shadow: 0 0 20px hsl(152 60% 45% / 0.15), 0 0 40px hsl(152 60% 45% / 0.05); }
+  .glow-purple { box-shadow: 0 0 20px hsl(270 70% 60% / 0.18), 0 0 40px hsl(270 70% 60% / 0.06); }
+  .glow-red    { box-shadow: 0 0 20px hsl(0 72% 55% / 0.15), 0 0 40px hsl(0 72% 55% / 0.05); }
+  .glow-white  { box-shadow: 0 0 20px hsl(0 0% 100% / 0.06), 0 0 40px hsl(0 0% 100% / 0.03); }
+
   .glass-panel {
-    @apply bg-card/80 backdrop-blur-sm border border-border/50;
+    @apply bg-card/70 backdrop-blur-xl border border-border/50;
   }
 
-  /* ───────────── Phase 2 — Global UX Consolidation ─────────────
-     Shared primitives for consistent surface treatment. Opt-in via
-     class names — does not override existing component styles. */
-
+  /* ─── Premium surface system ─── */
   .surface-card {
-    @apply rounded-lg border border-border/60 bg-card text-card-foreground
-           transition-colors duration-200;
+    @apply rounded-xl border border-border/60 bg-card text-card-foreground
+           transition-all duration-200;
   }
   .surface-card-hover {
-    @apply hover:border-border hover:shadow-md hover:shadow-black/5;
+    @apply hover:border-border hover:shadow-lg hover:shadow-black/20 hover:-translate-y-px;
   }
 
-  /* Premium elevated surface — for floating panels / key cards */
   .surface-elevated {
-    @apply rounded-xl border border-border/60 bg-card text-card-foreground;
-    background-image: linear-gradient(180deg, hsl(var(--card)) 0%, hsl(var(--background)) 100%);
+    @apply rounded-xl border border-border/60 bg-card text-card-foreground relative;
+    background-image:
+      linear-gradient(180deg, hsl(var(--card)) 0%, hsl(var(--background) / 0.6) 100%);
     box-shadow:
-      0 1px 0 0 hsl(0 0% 100% / 0.03) inset,
+      0 1px 0 0 hsl(0 0% 100% / 0.04) inset,
       0 1px 2px 0 hsl(0 0% 0% / 0.4),
-      0 8px 24px -12px hsl(0 0% 0% / 0.5);
+      0 12px 32px -16px hsl(0 0% 0% / 0.6);
   }
 
-  /* Subtle contextual glows (low opacity, atmospheric) */
+  /* Subtle contextual glows */
   .glow-primary-soft {
-    box-shadow: 0 0 0 1px hsl(var(--primary) / 0.25), 0 0 24px -4px hsl(var(--primary) / 0.25);
+    box-shadow: 0 0 0 1px hsl(var(--primary) / 0.22), 0 0 28px -6px hsl(var(--primary) / 0.30);
   }
   .glow-accent-soft {
-    box-shadow: 0 0 0 1px hsl(var(--accent) / 0.25), 0 0 24px -4px hsl(var(--accent) / 0.22);
+    box-shadow: 0 0 0 1px hsl(var(--accent) / 0.22), 0 0 28px -6px hsl(var(--accent) / 0.26);
+  }
+  .glow-amber-soft {
+    box-shadow: 0 0 0 1px hsl(38 92% 55% / 0.22), 0 0 28px -6px hsl(38 92% 55% / 0.28);
   }
 
-  /* Sidebar active indicator — premium vertical bar + soft glow */
-  [data-sidebar="menu-button"][data-active="true"],
-  .sidebar-active {
+  /* ─── Sidebar — premium illuminated active state (NO left bar) ─── */
+  [data-sidebar="menu-button"] {
     position: relative;
+    border-radius: 0.625rem !important;
+    transition: background-color 180ms ease, color 180ms ease, box-shadow 220ms ease;
   }
-  [data-sidebar="menu-button"].bg-sidebar-accent::before,
-  .sidebar-active::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 6px;
-    bottom: 6px;
-    width: 2px;
-    border-radius: 2px;
-    background: linear-gradient(180deg, hsl(var(--primary)), hsl(var(--accent)));
-    box-shadow: 0 0 8px hsl(var(--primary) / 0.5);
+  [data-sidebar="menu-button"]:hover {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--sidebar-accent) / 0.7) 0%,
+      hsl(var(--sidebar-accent) / 0.3) 100%
+    ) !important;
+  }
+  [data-sidebar="menu-button"].bg-sidebar-accent,
+  [data-sidebar="menu-button"][data-active="true"] {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--primary) / 0.16) 0%,
+      hsl(var(--accent) / 0.08) 60%,
+      transparent 100%
+    ) !important;
+    box-shadow:
+      inset 0 0 0 1px hsl(var(--primary) / 0.22),
+      0 0 20px -8px hsl(var(--primary) / 0.45);
+    color: hsl(var(--sidebar-accent-foreground)) !important;
+  }
+  [data-sidebar="menu-button"].bg-sidebar-accent svg,
+  [data-sidebar="menu-button"][data-active="true"] svg {
+    color: hsl(var(--primary));
+    filter: drop-shadow(0 0 6px hsl(var(--primary) / 0.55));
   }
 
-  /* Standard module wrapper — spacing + entry animation. */
-  .module-shell {
-    @apply space-y-6 animate-fade-in;
+  /* ─── Premium button feel ─── */
+  button:not([disabled]):active { transform: translateY(0.5px); }
+
+  /* ─── Table row premium hover ─── */
+  tbody tr {
+    transition: background-color 160ms ease, box-shadow 160ms ease;
+  }
+  tbody tr:hover {
+    background-color: hsl(var(--muted) / 0.35) !important;
+    box-shadow: inset 2px 0 0 hsl(var(--primary) / 0.5);
   }
 
-  /* Smooth fade for skeleton → content swap to prevent flicker. */
+  .module-shell { @apply space-y-6 animate-fade-in; }
+
   @keyframes fade-in-soft {
     from { opacity: 0; }
     to   { opacity: 1; }
   }
-  .animate-fade-in-soft {
-    animation: fade-in-soft 180ms ease-out;
-  }
+  .animate-fade-in-soft { animation: fade-in-soft 180ms ease-out; }
 
-  /* Vertical column tonal alternation — independent of theme.
-     Subtle dark overlay for light mode, subtle light overlay for dark mode.
-     No grid lines; separation comes purely from tonal contrast. */
   .table-cols-zebra thead th:nth-child(even),
   .table-cols-zebra tbody td:nth-child(even) {
     background-color: rgba(0, 0, 0, 0.045);
   }
   .dark .table-cols-zebra thead th:nth-child(even),
   .dark .table-cols-zebra tbody td:nth-child(even) {
-    background-color: rgba(255, 255, 255, 0.05);
+    background-color: rgba(255, 255, 255, 0.035);
   }
 
   @keyframes slide-in-right-kf {
     from { transform: translateX(100%); }
     to { transform: translateX(0); }
   }
-  .animate-slide-in-right {
-    animation: slide-in-right-kf 0.3s ease-out;
-  }
+  .animate-slide-in-right { animation: slide-in-right-kf 0.3s ease-out; }
 }
 
 /* ───────────── Print-safe invoice document engine ───────────── */
