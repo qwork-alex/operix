@@ -14,6 +14,7 @@ import { NavLink } from "@/components/NavLink";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useCan } from "@/hooks/usePermission";
 import { useCompanyLogo } from "@/hooks/useCompanyLogo";
+import { useWorkspace } from "@/hooks/useWorkspace";
 import { BrandNameEditor, type BrandConfig } from "@/components/layout/BrandNameEditor";
 import { BrandLogo } from "@/components/BrandLogo";
 import { brandConfig as appBrand } from "@/brand.config";
@@ -25,6 +26,7 @@ export function AppSidebar() {
   const { t } = useLanguage();
   const { can, isLoading: permsLoading } = useCan();
   const { brandConfig, saveBrandConfig } = useCompanyLogo();
+  const { workspaceName } = useWorkspace();
   const { data: isPlatformOwner } = useIsPlatformOwner();
 
   const handleBrandSave = async (config: BrandConfig) => {
@@ -36,7 +38,8 @@ export function AppSidebar() {
     }
   };
 
-  const displayName = brandConfig.name || appBrand.appName;
+  // Dynamic display name: explicit brand override → workspace name → app default
+  const displayName = brandConfig.name || workspaceName || appBrand.appName;
 
   // Single source of truth — useCan() resolves everything (admin, override, role, deny).
   const allNav = [
