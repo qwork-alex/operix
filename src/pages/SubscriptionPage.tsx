@@ -11,6 +11,7 @@ import { useSubscription, useIsPlatformOwner, type SubscriptionStatus } from "@/
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { Link } from "react-router-dom";
 import { SubscriptionTimeline } from "@/components/billing/SubscriptionTimeline";
+import { BillingIntelligencePanel } from "@/components/billing/BillingIntelligencePanel";
 
 const STATUS_META: Record<SubscriptionStatus, { label: string; tone: string; icon: typeof CheckCircle2 }> = {
   trial:        { label: "Em avaliação", tone: "bg-amber-500/10 text-amber-500 border-amber-500/30",  icon: Clock },
