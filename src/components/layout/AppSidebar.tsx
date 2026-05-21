@@ -63,19 +63,40 @@ export function AppSidebar() {
 
       <div className={`flex h-14 items-center border-b border-border/50 ${collapsed ? "justify-center px-0" : "px-4"}`}>
         {!collapsed && (
-          <div className="flex items-center gap-2 overflow-hidden">
-            <BrandLogo size={28} />
-            {can("settings", "edit").allowed ? (
-              <BrandNameEditor config={brandConfig} onSave={handleBrandSave}>
-                <button className="overflow-hidden hover:opacity-80 transition-opacity cursor-pointer text-left" title={t("brand.editTooltip")}>
-                  <span className="text-sm font-semibold text-foreground">{displayName}</span>
-                </button>
-              </BrandNameEditor>
-            ) : (
-              <Link to="/" className="overflow-hidden">
-                <span className="text-sm font-semibold text-foreground">{displayName}</span>
-              </Link>
-            )}
+          <div className="flex items-center gap-2.5 overflow-hidden">
+            <BrandLogo size={brandConfig.logoSizeNum ?? 30} />
+            {(() => {
+              const nameStyle: React.CSSProperties = {
+                fontFamily: brandConfig.fontFamily || undefined,
+                color: brandConfig.color || undefined,
+                fontSize: brandConfig.fontSize || undefined,
+                fontWeight: brandConfig.bold ? 700 : 600,
+                fontStyle: brandConfig.italic ? "italic" : undefined,
+                textShadow:
+                  (brandConfig.glowIntensity ?? 0) > 0
+                    ? `0 0 ${brandConfig.glowIntensity}px ${brandConfig.color || "hsl(var(--primary))"}`
+                    : undefined,
+                letterSpacing: "-0.01em",
+              };
+              return can("settings", "edit").allowed ? (
+                <BrandNameEditor config={brandConfig} onSave={handleBrandSave}>
+                  <button
+                    className="overflow-hidden hover:opacity-80 transition-opacity cursor-pointer text-left font-display"
+                    title={t("brand.editTooltip")}
+                  >
+                    <span className="text-sm text-foreground truncate" style={nameStyle}>
+                      {displayName}
+                    </span>
+                  </button>
+                </BrandNameEditor>
+              ) : (
+                <Link to="/" className="overflow-hidden font-display">
+                  <span className="text-sm text-foreground truncate" style={nameStyle}>
+                    {displayName}
+                  </span>
+                </Link>
+              );
+            })()}
           </div>
         )}
       </div>
