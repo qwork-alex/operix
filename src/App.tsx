@@ -107,6 +107,7 @@ const App = () => (
                             <Route path="/profile" element={<ProfilePage />} />
                             <Route path="/audit" element={<AuditPage />} />
                             <Route path="/automations" element={<PermissionGuard permission="settings.edit"><AutomationsPage /></PermissionGuard>} />
+                            <Route path="/ai" element={<AIPage />} />
                             <Route path="/recovery" element={<RecoveryPage />} />
                             <Route path="/subscription" element={<SubscriptionPage />} />
                             <Route path="/checkout" element={<CheckoutPage />} />
