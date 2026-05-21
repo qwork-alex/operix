@@ -500,6 +500,30 @@ Deno.serve(async (req) => {
     const validRoles = ["admin", "partner", "technician", "client"];
     if (!validRoles.includes(role)) return jsonResp({ error: "invalid role" }, 400);
 
+    // Resolve caller's active workspace (we attach new user there, no auto-workspace)
+    const { data: callerAppUser } = await adminClient
+      .from("app_users")
+      .select("id")
+      .eq("auth_user_id", caller.id)
+      .maybeSingle();
+
+    let targetWorkspaceId: string | null = typeof body.workspace_id === "string" ? body.workspace_id : null;
+    if (!targetWorkspaceId && callerAppUser?.id) {
+      const { data: callerMem } = await adminClient
+        .from("memberships")
+        .select("workspace_id, role")
+        .eq("user_id", callerAppUser.id)
+        .eq("status", "active")
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      targetWorkspaceId = callerMem?.workspace_id ?? null;
+    }
+
+    if (!targetWorkspaceId) {
+      return jsonResp({ error: "no_target_workspace_for_caller" }, 400);
+    }
+
     // Generate temporary password
     const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$";
     let tempPassword = "";
@@ -507,7 +531,8 @@ Deno.serve(async (req) => {
       tempPassword += chars[Math.floor(Math.random() * chars.length)];
     }
 
-    // Create auth user
+    // Create auth user — flag as admin-provisioned so the signup trigger
+    // does NOT auto-create a personal workspace / admin membership.
     const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
       email,
       password: tempPassword,
@@ -515,6 +540,9 @@ Deno.serve(async (req) => {
       user_metadata: {
         full_name: full_name || email.split("@")[0],
         must_change_password: true,
+        provisioned_by_admin: true,
+        provisioned_by: caller.id,
+        provisioned_workspace_id: targetWorkspaceId,
       },
     });
 
@@ -541,6 +569,38 @@ Deno.serve(async (req) => {
       role,
     }, { onConflict: "user_id" });
 
+    // Ensure app_user row exists (signup trigger normally does this, but be defensive)
+    const { data: newAppUser } = await adminClient
+      .from("app_users")
+      .upsert(
+        { auth_user_id: userId, email, name: displayName },
+        { onConflict: "auth_user_id" }
+      )
+      .select("id")
+      .single();
+
+    // Map app role -> membership role
+    const membershipRoleMap: Record<string, string> = {
+      admin: "admin",
+      partner: "socio",
+      technician: "tecnico",
+      client: "cliente",
+    };
+    const membershipRole = membershipRoleMap[role] ?? "tecnico";
+
+    // Attach to caller's workspace as a MEMBER (never owner, never new workspace)
+    if (newAppUser?.id) {
+      await adminClient.from("memberships").upsert(
+        {
+          user_id: newAppUser.id,
+          workspace_id: targetWorkspaceId,
+          role: membershipRole,
+          status: "active",
+        },
+        { onConflict: "user_id,workspace_id" }
+      );
+    }
+
     // Persist temp password for admin visibility until user changes it
     await adminClient.from("temp_credentials").upsert({
       user_id: userId,
@@ -553,8 +613,10 @@ Deno.serve(async (req) => {
     return jsonResp({
       success: true,
       user_id: userId,
+      workspace_id: targetWorkspaceId,
       temp_password: tempPassword,
     });
+
 
   } catch (err) {
     return jsonResp({ error: (err as Error).message || "Internal error" }, 500);

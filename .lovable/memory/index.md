@@ -40,6 +40,7 @@ i18n rule: every visible string MUST flow through useLanguage().t(key) — no in
 - [Editing Pattern](mem://ux/editing-pattern) — Spreadsheet-style inline row editing for operational tables
 - [UX Principles](mem://ux/principles) — Inline editing, single-tenant RBAC, DB truth, fixed sorting, hidden search
 - [User Management](mem://features/usuarios/gestao-e-identidade) — Centralized auth, manual profile persistence via Edge Functions
+- [Tenancy Stabilization](mem://auth/tenancy-stabilization) — Admin-created users no longer auto-provision a workspace; attached to caller's workspace via membership only
 - [System Reset](mem://dev/system-reset) — Danger Zone DB wipe restricted to owner account
 - [Tech Stack](mem://tech/stack) — React, Tailwind, Supabase, Edge Functions for APIs (Gemini, ORS, Nominatim)
 - [Fleet Architecture](mem://features/frota/arquitetura) — Registry, Ops, Intelligence layers, lion-tone tabs
