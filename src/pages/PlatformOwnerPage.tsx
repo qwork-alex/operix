@@ -4,7 +4,7 @@ import { Navigate } from "react-router-dom";
 import {
   Shield, Building2, AlertCircle, Clock, CheckCircle2,
   Landmark, CreditCard, Receipt, Percent, Webhook, Activity,
-  ScrollText, Power, Brain,
+  ScrollText, Power, Brain, ShieldCheck,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
