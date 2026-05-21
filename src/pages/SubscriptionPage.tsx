@@ -212,7 +212,7 @@ export default function SubscriptionPage() {
       <SubscriptionTimeline />
 
       <Card className="p-4 surface-card text-xs text-muted-foreground">
-        Gateway de pagamento ainda não está activo — esta página gere a arquitectura de subscrição e checkout interno.
+        Stripe ligado como gateway de pagamento. Os planos, preços e regras de billing continuam definidos internamente — o Stripe trata apenas de checkout, cobranças recorrentes, faturas e portal do cliente.
       </Card>
     </div>
   );
