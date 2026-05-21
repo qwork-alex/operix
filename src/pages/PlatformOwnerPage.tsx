@@ -66,6 +66,7 @@ export default function PlatformOwnerPage() {
         </TabsContent>
         <TabsContent value="audit" className="mt-6"><AuditTab /></TabsContent>
         <TabsContent value="security" className="mt-6"><SecurityDashboard /></TabsContent>
+        <TabsContent value="compliance" className="mt-6"><ComplianceDashboard /></TabsContent>
       </Tabs>
     </div>
   );
