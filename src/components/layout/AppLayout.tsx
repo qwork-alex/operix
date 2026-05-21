@@ -5,6 +5,7 @@ import { TopBar } from "./TopBar";
 import { ImpersonationBanner } from "./ImpersonationBanner";
 import { AppFooter } from "./AppFooter";
 import { ConsentGate } from "@/components/legal/ConsentGate";
+import { AccessStateBanner } from "@/components/billing/AccessStateBanner";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   return (
@@ -16,7 +17,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <ImpersonationBanner />
             <TopBar />
             <main className="flex-1 overflow-x-hidden overflow-y-auto p-6 min-w-0 max-w-full">
-              <div className="min-w-0 max-w-full w-full">
+              <div className="min-w-0 max-w-full w-full space-y-4">
+                <AccessStateBanner />
                 {children}
               </div>
             </main>
