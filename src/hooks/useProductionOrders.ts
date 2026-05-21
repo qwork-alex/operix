@@ -76,16 +76,15 @@ export function normalizeProductionOrderPayload(payload: Partial<ProductionOrder
   delete normalized.workspace_id;
 
   TIMESTAMP_FIELDS.forEach((field) => {
+    if (!(field in normalized)) return;
     const value = normalized[field];
     normalized[field] = typeof value === "string" && value.trim() === "" ? null : value ?? null;
   });
 
   TEXT_NULL_FIELDS.forEach((field) => {
+    if (!(field in normalized)) return;
     if (normalized[field] === "") normalized[field] = null;
   });
-
-  if (!normalized.priority) normalized.priority = "normal";
-  if (!normalized.status) normalized.status = "new_vehicle";
 
   return normalized as Partial<ProductionOrder>;
 }
@@ -118,7 +117,7 @@ export function useProductionOrders(filters?: { technicianOnly?: boolean; status
       const clean = normalizeProductionOrderPayload(payload);
       const { data, error } = await (supabase as any)
         .from("production_orders")
-        .insert({ ...clean, workspace_id: workspaceId })
+        .insert({ priority: "normal", status: "new_vehicle", ...clean, workspace_id: workspaceId })
         .select()
         .single();
       if (error) throw error;
