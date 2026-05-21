@@ -620,6 +620,7 @@ export type Database = {
           postal_code: string | null
           preferred_currency: string
           updated_at: string
+          vat_mode: string
           vat_number: string | null
           workspace_id: string
         }
@@ -636,6 +637,7 @@ export type Database = {
           postal_code?: string | null
           preferred_currency?: string
           updated_at?: string
+          vat_mode?: string
           vat_number?: string | null
           workspace_id: string
         }
@@ -652,6 +654,7 @@ export type Database = {
           postal_code?: string | null
           preferred_currency?: string
           updated_at?: string
+          vat_mode?: string
           vat_number?: string | null
           workspace_id?: string
         }

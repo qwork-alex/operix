@@ -85,3 +85,4 @@ i18n rule: every visible string MUST flow through useLanguage().t(key) — no in
 - [Financial Audit Layer](mem://features/financeiro/audit-layer) — Phase 4.5 read-only: timeline view, integrity KPIs, participation_diffs trigger, FinancialAuditTab
 - [Compliance & GDPR](mem://features/security/phase-5-5-compliance) — Phase 5.5: consent_logs, immutable_audit_logs (sha256 chain), fraud_signals, user_devices, data exports, workspace deletion lifecycle, security_policies
 - [Stripe Gateway](mem://features/billing/stripe-gateway) — Stripe as payment gateway only (checkout/portal/webhook). Internal plans stay authoritative. lookup_key = `{plan_code}_{cycle}`. No auto product creation.
+- [Portal Financeiro](mem://features/billing/portal-financeiro) — SubscriptionPage em 5 abas: Visão geral, Faturas, Pagamento, Faturação (vat_mode), Histórico. Alertas inteligentes, Invoice Center, Stripe Portal CTA.

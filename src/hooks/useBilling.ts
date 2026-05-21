@@ -16,6 +16,7 @@ export interface BillingProfile {
   vat_number: string | null;
   is_business: boolean;
   preferred_currency: string;
+  vat_mode?: "with_vat" | "no_vat" | "reverse_charge";
 }
 
 export interface PaymentMethod {
