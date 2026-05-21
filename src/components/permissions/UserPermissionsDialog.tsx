@@ -512,6 +512,46 @@ export function UserPermissionsDialog({
     onError: (err) => toast.error((err as Error).message),
   });
 
+  /**
+   * Apply a role preset — loads role_permissions for the chosen role and
+   * upserts them as user overrides (allow=true). Existing overrides for
+   * permissions NOT in the preset are preserved (no destructive wipe).
+   * SAFE MODE: backend untouched; only writes to user_permissions.
+   */
+  const applyPresetMutation = useMutation({
+    mutationFn: async (presetRole: "admin" | "socio" | "tecnico" | "cliente") => {
+      if (!userId) return;
+      const { data, error } = await supabase
+        .from("role_permissions")
+        .select("permission_id")
+        .eq("role", presetRole as any);
+      if (error) throw error;
+      const ids = (data ?? []).map((r: any) => r.permission_id as string);
+      if (ids.length === 0) {
+        toast.info(`Função "${presetRole}" não tem permissões padrão definidas.`);
+        return;
+      }
+      const rows = ids.map((permission_id) => ({
+        user_id: userId,
+        permission_id,
+        allow: true,
+      }));
+      const { error: upErr } = await supabase
+        .from("user_permissions")
+        .upsert(rows, { onConflict: "user_id,permission_id" });
+      if (upErr) throw upErr;
+      return ids.length;
+    },
+    onSuccess: (count, role) => {
+      queryClient.invalidateQueries({ queryKey: ["user-permissions", userId] });
+      invalidatePerms();
+      if (typeof count === "number") {
+        toast.success(`Preset "${role}" aplicado — ${count} permissões carregadas.`);
+      }
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+
   const isAdminUser = userRole === "admin";
   const loading = loadingPerms || loadingOv;
 
