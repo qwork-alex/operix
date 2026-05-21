@@ -313,6 +313,40 @@ const CATALOG: CatalogModule[] = [
       { label: "Ver compliance", m: "platform", a: "view_compliance" },
     ],
   },
+  {
+    key: "settings",
+    label: "Configurações",
+    items: [
+      { label: "Ver configurações", m: "settings", a: "view" },
+      { label: "Editar configurações", m: "settings", a: "edit" },
+      { label: "Alterar idioma", m: "settings", a: "change_language" },
+      { label: "Alterar tema", m: "settings", a: "change_theme" },
+      { label: "Alterar senha", m: "settings", a: "change_password" },
+      { label: "Reset password", m: "settings", a: "reset_password" },
+      { label: "Ver senhas temporárias", m: "settings", a: "view_temp_credentials" },
+      { label: "Reset do sistema", m: "settings", a: "reset_system" },
+    ],
+  },
+  {
+    key: "profile",
+    label: "Perfil",
+    items: [
+      { label: "Ver perfil", m: "profile", a: "view" },
+      { label: "Editar perfil", m: "profile", a: "edit" },
+      { label: "Exportar perfil", m: "profile", a: "export" },
+      { label: "Apagar perfil", m: "profile", a: "delete" },
+    ],
+  },
+  {
+    key: "notifications",
+    label: "Notificações",
+    items: [
+      { label: "Ver notificações", m: "notifications", a: "view" },
+      { label: "Ver alertas críticos", m: "notifications", a: "view_critical" },
+      { label: "Marcar como lido", m: "notifications", a: "mark_read" },
+      { label: "Apagar notificações", m: "notifications", a: "delete" },
+    ],
+  },
 ];
 
 export function UserPermissionsDialog({
@@ -474,6 +508,46 @@ export function UserPermissionsDialog({
       queryClient.invalidateQueries({ queryKey: ["user-permissions", userId] });
       invalidatePerms();
       toast.success("Permissões repostas aos padrões da função.");
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+
+  /**
+   * Apply a role preset — loads role_permissions for the chosen role and
+   * upserts them as user overrides (allow=true). Existing overrides for
+   * permissions NOT in the preset are preserved (no destructive wipe).
+   * SAFE MODE: backend untouched; only writes to user_permissions.
+   */
+  const applyPresetMutation = useMutation({
+    mutationFn: async (presetRole: "admin" | "socio" | "tecnico" | "cliente") => {
+      if (!userId) return;
+      const { data, error } = await supabase
+        .from("role_permissions")
+        .select("permission_id")
+        .eq("role", presetRole as any);
+      if (error) throw error;
+      const ids = (data ?? []).map((r: any) => r.permission_id as string);
+      if (ids.length === 0) {
+        toast.info(`Função "${presetRole}" não tem permissões padrão definidas.`);
+        return;
+      }
+      const rows = ids.map((permission_id) => ({
+        user_id: userId,
+        permission_id,
+        allow: true,
+      }));
+      const { error: upErr } = await supabase
+        .from("user_permissions")
+        .upsert(rows, { onConflict: "user_id,permission_id" });
+      if (upErr) throw upErr;
+      return ids.length;
+    },
+    onSuccess: (count, role) => {
+      queryClient.invalidateQueries({ queryKey: ["user-permissions", userId] });
+      invalidatePerms();
+      if (typeof count === "number") {
+        toast.success(`Preset "${role}" aplicado — ${count} permissões carregadas.`);
+      }
     },
     onError: (err) => toast.error((err as Error).message),
   });
@@ -642,6 +716,36 @@ export function UserPermissionsDialog({
                   </div>
                 </label>
               </div>
+
+              {/* Presets — populate matrix from a role's default permissions.
+                  Existing overrides for keys NOT in the preset are preserved. */}
+              <div className="rounded-lg border border-border/60 bg-background/40 p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <div className="text-sm font-medium">Presets de função</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      Carrega as permissões padrão da função escolhida sobre esta matriz.
+                      Não remove permissões individuais já existentes.
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(["admin", "socio", "tecnico", "cliente"] as const).map((r) => (
+                    <Button
+                      key={r}
+                      variant="outline"
+                      size="sm"
+                      disabled={applyPresetMutation.isPending}
+                      onClick={() => applyPresetMutation.mutate(r)}
+                      className="text-xs h-7 capitalize"
+                    >
+                      {r}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+
 
               {loading ? (
                 <div className="space-y-2">
