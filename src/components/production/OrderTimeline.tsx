@@ -1,5 +1,5 @@
 import { useProductionTimeline } from "@/hooks/useProductionOrders";
-import { Activity, ArrowRight, Camera, UserPlus, AlertCircle } from "lucide-react";
+import { Activity, ArrowRight, Camera, UserPlus, AlertCircle, Edit3, Pause, Play, CheckCircle2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -11,6 +11,7 @@ const ICONS: Record<string, any> = {
   assigned: UserPlus,
   photo_added: Camera,
   priority_changed: AlertCircle,
+  field_updated: Edit3,
 };
 
 export function OrderTimeline({ orderId }: Props) {
@@ -21,7 +22,7 @@ export function OrderTimeline({ orderId }: Props) {
   return (
     <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
       {events.map((e: any) => {
-        const Icon = ICONS[e.event_type] ?? Activity;
+        const Icon = iconFor(e);
         return (
           <div key={e.id} className="flex gap-3 text-sm">
             <div className="flex flex-col items-center">
@@ -36,7 +37,7 @@ export function OrderTimeline({ orderId }: Props) {
                 <span className="text-muted-foreground">{labelFor(e)}</span>
               </div>
               <div className="text-xs text-muted-foreground">
-                {formatDistanceToNow(new Date(e.created_at), { addSuffix: true, locale: ptBR })}
+                {new Date(e.created_at).toLocaleString("pt-PT")} · {formatDistanceToNow(new Date(e.created_at), { addSuffix: true, locale: ptBR })}
               </div>
             </div>
           </div>
@@ -48,11 +49,47 @@ export function OrderTimeline({ orderId }: Props) {
 
 function labelFor(e: any) {
   switch (e.event_type) {
-    case "created": return `criou a ordem (${e.to_value})`;
-    case "status_changed": return `mudou status: ${e.from_value} → ${e.to_value}`;
+    case "created": return `criou a ordem (${statusLabel(e.to_value)})`;
+    case "status_changed": return statusActionLabel(e.from_value, e.to_value);
     case "assigned": return `atribuiu para ${e.to_value ?? "—"}`;
-    case "photo_added": return `enviou foto (${e.to_value})`;
-    case "priority_changed": return `prioridade: ${e.from_value} → ${e.to_value}`;
+    case "photo_added": return `enviou foto (${photoLabel(e.to_value)})`;
+    case "priority_changed": return `alterou prioridade: ${e.from_value} → ${e.to_value}`;
+    case "field_updated": return "editou dados da ordem";
     default: return e.event_type;
   }
+}
+
+function iconFor(e: any) {
+  if (e.event_type === "status_changed") {
+    if (e.to_value === "paused") return Pause;
+    if (e.from_value === "paused" && e.to_value === "in_production") return Play;
+    if (e.to_value === "finished") return CheckCircle2;
+  }
+  return ICONS[e.event_type] ?? Activity;
+}
+
+function statusActionLabel(from?: string | null, to?: string | null) {
+  if (to === "paused") return "pausou a ordem";
+  if (from === "paused" && to === "in_production") return "retomou a ordem";
+  if (to === "finished") return "finalizou a ordem";
+  return `alterou status: ${statusLabel(from)} → ${statusLabel(to)}`;
+}
+
+function statusLabel(value?: string | null) {
+  const labels: Record<string, string> = {
+    new_vehicle: "Novo Veículo",
+    triage: "Em Triagem",
+    awaiting_validation: "Aguardando Validação",
+    in_production: "Em Produção",
+    paused: "Pausado",
+    finished: "Finalizado",
+    invoiced: "Faturado",
+    delivered: "Entregue",
+  };
+  return value ? labels[value] ?? value : "—";
+}
+
+function photoLabel(value?: string | null) {
+  const labels: Record<string, string> = { before: "Antes", during: "Durante", after: "Depois", damage: "Danos", validation: "Validação" };
+  return value ? labels[value] ?? value : "—";
 }
