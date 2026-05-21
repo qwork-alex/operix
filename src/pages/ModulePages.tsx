@@ -29,7 +29,7 @@ import {
   Copy, Link, AlertTriangle, Shield,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { RolePermissionsManager } from "@/components/permissions/RolePermissionsManager";
+
 import { UserPermissionsDialog } from "@/components/permissions/UserPermissionsDialog";
 import { Can } from "@/components/Can";
 import { getCurrentUserId, logSaveError, logSavePayload } from "@/lib/authUser";
@@ -1391,135 +1391,6 @@ export function UsersPage() {
             <p className="text-xs text-muted-foreground">{t("users.subtitle")}</p>
           </div>
         </div>
-         {import.meta.env.DEV && (
-           <Button
-             size="sm"
-             variant="destructive"
-             onClick={async () => {
-               const TEST_USER_ID = "SUBSTITUIR_PELO_UUID_DO_USUARIO_TESTE";
-               try {
-                 const { data: { session } } = await supabase.auth.getSession();
-                 const accessToken = session?.access_token;
-                 console.log("🧪 [FORCE DELETE TEST] access_token presente?", !!accessToken);
-                 console.log("🧪 [FORCE DELETE TEST] user_id alvo:", TEST_USER_ID);
-
-                 const res = await fetch(
-                   "https://nwjiyfvaoogevqovnyon.supabase.co/functions/v1/admin-create-user",
-                   {
-                     method: "POST",
-                     headers: {
-                       "Content-Type": "application/json",
-                       "Authorization": `Bearer ${accessToken}`,
-                       "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-                     },
-                     body: JSON.stringify({
-                       action: "force_delete",
-                       user_id: TEST_USER_ID,
-                     }),
-                   }
-                 );
-                 const json = await res.json().catch(() => ({}));
-                 console.log("🧪 [FORCE DELETE TEST] status:", res.status);
-                 console.log("🧪 [FORCE DELETE TEST] resposta completa:", json);
-                 if (!res.ok) {
-                   console.error("🧪 [FORCE DELETE TEST] ❌ erro:", json);
-                 } else {
-                   console.log("🧪 [FORCE DELETE TEST] ✅ sucesso");
-                 }
-               } catch (err) {
-                 console.error("🧪 [FORCE DELETE TEST] ❌ exceção:", err);
-               }
-             }}
-           >
-             🧪 Force Delete (DEV)
-           </Button>
-         )}
-         {import.meta.env.DEV && (
-           <Button
-             size="sm"
-             variant="outline"
-             onClick={async () => {
-               const uuid = window.prompt("UUID do usuário órfão para limpar:");
-               if (!uuid) return;
-               try {
-                 const { data: { session } } = await supabase.auth.getSession();
-                 const accessToken = session?.access_token;
-                 console.log("🧹 [CLEANUP TEST] user_id:", uuid);
-                 const res = await fetch(
-                   "https://nwjiyfvaoogevqovnyon.supabase.co/functions/v1/admin-create-user",
-                   {
-                     method: "POST",
-                     headers: {
-                       "Content-Type": "application/json",
-                       "Authorization": `Bearer ${accessToken}`,
-                       "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-                     },
-                     body: JSON.stringify({ action: "cleanup_orphan_user", user_id: uuid }),
-                   }
-                 );
-                 const json = await res.json().catch(() => ({}));
-                 console.log("🧹 [CLEANUP TEST] status:", res.status);
-                 console.log("🧹 [CLEANUP TEST] resposta completa:", json);
-                 if (json?.log) console.table(json.log);
-                 if (!res.ok) {
-                   console.error("🧹 [CLEANUP TEST] ❌ erro:", json);
-                   toast.error(`Cleanup falhou: ${json?.error ?? res.status}`);
-                 } else {
-                   toast.success(`Cleanup OK — removidos: ${json.total_removed}, desanexados: ${json.total_detached}`);
-                 }
-               } catch (err) {
-                 console.error("🧹 [CLEANUP TEST] ❌ exceção:", err);
-                 toast.error("Cleanup: exceção (ver console)");
-               }
-             }}
-           >
-             🧹 Cleanup User (DEV)
-           </Button>
-          )}
-          {import.meta.env.DEV && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={async () => {
-                const uuid = window.prompt("UUID do usuário para desativar (Safe Mode):");
-                if (!uuid) return;
-                try {
-                  const { data: { session } } = await supabase.auth.getSession();
-                  const accessToken = session?.access_token;
-                  console.log("🛡️ [DEACTIVATE SAFE] user_id:", uuid);
-                  const res = await fetch(
-                    "https://nwjiyfvaoogevqovnyon.supabase.co/functions/v1/admin-create-user",
-                    {
-                      method: "POST",
-                      headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": `Bearer ${accessToken}`,
-                        "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-                      },
-                      body: JSON.stringify({ action: "deactivate_user_safe", user_id: uuid }),
-                    }
-                  );
-                  const json = await res.json().catch(() => ({}));
-                  console.log("🛡️ [DEACTIVATE SAFE] status:", res.status);
-                  console.log("🛡️ [DEACTIVATE SAFE] resposta:", json);
-                  if (!res.ok) {
-                    console.error("🛡️ [DEACTIVATE SAFE] ❌ erro:", json);
-                    toast.error(`Desativação falhou: ${json?.error ?? res.status}`);
-                  } else {
-                    toast.success("Usuário desativado com segurança");
-                    queryClient.invalidateQueries({ queryKey: ["all-users"] });
-                    queryClient.invalidateQueries({ queryKey: ["all-users-with-roles"] });
-                    queryClient.invalidateQueries({ queryKey: ["assignable-users"] });
-                  }
-                } catch (err) {
-                  console.error("🛡️ [DEACTIVATE SAFE] ❌ exceção:", err);
-                  toast.error("Desativação: exceção (ver console)");
-                }
-              }}
-            >
-              🛡️ Deactivate User (Safe Mode)
-            </Button>
-          )}
           {isAdmin && (
            <Dialog open={showCreate} onOpenChange={(v) => { if (!v) closeCreateDialog(); else setShowCreate(true); }}>
              <DialogTrigger asChild>
@@ -1818,12 +1689,6 @@ export function UsersPage() {
         </div>
       )}
 
-      {/* Role permissions manager — só admin */}
-      {isAdmin && (
-        <div className="pt-6 border-t border-border/50">
-          <RolePermissionsManager />
-        </div>
-      )}
 
       {/* Dialog de permissões por utilizador */}
       <UserPermissionsDialog
