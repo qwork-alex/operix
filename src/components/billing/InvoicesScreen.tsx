@@ -1161,7 +1161,7 @@ export default function InvoicesScreen() {
               >
                 <Printer className="h-3.5 w-3.5 mr-1.5" /> Visualizar impressão
               </Button>
-              <InvoiceLogoButton />
+              
               {viewMode === "edit" && (
                 <Button
                   variant="outline" size="sm" className="h-8 no-print"
