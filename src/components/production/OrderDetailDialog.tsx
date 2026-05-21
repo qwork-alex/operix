@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -23,10 +23,14 @@ interface Props {
 export function OrderDetailDialog({ order, onClose }: Props) {
   const { update, remove, create } = useProductionOrders();
   const [form, setForm] = useState<Partial<ProductionOrder>>({});
+  const [activeTab, setActiveTab] = useState("info");
   const isNew = order?.id === "__new__";
   const locked = !isNew && isOrderLocked(order?.status);
 
-  useEffect(() => { setForm(order ?? {}); }, [order]);
+  useEffect(() => {
+    setForm(order ?? {});
+    setActiveTab("info");
+  }, [order]);
 
   if (!order) return null;
 
@@ -36,12 +40,16 @@ export function OrderDetailDialog({ order, onClose }: Props) {
   };
 
   const save = async () => {
-    if (isNew) {
-      await create.mutateAsync(form);
-    } else {
-      await update.mutateAsync({ id: order.id, ...form });
+    try {
+      if (isNew) {
+        await create.mutateAsync(form);
+      } else {
+        await update.mutateAsync({ id: order.id, ...form });
+      }
+      onClose();
+    } catch (err) {
+      console.error("[Production] save failed", err);
     }
-    onClose();
   };
 
   return (
@@ -61,9 +69,12 @@ export function OrderDetailDialog({ order, onClose }: Props) {
               </Badge>
             )}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Formulário operacional da ordem de produção com dados, fotos e histórico.
+          </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="info">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
             <TabsTrigger value="info">Dados</TabsTrigger>
             <TabsTrigger value="photos" disabled={isNew}>Fotos</TabsTrigger>

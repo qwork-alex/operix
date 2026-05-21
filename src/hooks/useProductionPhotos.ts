@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useWorkspace } from "./useWorkspace";
 import { toast } from "sonner";
@@ -29,7 +28,9 @@ export const PHOTO_CATEGORIES: { value: PhotoCategory; label: string }[] = [
 async function compress(file: File, maxDim = 1600, quality = 0.82): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
     img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
       const ratio = Math.min(1, maxDim / Math.max(img.width, img.height));
       const w = Math.round(img.width * ratio);
       const h = Math.round(img.height * ratio);
@@ -40,8 +41,11 @@ async function compress(file: File, maxDim = 1600, quality = 0.82): Promise<Blob
       ctx.drawImage(img, 0, 0, w, h);
       canvas.toBlob((b) => b ? resolve(b) : reject(new Error("Blob error")), "image/jpeg", quality);
     };
-    img.onerror = reject;
-    img.src = URL.createObjectURL(file);
+    img.onerror = (err) => {
+      URL.revokeObjectURL(objectUrl);
+      reject(err);
+    };
+    img.src = objectUrl;
   });
 }
 
@@ -69,18 +73,6 @@ export function useProductionPhotos(orderId: string | null) {
     },
   });
 
-  useEffect(() => {
-    if (!orderId) return;
-    const ch = supabase
-      .channel(`prod-photos:${orderId}`)
-      .on("postgres_changes",
-        { event: "*", schema: "public", table: "production_photos", filter: `production_order_id=eq.${orderId}` },
-        () => qc.invalidateQueries({ queryKey: ["production_photos", orderId] })
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [qc, orderId]);
-
   const upload = useMutation({
     mutationFn: async ({ file, category, caption }: { file: File; category: PhotoCategory; caption?: string }) => {
       if (!orderId || !workspaceId) throw new Error("Ordem inválida");
@@ -99,6 +91,7 @@ export function useProductionPhotos(orderId: string | null) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["production_photos", orderId] });
+      qc.invalidateQueries({ queryKey: ["production_events", orderId] });
       toast.success("Foto enviada");
     },
     onError: (e: any) => toast.error(e.message),

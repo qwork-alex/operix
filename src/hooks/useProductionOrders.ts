@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useWorkspace } from "./useWorkspace";
 import { useAuth } from "./useAuth";
@@ -62,6 +61,34 @@ export const PRIORITY_META: Record<ProductionPriority, { label: string; tone: st
   urgent: { label: "Urgente", tone: "text-destructive" },
 };
 
+const TIMESTAMP_FIELDS = ["due_at", "started_at", "finished_at", "delivered_at"] as const;
+const TEXT_NULL_FIELDS = [
+  "client_id", "client_name", "technician_user_id", "technician_name", "platform", "insurer",
+  "license_plate", "vin", "brand", "model", "color", "notes", "service_order_id", "commercial_status",
+] as const;
+
+export function normalizeProductionOrderPayload(payload: Partial<ProductionOrder>) {
+  const normalized: Record<string, unknown> = { ...payload };
+  delete normalized.id;
+  delete normalized.created_at;
+  delete normalized.updated_at;
+  delete normalized.created_by;
+  delete normalized.workspace_id;
+
+  TIMESTAMP_FIELDS.forEach((field) => {
+    if (!(field in normalized)) return;
+    const value = normalized[field];
+    normalized[field] = typeof value === "string" && value.trim() === "" ? null : value ?? null;
+  });
+
+  TEXT_NULL_FIELDS.forEach((field) => {
+    if (!(field in normalized)) return;
+    if (normalized[field] === "") normalized[field] = null;
+  });
+
+  return normalized as Partial<ProductionOrder>;
+}
+
 export function useProductionOrders(filters?: { technicianOnly?: boolean; status?: ProductionStatus }) {
   const qc = useQueryClient();
   const { workspaceId } = useWorkspace();
@@ -84,26 +111,13 @@ export function useProductionOrders(filters?: { technicianOnly?: boolean; status
     },
   });
 
-  useEffect(() => {
-    if (!workspaceId) return;
-    const channelId = `production:${workspaceId}:${Math.random().toString(36).slice(2, 10)}`;
-    const ch = supabase
-      .channel(channelId)
-      .on("postgres_changes", { event: "*", schema: "public", table: "production_orders" }, () => {
-        qc.invalidateQueries({ queryKey: ["production_orders"] });
-        qc.invalidateQueries({ queryKey: ["production_kpis"] });
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [qc, workspaceId]);
-
-
   const create = useMutation({
     mutationFn: async (payload: Partial<ProductionOrder>) => {
       if (!workspaceId) throw new Error("Workspace ausente");
+      const clean = normalizeProductionOrderPayload(payload);
       const { data, error } = await (supabase as any)
         .from("production_orders")
-        .insert({ ...payload, workspace_id: workspaceId })
+        .insert({ priority: "normal", status: "new_vehicle", ...clean, workspace_id: workspaceId })
         .select()
         .single();
       if (error) throw error;
@@ -118,14 +132,15 @@ export function useProductionOrders(filters?: { technicianOnly?: boolean; status
 
   const update = useMutation({
     mutationFn: async ({ id, ...patch }: Partial<ProductionOrder> & { id: string }) => {
+      const clean = normalizeProductionOrderPayload(patch);
       // Auto stamp timestamps on status transitions
       const stamp: any = {};
-      if (patch.status === "in_production" && !patch.started_at) stamp.started_at = new Date().toISOString();
-      if (patch.status === "finished" && !patch.finished_at) stamp.finished_at = new Date().toISOString();
-      if (patch.status === "delivered" && !patch.delivered_at) stamp.delivered_at = new Date().toISOString();
+      if (clean.status === "in_production" && !clean.started_at) stamp.started_at = new Date().toISOString();
+      if (clean.status === "finished" && !clean.finished_at) stamp.finished_at = new Date().toISOString();
+      if (clean.status === "delivered" && !clean.delivered_at) stamp.delivered_at = new Date().toISOString();
       const { data, error } = await (supabase as any)
         .from("production_orders")
-        .update({ ...patch, ...stamp })
+        .update({ ...clean, ...stamp })
         .eq("id", id)
         .select()
         .single();
@@ -169,7 +184,6 @@ export function useProductionKpis() {
 }
 
 export function useProductionTimeline(orderId: string | null) {
-  const qc = useQueryClient();
   const query = useQuery({
     queryKey: ["production_events", orderId],
     enabled: !!orderId,
@@ -183,20 +197,6 @@ export function useProductionTimeline(orderId: string | null) {
       return data ?? [];
     },
   });
-
-  useEffect(() => {
-    if (!orderId) return;
-    const channelId = `prod-events:${orderId}:${Math.random().toString(36).slice(2, 10)}`;
-    const ch = supabase
-      .channel(channelId)
-      .on("postgres_changes",
-        { event: "INSERT", schema: "public", table: "production_events", filter: `production_order_id=eq.${orderId}` },
-        () => qc.invalidateQueries({ queryKey: ["production_events", orderId] })
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [qc, orderId]);
-
 
   return query;
 }
