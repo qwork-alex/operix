@@ -1,110 +1,81 @@
-# Fase 6D — Real Invoices + TVA + PDF (Safe Mode)
+# Fase 6E — Webhooks + Retries + Cobrança Automática (Safe Mode)
 
-Implementação **incremental, defensiva, aditiva**. Nenhuma rota, provider, hook ou lifecycle existente é alterado. Todas as peças novas vivem em ficheiros isolados e tabelas complementares. Após cada passo validamos o preview antes de avançar.
-
----
-
-## Princípios
-
-- **Aditivo apenas.** Nada de reescrever Subscription Engine, Stripe lifecycle, autenticação, rotas ou layout.
-- **Reaproveitar `billing_invoices`** (já existe) — só adicionamos colunas + novas tabelas auxiliares.
-- **Falha isolada.** Erros em PDF/email/export NUNCA derrubam UI nem checkout.
-- **Idempotência** em geração, numeração e envio.
-- **Rollback fácil:** cada passo é uma migration + ficheiros novos, removíveis sem efeitos colaterais.
+Aditivo. Reaproveita o que já existe das fases 2.5 → 6D. Nenhum redesign, nenhuma alteração ao Stripe gateway, lifecycle, rotas, providers, sidebar ou branding.
 
 ---
 
-## Arquitetura
+## O que já existe (não recriar)
 
-```text
-                  ┌──────────────────────┐
-   evento ───►    │  invoice_engine (RPC)│ ──► billing_invoices (+ items, events)
- (renew/upgrade/  └──────────┬───────────┘
-  payment/active)            │
-                             ├──► tva_engine (calc com_iva / sem_iva / reverse_charge)
-                             ├──► bank_snapshot (Wise pessoal vs empresa)
-                             ├──► pdf_service  (edge function isolada)
-                             └──► email_queue  (tabela + dispatcher cron)
-```
+- `run_subscription_automation()` (renewals + retries + dunning + transições) — Fase 4.
+- `process_lifecycle_transitions()` — Fase 4 (trial→active, failed→retry, retry→suspended, suspended→cancelled).
+- `payments-webhook` — recebe `customer.subscription.*`, `invoice.paid/payment_failed`, `checkout.session.completed`.
+- `subscription_events` + `log_subscription_event` — audit log.
+- `billing_invoices` + `generate-invoice-pdf` + `process-invoice-emails` + `send-invoice-email` — Fase 6D.
+- `BillingAlerts`, `AccessStateBanner` UI.
+
+Fase 6E só **liga as pontas**, **agenda execução** e **adiciona emails de dunning**.
 
 ---
 
-## Passos (executados um de cada vez, com validação de preview entre eles)
+## Passos (cada um validado isoladamente)
 
-### PASSO 1 — Schema base (migration)
+### PASSO 1 — Webhook completeness
 
-- `billing_invoices`: adicionar colunas (nullable, defaults seguros)
-  `vat_mode`, `vat_rate`, `subtotal_amount`, `vat_amount`, `bank_snapshot jsonb`, `pdf_path`, `pdf_generated_at`, `sequence_year`, `sequence_number`.
-- `invoice_items` (novo): id, invoice_id, description, quantity, unit_amount, vat_rate, line_total.
-- `invoice_events` (novo): id, invoice_id, type (`generated|sent|downloaded|status_changed|pdf_regenerated`), payload jsonb, actor_id, created_at.
-- `invoice_email_queue` (novo): id, invoice_id, recipient, status (`pending|sent|failed|dlq`), attempts, last_error, scheduled_at.
-- `invoice_sequences` (novo): year int PK, last_number bigint — para numeração segura.
-- RPC `next_invoice_number(year)` (SECURITY DEFINER, locking) → devolve `INV-YYYY-000001`.
-- RPC `generate_invoice(workspace_id, kind, source_ref, items[], vat_mode)` idempotente por `(workspace_id, source_ref, kind)`.
-- RLS: workspace members leem; só service role escreve em items/events/queue/sequences.
+`payments-webhook/index.ts`: após cada handler, chamar `generate_invoice` (idempotente) em `invoice.payment_succeeded` para emitir fatura + enfileirar PDF + email. Em `invoice.payment_failed`, enfileirar alerta dunning. Eventos `renewed` e `canceled` já cobertos pelos handlers existentes — só garantir `log_subscription_event` em todos os ramos.
 
-### PASSO 2 — Invoice Engine (TS)
+### PASSO 2 — Cron de automação (pg_cron)
 
-- `src/lib/invoices/invoiceEngine.ts` — wrapper client das RPC.
-- `src/lib/invoices/tvaEngine.ts` — cálculo: `with_vat` (20% FR default por workspace country), `no_vat`, `reverse_charge` (mostra menção legal "Reverse charge – Article 196 EU VAT Directive 2006/112/EC", IVA 0).
-- `src/lib/invoices/bankSnapshot.ts` — regra: `no_vat → wise_personal`, `with_vat|reverse_charge → company_account`. Lê de `company_settings` + fallback config.
-- Hook `useGenerateInvoice()` (TanStack) que envolve a RPC.
+Agendar `run_subscription_automation()` diariamente às 03:00 UTC via `pg_cron` + `pg_net` (chamada a uma edge function fina `run-billing-automation` que invoca a RPC e devolve resumo). Permite execução manual mantida no `AutomationPanel`.
 
-### PASSO 3 — Triggers de geração
+### PASSO 3 — Dunning emails
 
-Edge function existente `payments-webhook` chama `generate_invoice` no evento `invoice.payment_succeeded` (idempotente). Adicionalmente um helper client invoca após upgrade/ativação manual. Nada do lifecycle Stripe muda.
+Tabela existente `dunning_events` (já criada em 2.5) — adicionar trigger AFTER INSERT que enfileira em `invoice_email_queue` (reaproveitar) com `template_kind` ∈ `reminder|warning|risk|suspension`. Edge function `send-dunning-email` (novo, isolado) consome a fila para templates de dunning. UI de invoices não muda.
 
-### PASSO 4 — PDF service (edge function isolada)
+### PASSO 4 — Lifecycle emails
 
-- `supabase/functions/generate-invoice-pdf/index.ts` (verify_jwt = true).
-- Gera PDF com `jspdf` (Deno-compatível) ou HTML→PDF via `npm:@react-pdf/renderer`. Decisão: jsPDF (zero-deps Deno).
-- Layout: header com `company_settings` (logo, nome, branding tokens), bloco emissor, bloco cliente (`billing_profiles`), tabela items, subtotal, TVA, total, menção legal TVA, snapshot bancário, footer com invoice number + datas.
-- Upload para storage bucket `invoice-pdfs` (criar privado, RLS por workspace).
-- Grava `pdf_path` + `pdf_generated_at` + `invoice_events('pdf_regenerated' | 'generated')`.
+Templates em `send-invoice-email` estendidos com modos:
+- `payment_succeeded`
+- `payment_failed`
+- `renewal_upcoming`
+- `invoice_issued` (já existe)
 
-### PASSO 5 — Email queue
+Disparados a partir de triggers em `subscription_events` (AFTER INSERT) para tipos relevantes — enfileiram, não enviam síncrono.
 
-- Cron `process-invoice-emails` (a cada 1 min, pg_cron + pg_net) que processa `invoice_email_queue` em lotes pequenos.
-- Edge function `send-invoice-notification` consome a fila, usa Lovable Emails (template novo `invoice-issued`) e regista `invoice_events('sent')`.
-- UI não bloqueia: enfileira e devolve toast otimista.
+### PASSO 5 — Event log unificado
 
-### PASSO 6 — UI Invoice Center (aditivo)
+Garantir que TODOS os ramos do webhook + cron + dunning chamam `log_subscription_event`. Adicionar índice `(workspace_id, created_at desc)` se faltar. Sem nova tabela.
 
-- `WorkspaceInvoiceCenter` (já existe) — só estendemos para mostrar botão **Descarregar PDF** que chama signed URL, e botão **Regenerar PDF** (admin).
-- Componente novo `InvoiceDetailsDrawer.tsx` (drawer lateral) com items, TVA, snapshot bancário, timeline (`invoice_events`).
-- Sem mudar tabs, layout ou rotas.
+### PASSO 6 — UI mínima (aditiva)
 
-### PASSO 7 — Exportação
+`AutomationPanel` já existe. Acrescentar:
+- Último run timestamp (lido de `subscription_events` tipo `automation.run`).
+- Pequeno indicador "Cron ativo" se job pg_cron existir.
 
-- Hook `useExportInvoices(format: 'pdf'|'csv'|'json')`.
-- PDF: zip de PDFs existentes (ou regenera em falta).
-- CSV/JSON: client-side, a partir de `billing_invoices` + `invoice_items` já carregados.
-- Botão único no header do Invoice Center.
+Nada mais muda visualmente.
+
+---
+
+## Ficheiros
+
+**Migrations:** 1 (cron + triggers de email + índices).
+**Novos:** `supabase/functions/run-billing-automation/index.ts`, `supabase/functions/send-dunning-email/index.ts`.
+**Editados (mínimos):** `payments-webhook/index.ts` (chamar `generate_invoice` + log adicional), `AutomationPanel.tsx` (mostrar último run + cron status).
+
+---
+
+## Fora de scope
+
+- Mudar gateway Stripe.
+- Alterar `subscription_plans`, `workspace_subscriptions` schema.
+- Customer Portal (já implementado).
+- Redesign UI.
+- Substituir lifecycle engine.
 
 ---
 
 ## Validação entre passos
 
-Após cada passo:
-1. `cloud_status` se passo tocou DB.
-2. Verificar preview (`/subscription` carrega, sem erros consola).
-3. Verificar que rotas `/billing`, `/checkout`, `/platform`, `/dashboard` continuam intactas.
-4. Se quebrar → rollback do passo (drop tabelas adicionadas ou apagar ficheiros novos) e parar.
-
----
-
-## Ficheiros previstos
-
-**Migrations:** 1 por passo (1, 4-bucket, 5-cron).
-**Novos:** `src/lib/invoices/*`, `src/hooks/useGenerateInvoice.ts`, `src/hooks/useExportInvoices.ts`, `src/components/billing/InvoiceDetailsDrawer.tsx`, `supabase/functions/generate-invoice-pdf/`, `supabase/functions/send-invoice-notification/`.
-**Editados (mínimo):** `WorkspaceInvoiceCenter.tsx` (botões PDF/export), `payments-webhook/index.ts` (chamar `generate_invoice`).
-
----
-
-## Fora de scope (explicitamente)
-
-- Substituir checkout Stripe.
-- Mexer em `workspace_subscriptions`, `subscription_plans`, lifecycle, RPCs existentes.
-- Alterar `/billing` operacional.
-- Customer Portal (já existe botão; não tocado).
-- Branding, sidebar, providers React.
+1. `cloud_status` após cada migration.
+2. Preview `/subscription`, `/platform`, `/billing` carregam sem erro.
+3. Cron job aparece em `cron.job`.
+4. Rollback: drop cron job + triggers novos + apagar 2 edge functions novas.
