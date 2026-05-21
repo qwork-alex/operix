@@ -212,6 +212,42 @@
     @apply hover:border-border hover:shadow-md hover:shadow-black/5;
   }
 
+  /* Premium elevated surface — for floating panels / key cards */
+  .surface-elevated {
+    @apply rounded-xl border border-border/60 bg-card text-card-foreground;
+    background-image: linear-gradient(180deg, hsl(var(--card)) 0%, hsl(var(--background)) 100%);
+    box-shadow:
+      0 1px 0 0 hsl(0 0% 100% / 0.03) inset,
+      0 1px 2px 0 hsl(0 0% 0% / 0.4),
+      0 8px 24px -12px hsl(0 0% 0% / 0.5);
+  }
+
+  /* Subtle contextual glows (low opacity, atmospheric) */
+  .glow-primary-soft {
+    box-shadow: 0 0 0 1px hsl(var(--primary) / 0.25), 0 0 24px -4px hsl(var(--primary) / 0.25);
+  }
+  .glow-accent-soft {
+    box-shadow: 0 0 0 1px hsl(var(--accent) / 0.25), 0 0 24px -4px hsl(var(--accent) / 0.22);
+  }
+
+  /* Sidebar active indicator — premium vertical bar + soft glow */
+  [data-sidebar="menu-button"][data-active="true"],
+  .sidebar-active {
+    position: relative;
+  }
+  [data-sidebar="menu-button"].bg-sidebar-accent::before,
+  .sidebar-active::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 6px;
+    bottom: 6px;
+    width: 2px;
+    border-radius: 2px;
+    background: linear-gradient(180deg, hsl(var(--primary)), hsl(var(--accent)));
+    box-shadow: 0 0 8px hsl(var(--primary) / 0.5);
+  }
+
   /* Standard module wrapper — spacing + entry animation. */
   .module-shell {
     @apply space-y-6 animate-fade-in;
