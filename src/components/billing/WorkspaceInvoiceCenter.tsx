@@ -8,9 +8,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   FileText, Download, ExternalLink, CheckCircle2, Clock, AlertTriangle, XCircle,
-  RefreshCw, MoreVertical, FileJson, Sheet,
+  RefreshCw, MoreVertical, FileJson, Sheet, Landmark,
 } from "lucide-react";
 import { useWorkspaceInvoices, bucketOf, type InvoiceBucket, type WorkspaceInvoice } from "@/hooks/useWorkspaceInvoices";
+import { useWorkspaceManualTransfers, statusMeta } from "@/hooks/useManualPayments";
+import { ManualPaymentDialog } from "./ManualPaymentDialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { requestInvoicePdf, getInvoicePdfSignedUrl } from "@/lib/invoices/invoiceEngine";
@@ -37,7 +39,19 @@ function downloadFile(name: string, content: string, mime: string) {
 
 export function WorkspaceInvoiceCenter() {
   const { data: invoices = [], isLoading, refetch } = useWorkspaceInvoices();
+  const { data: transfers = [] } = useWorkspaceManualTransfers();
   const [filter, setFilter] = useState<InvoiceBucket | "all">("all");
+  const [payInvoice, setPayInvoice] = useState<WorkspaceInvoice | null>(null);
+
+  const transfersByInvoice = useMemo(() => {
+    const m = new Map<string, typeof transfers>();
+    transfers.forEach((t) => {
+      if (!t.invoice_id) return;
+      const arr = m.get(t.invoice_id) ?? [];
+      arr.push(t); m.set(t.invoice_id, arr);
+    });
+    return m;
+  }, [transfers]);
 
   const counts = useMemo(() => {
     const c = { paid: 0, pending: 0, overdue: 0, failed: 0 } as Record<InvoiceBucket, number>;
@@ -114,19 +128,37 @@ export function WorkspaceInvoiceCenter() {
         </div>
       ) : (
         <div className="space-y-2">
-          {filtered.map((inv) => <InvoiceRow key={inv.id} inv={inv} onChanged={refetch} />)}
+          {filtered.map((inv) => (
+            <InvoiceRow
+              key={inv.id}
+              inv={inv}
+              transfers={transfersByInvoice.get(inv.id) ?? []}
+              onChanged={refetch}
+              onPay={() => setPayInvoice(inv)}
+            />
+          ))}
         </div>
       )}
+
+      <ManualPaymentDialog invoice={payInvoice} open={!!payInvoice} onOpenChange={(v) => !v && setPayInvoice(null)} />
     </Card>
   );
 }
 
-function InvoiceRow({ inv, onChanged }: { inv: WorkspaceInvoice; onChanged: () => void }) {
+function InvoiceRow({ inv, transfers, onChanged, onPay }: {
+  inv: WorkspaceInvoice;
+  transfers: any[];
+  onChanged: () => void;
+  onPay: () => void;
+}) {
   const bucket = bucketOf(inv);
   const meta = BUCKET_META[bucket];
   const Icon = meta.icon;
   const hostedUrl: string | undefined = (inv.metadata as any)?.hosted_invoice_url;
   const [busy, setBusy] = useState<null | "pdf" | "open">(null);
+  const latestTransfer = transfers[0];
+  const tMeta = latestTransfer ? statusMeta(latestTransfer.status) : null;
+  const canPay = bucket !== "paid" && (!latestTransfer || latestTransfer.status === "rejected");
 
   const handleOpenPdf = async () => {
     setBusy("open");
@@ -135,7 +167,6 @@ function InvoiceRow({ inv, onChanged }: { inv: WorkspaceInvoice; onChanged: () =
         const { url } = await getInvoicePdfSignedUrl(inv.pdf_path);
         if (url) { window.open(url, "_blank", "noopener,noreferrer"); return; }
       }
-      // No PDF yet → generate then open
       const { data, error } = await requestInvoicePdf(inv.id);
       if (error) throw error;
       const signed = (data as any)?.signedUrl;
@@ -172,6 +203,11 @@ function InvoiceRow({ inv, onChanged }: { inv: WorkspaceInvoice; onChanged: () =
               {inv.vat_mode === "with_vat" ? "TVA" : inv.vat_mode === "no_vat" ? "Sem TVA" : "Reverse charge"}
             </Badge>
           )}
+          {tMeta && (
+            <Badge variant="outline" className={`text-[10px] ${tMeta.tone}`}>
+              <Landmark className="h-2.5 w-2.5 mr-1" />{tMeta.label}
+            </Badge>
+          )}
         </div>
         <p className="text-xs text-muted-foreground">
           Emitida {new Date(inv.issue_date).toLocaleDateString("pt-PT")}
@@ -184,6 +220,11 @@ function InvoiceRow({ inv, onChanged }: { inv: WorkspaceInvoice; onChanged: () =
           <p className="text-[10px] text-muted-foreground">Em falta: {fmtMoney(Number(inv.remaining_amount))}</p>
         )}
       </div>
+      {canPay && (
+        <Button size="sm" variant="outline" onClick={onPay} className="h-8 gap-1 hidden sm:inline-flex">
+          <Landmark className="h-3.5 w-3.5" /> Pagar
+        </Button>
+      )}
       <Button size="sm" variant="ghost" onClick={handleOpenPdf} disabled={busy !== null} aria-label="Ver PDF">
         {busy === "open" ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
       </Button>
@@ -192,6 +233,11 @@ function InvoiceRow({ inv, onChanged }: { inv: WorkspaceInvoice; onChanged: () =
           <Button size="sm" variant="ghost" aria-label="Mais ações"><MoreVertical className="h-3.5 w-3.5" /></Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          {canPay && (
+            <DropdownMenuItem onClick={onPay}>
+              <Landmark className="h-3.5 w-3.5 mr-2" /> Pagar por transferência
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onClick={handleRegenerate} disabled={busy !== null}>
             <RefreshCw className={`h-3.5 w-3.5 mr-2 ${busy === "pdf" ? "animate-spin" : ""}`} />
             Regenerar PDF
