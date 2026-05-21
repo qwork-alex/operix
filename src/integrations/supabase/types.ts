@@ -3258,6 +3258,65 @@ export type Database = {
           },
         ]
       }
+      security_events: {
+        Row: {
+          app_user_id: string | null
+          created_at: string
+          device: string | null
+          event_type: string
+          id: string
+          ip_address: string | null
+          metadata: Json
+          resource: string | null
+          resource_id: string | null
+          risk_score: number
+          severity: string
+          user_agent: string | null
+          user_id: string | null
+          workspace_id: string | null
+        }
+        Insert: {
+          app_user_id?: string | null
+          created_at?: string
+          device?: string | null
+          event_type: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json
+          resource?: string | null
+          resource_id?: string | null
+          risk_score?: number
+          severity?: string
+          user_agent?: string | null
+          user_id?: string | null
+          workspace_id?: string | null
+        }
+        Update: {
+          app_user_id?: string | null
+          created_at?: string
+          device?: string | null
+          event_type?: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json
+          resource?: string | null
+          resource_id?: string | null
+          risk_score?: number
+          severity?: string
+          user_agent?: string | null
+          user_id?: string | null
+          workspace_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "security_events_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       service_order_distributions: {
         Row: {
           calculated_value: number
@@ -4500,6 +4559,10 @@ export type Database = {
         }[]
       }
       assert_active: { Args: { _uid: string }; Returns: undefined }
+      assert_workspace_member: {
+        Args: { _workspace_id: string }
+        Returns: boolean
+      }
       audit_log_purge_older_than: { Args: { _days: number }; Returns: number }
       billing_recalc_invoice: {
         Args: { _invoice_id: string }
@@ -4544,6 +4607,7 @@ export type Database = {
         Returns: Json
       }
       compute_platform_smart_metrics: { Args: never; Returns: Json }
+      compute_security_metrics: { Args: never; Returns: Json }
       current_user_effective_role: { Args: never; Returns: string }
       current_user_workspace_ids: { Args: never; Returns: string[] }
       deterministic_event_hash: {
@@ -4700,6 +4764,20 @@ export type Database = {
           _severity?: string
           _subscription_id: string
           _workspace_id: string
+        }
+        Returns: string
+      }
+      log_security_event: {
+        Args: {
+          _event_type: string
+          _ip?: string
+          _metadata?: Json
+          _resource?: string
+          _resource_id?: string
+          _risk_score?: number
+          _severity?: string
+          _user_agent?: string
+          _workspace_id?: string
         }
         Returns: string
       }
