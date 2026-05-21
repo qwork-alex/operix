@@ -85,11 +85,16 @@ export default function SubscriptionPage() {
         title="Assinatura"
         subtitle={workspaceName ?? undefined}
         actions={
-          isPlatformOwner ? (
-            <Button asChild variant="outline" size="sm">
-              <Link to="/platform">Painel Plataforma</Link>
+          <div className="flex gap-2">
+            <Button asChild size="sm">
+              <Link to={`/checkout?plan=${plan.code}&cycle=${subscription.billing_cycle}`}>Checkout</Link>
             </Button>
-          ) : null
+            {isPlatformOwner ? (
+              <Button asChild variant="outline" size="sm">
+                <Link to="/platform">Painel Plataforma</Link>
+              </Button>
+            ) : null}
+          </div>
         }
       />
 
