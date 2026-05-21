@@ -1,81 +1,109 @@
-# Fase 6E — Webhooks + Retries + Cobrança Automática (Safe Mode)
+# Automation Engine — Plano de implementação
 
-Aditivo. Reaproveita o que já existe das fases 2.5 → 6D. Nenhum redesign, nenhuma alteração ao Stripe gateway, lifecycle, rotas, providers, sidebar ou branding.
+Engine central de automações operacionais, isolado por workspace, sem tocar em tenancy/auth/RBAC. Reutiliza a infraestrutura já existente (`audit_log`, `notifications`, `backend_event_logs`, RLS via `is_workspace_member`).
 
----
+## Arquitetura
 
-## O que já existe (não recriar)
+```text
+  EVENTO no DB                EDGE FUNCTION                 TABELAS
+  (trigger SQL)               run-automation-engine         automation_rules
+        │                            │                       automation_executions
+        ▼                            ▼                       automation_dead_letter
+  automation_queue  ─────►  fetch pending, match rules,
+  (insert + NOTIFY)         exec actions (notification,
+                            audit-log, status update,
+                            retry com backoff)
+                                     │
+                                     ▼
+                              audit_log + notifications
+```
 
-- `run_subscription_automation()` (renewals + retries + dunning + transições) — Fase 4.
-- `process_lifecycle_transitions()` — Fase 4 (trial→active, failed→retry, retry→suspended, suspended→cancelled).
-- `payments-webhook` — recebe `customer.subscription.*`, `invoice.paid/payment_failed`, `checkout.session.completed`.
-- `subscription_events` + `log_subscription_event` — audit log.
-- `billing_invoices` + `generate-invoice-pdf` + `process-invoice-emails` + `send-invoice-email` — Fase 6D.
-- `BillingAlerts`, `AccessStateBanner` UI.
+- **Triggers SQL leves** só fazem `INSERT` em `automation_queue` (não executam nada — zero risco de loop bloqueante).
+- **Edge function** consome a fila (cron de 1 min + invocação manual), avalia condições, executa actions, regista cada passo em `automation_executions`. Erros após N tentativas vão para `automation_dead_letter`.
+- **Anti-recursão**: cada evento carrega `source_correlation_id`; o engine recusa eventos cuja origem foi o próprio engine, e limita profundidade a 3.
+- **Tenant-safe**: `workspace_id` obrigatório em todas as tabelas, RLS via `is_workspace_member`, edge function valida `workspace_id` antes de cada action.
 
-Fase 6E só **liga as pontas**, **agenda execução** e **adiciona emails de dunning**.
+## Schema (migration)
 
----
+- `automation_rules` — `id`, `workspace_id`, `name`, `description`, `trigger_type`, `trigger_config jsonb`, `conditions jsonb`, `actions jsonb`, `delay_seconds`, `max_retries`, `retry_backoff_seconds`, `enabled bool`, `safe_mode bool` (dry-run), `created_by`, timestamps.
+- `automation_queue` — `id`, `workspace_id`, `rule_id` (nullable até match), `event_type`, `entity_type`, `entity_id`, `payload jsonb`, `source_correlation_id`, `depth int`, `scheduled_at`, `status` (pending/processing/done/failed/dead).
+- `automation_executions` — `id`, `workspace_id`, `rule_id`, `queue_id`, `started_at`, `finished_at`, `status`, `attempt int`, `actions_log jsonb[]`, `error text`, `dry_run bool`.
+- `automation_dead_letter` — `id`, `workspace_id`, `queue_id`, `rule_id`, `last_error text`, `attempts int`, `payload jsonb`, `created_at`.
 
-## Passos (cada um validado isoladamente)
+RLS:
+- SELECT/INSERT/UPDATE/DELETE em `automation_rules` para membros do workspace com role admin/socio (reutiliza `is_workspace_member` + `effective_role`).
+- `automation_executions` / `automation_dead_letter` / `automation_queue` — SELECT-only para membros; INSERT/UPDATE só via SECURITY DEFINER (edge function via service role).
 
-### PASSO 1 — Webhook completeness
+## Triggers SQL (apenas enfileiram)
 
-`payments-webhook/index.ts`: após cada handler, chamar `generate_invoice` (idempotente) em `invoice.payment_succeeded` para emitir fatura + enfileirar PDF + email. Em `invoice.payment_failed`, enfileirar alerta dunning. Eventos `renewed` e `canceled` já cobertos pelos handlers existentes — só garantir `log_subscription_event` em todos os ramos.
+Pequenos `AFTER INSERT/UPDATE` em `service_orders`, `payment_orders`, `invoices`, `fleet_fuel_logs`, `marketplace_listings`, `auth_users_view`. Cada um faz:
+```sql
+INSERT INTO automation_queue (workspace_id, event_type, entity_type, entity_id, payload, source_correlation_id, depth)
+VALUES (NEW.workspace_id, 'service_order.created', 'service_order', NEW.id, to_jsonb(NEW), NULL, 0);
+```
+Triggers ignoram eventos cuja `source_correlation_id` é prefixada `engine:` → anti-recursão.
 
-### PASSO 2 — Cron de automação (pg_cron)
+## Edge function `run-automation-engine`
 
-Agendar `run_subscription_automation()` diariamente às 03:00 UTC via `pg_cron` + `pg_net` (chamada a uma edge function fina `run-billing-automation` que invoca a RPC e devolve resumo). Permite execução manual mantida no `AutomationPanel`.
+Cron a cada minuto via `pg_cron` + endpoint manual.
+- Carrega lote de até 100 itens `pending` ordenados por `scheduled_at`.
+- Para cada item: marca `processing`, faz match contra `automation_rules` (workspace + trigger_type + condições JSON-logic simples), executa actions, regista `automation_executions`.
+- Retry com backoff exponencial até `max_retries`. Após esgotar → `automation_dead_letter`.
+- `safe_mode = true` registra a execução mas não emite efeitos (dry-run).
 
-### PASSO 3 — Dunning emails
+### Tipos de action suportados (v1)
+- `notify` — cria registo em `notifications`.
+- `update_status` — update validado por whitelist de colunas seguras (status, prioridade, observação).
+- `audit` — escreve em `audit_log` com `origin = 'automation'`.
+- `webhook` — POST a URL configurada (com timeout 5s).
+- `assign_user` — set de `assigned_user_id` em entidade.
 
-Tabela existente `dunning_events` (já criada em 2.5) — adicionar trigger AFTER INSERT que enfileira em `invoice_email_queue` (reaproveitar) com `template_kind` ∈ `reminder|warning|risk|suspension`. Edge function `send-dunning-email` (novo, isolado) consome a fila para templates de dunning. UI de invoices não muda.
+Cross-workspace bloqueado: action recebe `workspace_id` do queue item e valida que a entidade alvo pertence ao mesmo workspace.
 
-### PASSO 4 — Lifecycle emails
+## UI
 
-Templates em `send-invoice-email` estendidos com modos:
-- `payment_succeeded`
-- `payment_failed`
-- `renewal_upcoming`
-- `invoice_issued` (já existe)
+Nova página `/automations` (admin/sócio only) com 3 tabs:
 
-Disparados a partir de triggers em `subscription_events` (AFTER INSERT) para tipos relevantes — enfileiram, não enviam síncrono.
+1. **Regras** — lista de `automation_rules`, toggle on/off, duplicar, exportar JSON, importar JSON, abrir builder.
+2. **Builder visual** — formulário com:
+   - Trigger (dropdown dos event_types disponíveis)
+   - Condições (lista de `field op value`)
+   - Ações (lista ordenada com tipo + config)
+   - Delay, retries, safe_mode
+3. **Execuções** — feed paginado de `automation_executions` com filtros (regra, status, range), expandir para ver `actions_log` e erros. Botão "Re-tentar" para dead-letter.
 
-### PASSO 5 — Event log unificado
+Painel de monitorização no topo: KPIs (execuções 24h, sucessos, falhas, dead-letter, fila pendente).
 
-Garantir que TODOS os ramos do webhook + cron + dunning chamam `log_subscription_event`. Adicionar índice `(workspace_id, created_at desc)` se faltar. Sem nova tabela.
+## Integrações
 
-### PASSO 6 — UI mínima (aditiva)
+- **Auditoria**: cada execução escreve em `audit_log` (operation `AUTOMATION`).
+- **Notificações**: action `notify` usa pipeline existente.
+- **Permissões**: a UI usa `useCan('automacao', 'gerir')` (mapeamento adicionado ao catálogo já presente em `UserPermissionsDialog`). Edge function valida via service role + workspace.
 
-`AutomationPanel` já existe. Acrescentar:
-- Último run timestamp (lido de `subscription_events` tipo `automation.run`).
-- Pequeno indicador "Cron ativo" se job pg_cron existir.
+## Performance & segurança
 
-Nada mais muda visualmente.
+- Fila assíncrona → frontend nunca bloqueia.
+- Idempotência: chave única `(rule_id, queue_id, attempt)` em `automation_executions`.
+- Anti-loop: depth máx. 3, source_correlation_id rejeitado se prefixo `engine:`.
+- Timeout por action: 5s. Limite global por execução: 30s.
+- Tenant isolation: WHERE workspace_id obrigatório em toda query do engine.
 
----
+## O que NÃO muda (SAFE MODE)
 
-## Ficheiros
+- Nenhuma alteração em `auth.*`, `memberships`, `user_roles`, `effective_role`, providers, RLS de tabelas existentes.
+- Nenhum trigger novo em tabelas Supabase reservadas.
+- UI existente intacta; só adiciona rota `/automations` e entrada de sidebar gated.
 
-**Migrations:** 1 (cron + triggers de email + índices).
-**Novos:** `supabase/functions/run-billing-automation/index.ts`, `supabase/functions/send-dunning-email/index.ts`.
-**Editados (mínimos):** `payments-webhook/index.ts` (chamar `generate_invoice` + log adicional), `AutomationPanel.tsx` (mostrar último run + cron status).
+## Entregáveis
 
----
+1. Migration: 4 tabelas + RLS + função `enqueue_automation_event` + triggers nas tabelas operacionais.
+2. Edge function `run-automation-engine` + cron schedule (1 min).
+3. Hooks: `useAutomationRules`, `useAutomationExecutions`, `useAutomationQueueStats`.
+4. Páginas: `AutomationsPage` (3 tabs) + builder.
+5. Catálogo de permissões atualizado (`automacao.gerir`, `automacao.ver`).
 
-## Fora de scope
+## Fora do escopo desta fase
 
-- Mudar gateway Stripe.
-- Alterar `subscription_plans`, `workspace_subscriptions` schema.
-- Customer Portal (já implementado).
-- Redesign UI.
-- Substituir lifecycle engine.
-
----
-
-## Validação entre passos
-
-1. `cloud_status` após cada migration.
-2. Preview `/subscription`, `/platform`, `/billing` carregam sem erro.
-3. Cron job aparece em `cron.job`.
-4. Rollback: drop cron job + triggers novos + apagar 2 edge functions novas.
+- Builder gráfico drag-and-drop estilo n8n (entregamos formulário estruturado; nó visual é fase 2).
+- Conectores externos além de webhook genérico.
+- Versionamento de regras (mantemos `updated_at`; histórico completo é fase 2).
