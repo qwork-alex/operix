@@ -14,6 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { LoadingState } from "@/components/shared/LoadingState";
+import { PlatformFinancialDashboard } from "@/components/billing/PlatformFinancialDashboard";
 import { useIsPlatformOwner } from "@/hooks/useSubscription";
 import { toast } from "sonner";
 
