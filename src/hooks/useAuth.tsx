@@ -48,7 +48,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!mounted.current) return;
       setSession(s);
       setUser(s?.user ?? null);
-      if (s?.user) fetchUserData(s.user.id);
+      if (s?.user) {
+        fetchUserData(s.user.id);
+        // Phase 5.5 — register device fingerprint (silent, best-effort)
+        registerCurrentDevice();
+      }
       setLoading(false);
     }).catch((err) => {
       console.error("[Auth] getSession error:", err);
