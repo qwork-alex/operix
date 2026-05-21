@@ -66,7 +66,7 @@ export function AppSidebar() {
           <div className="flex items-center gap-2.5 overflow-hidden">
             <BrandLogo size={brandConfig.logoSizeNum ?? 30} />
             {(() => {
-              const nameStyle: React.CSSProperties = {
+              const nameStyle: import("react").CSSProperties = {
                 fontFamily: brandConfig.fontFamily || undefined,
                 color: brandConfig.color || undefined,
                 fontSize: brandConfig.fontSize || undefined,
