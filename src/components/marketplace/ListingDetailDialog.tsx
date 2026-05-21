@@ -111,11 +111,11 @@ export function ListingDetailDialog({ open, onOpenChange, listing }: Props) {
       <ListingFormDialog open={editOpen} onOpenChange={setEditOpen} listing={listing} />
       <ConfirmDialog
         open={confirmDel}
-        onOpenChange={setConfirmDel}
         title="Remover anúncio?"
         description="Esta ação não pode ser desfeita."
         confirmLabel="Remover"
-        variant="destructive"
+        variant="danger"
+        onCancel={() => setConfirmDel(false)}
         onConfirm={async () => {
           await deleteListing.mutateAsync(listing.id);
           setConfirmDel(false);
