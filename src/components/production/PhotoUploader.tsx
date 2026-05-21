@@ -4,29 +4,36 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useProductionPhotos, PHOTO_CATEGORIES, type PhotoCategory } from "@/hooks/useProductionPhotos";
 
-interface Props { orderId: string; }
+interface Props { orderId: string; fixedCategory?: PhotoCategory; hideOthers?: boolean; }
 
-export function PhotoUploader({ orderId }: Props) {
-  const { data: photos = [], upload, remove } = useProductionPhotos(orderId);
-  const [category, setCategory] = useState<PhotoCategory>("before");
+export function PhotoUploader({ orderId, fixedCategory, hideOthers }: Props) {
+  const { data: allPhotos = [], upload, remove } = useProductionPhotos(orderId);
+  const [category, setCategory] = useState<PhotoCategory>(fixedCategory ?? "before");
+  const photos = hideOthers && fixedCategory ? allPhotos.filter(p => p.category === fixedCategory) : allPhotos;
   const [dragOver, setDragOver] = useState(false);
 
   const handleFiles = async (files: FileList | File[]) => {
     for (const file of Array.from(files)) {
       if (!file.type.startsWith("image/")) continue;
-      await upload.mutateAsync({ file, category });
+      try {
+        await upload.mutateAsync({ file, category });
+      } catch (err) {
+        console.error("[PhotoUploader] upload failed", err);
+      }
     }
   };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <Select value={category} onValueChange={(v) => setCategory(v as PhotoCategory)}>
-          <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {PHOTO_CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        {!fixedCategory && (
+          <Select value={category} onValueChange={(v) => setCategory(v as PhotoCategory)}>
+            <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {PHOTO_CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
         <label className="flex-1">
           <input type="file" accept="image/*" multiple className="hidden"
             onChange={(e) => e.target.files && handleFiles(e.target.files)} />

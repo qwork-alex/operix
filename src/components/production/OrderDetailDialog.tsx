@@ -12,7 +12,6 @@ import {
   useProductionOrders, PRODUCTION_STATUSES, PRIORITY_META,
   type ProductionOrder, type ProductionStatus, type ProductionPriority,
 } from "@/hooks/useProductionOrders";
-import { useAssignableUsers } from "@/hooks/useAssignableUsers";
 import { PhotoUploader } from "./PhotoUploader";
 import { OrderTimeline } from "./OrderTimeline";
 
@@ -23,7 +22,6 @@ interface Props {
 
 export function OrderDetailDialog({ order, onClose }: Props) {
   const { update, remove, create } = useProductionOrders();
-  const { data: users = [] } = useAssignableUsers();
   const [form, setForm] = useState<Partial<ProductionOrder>>({});
   const isNew = order?.id === "__new__";
 
@@ -72,7 +70,7 @@ export function OrderDetailDialog({ order, onClose }: Props) {
               <Field label="Marca"><Input value={form.brand ?? ""} onChange={e => set("brand", e.target.value)} /></Field>
               <Field label="Modelo"><Input value={form.model ?? ""} onChange={e => set("model", e.target.value)} /></Field>
               <Field label="Cor"><Input value={form.color ?? ""} onChange={e => set("color", e.target.value)} /></Field>
-              <Field label="Seguradora"><Input value={form.insurer ?? ""} onChange={e => set("insurer", e.target.value)} /></Field>
+              <Field label="Seguradora / Cliente"><Input value={form.insurer ?? ""} onChange={e => set("insurer", e.target.value)} /></Field>
 
               <Field label="Status">
                 <Select value={form.status ?? "new_vehicle"} onValueChange={(v) => set("status", v as ProductionStatus)}>
@@ -92,18 +90,15 @@ export function OrderDetailDialog({ order, onClose }: Props) {
               </Field>
 
               <Field label="Técnico Responsável">
-                <Select value={form.technician_user_id ?? "__none__"}
-                  onValueChange={(v) => {
-                    const u = users.find(x => x.user_id === v);
-                    set("technician_user_id", v === "__none__" ? null : v as any);
-                    set("technician_name", u?.name ?? null);
-                  }}>
-                  <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">Sem técnico</SelectItem>
-                    {users.map(u => <SelectItem key={u.user_id} value={u.user_id}>{u.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Input
+                  value={form.technician_name ?? ""}
+                  placeholder="Digite o nome do técnico"
+                  onChange={(e) => {
+                    set("technician_name", e.target.value || null);
+                    // Free-text mode: clear any legacy linked user ID
+                    if (form.technician_user_id) set("technician_user_id", null);
+                  }}
+                />
               </Field>
               <Field label="Prazo">
                 <Input type="datetime-local"
@@ -133,8 +128,18 @@ export function OrderDetailDialog({ order, onClose }: Props) {
             </div>
           </TabsContent>
 
-          <TabsContent value="photos" className="pt-4">
-            <PhotoUploader orderId={order.id} />
+          <TabsContent value="photos" className="pt-4 space-y-6">
+            <section className="space-y-2">
+              <h4 className="text-sm font-semibold text-foreground">Antes do Serviço</h4>
+              <p className="text-xs text-muted-foreground">Registo inicial do veículo antes da intervenção.</p>
+              <PhotoUploader orderId={order.id} fixedCategory="before" hideOthers />
+            </section>
+            <div className="h-px bg-border/60" />
+            <section className="space-y-2">
+              <h4 className="text-sm font-semibold text-foreground">Depois do Serviço</h4>
+              <p className="text-xs text-muted-foreground">Resultado final para comparação visual.</p>
+              <PhotoUploader orderId={order.id} fixedCategory="after" hideOthers />
+            </section>
           </TabsContent>
           <TabsContent value="timeline" className="pt-4">
             <OrderTimeline orderId={order.id} />
