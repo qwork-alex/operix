@@ -46,6 +46,7 @@ export default function PlatformOwnerPage() {
           <TabsTrigger value="automation"><Brain className="h-3.5 w-3.5 mr-1.5" />Automação</TabsTrigger>
           <TabsTrigger value="audit"><ScrollText className="h-3.5 w-3.5 mr-1.5" />Auditoria</TabsTrigger>
           <TabsTrigger value="security"><Shield className="h-3.5 w-3.5 mr-1.5" />Segurança</TabsTrigger>
+          <TabsTrigger value="compliance"><ShieldCheck className="h-3.5 w-3.5 mr-1.5" />Compliance</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-6 space-y-6">
