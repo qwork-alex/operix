@@ -204,9 +204,10 @@ export default function SubscriptionPage() {
         </div>
       </Card>
 
+      <SubscriptionTimeline />
+
       <Card className="p-4 surface-card text-xs text-muted-foreground">
-        Pagamento online ainda não está activo — esta página mostra apenas a arquitectura de subscrição.
-        Para alterar o plano contacte a equipa.
+        Gateway de pagamento ainda não está activo — esta página gere a arquitectura de subscrição e checkout interno.
       </Card>
     </div>
   );
