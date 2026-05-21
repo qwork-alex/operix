@@ -31,6 +31,7 @@ import {
 import FleetPage from "./pages/FleetPage";
 import BillingPage from "./pages/BillingPage";
 import AuditPage from "./pages/AuditPage";
+import AutomationsPage from "./pages/AutomationsPage";
 import RecoveryPage from "./pages/RecoveryPage";
 import ProfilePage from "./pages/ProfilePage";
 import SubscriptionPage from "./pages/SubscriptionPage";
@@ -104,6 +105,7 @@ const App = () => (
                             <Route path="/settings" element={<SettingsPage />} />
                             <Route path="/profile" element={<ProfilePage />} />
                             <Route path="/audit" element={<AuditPage />} />
+                            <Route path="/automations" element={<PermissionGuard permission="settings.edit"><AutomationsPage /></PermissionGuard>} />
                             <Route path="/recovery" element={<RecoveryPage />} />
                             <Route path="/subscription" element={<SubscriptionPage />} />
                             <Route path="/checkout" element={<CheckoutPage />} />
