@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import {
   LayoutDashboard, FileText, CreditCard, TrendingUp, PieChart,
-  BookOpen, Car, FolderOpen, Users, Settings, Receipt, Shield, Wrench,
+  BookOpen, Car, FolderOpen, Users, Settings, Receipt, Shield, Wrench, Store,
 } from "lucide-react";
 import { useIsPlatformOwner } from "@/hooks/useSubscription";
 import {
@@ -134,6 +134,18 @@ export function AppSidebar() {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <NavLink
+                    to="/marketplace"
+                    className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+                    activeClassName="bg-sidebar-accent text-primary font-medium"
+                  >
+                    <Store className="h-4 w-4 shrink-0" />
+                    {!collapsed && <span>Marketplace</span>}
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
                   <NavLink
