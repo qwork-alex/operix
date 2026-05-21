@@ -2306,40 +2306,64 @@ export type Database = {
         Row: {
           amount: number
           bank_account_id: string | null
+          created_at: string
           currency: string
           declared_at: string
           id: string
           invoice_id: string | null
+          notes: string | null
+          payment_method: string | null
+          proof_path: string | null
           reference_code: string
           reviewed_at: string | null
+          reviewed_by: string | null
           reviewer_notes: string | null
           status: string
+          submitted_by: string | null
+          transfer_date: string | null
+          updated_at: string
           workspace_id: string
         }
         Insert: {
           amount: number
           bank_account_id?: string | null
+          created_at?: string
           currency?: string
           declared_at?: string
           id?: string
           invoice_id?: string | null
+          notes?: string | null
+          payment_method?: string | null
+          proof_path?: string | null
           reference_code: string
           reviewed_at?: string | null
+          reviewed_by?: string | null
           reviewer_notes?: string | null
           status?: string
+          submitted_by?: string | null
+          transfer_date?: string | null
+          updated_at?: string
           workspace_id: string
         }
         Update: {
           amount?: number
           bank_account_id?: string | null
+          created_at?: string
           currency?: string
           declared_at?: string
           id?: string
           invoice_id?: string | null
+          notes?: string | null
+          payment_method?: string | null
+          proof_path?: string | null
           reference_code?: string
           reviewed_at?: string | null
+          reviewed_by?: string | null
           reviewer_notes?: string | null
           status?: string
+          submitted_by?: string | null
+          transfer_date?: string | null
+          updated_at?: string
           workspace_id?: string
         }
         Relationships: [
@@ -5253,6 +5277,10 @@ export type Database = {
           user_id: string
         }[]
       }
+      approve_manual_transfer: {
+        Args: { _notes?: string; _transfer_id: string }
+        Returns: string
+      }
       assert_active: { Args: { _uid: string }; Returns: undefined }
       assert_workspace_member: {
         Args: { _workspace_id: string }
@@ -5566,6 +5594,10 @@ export type Database = {
         }
         Returns: string
       }
+      reject_manual_transfer: {
+        Args: { _reason?: string; _transfer_id: string }
+        Returns: undefined
+      }
       replay_financial_state: { Args: { _invoice_id: string }; Returns: Json }
       request_data_export: {
         Args: { _format?: string; _scope?: string; _workspace_id?: string }
@@ -5613,6 +5645,20 @@ export type Database = {
       start_workspace_checkout: {
         Args: { _cycle?: string; _plan_code: string; _workspace_id: string }
         Returns: Json
+      }
+      submit_manual_transfer: {
+        Args: {
+          _amount: number
+          _bank_account_id: string
+          _currency: string
+          _invoice_id: string
+          _notes: string
+          _payment_method: string
+          _proof_path: string
+          _transfer_date: string
+          _workspace_id: string
+        }
+        Returns: string
       }
       sync_discrepancy_for_service_order: {
         Args: { _service_order_id: string }
