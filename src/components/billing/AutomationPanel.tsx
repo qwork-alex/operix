@@ -1,10 +1,31 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Play, RefreshCcw, Repeat2, AlertTriangle, ArrowRight } from "lucide-react";
+import { Play, RefreshCcw, Repeat2, AlertTriangle, ArrowRight, Clock, Zap } from "lucide-react";
 import { useRunAutomation } from "@/hooks/useAutomation";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { formatDistanceToNow } from "date-fns";
+
+function useLastAutomationRun() {
+  return useQuery({
+    queryKey: ["automation-last-run"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("subscription_events" as any)
+        .select("created_at, metadata")
+        .eq("event_type", "automation.run")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data as any;
+    },
+    refetchInterval: 30_000,
+  });
+}
 
 export function AutomationPanel() {
   const run = useRunAutomation();
+  const { data: lastRun } = useLastAutomationRun();
 
   const stages = [
     { icon: RefreshCcw, label: "Renovações", desc: "Gera nova fatura quando o ciclo expira", tone: "text-amber-500" },
@@ -33,6 +54,19 @@ export function AutomationPanel() {
           </Button>
         </div>
 
+        <div className="flex items-center gap-4 mb-4 text-[11px] text-muted-foreground flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <Zap className="h-3 w-3 text-emerald-500" />
+            <span>Cron ativo · diário 03:00 UTC</span>
+          </div>
+          {lastRun?.created_at && (
+            <div className="flex items-center gap-1.5">
+              <Clock className="h-3 w-3" />
+              <span>Última execução {formatDistanceToNow(new Date(lastRun.created_at), { addSuffix: true })}</span>
+            </div>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           {stages.map((s) => (
             <div key={s.label} className="rounded-md border border-border/60 bg-card/40 p-3">
@@ -45,7 +79,7 @@ export function AutomationPanel() {
         </div>
 
         <p className="text-[10px] text-muted-foreground mt-4">
-          Execução manual disponível para owner. Em produção, ligar a um cron diário.
+          Execução automática diária + dispatcher de emails a cada 5 minutos.
         </p>
       </div>
     </Card>
