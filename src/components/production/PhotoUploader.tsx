@@ -79,11 +79,13 @@ export function PhotoUploader({ orderId, fixedCategory, hideOthers, readOnly }: 
               <div className="absolute top-1 left-1 text-[10px] px-1.5 py-0.5 rounded bg-background/80 backdrop-blur">
                 {PHOTO_CATEGORIES.find(c => c.value === p.category)?.label}
               </div>
-              <button
-                onClick={() => remove.mutate(p)}
-                className="absolute top-1 right-1 p-1 rounded bg-background/80 opacity-0 group-hover:opacity-100 transition-opacity">
-                <X className="h-3 w-3" />
-              </button>
+              {!readOnly && (
+                <button
+                  onClick={() => remove.mutate(p)}
+                  className="absolute top-1 right-1 p-1 rounded bg-background/80 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <X className="h-3 w-3" />
+                </button>
+              )}
             </div>
           ))}
         </div>
