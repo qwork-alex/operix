@@ -45,6 +45,7 @@ export function AppSidebar() {
   const allNav = [
     { title: t("nav.dashboard"), url: "/", icon: LayoutDashboard, module: "dashboard", action: "view" },
     { title: t("nav.serviceOrders"), url: "/service-orders", icon: FileText, module: "service_orders", action: "view" },
+    { title: "Produção", url: "/production", icon: Wrench, module: "service_orders", action: "view" },
     { title: t("nav.paymentOrders"), url: "/payment-orders", icon: CreditCard, module: "payment_orders", action: "view" },
     { title: "Faturamento", url: "/billing", icon: Receipt, module: "accounting", action: "view" },
     { title: t("nav.financial"), url: "/financial", icon: TrendingUp, module: "financial", action: "view" },
