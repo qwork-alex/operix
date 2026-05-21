@@ -73,7 +73,8 @@ function OverviewTab() {
   }, { total: 0 } as Record<string, number>);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      <PlatformFinancialDashboard />
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {[
           { label: "Workspaces", value: counts.total, icon: Building2, tone: "text-foreground" },
