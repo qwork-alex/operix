@@ -34,6 +34,7 @@ import RecoveryPage from "./pages/RecoveryPage";
 import ProfilePage from "./pages/ProfilePage";
 import SubscriptionPage from "./pages/SubscriptionPage";
 import PlatformOwnerPage from "./pages/PlatformOwnerPage";
+import CheckoutPage from "./pages/CheckoutPage";
 import {
   TermsPage,
   PrivacyPage,
