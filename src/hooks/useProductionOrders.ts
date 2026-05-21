@@ -9,6 +9,12 @@ export type ProductionStatus =
   | "new_vehicle" | "triage" | "awaiting_validation" | "in_production"
   | "paused" | "finished" | "invoiced" | "delivered";
 
+export type CommercialStatus = "invoiced" | "delivered" | null;
+
+/** Statuses that lock the order from editing once reached. */
+export const LOCKED_STATUSES: ProductionStatus[] = ["finished", "invoiced", "delivered"];
+export const isOrderLocked = (s?: ProductionStatus | null) => !!s && LOCKED_STATUSES.includes(s);
+
 export type ProductionPriority = "low" | "normal" | "high" | "urgent";
 
 export interface ProductionOrder {
@@ -39,6 +45,7 @@ export interface ProductionOrder {
   updated_at: string;
 }
 
+/** Operational pipeline statuses only — commercial states (invoiced/delivered) live elsewhere. */
 export const PRODUCTION_STATUSES: { value: ProductionStatus; label: string; color: string }[] = [
   { value: "new_vehicle", label: "Novo Veículo", color: "bg-slate-500" },
   { value: "triage", label: "Em Triagem", color: "bg-blue-500" },
@@ -46,8 +53,6 @@ export const PRODUCTION_STATUSES: { value: ProductionStatus; label: string; colo
   { value: "in_production", label: "Em Produção", color: "bg-indigo-500" },
   { value: "paused", label: "Pausado", color: "bg-orange-500" },
   { value: "finished", label: "Finalizado", color: "bg-emerald-500" },
-  { value: "invoiced", label: "Faturado", color: "bg-teal-500" },
-  { value: "delivered", label: "Entregue", color: "bg-green-600" },
 ];
 
 export const PRIORITY_META: Record<ProductionPriority, { label: string; tone: string }> = {
