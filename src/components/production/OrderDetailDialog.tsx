@@ -12,7 +12,6 @@ import {
   useProductionOrders, PRODUCTION_STATUSES, PRIORITY_META,
   type ProductionOrder, type ProductionStatus, type ProductionPriority,
 } from "@/hooks/useProductionOrders";
-import { useAssignableUsers } from "@/hooks/useAssignableUsers";
 import { PhotoUploader } from "./PhotoUploader";
 import { OrderTimeline } from "./OrderTimeline";
 
@@ -23,7 +22,6 @@ interface Props {
 
 export function OrderDetailDialog({ order, onClose }: Props) {
   const { update, remove, create } = useProductionOrders();
-  const { data: users = [] } = useAssignableUsers();
   const [form, setForm] = useState<Partial<ProductionOrder>>({});
   const isNew = order?.id === "__new__";
 
