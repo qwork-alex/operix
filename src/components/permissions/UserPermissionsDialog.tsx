@@ -207,21 +207,6 @@ export function UserPermissionsDialog({
                 Visibilidade de dados
               </div>
 
-              <label className="flex items-start gap-3 cursor-pointer">
-                <Switch
-                  checked={!!settings?.can_view_workspace_data}
-                  onCheckedChange={(v) => updateSettingMutation.mutate({ can_view_workspace_data: v })}
-                />
-                <div className="flex-1">
-                  <div className="text-sm flex items-center gap-1.5">
-                    <Globe2 className="h-3.5 w-3.5 text-primary" />
-                    Vista global do workspace
-                  </div>
-                  <div className="text-[11px] text-muted-foreground">
-                    Vê todos os registos. Sem isto, só vê os seus próprios (técnico) ou os atribuídos (cliente).
-                  </div>
-                </div>
-              </label>
 
               <label className="flex items-start gap-3 cursor-pointer">
                 <Switch
