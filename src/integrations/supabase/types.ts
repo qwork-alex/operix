@@ -198,6 +198,63 @@ export type Database = {
           },
         ]
       }
+      billing_audit_logs: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          category: string
+          created_at: string
+          id: string
+          ip_address: string | null
+          message: string | null
+          payload: Json
+          severity: string
+          subscription_id: string | null
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          category: string
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          message?: string | null
+          payload?: Json
+          severity?: string
+          subscription_id?: string | null
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          category?: string
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          message?: string | null
+          payload?: Json
+          severity?: string
+          subscription_id?: string | null
+          workspace_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_audit_logs_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billing_audit_logs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       billing_clients: {
         Row: {
           address: string | null
@@ -3555,6 +3612,41 @@ export type Database = {
         }
         Relationships: []
       }
+      trial_fingerprints: {
+        Row: {
+          email_normalized: string
+          id: string
+          ip_hash: string | null
+          owner_user_id: string | null
+          trial_started_at: string
+          workspace_id: string | null
+        }
+        Insert: {
+          email_normalized: string
+          id?: string
+          ip_hash?: string | null
+          owner_user_id?: string | null
+          trial_started_at?: string
+          workspace_id?: string | null
+        }
+        Update: {
+          email_normalized?: string
+          id?: string
+          ip_hash?: string | null
+          owner_user_id?: string | null
+          trial_started_at?: string
+          workspace_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trial_fingerprints_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_consents: {
         Row: {
           accepted_data_storage: boolean
@@ -4061,6 +4153,60 @@ export type Database = {
         }
         Relationships: []
       }
+      workspace_limit_snapshots: {
+        Row: {
+          created_at: string
+          delta_price: number
+          id: string
+          new_count: number
+          new_price: number
+          previous_count: number
+          previous_price: number
+          reason: string
+          subscription_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          delta_price: number
+          id?: string
+          new_count: number
+          new_price: number
+          previous_count: number
+          previous_price: number
+          reason?: string
+          subscription_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          delta_price?: number
+          id?: string
+          new_count?: number
+          new_price?: number
+          previous_count?: number
+          previous_price?: number
+          reason?: string
+          subscription_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_limit_snapshots_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workspace_limit_snapshots_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspace_module_permissions: {
         Row: {
           created_at: string
@@ -4101,7 +4247,9 @@ export type Database = {
       }
       workspace_subscriptions: {
         Row: {
+          auto_renew: boolean
           billing_cycle: Database["public"]["Enums"]["billing_cycle"]
+          billing_owner_user_id: string | null
           cancelled_at: string | null
           created_at: string
           current_period_end: string | null
@@ -4109,9 +4257,12 @@ export type Database = {
           current_price: number
           grace_until: string | null
           id: string
+          last_recalculated_at: string | null
+          legal_hold: boolean
           metadata: Json
           plan_id: string
           status: Database["public"]["Enums"]["subscription_status"]
+          suspension_mode: string | null
           technician_count: number
           trial_ends_at: string
           trial_started_at: string
@@ -4119,7 +4270,9 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          auto_renew?: boolean
           billing_cycle?: Database["public"]["Enums"]["billing_cycle"]
+          billing_owner_user_id?: string | null
           cancelled_at?: string | null
           created_at?: string
           current_period_end?: string | null
@@ -4127,9 +4280,12 @@ export type Database = {
           current_price?: number
           grace_until?: string | null
           id?: string
+          last_recalculated_at?: string | null
+          legal_hold?: boolean
           metadata?: Json
           plan_id: string
           status?: Database["public"]["Enums"]["subscription_status"]
+          suspension_mode?: string | null
           technician_count?: number
           trial_ends_at?: string
           trial_started_at?: string
@@ -4137,7 +4293,9 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          auto_renew?: boolean
           billing_cycle?: Database["public"]["Enums"]["billing_cycle"]
+          billing_owner_user_id?: string | null
           cancelled_at?: string | null
           created_at?: string
           current_period_end?: string | null
@@ -4145,9 +4303,12 @@ export type Database = {
           current_price?: number
           grace_until?: string | null
           id?: string
+          last_recalculated_at?: string | null
+          legal_hold?: boolean
           metadata?: Json
           plan_id?: string
           status?: Database["public"]["Enums"]["subscription_status"]
+          suspension_mode?: string | null
           technician_count?: number
           trial_ends_at?: string
           trial_started_at?: string
@@ -4348,6 +4509,10 @@ export type Database = {
         }
         Returns: number
       }
+      calculate_technician_cross_workspace_billing: {
+        Args: { _user_id: string }
+        Returns: Json
+      }
       calculate_vat: {
         Args: { _country: string; _is_business?: boolean; _vat_number?: string }
         Returns: Json
@@ -4368,6 +4533,7 @@ export type Database = {
           scope: Database["public"]["Enums"]["permission_scope"]
         }[]
       }
+      check_trial_eligibility: { Args: { _email: string }; Returns: Json }
       clear_my_temp_credential: { Args: never; Returns: undefined }
       current_user_effective_role: { Args: never; Returns: string }
       current_user_workspace_ids: { Args: never; Returns: string[] }
@@ -4416,6 +4582,10 @@ export type Database = {
           workspace_id: string
           workspace_name: string
         }[]
+      }
+      get_workspace_access_state: {
+        Args: { _workspace_id: string }
+        Returns: Json
       }
       get_workspace_subscription: {
         Args: { _workspace_id: string }
@@ -4501,6 +4671,18 @@ export type Database = {
         }
         Returns: string
       }
+      log_billing_audit: {
+        Args: {
+          _action: string
+          _category: string
+          _message?: string
+          _payload?: Json
+          _severity?: string
+          _subscription_id: string
+          _workspace_id: string
+        }
+        Returns: string
+      }
       log_subscription_event: {
         Args: {
           _event_type: string
@@ -4518,6 +4700,10 @@ export type Database = {
         Returns: boolean
       }
       payment_order_has_invoice: { Args: { _op_id: string }; Returns: boolean }
+      recalculate_workspace_subscription: {
+        Args: { _workspace_id: string }
+        Returns: Json
+      }
       replay_financial_state: { Args: { _invoice_id: string }; Returns: Json }
       resolve_participant_user_id: {
         Args: { _participant_type: string; _rule_id: string }
@@ -4570,6 +4756,15 @@ export type Database = {
       sync_participation_for_so: {
         Args: { _service_order_id: string }
         Returns: undefined
+      }
+      transition_subscription_status: {
+        Args: {
+          _new_status: string
+          _reason?: string
+          _suspension_mode?: string
+          _workspace_id: string
+        }
+        Returns: Json
       }
       user_can_access_module: {
         Args: { _module: string; _uid: string; _ws_id: string }
@@ -4628,6 +4823,8 @@ export type Database = {
         | "overdue"
         | "suspended"
         | "cancelled"
+        | "past_due"
+        | "legal_hold"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -4804,6 +5001,8 @@ export const Constants = {
         "overdue",
         "suspended",
         "cancelled",
+        "past_due",
+        "legal_hold",
       ],
     },
   },
