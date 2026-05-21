@@ -4539,6 +4539,11 @@ export type Database = {
       }
       check_trial_eligibility: { Args: { _email: string }; Returns: Json }
       clear_my_temp_credential: { Args: never; Returns: undefined }
+      compute_billing_intelligence: {
+        Args: { _workspace_id: string }
+        Returns: Json
+      }
+      compute_platform_smart_metrics: { Args: never; Returns: Json }
       current_user_effective_role: { Args: never; Returns: string }
       current_user_workspace_ids: { Args: never; Returns: string[] }
       deterministic_event_hash: {
@@ -4709,12 +4714,26 @@ export type Database = {
         Returns: string
       }
       next_platform_invoice_number: { Args: never; Returns: string }
+      notify_workspace_admins: {
+        Args: {
+          _entity_id?: string
+          _entity_type?: string
+          _message: string
+          _title: string
+          _type: string
+          _workspace_id: string
+        }
+        Returns: number
+      }
       owner_filter_uids: { Args: { _uid: string }; Returns: string[] }
       payment_order_has_active_billing: {
         Args: { _op_id: string }
         Returns: boolean
       }
       payment_order_has_invoice: { Args: { _op_id: string }; Returns: boolean }
+      process_lifecycle_transitions: { Args: never; Returns: Json }
+      process_payment_retries: { Args: never; Returns: Json }
+      process_subscription_renewals: { Args: never; Returns: Json }
       recalculate_workspace_subscription: {
         Args: { _workspace_id: string }
         Returns: Json
@@ -4744,6 +4763,7 @@ export type Database = {
         Args: { _workspace_id?: string; _year?: number }
         Returns: Json
       }
+      run_subscription_automation: { Args: never; Returns: Json }
       schedule_payment_retries: {
         Args: { _invoice_id: string }
         Returns: number

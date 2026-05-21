@@ -4,7 +4,7 @@ import { Navigate } from "react-router-dom";
 import {
   Shield, Building2, AlertCircle, Clock, CheckCircle2,
   Landmark, CreditCard, Receipt, Percent, Webhook, Activity,
-  ScrollText, Power,
+  ScrollText, Power, Brain,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -16,6 +16,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { LoadingState } from "@/components/shared/LoadingState";
 import { PlatformFinancialDashboard } from "@/components/billing/PlatformFinancialDashboard";
+import { SmartMetricsCards } from "@/components/billing/SmartMetricsCards";
+import { AutomationPanel } from "@/components/billing/AutomationPanel";
 import { useIsPlatformOwner } from "@/hooks/useSubscription";
 import { toast } from "sonner";
 
@@ -39,10 +41,14 @@ export default function PlatformOwnerPage() {
           <TabsTrigger value="invoices"><Receipt className="h-3.5 w-3.5 mr-1.5" />Faturas</TabsTrigger>
           <TabsTrigger value="webhooks"><Webhook className="h-3.5 w-3.5 mr-1.5" />Webhooks</TabsTrigger>
           <TabsTrigger value="lifecycle"><Power className="h-3.5 w-3.5 mr-1.5" />Ciclo de vida</TabsTrigger>
+          <TabsTrigger value="automation"><Brain className="h-3.5 w-3.5 mr-1.5" />Automação</TabsTrigger>
           <TabsTrigger value="audit"><ScrollText className="h-3.5 w-3.5 mr-1.5" />Auditoria</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="mt-6"><OverviewTab /></TabsContent>
+        <TabsContent value="overview" className="mt-6 space-y-6">
+          <SmartMetricsCards />
+          <OverviewTab />
+        </TabsContent>
         <TabsContent value="banks" className="mt-6"><BankAccountsTab /></TabsContent>
         <TabsContent value="subscriptions" className="mt-6"><SubscriptionsTab /></TabsContent>
         <TabsContent value="payments" className="mt-6"><PaymentsTab /></TabsContent>
@@ -50,6 +56,10 @@ export default function PlatformOwnerPage() {
         <TabsContent value="invoices" className="mt-6"><InvoicesTab /></TabsContent>
         <TabsContent value="webhooks" className="mt-6"><WebhooksTab /></TabsContent>
         <TabsContent value="lifecycle" className="mt-6"><LifecycleTab /></TabsContent>
+        <TabsContent value="automation" className="mt-6 space-y-6">
+          <AutomationPanel />
+          <SmartMetricsCards />
+        </TabsContent>
         <TabsContent value="audit" className="mt-6"><AuditTab /></TabsContent>
       </Tabs>
     </div>
