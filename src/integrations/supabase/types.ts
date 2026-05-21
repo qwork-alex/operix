@@ -3207,6 +3207,187 @@ export type Database = {
         }
         Relationships: []
       }
+      production_events: {
+        Row: {
+          actor_name: string | null
+          actor_user_id: string
+          created_at: string
+          event_type: string
+          from_value: string | null
+          id: string
+          payload: Json | null
+          production_order_id: string
+          to_value: string | null
+          workspace_id: string
+        }
+        Insert: {
+          actor_name?: string | null
+          actor_user_id?: string
+          created_at?: string
+          event_type: string
+          from_value?: string | null
+          id?: string
+          payload?: Json | null
+          production_order_id: string
+          to_value?: string | null
+          workspace_id: string
+        }
+        Update: {
+          actor_name?: string | null
+          actor_user_id?: string
+          created_at?: string
+          event_type?: string
+          from_value?: string | null
+          id?: string
+          payload?: Json | null
+          production_order_id?: string
+          to_value?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_events_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      production_orders: {
+        Row: {
+          brand: string | null
+          client_id: string | null
+          client_name: string | null
+          code: string
+          color: string | null
+          created_at: string
+          created_by: string
+          delivered_at: string | null
+          due_at: string | null
+          finished_at: string | null
+          id: string
+          insurer: string | null
+          license_plate: string | null
+          model: string | null
+          notes: string | null
+          platform: string | null
+          priority: Database["public"]["Enums"]["production_priority"]
+          service_order_id: string | null
+          started_at: string | null
+          status: Database["public"]["Enums"]["production_status"]
+          technician_name: string | null
+          technician_user_id: string | null
+          updated_at: string
+          vin: string | null
+          workspace_id: string
+        }
+        Insert: {
+          brand?: string | null
+          client_id?: string | null
+          client_name?: string | null
+          code: string
+          color?: string | null
+          created_at?: string
+          created_by?: string
+          delivered_at?: string | null
+          due_at?: string | null
+          finished_at?: string | null
+          id?: string
+          insurer?: string | null
+          license_plate?: string | null
+          model?: string | null
+          notes?: string | null
+          platform?: string | null
+          priority?: Database["public"]["Enums"]["production_priority"]
+          service_order_id?: string | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["production_status"]
+          technician_name?: string | null
+          technician_user_id?: string | null
+          updated_at?: string
+          vin?: string | null
+          workspace_id: string
+        }
+        Update: {
+          brand?: string | null
+          client_id?: string | null
+          client_name?: string | null
+          code?: string
+          color?: string | null
+          created_at?: string
+          created_by?: string
+          delivered_at?: string | null
+          due_at?: string | null
+          finished_at?: string | null
+          id?: string
+          insurer?: string | null
+          license_plate?: string | null
+          model?: string | null
+          notes?: string | null
+          platform?: string | null
+          priority?: Database["public"]["Enums"]["production_priority"]
+          service_order_id?: string | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["production_status"]
+          technician_name?: string | null
+          technician_user_id?: string | null
+          updated_at?: string
+          vin?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      production_photos: {
+        Row: {
+          caption: string | null
+          category: Database["public"]["Enums"]["production_photo_category"]
+          created_at: string
+          height: number | null
+          id: string
+          production_order_id: string
+          size_bytes: number | null
+          storage_path: string
+          uploaded_by: string
+          width: number | null
+          workspace_id: string
+        }
+        Insert: {
+          caption?: string | null
+          category?: Database["public"]["Enums"]["production_photo_category"]
+          created_at?: string
+          height?: number | null
+          id?: string
+          production_order_id: string
+          size_bytes?: number | null
+          storage_path: string
+          uploaded_by?: string
+          width?: number | null
+          workspace_id: string
+        }
+        Update: {
+          caption?: string | null
+          category?: Database["public"]["Enums"]["production_photo_category"]
+          created_at?: string
+          height?: number | null
+          id?: string
+          production_order_id?: string
+          size_bytes?: number | null
+          storage_path?: string
+          uploaded_by?: string
+          width?: number | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_photos_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           address: string | null
@@ -5108,10 +5289,9 @@ export type Database = {
         Args: { _uid?: string; _workspace_id: string }
         Returns: boolean
       }
-      is_workspace_member: {
-        Args: { _uid: string; _ws: string }
-        Returns: boolean
-      }
+      is_workspace_member:
+        | { Args: { _uid: string; _ws: string }; Returns: boolean }
+        | { Args: { _workspace_id: string }; Returns: boolean }
       list_audit_events: {
         Args: { _limit?: number; _table_filter?: string }
         Returns: {
@@ -5206,6 +5386,7 @@ export type Database = {
       process_lifecycle_transitions: { Args: never; Returns: Json }
       process_payment_retries: { Args: never; Returns: Json }
       process_subscription_renewals: { Args: never; Returns: Json }
+      production_kpis: { Args: { _workspace_id: string }; Returns: Json }
       recalculate_workspace_subscription: {
         Args: { _workspace_id: string }
         Returns: Json
@@ -5397,6 +5578,22 @@ export type Database = {
       membership_role: "admin" | "tecnico" | "cliente" | "socio"
       membership_status: "active" | "pending"
       permission_scope: "own" | "team" | "all"
+      production_photo_category:
+        | "before"
+        | "during"
+        | "after"
+        | "damage"
+        | "validation"
+      production_priority: "low" | "normal" | "high" | "urgent"
+      production_status:
+        | "new_vehicle"
+        | "triage"
+        | "awaiting_validation"
+        | "in_production"
+        | "paused"
+        | "finished"
+        | "invoiced"
+        | "delivered"
       subscription_status:
         | "trial"
         | "active"
@@ -5586,6 +5783,24 @@ export const Constants = {
       membership_role: ["admin", "tecnico", "cliente", "socio"],
       membership_status: ["active", "pending"],
       permission_scope: ["own", "team", "all"],
+      production_photo_category: [
+        "before",
+        "during",
+        "after",
+        "damage",
+        "validation",
+      ],
+      production_priority: ["low", "normal", "high", "urgent"],
+      production_status: [
+        "new_vehicle",
+        "triage",
+        "awaiting_validation",
+        "in_production",
+        "paused",
+        "finished",
+        "invoiced",
+        "delivered",
+      ],
       subscription_status: [
         "trial",
         "active",
