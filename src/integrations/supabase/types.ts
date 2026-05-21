@@ -405,6 +405,8 @@ export type Database = {
           service_order_id: string | null
           source: string
           status: Database["public"]["Enums"]["billing_invoice_status"]
+          stripe_invoice_id: string | null
+          stripe_payment_intent_id: string | null
           supplier_id: string | null
           sync_revision: number
           total_amount: number
@@ -439,6 +441,8 @@ export type Database = {
           service_order_id?: string | null
           source?: string
           status?: Database["public"]["Enums"]["billing_invoice_status"]
+          stripe_invoice_id?: string | null
+          stripe_payment_intent_id?: string | null
           supplier_id?: string | null
           sync_revision?: number
           total_amount?: number
@@ -473,6 +477,8 @@ export type Database = {
           service_order_id?: string | null
           source?: string
           status?: Database["public"]["Enums"]["billing_invoice_status"]
+          stripe_invoice_id?: string | null
+          stripe_payment_intent_id?: string | null
           supplier_id?: string | null
           sync_revision?: number
           total_amount?: number
@@ -4889,6 +4895,10 @@ export type Database = {
           metadata: Json
           plan_id: string
           status: Database["public"]["Enums"]["subscription_status"]
+          stripe_customer_id: string | null
+          stripe_environment: string | null
+          stripe_price_lookup_key: string | null
+          stripe_subscription_id: string | null
           suspension_mode: string | null
           technician_count: number
           trial_ends_at: string
@@ -4912,6 +4922,10 @@ export type Database = {
           metadata?: Json
           plan_id: string
           status?: Database["public"]["Enums"]["subscription_status"]
+          stripe_customer_id?: string | null
+          stripe_environment?: string | null
+          stripe_price_lookup_key?: string | null
+          stripe_subscription_id?: string | null
           suspension_mode?: string | null
           technician_count?: number
           trial_ends_at?: string
@@ -4935,6 +4949,10 @@ export type Database = {
           metadata?: Json
           plan_id?: string
           status?: Database["public"]["Enums"]["subscription_status"]
+          stripe_customer_id?: string | null
+          stripe_environment?: string | null
+          stripe_price_lookup_key?: string | null
+          stripe_subscription_id?: string | null
           suspension_mode?: string | null
           technician_count?: number
           trial_ends_at?: string
@@ -5378,6 +5396,13 @@ export type Database = {
         Returns: number
       }
       owner_filter_uids: { Args: { _uid: string }; Returns: string[] }
+      parse_stripe_lookup_key: {
+        Args: { _key: string }
+        Returns: {
+          cycle: string
+          plan_code: string
+        }[]
+      }
       payment_order_has_active_billing: {
         Args: { _op_id: string }
         Returns: boolean

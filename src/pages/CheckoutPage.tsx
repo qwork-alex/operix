@@ -21,6 +21,8 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
+import { StripeEmbeddedCheckout } from "@/components/billing/StripeEmbeddedCheckout";
+import { isStripeConfigured } from "@/lib/stripe";
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
@@ -212,7 +214,10 @@ export default function CheckoutPage() {
       }
       if (step === 5) {
         if (payKind === "stripe") {
-          toast.info("Stripe brevemente disponível");
+          // Stripe handles the entire payment + invoice + receipt flow.
+          // The webhook syncs subscription state into workspace_subscriptions
+          // and the embedded checkout return URL drives the user back here.
+          // Nothing else to do on this step — keep them on the Stripe form.
           return;
         }
         if (payKind !== "manual_transfer") {
@@ -399,11 +404,27 @@ export default function CheckoutPage() {
           <section className="space-y-4">
             <h2 className="text-lg font-semibold flex items-center gap-2"><CreditCard className="h-4 w-4 text-[hsl(var(--accent))]" /> Pagamento</h2>
             <RadioGroup value={payKind} onValueChange={(v) => setPayKind(v as any)} className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-              <MethodCard active={payKind === "card"} icon={CreditCard} label="Cartão (mock)" value="card" />
-              <MethodCard active={payKind === "sepa"} icon={Landmark} label="SEPA Débito" value="sepa" />
+              <MethodCard active={payKind === "stripe"} icon={Sparkles} label="Stripe · cartão / SEPA" value="stripe" disabled={!isStripeConfigured()} />
               <MethodCard active={payKind === "manual_transfer"} icon={Receipt} label="Transferência" value="manual_transfer" />
-              <MethodCard active={payKind === "stripe"} icon={Sparkles} label="Stripe (em breve)" value="stripe" disabled />
+              <MethodCard active={payKind === "card"} icon={CreditCard} label="Cartão (manual)" value="card" />
+              <MethodCard active={payKind === "sepa"} icon={Landmark} label="SEPA (manual)" value="sepa" />
             </RadioGroup>
+
+            {payKind === "stripe" && workspaceId && (
+              <div className="space-y-3">
+                <div className="rounded-lg border border-[hsl(var(--accent))]/30 bg-[hsl(var(--accent))]/5 p-3 text-xs text-muted-foreground">
+                  Pagamento processado pelo Stripe. A subscrição é ativada automaticamente quando o pagamento for confirmado (via webhook).
+                  Convenção de preços: <span className="font-mono">{`{plan}_{monthly|yearly}`}</span> — usa <span className="font-mono">{`${plan}_${cycle}`}</span> como <code>lookup_key</code> no Stripe.
+                </div>
+                <StripeEmbeddedCheckout
+                  lookupKey={`${plan}_${cycle}`}
+                  workspaceId={workspaceId}
+                  customerEmail={form.billing_email || undefined}
+                  legalName={form.legal_name || undefined}
+                  returnUrl={`${window.location.origin}/subscription?stripe=success&session_id={CHECKOUT_SESSION_ID}`}
+                />
+              </div>
+            )}
 
             {payKind === "card" && (
               <div className="grid gap-3 md:grid-cols-3">
@@ -495,7 +516,9 @@ export default function CheckoutPage() {
             <p className="text-sm text-muted-foreground">
               {payKind === "manual_transfer"
                 ? "Transferência declarada — aguarda revisão manual."
-                : "Pagamento simulado registado (gateway real em breve)."}
+                : payKind === "stripe"
+                ? "Stripe confirmou o pagamento. Webhook a sincronizar a subscrição."
+                : "Método de pagamento registado."}
             </p>
             <p className="text-xs text-muted-foreground">Continua para ativar a assinatura.</p>
           </section>

@@ -12,6 +12,7 @@ import { useWorkspace } from "@/hooks/useWorkspace";
 import { Link } from "react-router-dom";
 import { SubscriptionTimeline } from "@/components/billing/SubscriptionTimeline";
 import { BillingIntelligencePanel } from "@/components/billing/BillingIntelligencePanel";
+import { StripePortalButton } from "@/components/billing/StripePortalButton";
 
 const STATUS_META: Record<SubscriptionStatus, { label: string; tone: string; icon: typeof CheckCircle2 }> = {
   trial:        { label: "Em avaliação", tone: "bg-amber-500/10 text-amber-500 border-amber-500/30",  icon: Clock },
@@ -87,10 +88,11 @@ export default function SubscriptionPage() {
         title="Assinatura"
         subtitle={workspaceName ?? undefined}
         actions={
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button asChild size="sm">
               <Link to={`/checkout?plan=${plan.code}&cycle=${subscription.billing_cycle}`}>Checkout</Link>
             </Button>
+            <StripePortalButton />
             {isPlatformOwner ? (
               <Button asChild variant="outline" size="sm">
                 <Link to="/platform">Painel Plataforma</Link>
@@ -210,7 +212,7 @@ export default function SubscriptionPage() {
       <SubscriptionTimeline />
 
       <Card className="p-4 surface-card text-xs text-muted-foreground">
-        Gateway de pagamento ainda não está activo — esta página gere a arquitectura de subscrição e checkout interno.
+        Stripe ligado como gateway de pagamento. Os planos, preços e regras de billing continuam definidos internamente — o Stripe trata apenas de checkout, cobranças recorrentes, faturas e portal do cliente.
       </Card>
     </div>
   );
