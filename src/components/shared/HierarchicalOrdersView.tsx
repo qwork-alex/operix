@@ -1,11 +1,20 @@
 import { useEffect, useMemo, useState, useCallback, type ReactNode } from "react";
-import { ChevronRight, Eye } from "lucide-react";
+import { ChevronRight, Eye, Power } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   HIERARCHY_FALLBACK,
   type HierarchyContext,
   type HierarchyRecord,
 } from "@/components/shared/HierarchyExplorer";
+
+// --- Platform active state (local-only, no schema impact) ---
+const PLATFORM_ACTIVE_KEY = "hierarchy.platform_active.v1";
+function readActiveMap(): Record<string, boolean> {
+  try { return JSON.parse(localStorage.getItem(PLATFORM_ACTIVE_KEY) || "{}"); } catch { return {}; }
+}
+function writeActiveMap(m: Record<string, boolean>) {
+  try { localStorage.setItem(PLATFORM_ACTIVE_KEY, JSON.stringify(m)); } catch { /* ignore */ }
+}
 
 /**
  * Phase 1B — Hierarchical grouped view wrapping existing tables.
