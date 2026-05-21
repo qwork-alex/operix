@@ -4,6 +4,7 @@ import { Navigate } from "react-router-dom";
 import {
   Shield, Building2, AlertCircle, Clock, CheckCircle2,
   Landmark, CreditCard, Receipt, Percent, Webhook, Activity,
+  ScrollText, Power,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -37,6 +38,8 @@ export default function PlatformOwnerPage() {
           <TabsTrigger value="vat"><Percent className="h-3.5 w-3.5 mr-1.5" />IVA</TabsTrigger>
           <TabsTrigger value="invoices"><Receipt className="h-3.5 w-3.5 mr-1.5" />Faturas</TabsTrigger>
           <TabsTrigger value="webhooks"><Webhook className="h-3.5 w-3.5 mr-1.5" />Webhooks</TabsTrigger>
+          <TabsTrigger value="lifecycle"><Power className="h-3.5 w-3.5 mr-1.5" />Ciclo de vida</TabsTrigger>
+          <TabsTrigger value="audit"><ScrollText className="h-3.5 w-3.5 mr-1.5" />Auditoria</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-6"><OverviewTab /></TabsContent>
@@ -46,6 +49,8 @@ export default function PlatformOwnerPage() {
         <TabsContent value="vat" className="mt-6"><VatTab /></TabsContent>
         <TabsContent value="invoices" className="mt-6"><InvoicesTab /></TabsContent>
         <TabsContent value="webhooks" className="mt-6"><WebhooksTab /></TabsContent>
+        <TabsContent value="lifecycle" className="mt-6"><LifecycleTab /></TabsContent>
+        <TabsContent value="audit" className="mt-6"><AuditTab /></TabsContent>
       </Tabs>
     </div>
   );
