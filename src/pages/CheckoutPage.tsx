@@ -75,7 +75,7 @@ export default function CheckoutPage() {
   }, [profile]);
 
   useEffect(() => {
-    supabase.from("platform_bank_accounts").select("*").eq("is_active", true).then(({ data }) => {
+    supabase.from("platform_bank_accounts").select("*").eq("active", true).then(({ data }) => {
       setBankAccounts(data ?? []);
     });
   }, []);
@@ -297,7 +297,7 @@ export default function CheckoutPage() {
                 {bankAccounts.length === 0 && <div className="text-muted-foreground">Sem contas bancárias configuradas.</div>}
                 {bankAccounts.map((b) => (
                   <div key={b.id} className="text-xs">
-                    <div><strong>{b.bank_name}</strong> — {b.account_holder}</div>
+                    <div><strong>{b.bank_name}</strong> — {b.account_name}</div>
                     <div>IBAN: {b.iban}</div>
                     {b.bic && <div>BIC: {b.bic}</div>}
                   </div>
