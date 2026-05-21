@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Building2, CreditCard, FileCheck, Landmark, Receipt, ShieldCheck, Sparkles, Check } from "lucide-react";
+import { ArrowLeft, ArrowRight, Building2, CreditCard, FileCheck, Landmark, Receipt, ShieldCheck, Sparkles, Check, User, Briefcase } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,34 +15,48 @@ import {
   useBillingProfile,
   useSaveBillingProfile,
   useAddPaymentMethod,
-  useStartCheckout,
   useDeclareManualTransfer,
 } from "@/hooks/useBilling";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { useQueryClient } from "@tanstack/react-query";
 
-type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
 const STEP_LABELS: Record<Step, string> = {
   1: "Plano",
-  2: "Faturação",
+  2: "Ciclo",
   3: "IVA",
-  4: "Pagamento",
-  5: "Revisão",
-  6: "Confirmação",
-  7: "Ativação",
+  4: "Identidade",
+  5: "Pagamento",
+  6: "Fatura",
+  7: "Confirmação",
+  8: "Ativação",
 };
+
+// Pricing model: 35€ base / 20 techs included, +10€ per extra block of 20.
+const BASE_PRICE = 35;
+const BASE_INCLUDED = 20;
+const EXTRA_BLOCK_PRICE = 10;
+const EXTRA_BLOCK_SIZE = 20;
+
+function computePrice(techs: number, cycle: "monthly" | "yearly") {
+  const extra = Math.max(0, techs - BASE_INCLUDED);
+  const blocks = Math.ceil(extra / EXTRA_BLOCK_SIZE);
+  const monthly = BASE_PRICE + blocks * EXTRA_BLOCK_PRICE;
+  return cycle === "yearly" ? monthly * 10 : monthly; // 2 months free
+}
 
 export default function CheckoutPage() {
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const [params] = useSearchParams();
   const { workspaceId, workspaceName, isAdmin } = useWorkspace();
   const { data: snap } = useSubscription();
   const { data: profile } = useBillingProfile();
   const saveProfile = useSaveBillingProfile();
   const addPM = useAddPaymentMethod();
-  const startCheckout = useStartCheckout();
   const declareManual = useDeclareManualTransfer();
 
   const [step, setStep] = useState<Step>(1);
@@ -50,6 +64,9 @@ export default function CheckoutPage() {
   const [cycle, setCycle] = useState<"monthly" | "yearly">(
     (params.get("cycle") as "monthly" | "yearly") || snap?.subscription?.billing_cycle || "monthly"
   );
+
+  // Critical: VAT mode drives bank routing + invoice format
+  const [vatMode, setVatMode] = useState<"personal" | "business">("business");
 
   const [form, setForm] = useState({
     legal_name: "",
@@ -64,37 +81,62 @@ export default function CheckoutPage() {
     preferred_currency: "EUR",
   });
 
-  const [payKind, setPayKind] = useState<"card" | "sepa" | "manual_transfer">("card");
+  const [payKind, setPayKind] = useState<"card" | "sepa" | "manual_transfer" | "stripe">("manual_transfer");
   const [pmDetails, setPmDetails] = useState({ holder_name: "", last4: "", iban_masked: "", brand: "Visa" });
 
   const [vatInfo, setVatInfo] = useState<{ rate: number; reverse: boolean; exemption: string | null } | null>(null);
   const [bankAccounts, setBankAccounts] = useState<any[]>([]);
+  const [selectedBankId, setSelectedBankId] = useState<string | null>(null);
+  const [invoice, setInvoice] = useState<any>(null);
+
+  // Guard against double-submission across the whole activation chain
+  const [activating, setActivating] = useState(false);
+  const [activated, setActivated] = useState(false);
 
   useEffect(() => {
     if (profile) setForm((f) => ({ ...f, ...profile } as any));
   }, [profile]);
 
+  // Load bank accounts and route by VAT mode
   useEffect(() => {
     supabase.from("platform_bank_accounts").select("*").eq("active", true).then(({ data }) => {
       setBankAccounts(data ?? []);
     });
   }, []);
 
-  // Pricing simulation (uses existing snapshot pricing or basic fallback)
-  const price = useMemo(() => {
-    if (snap?.pricing) {
-      return cycle === "yearly" ? snap.pricing.current_yearly : snap.pricing.current_monthly;
-    }
-    return 29;
-  }, [snap, cycle]);
+  const routedBanks = useMemo(() => {
+    const filtered = bankAccounts.filter((b) =>
+      vatMode === "business" ? b.account_type !== "personal" : b.account_type === "personal"
+    );
+    return filtered.length > 0 ? filtered : bankAccounts;
+  }, [bankAccounts, vatMode]);
 
-  const vatAmount = vatInfo ? Math.round((price * vatInfo.rate) * 100) / 100 : 0;
-  const total = Math.round((price + vatAmount) * 100) / 100;
+  useEffect(() => {
+    if (routedBanks.length > 0) {
+      setSelectedBankId(routedBanks.find((b) => b.is_primary)?.id ?? routedBanks[0].id);
+    } else {
+      setSelectedBankId(null);
+    }
+  }, [routedBanks]);
+
+  // Sync VAT mode → form.is_business
+  useEffect(() => {
+    setForm((f) => ({ ...f, is_business: vatMode === "business" }));
+  }, [vatMode]);
+
+  const techCount = snap?.usage?.technician_count ?? BASE_INCLUDED;
+  const subtotal = useMemo(() => {
+    const monthly = computePrice(techCount, "monthly");
+    return cycle === "yearly" ? monthly * 10 : monthly;
+  }, [techCount, cycle]);
+
+  const vatAmount = vatInfo && vatMode === "business" ? Math.round(subtotal * vatInfo.rate * 100) / 100 : 0;
+  const total = Math.round((subtotal + vatAmount) * 100) / 100;
 
   async function calcVat() {
     const { data, error } = await supabase.rpc("calculate_vat", {
       _country: form.country,
-      _is_business: form.is_business,
+      _is_business: vatMode === "business",
       _vat_number: form.vat_number || null,
     });
     if (error) {
@@ -109,56 +151,109 @@ export default function CheckoutPage() {
     });
   }
 
+  async function generateInvoice() {
+    const { data, error } = await supabase.rpc("generate_platform_invoice", {
+      _workspace_id: workspaceId!,
+      _plan_code: plan,
+      _cycle: cycle,
+      _vat_mode: vatMode,
+      _bank_account_id: selectedBankId,
+      _amount: computePrice(techCount, "monthly"),
+    });
+    if (error) {
+      toast.error(error.message || "Falha ao gerar fatura");
+      return null;
+    }
+    setInvoice(data);
+    return data;
+  }
+
+  async function activate() {
+    if (activating || activated) return;
+    setActivating(true);
+    try {
+      const { error } = await supabase.rpc("activate_workspace_subscription", {
+        _workspace_id: workspaceId!,
+        _plan_code: plan,
+        _cycle: cycle,
+      });
+      if (error) throw error;
+      setActivated(true);
+      qc.invalidateQueries({ queryKey: ["workspace-subscription"] });
+      qc.invalidateQueries({ queryKey: ["subscription-events"] });
+      qc.invalidateQueries({ queryKey: ["workspace-access"] });
+    } catch (e: any) {
+      toast.error(e.message || "Falha ao ativar");
+      throw e;
+    } finally {
+      setActivating(false);
+    }
+  }
+
   async function handleNext() {
-    if (step === 2) {
-      if (!form.legal_name || !form.billing_email) {
-        toast.error("Preenche nome legal e email de faturação");
+    try {
+      if (step === 3) {
+        await calcVat();
+        setStep(4);
         return;
       }
-      await saveProfile.mutateAsync(form);
-      await calcVat();
-      setStep(3);
-      return;
-    }
-    if (step === 4) {
-      if (payKind !== "manual_transfer") {
-        await addPM.mutateAsync({
-          kind: payKind,
-          brand: payKind === "card" ? pmDetails.brand : null,
-          last4: payKind === "card" ? pmDetails.last4 : null,
-          iban_masked: payKind === "sepa" ? pmDetails.iban_masked : null,
-          holder_name: pmDetails.holder_name,
-          is_default: true,
-        });
+      if (step === 4) {
+        if (!form.legal_name || !form.billing_email) {
+          toast.error("Preenche nome legal e email de faturação");
+          return;
+        }
+        if (vatMode === "business" && !form.vat_number) {
+          toast.error("Número de IVA é obrigatório para faturação empresarial");
+          return;
+        }
+        await saveProfile.mutateAsync(form);
+        setStep(5);
+        return;
       }
-      setStep(5);
-      return;
-    }
-    if (step === 5) {
-      // Confirm: start checkout
-      await startCheckout.mutateAsync({ plan_code: plan, cycle });
-      if (payKind === "manual_transfer") {
-        await declareManual.mutateAsync({ amount: total });
+      if (step === 5) {
+        if (payKind === "stripe") {
+          toast.info("Stripe brevemente disponível");
+          return;
+        }
+        if (payKind !== "manual_transfer") {
+          await addPM.mutateAsync({
+            kind: payKind,
+            brand: payKind === "card" ? pmDetails.brand : null,
+            last4: payKind === "card" ? pmDetails.last4 : null,
+            iban_masked: payKind === "sepa" ? pmDetails.iban_masked : null,
+            holder_name: pmDetails.holder_name,
+            is_default: true,
+          });
+        }
+        const inv = await generateInvoice();
+        if (!inv) return;
+        setStep(6);
+        return;
       }
-      setStep(6);
-      return;
+      if (step === 6) {
+        if (payKind === "manual_transfer") {
+          await declareManual.mutateAsync({
+            amount: total,
+            invoice_id: invoice?.invoice_id,
+            bank_account_id: selectedBankId ?? undefined,
+          });
+        }
+        setStep(7);
+        return;
+      }
+      if (step === 7) {
+        await activate();
+        setStep(8);
+        return;
+      }
+      if (step === 8) {
+        navigate("/subscription");
+        return;
+      }
+      setStep((s) => (Math.min(8, s + 1) as Step));
+    } catch {
+      // toasts already shown
     }
-    if (step === 6) {
-      await supabase.rpc("log_subscription_event", {
-        _workspace_id: workspaceId!,
-        _event_type: "subscription_activated_pending",
-        _severity: "success",
-        _message: "Assinatura criada — aguardando confirmação de pagamento",
-        _metadata: { plan, cycle, payment_method: payKind } as any,
-      });
-      setStep(7);
-      return;
-    }
-    if (step === 7) {
-      navigate("/subscription");
-      return;
-    }
-    setStep((s) => (Math.min(7, (s + 1)) as Step));
   }
 
   if (!isAdmin) {
@@ -171,6 +266,8 @@ export default function CheckoutPage() {
       </div>
     );
   }
+
+  const selectedBank = routedBanks.find((b) => b.id === selectedBankId);
 
   return (
     <div className="module-shell space-y-6">
@@ -187,8 +284,8 @@ export default function CheckoutPage() {
               key={n}
               className={cn(
                 "flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition",
-                active && "border-primary/40 bg-primary/10 text-primary",
-                done && "border-emerald-500/30 bg-emerald-500/10 text-emerald-500",
+                active && "border-[hsl(var(--accent))]/40 bg-[hsl(var(--accent))]/10 text-[hsl(var(--accent))]",
+                done && "border-success/30 bg-success/10 text-success",
                 !active && !done && "border-border text-muted-foreground"
               )}
             >
@@ -203,79 +300,109 @@ export default function CheckoutPage() {
       <Card className="p-6 surface-card space-y-6">
         {step === 1 && (
           <section className="space-y-4">
-            <h2 className="text-lg font-semibold flex items-center gap-2"><Sparkles className="h-4 w-4" /> Escolhe o plano</h2>
+            <h2 className="text-lg font-semibold flex items-center gap-2"><Sparkles className="h-4 w-4 text-[hsl(var(--accent))]" /> Plano</h2>
             <RadioGroup value={plan} onValueChange={setPlan} className="grid gap-3 md:grid-cols-2">
-              {["starter", "pro", "scale", "enterprise"].map((p) => (
-                <label key={p} className={cn("flex cursor-pointer items-center gap-3 rounded-lg border p-4 hover:border-primary/40", plan === p && "border-primary/60 bg-primary/5")}>
-                  <RadioGroupItem value={p} />
+              {[
+                { code: "starter", name: "Starter", desc: "20 técnicos incluídos · 35€/mês" },
+                { code: "pro", name: "Pro", desc: "40 técnicos · 45€/mês" },
+                { code: "scale", name: "Scale", desc: "60+ técnicos · escalável" },
+                { code: "enterprise", name: "Enterprise", desc: "Multi-workspace + SLA" },
+              ].map((p) => (
+                <label key={p.code} className={cn("flex cursor-pointer items-center gap-3 rounded-lg border p-4 hover:border-[hsl(var(--accent))]/40", plan === p.code && "border-[hsl(var(--accent))]/60 bg-[hsl(var(--accent))]/5")}>
+                  <RadioGroupItem value={p.code} />
                   <div>
-                    <div className="font-medium capitalize">{p}</div>
-                    <div className="text-xs text-muted-foreground">Plano {p}</div>
+                    <div className="font-medium">{p.name}</div>
+                    <div className="text-xs text-muted-foreground">{p.desc}</div>
                   </div>
                 </label>
               ))}
             </RadioGroup>
-            <div>
-              <Label>Ciclo</Label>
-              <RadioGroup value={cycle} onValueChange={(v) => setCycle(v as any)} className="mt-2 flex gap-3">
-                <label className={cn("flex cursor-pointer items-center gap-2 rounded-lg border px-4 py-2", cycle === "monthly" && "border-primary/60 bg-primary/5")}>
-                  <RadioGroupItem value="monthly" /> Mensal
-                </label>
-                <label className={cn("flex cursor-pointer items-center gap-2 rounded-lg border px-4 py-2", cycle === "yearly" && "border-primary/60 bg-primary/5")}>
-                  <RadioGroupItem value="yearly" /> Anual <Badge variant="outline" className="ml-1">2 meses grátis</Badge>
-                </label>
-              </RadioGroup>
+            <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+              Base: {BASE_PRICE}€/mês inclui {BASE_INCLUDED} técnicos. Cada bloco adicional de {EXTRA_BLOCK_SIZE} técnicos = +{EXTRA_BLOCK_PRICE}€/mês.
+              Técnicos em múltiplas workspaces: 1ª = 20€, cada adicional +10€.
             </div>
           </section>
         )}
 
         {step === 2 && (
           <section className="space-y-4">
-            <h2 className="text-lg font-semibold flex items-center gap-2"><Building2 className="h-4 w-4" /> Perfil de faturação</h2>
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Nome legal *" value={form.legal_name} onChange={(v) => setForm({ ...form, legal_name: v })} />
-              <Field label="Nome comercial" value={form.company_name} onChange={(v) => setForm({ ...form, company_name: v })} />
-              <Field label="Email de faturação *" value={form.billing_email} onChange={(v) => setForm({ ...form, billing_email: v })} />
-              <Field label="País (ISO)" value={form.country} onChange={(v) => setForm({ ...form, country: v.toUpperCase().slice(0, 2) })} />
-              <Field label="Morada" value={form.billing_address} onChange={(v) => setForm({ ...form, billing_address: v })} />
-              <Field label="Cidade" value={form.city} onChange={(v) => setForm({ ...form, city: v })} />
-              <Field label="Código postal" value={form.postal_code} onChange={(v) => setForm({ ...form, postal_code: v })} />
-              <Field label="Moeda preferida" value={form.preferred_currency} onChange={(v) => setForm({ ...form, preferred_currency: v.toUpperCase().slice(0, 3) })} />
-            </div>
+            <h2 className="text-lg font-semibold flex items-center gap-2"><Receipt className="h-4 w-4 text-[hsl(var(--warning))]" /> Ciclo de faturação</h2>
+            <RadioGroup value={cycle} onValueChange={(v) => setCycle(v as any)} className="grid gap-3 md:grid-cols-2">
+              <label className={cn("flex cursor-pointer items-start gap-3 rounded-lg border p-4 hover:border-[hsl(var(--accent))]/40", cycle === "monthly" && "border-[hsl(var(--accent))]/60 bg-[hsl(var(--accent))]/5")}>
+                <RadioGroupItem value="monthly" />
+                <div>
+                  <div className="font-medium">Mensal</div>
+                  <div className="text-xs text-muted-foreground">{computePrice(techCount, "monthly").toFixed(2)} €/mês · cobrado mensalmente</div>
+                </div>
+              </label>
+              <label className={cn("flex cursor-pointer items-start gap-3 rounded-lg border p-4 hover:border-[hsl(var(--accent))]/40", cycle === "yearly" && "border-[hsl(var(--accent))]/60 bg-[hsl(var(--accent))]/5")}>
+                <RadioGroupItem value="yearly" />
+                <div>
+                  <div className="font-medium flex items-center gap-2">Anual <Badge variant="outline" className="text-[10px]">2 meses grátis</Badge></div>
+                  <div className="text-xs text-muted-foreground">{computePrice(techCount, "yearly").toFixed(2)} €/ano</div>
+                </div>
+              </label>
+            </RadioGroup>
           </section>
         )}
 
         {step === 3 && (
           <section className="space-y-4">
-            <h2 className="text-lg font-semibold flex items-center gap-2"><ShieldCheck className="h-4 w-4" /> Validação de IVA</h2>
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Número de IVA" value={form.vat_number} onChange={(v) => setForm({ ...form, vat_number: v.toUpperCase() })} />
-              <div>
-                <Label>Tipo</Label>
-                <RadioGroup value={form.is_business ? "b" : "c"} onValueChange={(v) => setForm({ ...form, is_business: v === "b" })} className="mt-2 flex gap-3">
-                  <label className="flex items-center gap-2"><RadioGroupItem value="b" /> Empresa</label>
-                  <label className="flex items-center gap-2"><RadioGroupItem value="c" /> Particular</label>
-                </RadioGroup>
-              </div>
-            </div>
-            <Button variant="outline" onClick={calcVat}>Recalcular IVA</Button>
-            {vatInfo && (
-              <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm">
-                <div>Taxa IVA aplicável: <strong>{(vatInfo.rate * 100).toFixed(0)}%</strong></div>
-                {vatInfo.reverse && <div className="text-amber-500">Reverse charge (B2B intra-UE)</div>}
-                {vatInfo.exemption && <div className="text-muted-foreground">Isenção: {vatInfo.exemption}</div>}
-              </div>
-            )}
+            <h2 className="text-lg font-semibold flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-[hsl(var(--accent))]" /> Modo de IVA</h2>
+            <RadioGroup value={vatMode} onValueChange={(v) => setVatMode(v as any)} className="grid gap-3 md:grid-cols-2">
+              <label className={cn("flex cursor-pointer items-start gap-3 rounded-lg border p-4 hover:border-[hsl(var(--accent))]/40", vatMode === "personal" && "border-[hsl(var(--accent))]/60 bg-[hsl(var(--accent))]/5")}>
+                <RadioGroupItem value="personal" />
+                <div className="space-y-1">
+                  <div className="font-medium flex items-center gap-2"><User className="h-3.5 w-3.5" /> Fatura pessoal (sem IVA)</div>
+                  <div className="text-xs text-muted-foreground">Transferência via conta pessoal Wise. Sem campos de IVA.</div>
+                </div>
+              </label>
+              <label className={cn("flex cursor-pointer items-start gap-3 rounded-lg border p-4 hover:border-[hsl(var(--accent))]/40", vatMode === "business" && "border-[hsl(var(--accent))]/60 bg-[hsl(var(--accent))]/5")}>
+                <RadioGroupItem value="business" />
+                <div className="space-y-1">
+                  <div className="font-medium flex items-center gap-2"><Briefcase className="h-3.5 w-3.5" /> Fatura empresarial (com IVA)</div>
+                  <div className="text-xs text-muted-foreground">Conta bancária da empresa. Nº IVA obrigatório.</div>
+                </div>
+              </label>
+            </RadioGroup>
           </section>
         )}
 
         {step === 4 && (
           <section className="space-y-4">
-            <h2 className="text-lg font-semibold flex items-center gap-2"><CreditCard className="h-4 w-4" /> Método de pagamento</h2>
-            <RadioGroup value={payKind} onValueChange={(v) => setPayKind(v as any)} className="grid gap-3 md:grid-cols-3">
-              <MethodCard active={payKind === "card"} icon={CreditCard} label="Cartão" value="card" />
-              <MethodCard active={payKind === "sepa"} icon={Landmark} label="SEPA" value="sepa" />
-              <MethodCard active={payKind === "manual_transfer"} icon={Receipt} label="Transferência manual" value="manual_transfer" />
+            <h2 className="text-lg font-semibold flex items-center gap-2"><Building2 className="h-4 w-4 text-[hsl(var(--accent))]" /> Identidade de faturação</h2>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="Nome legal *" value={form.legal_name} onChange={(v) => setForm({ ...form, legal_name: v })} />
+              {vatMode === "business" && (
+                <Field label="Nome comercial" value={form.company_name} onChange={(v) => setForm({ ...form, company_name: v })} />
+              )}
+              <Field label="Email de faturação *" value={form.billing_email} onChange={(v) => setForm({ ...form, billing_email: v })} />
+              <Field label="País (ISO)" value={form.country} onChange={(v) => setForm({ ...form, country: v.toUpperCase().slice(0, 2) })} />
+              <Field label="Morada" value={form.billing_address} onChange={(v) => setForm({ ...form, billing_address: v })} />
+              <Field label="Cidade" value={form.city} onChange={(v) => setForm({ ...form, city: v })} />
+              <Field label="Código postal" value={form.postal_code} onChange={(v) => setForm({ ...form, postal_code: v })} />
+              {vatMode === "business" && (
+                <Field label="Número de IVA *" value={form.vat_number} onChange={(v) => setForm({ ...form, vat_number: v.toUpperCase() })} />
+              )}
+            </div>
+            {vatInfo && vatMode === "business" && (
+              <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs">
+                Taxa IVA: <strong>{(vatInfo.rate * 100).toFixed(0)}%</strong>
+                {vatInfo.reverse && <span className="ml-2 text-[hsl(var(--warning))]">· Reverse charge</span>}
+                {vatInfo.exemption && <span className="ml-2 text-muted-foreground">· {vatInfo.exemption}</span>}
+              </div>
+            )}
+          </section>
+        )}
+
+        {step === 5 && (
+          <section className="space-y-4">
+            <h2 className="text-lg font-semibold flex items-center gap-2"><CreditCard className="h-4 w-4 text-[hsl(var(--accent))]" /> Pagamento</h2>
+            <RadioGroup value={payKind} onValueChange={(v) => setPayKind(v as any)} className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+              <MethodCard active={payKind === "card"} icon={CreditCard} label="Cartão (mock)" value="card" />
+              <MethodCard active={payKind === "sepa"} icon={Landmark} label="SEPA Débito" value="sepa" />
+              <MethodCard active={payKind === "manual_transfer"} icon={Receipt} label="Transferência" value="manual_transfer" />
+              <MethodCard active={payKind === "stripe"} icon={Sparkles} label="Stripe (em breve)" value="stripe" disabled />
             </RadioGroup>
 
             {payKind === "card" && (
@@ -292,70 +419,112 @@ export default function CheckoutPage() {
               </div>
             )}
             {payKind === "manual_transfer" && (
-              <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm space-y-2">
-                <div className="font-medium">Instruções de transferência</div>
-                {bankAccounts.length === 0 && <div className="text-muted-foreground">Sem contas bancárias configuradas.</div>}
-                {bankAccounts.map((b) => (
-                  <div key={b.id} className="text-xs">
-                    <div><strong>{b.bank_name}</strong> — {b.account_name}</div>
-                    <div>IBAN: {b.iban}</div>
-                    {b.bic && <div>BIC: {b.bic}</div>}
-                  </div>
-                ))}
-                <Separator />
-                <div className="text-amber-500 text-xs">O pagamento ficará em <strong>pending_manual_review</strong> até confirmação.</div>
+              <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm space-y-3">
+                <div className="font-medium flex items-center gap-2">
+                  <Landmark className="h-4 w-4 text-[hsl(var(--warning))]" />
+                  Conta de destino · {vatMode === "personal" ? "Wise pessoal" : "Empresa"}
+                </div>
+                {routedBanks.length === 0 && <div className="text-muted-foreground">Sem contas configuradas.</div>}
+                <RadioGroup value={selectedBankId ?? ""} onValueChange={setSelectedBankId} className="space-y-2">
+                  {routedBanks.map((b) => (
+                    <label key={b.id} className={cn("flex cursor-pointer gap-3 rounded-lg border p-3", selectedBankId === b.id && "border-[hsl(var(--warning))]/50 bg-[hsl(var(--warning))]/5")}>
+                      <RadioGroupItem value={b.id} className="mt-1" />
+                      <div className="flex-1 text-xs space-y-0.5">
+                        <div className="font-medium text-sm">{b.bank_name} <span className="text-muted-foreground font-normal">· {b.account_name}</span></div>
+                        {b.iban && <div>IBAN: <span className="font-mono">{b.iban}</span></div>}
+                        {b.bic && <div>BIC: <span className="font-mono">{b.bic}</span></div>}
+                        <div className="text-muted-foreground">{b.country} · {b.currency} · {b.account_type}</div>
+                      </div>
+                    </label>
+                  ))}
+                </RadioGroup>
               </div>
             )}
           </section>
         )}
 
-        {step === 5 && (
-          <section className="space-y-4">
-            <h2 className="text-lg font-semibold flex items-center gap-2"><FileCheck className="h-4 w-4" /> Revisão</h2>
-            <div className="grid gap-3 text-sm">
-              <Row label="Plano" value={`${plan} • ${cycle === "yearly" ? "Anual" : "Mensal"}`} />
-              <Row label="Faturado para" value={form.legal_name} />
-              <Row label="Email" value={form.billing_email} />
-              <Row label="País / IVA" value={`${form.country}${form.vat_number ? " • " + form.vat_number : ""}`} />
-              <Row label="Método" value={payKind === "card" ? "Cartão" : payKind === "sepa" ? "SEPA" : "Transferência manual"} />
-              <Separator />
-              <Row label="Subtotal" value={`${price.toFixed(2)} ${form.preferred_currency}`} />
-              <Row label={`IVA (${((vatInfo?.rate ?? 0) * 100).toFixed(0)}%)`} value={`${vatAmount.toFixed(2)} ${form.preferred_currency}`} />
-              <Row label="Total" value={`${total.toFixed(2)} ${form.preferred_currency}`} bold />
-            </div>
-          </section>
-        )}
-
         {step === 6 && (
-          <section className="space-y-3 text-center py-6">
-            <div className="mx-auto h-14 w-14 rounded-full bg-emerald-500/15 text-emerald-500 grid place-items-center">
-              <Check className="h-7 w-7" />
+          <section className="space-y-4">
+            <h2 className="text-lg font-semibold flex items-center gap-2"><FileCheck className="h-4 w-4 text-[hsl(var(--accent))]" /> Pré-visualização da fatura</h2>
+            <div className="rounded-xl border border-border bg-card/60 p-5 space-y-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="text-xs text-muted-foreground">Fatura</div>
+                  <div className="text-lg font-semibold font-mono">{invoice?.invoice_number ?? "—"}</div>
+                </div>
+                <Badge variant="outline" className={vatMode === "business" ? "border-[hsl(var(--accent))]/40 text-[hsl(var(--accent))]" : "border-[hsl(var(--warning))]/40 text-[hsl(var(--warning))]"}>
+                  {vatMode === "business" ? "Empresarial (IVA)" : "Pessoal (sem IVA)"}
+                </Badge>
+              </div>
+              <Separator />
+              <div className="grid gap-2 text-sm">
+                <Row label="Cliente" value={form.legal_name} />
+                <Row label="Email" value={form.billing_email} />
+                {vatMode === "business" && <Row label="IVA" value={form.vat_number || "—"} />}
+                <Row label="País" value={form.country} />
+              </div>
+              <Separator />
+              <div className="grid gap-2 text-sm">
+                <Row label={`Plano ${plan} · ${cycle === "yearly" ? "Anual" : "Mensal"}`} value={`${subtotal.toFixed(2)} €`} />
+                <Row label="Técnicos atuais" value={`${techCount}`} />
+                <Row label={`IVA (${((vatInfo?.rate ?? 0) * 100).toFixed(0)}%)`} value={`${vatAmount.toFixed(2)} €`} />
+                <Row label="Total" value={`${total.toFixed(2)} €`} bold />
+                <Row label="Vencimento" value={`em 14 dias`} />
+              </div>
+              {selectedBank && payKind === "manual_transfer" && (
+                <>
+                  <Separator />
+                  <div className="text-xs space-y-0.5">
+                    <div className="font-medium text-sm mb-1">Instruções de pagamento</div>
+                    <div>{selectedBank.bank_name} · {selectedBank.account_name}</div>
+                    {selectedBank.iban && <div>IBAN <span className="font-mono">{selectedBank.iban}</span></div>}
+                    {selectedBank.bic && <div>BIC <span className="font-mono">{selectedBank.bic}</span></div>}
+                  </div>
+                </>
+              )}
             </div>
-            <h2 className="text-xl font-semibold">Pagamento registado</h2>
-            <p className="text-sm text-muted-foreground">
-              {payKind === "manual_transfer"
-                ? "Aguardando confirmação manual da transferência."
-                : "Mock provider — em fase Stripe será cobrado automaticamente."}
-            </p>
           </section>
         )}
 
         {step === 7 && (
           <section className="space-y-3 text-center py-6">
-            <div className="mx-auto h-14 w-14 rounded-full bg-primary/15 text-primary grid place-items-center">
+            <div className="mx-auto h-14 w-14 rounded-full bg-success/15 text-success grid place-items-center">
+              <Check className="h-7 w-7" />
+            </div>
+            <h2 className="text-xl font-semibold">Pagamento registado</h2>
+            <p className="text-sm text-muted-foreground">
+              {payKind === "manual_transfer"
+                ? "Transferência declarada — aguarda revisão manual."
+                : "Pagamento simulado registado (gateway real em breve)."}
+            </p>
+            <p className="text-xs text-muted-foreground">Continua para ativar a assinatura.</p>
+          </section>
+        )}
+
+        {step === 8 && (
+          <section className="space-y-3 text-center py-6">
+            <div className="mx-auto h-14 w-14 rounded-full bg-[hsl(var(--accent))]/15 text-[hsl(var(--accent))] grid place-items-center">
               <Sparkles className="h-7 w-7" />
             </div>
             <h2 className="text-xl font-semibold">Assinatura ativada</h2>
-            <p className="text-sm text-muted-foreground">A workspace está pronta. Consulta a timeline em Assinatura.</p>
+            <p className="text-sm text-muted-foreground">Workspace pronta. Consulta a timeline em Assinatura.</p>
           </section>
         )}
 
         <div className="flex justify-between pt-2">
-          <Button variant="ghost" onClick={() => (step === 1 ? navigate(-1) : setStep((s) => Math.max(1, s - 1) as Step))}>
+          <Button
+            variant="ghost"
+            onClick={() => (step === 1 ? navigate(-1) : setStep((s) => Math.max(1, s - 1) as Step))}
+            disabled={activating || step === 8}
+          >
             <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
           </Button>
-          <Button onClick={handleNext} disabled={saveProfile.isPending || startCheckout.isPending}>
-            {step === 7 ? "Concluir" : "Continuar"} <ArrowRight className="ml-2 h-4 w-4" />
+          <Button
+            onClick={handleNext}
+            disabled={saveProfile.isPending || addPM.isPending || activating || (step === 7 && activated)}
+          >
+            {step === 8 ? "Concluir" : step === 7 ? (activating ? "A ativar…" : "Ativar assinatura") : "Continuar"}
+            <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
         </div>
       </Card>
@@ -372,10 +541,14 @@ function Field({ label, value, onChange }: { label: string; value: string; onCha
   );
 }
 
-function MethodCard({ active, icon: Icon, label, value }: { active: boolean; icon: any; label: string; value: string }) {
+function MethodCard({ active, icon: Icon, label, value, disabled }: { active: boolean; icon: any; label: string; value: string; disabled?: boolean }) {
   return (
-    <label className={cn("flex cursor-pointer items-center gap-3 rounded-lg border p-4 hover:border-primary/40", active && "border-primary/60 bg-primary/5")}>
-      <RadioGroupItem value={value} />
+    <label className={cn(
+      "flex cursor-pointer items-center gap-3 rounded-lg border p-4 hover:border-[hsl(var(--accent))]/40",
+      active && "border-[hsl(var(--accent))]/60 bg-[hsl(var(--accent))]/5",
+      disabled && "opacity-50 cursor-not-allowed"
+    )}>
+      <RadioGroupItem value={value} disabled={disabled} />
       <Icon className="h-4 w-4" />
       <span className="text-sm">{label}</span>
     </label>
