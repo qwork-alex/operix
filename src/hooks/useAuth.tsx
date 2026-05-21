@@ -66,8 +66,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(s);
         setUser(s?.user ?? null);
         if (s?.user) {
-          // Fire-and-forget profile fetch (no await)
-          setTimeout(() => fetchUserData(s.user.id), 0);
+          // Fire-and-forget profile fetch + device register (no await)
+          setTimeout(() => {
+            fetchUserData(s.user.id);
+            registerCurrentDevice();
+          }, 0);
         } else {
           setProfile(null);
         }
