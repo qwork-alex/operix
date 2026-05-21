@@ -36,6 +36,7 @@ import ProfilePage from "./pages/ProfilePage";
 import SubscriptionPage from "./pages/SubscriptionPage";
 import PlatformOwnerPage from "./pages/PlatformOwnerPage";
 import CheckoutPage from "./pages/CheckoutPage";
+import ProductionPage from "./pages/ProductionPage";
 import {
   TermsPage,
   PrivacyPage,
@@ -89,6 +90,7 @@ const App = () => (
                           <Routes>
                             <Route path="/" element={<PermissionGuard permission="dashboard.view"><Index /></PermissionGuard>} />
                             <Route path="/service-orders" element={<PermissionGuard permission="service_orders.view"><ServiceOrdersPage /></PermissionGuard>} />
+                            <Route path="/production" element={<PermissionGuard permission="service_orders.view"><ProductionPage /></PermissionGuard>} />
                             <Route path="/payment-orders" element={<PermissionGuard permission="payment_orders.view"><PaymentOrdersPage /></PermissionGuard>} />
                             <Route path="/financial" element={<PermissionGuard permission="financial.view"><FinancialPage /></PermissionGuard>} />
                             <Route path="/profit" element={<PermissionGuard permission="profit.view"><ProfitDistribution /></PermissionGuard>} />

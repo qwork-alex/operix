@@ -13,6 +13,7 @@ Owner account (qwork@qworkgroup.com) is protected, has exclusive reset access. N
 i18n rule: every visible string MUST flow through useLanguage().t(key) — no inline literals (see mem://style/i18n-rule).
 
 ## Memories
+- [Phase 6 — Operational Engine](mem://features/production/phase-6-operational-engine) — production_orders/events/photos tables, kanban board, technician hub mobile-first, photo uploader with client-side compression, KPIs RPC, /production route. Fully additive to existing service_orders flow.
 - [Phase 5 — Tenant Security](mem://features/security/phase-5-tenant-isolation) — security_events append-only log, log_security_event/compute_security_metrics RPCs, TenantProvider/useTenant, RoleGuard, PermissionGate, Security tab in PlatformOwner
 - [i18n Rule](mem://style/i18n-rule) — Phase 4C: all UI strings via t(); no inline literals; Brazilian PT goes in the existing pt slot
 - [Workspace Context Phase 1](mem://auth/workspace-context-phase1) — workspace_id/year_reference/visibility_scope em todas tabelas críticas, workspace_module_permissions, resolvers SQL, hooks frontend opt-in (scopeQuery, useWorkspaceModules). Aditivo, sem quebra de RLS.
