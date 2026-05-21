@@ -1,11 +1,20 @@
 import { useEffect, useMemo, useState, useCallback, type ReactNode } from "react";
-import { ChevronRight, Eye } from "lucide-react";
+import { ChevronRight, Eye, Power } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   HIERARCHY_FALLBACK,
   type HierarchyContext,
   type HierarchyRecord,
 } from "@/components/shared/HierarchyExplorer";
+
+// --- Platform active state (local-only, no schema impact) ---
+const PLATFORM_ACTIVE_KEY = "hierarchy.platform_active.v1";
+function readActiveMap(): Record<string, boolean> {
+  try { return JSON.parse(localStorage.getItem(PLATFORM_ACTIVE_KEY) || "{}"); } catch { return {}; }
+}
+function writeActiveMap(m: Record<string, boolean>) {
+  try { localStorage.setItem(PLATFORM_ACTIVE_KEY, JSON.stringify(m)); } catch { /* ignore */ }
+}
 
 /**
  * Phase 1B — Hierarchical grouped view wrapping existing tables.
@@ -133,6 +142,15 @@ export function HierarchicalOrdersView<R extends HierarchyRecord>({
     } catch { /* ignore */ }
   }, [open, storageKey]);
 
+  const [activeMap, setActiveMap] = useState<Record<string, boolean>>(() => readActiveMap());
+  const togglePlatformActive = useCallback((key: string) => {
+    setActiveMap(prev => {
+      const next = { ...prev, [key]: !prev[key] };
+      writeActiveMap(next);
+      return next;
+    });
+  }, []);
+
   const toggle = useCallback((k: string) => {
     setOpen(prev => {
       const next = new Set(prev);
@@ -223,14 +241,18 @@ export function HierarchicalOrdersView<R extends HierarchyRecord>({
     const groupPending = Math.max(0, groupTotal - groupPaid);
     const groupStatus = aggregateStatus(node.rows, statusOf as any);
     const active = isCtxActive(node.ctx);
+    const isPlatform = node.ctx.level === "unit";
+    const platformKey = isPlatform ? `${node.ctx.client ?? ""}|${node.ctx.unit ?? ""}` : "";
+    const isPlatformActive = isPlatform && !!activeMap[platformKey];
 
     return (
       <div key={node.key} className="space-y-1">
         <div
           className={cn(
-            "group flex items-center gap-2 rounded-md border border-border/40 bg-secondary/30 px-2 py-1.5 transition-colors",
-            "hover:bg-secondary/50",
+            "group flex items-center gap-2 rounded-md border px-2 py-1.5 transition-all",
+            "border-border/40 bg-secondary/30 hover:bg-secondary/50",
             active && "ring-1 ring-primary/50 bg-primary/5",
+            isPlatformActive && "border-primary/60 bg-primary/10 shadow-[0_0_12px_-2px_hsl(var(--primary)/0.45)]",
           )}
           style={{ marginLeft: depth * 12 }}
         >
@@ -243,7 +265,7 @@ export function HierarchicalOrdersView<R extends HierarchyRecord>({
             <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", isOpen && "rotate-90")} />
           </button>
 
-          <span className="flex-1 truncate text-xs font-medium" title={node.label}>
+          <span className={cn("flex-1 truncate text-xs font-medium", isPlatformActive && "text-primary")} title={node.label}>
             {node.label}
           </span>
 
@@ -264,6 +286,24 @@ export function HierarchicalOrdersView<R extends HierarchyRecord>({
           <span className={cn("text-[10px] font-medium", STATUS_STYLE[groupStatus])}>
             {STATUS_LABEL[groupStatus]}
           </span>
+
+          {isPlatform && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); togglePlatformActive(platformKey); }}
+              className={cn(
+                "flex h-5 w-5 shrink-0 items-center justify-center rounded-sm transition-opacity",
+                isPlatformActive
+                  ? "opacity-100 text-primary"
+                  : "opacity-0 group-hover:opacity-60 hover:!opacity-100 hover:text-primary",
+              )}
+              title={isPlatformActive ? "Plataforma ativa — clique para desativar" : "Marcar plataforma como ativa"}
+              aria-label="Alternar plataforma ativa"
+              aria-pressed={isPlatformActive}
+            >
+              <Power className="h-3 w-3" />
+            </button>
+          )}
 
           {onView && (
             <button

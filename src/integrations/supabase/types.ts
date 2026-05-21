@@ -3400,6 +3400,7 @@ export type Database = {
           client_name: string | null
           code: string
           color: string | null
+          commercial_status: string | null
           created_at: string
           created_by: string
           delivered_at: string | null
@@ -3427,6 +3428,7 @@ export type Database = {
           client_name?: string | null
           code: string
           color?: string | null
+          commercial_status?: string | null
           created_at?: string
           created_by?: string
           delivered_at?: string | null
@@ -3454,6 +3456,7 @@ export type Database = {
           client_name?: string | null
           code?: string
           color?: string | null
+          commercial_status?: string | null
           created_at?: string
           created_by?: string
           delivered_at?: string | null
