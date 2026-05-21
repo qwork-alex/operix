@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode, useRef } fro
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { logSecurityEvent } from "@/lib/securityLog";
+import { registerCurrentDevice } from "@/lib/deviceFingerprint";
 
 interface AuthContextType {
   session: Session | null;
