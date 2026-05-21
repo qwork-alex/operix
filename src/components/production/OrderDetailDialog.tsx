@@ -128,8 +128,18 @@ export function OrderDetailDialog({ order, onClose }: Props) {
             </div>
           </TabsContent>
 
-          <TabsContent value="photos" className="pt-4">
-            <PhotoUploader orderId={order.id} />
+          <TabsContent value="photos" className="pt-4 space-y-6">
+            <section className="space-y-2">
+              <h4 className="text-sm font-semibold text-foreground">Antes do Serviço</h4>
+              <p className="text-xs text-muted-foreground">Registo inicial do veículo antes da intervenção.</p>
+              <PhotoUploader orderId={order.id} fixedCategory="before" hideOthers />
+            </section>
+            <div className="h-px bg-border/60" />
+            <section className="space-y-2">
+              <h4 className="text-sm font-semibold text-foreground">Depois do Serviço</h4>
+              <p className="text-xs text-muted-foreground">Resultado final para comparação visual.</p>
+              <PhotoUploader orderId={order.id} fixedCategory="after" hideOthers />
+            </section>
           </TabsContent>
           <TabsContent value="timeline" className="pt-4">
             <OrderTimeline orderId={order.id} />
