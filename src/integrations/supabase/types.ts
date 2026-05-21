@@ -1232,6 +1232,7 @@ export type Database = {
           id: string
           invoice_id: string | null
           notified: boolean
+          notified_at: string | null
           stage: string
           triggered_at: string
           workspace_id: string
@@ -1241,6 +1242,7 @@ export type Database = {
           id?: string
           invoice_id?: string | null
           notified?: boolean
+          notified_at?: string | null
           stage: string
           triggered_at?: string
           workspace_id: string
@@ -1250,6 +1252,7 @@ export type Database = {
           id?: string
           invoice_id?: string | null
           notified?: boolean
+          notified_at?: string | null
           stage?: string
           triggered_at?: string
           workspace_id?: string
