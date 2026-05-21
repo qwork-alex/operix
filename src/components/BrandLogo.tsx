@@ -5,38 +5,35 @@ import { useWorkspace } from "@/hooks/useWorkspace";
 interface BrandLogoProps {
   size?: number;
   className?: string;
-  /** Override the source name (used in invoices/PDFs to inherit workspace branding). */
+  /** Override the source name (used in invoices/PDFs to inherit workspace name). */
   nameOverride?: string;
-  /** Force-skip uploaded logo and use auto-monogram instead. */
-  forceMonogram?: boolean;
-  /** Direct URL override (used in invoice PDF where company logo comes from props). */
-  logoUrlOverride?: string | null;
+  /** Optional explicit color override (used by print contexts). */
+  colorOverride?: string;
+  /** When true, ignores configured glow (useful for print/PDF). */
+  disableGlow?: boolean;
 }
 
 /**
- * Premium dynamic brand glyph.
- * - If the workspace uploaded a logo → renders it.
- * - Otherwise → generates an elegant gradient monogram from the first
- *   letter of the workspace / brand name (e.g. "Sanches Auto" → "S").
- * Respects user-configured color + glow from brand_config.
+ * Procedural brand glyph — letter-based, always generated.
+ *
+ * Rule: the logo is ALWAYS the first alphanumeric letter of the workspace
+ * (or override) name. No raster uploads, no images — pure vector/CSS render.
+ *
+ * Dynamically inherits brand color, glow and typography from `brand_config`.
  */
 export function BrandLogo({
   size = 32,
   className = "",
   nameOverride,
-  forceMonogram,
-  logoUrlOverride,
+  colorOverride,
+  disableGlow,
 }: BrandLogoProps) {
-  // Hooks must run unconditionally — they're cheap (cached via react-query).
-  const { logoUrl, brandConfig } = useCompanyLogo();
+  // Hooks must run unconditionally.
+  const { brandConfig } = useCompanyLogo();
   let workspaceName: string | null = null;
   try {
-    // useWorkspace can throw if outside provider (rare — auth screens).
     workspaceName = useWorkspace().workspaceName;
-  } catch { /* no workspace context */ }
-
-  const effectiveUrl =
-    logoUrlOverride !== undefined ? logoUrlOverride : logoUrl;
+  } catch { /* outside provider (e.g. auth screens) */ }
 
   const displayName =
     nameOverride ||
@@ -44,28 +41,11 @@ export function BrandLogo({
     workspaceName ||
     appBrand.appName;
 
-  // Show real logo when available
-  if (!forceMonogram && effectiveUrl) {
-    return (
-      <img
-        src={effectiveUrl}
-        alt={`${displayName} logo`}
-        width={size}
-        height={size}
-        decoding="sync"
-        loading="eager"
-        className={`shrink-0 object-contain bg-transparent ${className}`}
-        style={{ background: "transparent" }}
-      />
-    );
-  }
-
-  // Auto-monogram from first alphanumeric character
   const letter =
     (displayName.match(/[\p{L}\p{N}]/u)?.[0] || "Q").toUpperCase();
 
-  const accentColor = brandConfig?.color || undefined;
-  const glow = brandConfig?.glowIntensity ?? 0;
+  const accentColor = colorOverride || brandConfig?.color || undefined;
+  const glow = disableGlow ? 0 : (brandConfig?.glowIntensity ?? 0);
 
   return (
     <div
@@ -74,6 +54,7 @@ export function BrandLogo({
         width: size,
         height: size,
         fontSize: Math.round(size * 0.5),
+        fontFamily: brandConfig?.fontFamily || undefined,
         color: "hsl(var(--primary-foreground))",
         background: accentColor
           ? `linear-gradient(135deg, ${accentColor}, hsl(var(--accent)))`
