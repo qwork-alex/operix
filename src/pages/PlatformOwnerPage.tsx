@@ -332,6 +332,7 @@ function PaymentsTab() {
         </div>
       )}
     </Card>
+    </div>
   );
 }
 
