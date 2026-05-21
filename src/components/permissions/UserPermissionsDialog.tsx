@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { RotateCcw, Eye } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
-import { PermissionsMatrix, type PermissionRow } from "./PermissionsMatrix";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useInvalidatePermissions } from "@/hooks/usePermission";
 
 interface UserPermissionsDialogProps {
@@ -14,8 +14,29 @@ interface UserPermissionsDialogProps {
   onOpenChange: (open: boolean) => void;
   userId: string | null;
   userName?: string;
-  userRole?: string; // db role: admin/partner/technician/client
+  userRole?: string;
 }
+
+type PermissionRow = { id: string; module: string; action: string };
+
+/** Fixed module order + display labels (UI-only). */
+const MODULE_ORDER: { module: string; label: string }[] = [
+  { module: "dashboard", label: "Painel" },
+  { module: "service_orders", label: "Ordens de serviço" },
+  { module: "payment_orders", label: "Ordens de pagamento" },
+  { module: "financial", label: "Financeiro" },
+  { module: "fleet", label: "Frota" },
+  { module: "documents", label: "Documentos" },
+  { module: "users", label: "Usuários" },
+];
+
+const CORE_ACTIONS = ["view", "create", "edit", "delete"] as const;
+const ACTION_LABEL: Record<string, string> = {
+  view: "Ver",
+  create: "Criar",
+  edit: "Editar",
+  delete: "Apagar",
+};
 
 export function UserPermissionsDialog({
   open,
@@ -32,7 +53,7 @@ export function UserPermissionsDialog({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("permissions")
-        .select("id, module, action, label")
+        .select("id, module, action")
         .order("module")
         .order("action");
       if (error) throw error;
@@ -69,27 +90,23 @@ export function UserPermissionsDialog({
     enabled: open && !!userId,
   });
 
-  // Visibility flags (user_settings)
   const { data: settings } = useQuery({
     queryKey: ["user-settings", userId],
     queryFn: async () => {
       if (!userId) return null;
       const { data, error } = await supabase
         .from("user_settings")
-        .select("can_view_other_users, can_view_workspace_data")
+        .select("can_view_other_users")
         .eq("user_id", userId)
         .maybeSingle();
       if (error) throw error;
-      return (data ?? { can_view_other_users: false, can_view_workspace_data: false }) as {
-        can_view_other_users: boolean;
-        can_view_workspace_data: boolean;
-      };
+      return (data ?? { can_view_other_users: false }) as { can_view_other_users: boolean };
     },
     enabled: open && !!userId,
   });
 
   const updateSettingMutation = useMutation({
-    mutationFn: async (patch: Partial<{ can_view_other_users: boolean; can_view_workspace_data: boolean }>) => {
+    mutationFn: async (patch: { can_view_other_users: boolean }) => {
       if (!userId) return;
       const { error } = await supabase
         .from("user_settings")
@@ -99,48 +116,54 @@ export function UserPermissionsDialog({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["user-settings", userId] });
       invalidatePerms();
-      toast.success("Visibilidade atualizada");
     },
     onError: (err) => toast.error((err as Error).message),
   });
 
-  const inherited = useMemo(() => {
+  /** permission_id -> effective boolean (override wins, else role default) */
+  const effective = useMemo(() => {
     const map: Record<string, boolean> = {};
     for (const id of rolePerms) map[id] = true;
-    return map;
-  }, [rolePerms]);
-
-  const values = useMemo(() => {
-    const map: Record<string, boolean | null> = {};
     for (const o of overrides) map[o.permission_id] = o.allow;
     return map;
-  }, [overrides]);
+  }, [rolePerms, overrides]);
+
+  /** module -> { action -> permission row } */
+  const byModule = useMemo(() => {
+    const m: Record<string, Record<string, PermissionRow>> = {};
+    for (const p of permissions) {
+      if (!m[p.module]) m[p.module] = {};
+      m[p.module][p.action] = p;
+    }
+    return m;
+  }, [permissions]);
 
   const toggleMutation = useMutation({
-    mutationFn: async ({
-      permissionId,
-      next,
-    }: {
-      permissionId: string;
-      next: boolean | null;
-    }) => {
+    mutationFn: async ({ permissionId, next }: { permissionId: string; next: boolean }) => {
       if (!userId) return;
-      if (next === null) {
-        const { error } = await supabase
-          .from("user_permissions")
-          .delete()
-          .eq("user_id", userId)
-          .eq("permission_id", permissionId);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from("user_permissions")
-          .upsert(
-            { user_id: userId, permission_id: permissionId, allow: next },
-            { onConflict: "user_id,permission_id" },
-          );
-        if (error) throw error;
-      }
+      const { error } = await supabase
+        .from("user_permissions")
+        .upsert(
+          { user_id: userId, permission_id: permissionId, allow: next },
+          { onConflict: "user_id,permission_id" },
+        );
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-permissions", userId] });
+      invalidatePerms();
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+
+  const bulkToggleMutation = useMutation({
+    mutationFn: async ({ ids, next }: { ids: string[]; next: boolean }) => {
+      if (!userId || ids.length === 0) return;
+      const rows = ids.map((permission_id) => ({ user_id: userId, permission_id, allow: next }));
+      const { error } = await supabase
+        .from("user_permissions")
+        .upsert(rows, { onConflict: "user_id,permission_id" });
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["user-permissions", userId] });
@@ -152,21 +175,19 @@ export function UserPermissionsDialog({
   const resetAllMutation = useMutation({
     mutationFn: async () => {
       if (!userId) return;
-      const { error } = await supabase
-        .from("user_permissions")
-        .delete()
-        .eq("user_id", userId);
+      const { error } = await supabase.from("user_permissions").delete().eq("user_id", userId);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["user-permissions", userId] });
       invalidatePerms();
-      toast.success("Overrides removidos. O utilizador volta aos defaults da função.");
+      toast.success("Permissões repostas aos padrões da função.");
     },
     onError: (err) => toast.error((err as Error).message),
   });
 
   const isAdminUser = userRole === "admin";
+  const loading = loadingPerms || loadingOv;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -176,9 +197,7 @@ export function UserPermissionsDialog({
             <div>
               <div className="text-sm">Permissões — {userName || "Utilizador"}</div>
               <div className="text-[11px] text-muted-foreground font-normal mt-0.5">
-                Função: <span className="font-mono">{userRole || "—"}</span>
-                {" · "}
-                Os overrides têm prioridade sobre os defaults da função.
+                Função: <span className="font-mono">{userRole || "—"}</span> · Overrides têm prioridade sobre os padrões da função.
               </div>
             </div>
             {!isAdminUser && overrides.length > 0 && (
@@ -189,7 +208,7 @@ export function UserPermissionsDialog({
                 onClick={() => resetAllMutation.mutate()}
               >
                 <RotateCcw className="h-3 w-3 mr-1" />
-                Limpar overrides
+                Repor padrões
               </Button>
             )}
           </DialogTitle>
@@ -201,14 +220,9 @@ export function UserPermissionsDialog({
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Visibility flags */}
-            <div className="rounded-md border border-border bg-muted/30 p-3 space-y-3">
-              <div className="text-xs font-semibold text-foreground uppercase tracking-wide">
-                Visibilidade de dados
-              </div>
-
-
-              <label className="flex items-start gap-3 cursor-pointer">
+            {/* Visibility */}
+            <div className="rounded-lg border border-border bg-muted/30 p-3">
+              <label className="flex items-center gap-3 cursor-pointer">
                 <Switch
                   checked={!!settings?.can_view_other_users}
                   onCheckedChange={(v) => updateSettingMutation.mutate({ can_view_other_users: v })}
@@ -219,22 +233,76 @@ export function UserPermissionsDialog({
                     Ver outros utilizadores
                   </div>
                   <div className="text-[11px] text-muted-foreground">
-                    Permite listar outros utilizadores na página de gestão.
+                    Permite listar outros utilizadores do workspace atual.
                   </div>
                 </div>
               </label>
             </div>
 
-            <PermissionsMatrix
-              permissions={permissions}
-              values={values}
-              inherited={inherited}
-              isLoading={loadingPerms || loadingOv}
-              showInheritColumn
-              onToggle={(permissionId, next) =>
-                toggleMutation.mutate({ permissionId, next })
-              }
-            />
+            {loading ? (
+              <div className="space-y-2">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <Skeleton key={i} className="h-16 w-full" />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {MODULE_ORDER.map(({ module, label }) => {
+                  const actions = byModule[module];
+                  if (!actions) return null;
+                  const coreIds = CORE_ACTIONS
+                    .map((a) => actions[a]?.id)
+                    .filter(Boolean) as string[];
+                  if (coreIds.length === 0) return null;
+                  const allOn = coreIds.every((id) => effective[id]);
+
+                  return (
+                    <div
+                      key={module}
+                      className="rounded-lg border border-border/60 bg-background/40 p-3"
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="text-sm font-semibold text-foreground">{label}</div>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <span className="text-[11px] text-muted-foreground">Permissão total</span>
+                          <Switch
+                            checked={allOn}
+                            onCheckedChange={(v) =>
+                              bulkToggleMutation.mutate({ ids: coreIds, next: Boolean(v) })
+                            }
+                          />
+                        </label>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {CORE_ACTIONS.map((action) => {
+                          const perm = actions[action];
+                          if (!perm) return null;
+                          const on = !!effective[perm.id];
+                          return (
+                            <label
+                              key={perm.id}
+                              className={`flex items-center justify-between gap-2 px-3 py-2 rounded-md border transition-colors cursor-pointer ${
+                                on
+                                  ? "border-primary/40 bg-primary/5"
+                                  : "border-border/40 hover:bg-muted/30"
+                              }`}
+                            >
+                              <span className="text-xs">{ACTION_LABEL[action]}</span>
+                              <Switch
+                                checked={on}
+                                onCheckedChange={(v) =>
+                                  toggleMutation.mutate({ permissionId: perm.id, next: Boolean(v) })
+                                }
+                              />
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </DialogContent>
