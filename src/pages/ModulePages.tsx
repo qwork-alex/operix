@@ -29,7 +29,7 @@ import {
   Copy, Link, AlertTriangle, Shield,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { RolePermissionsManager } from "@/components/permissions/RolePermissionsManager";
+
 import { UserPermissionsDialog } from "@/components/permissions/UserPermissionsDialog";
 import { Can } from "@/components/Can";
 import { getCurrentUserId, logSaveError, logSavePayload } from "@/lib/authUser";
