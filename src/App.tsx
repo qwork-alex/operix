@@ -9,6 +9,7 @@ import { ThemeProvider } from "@/hooks/useTheme";
 import { RoleProvider } from "@/hooks/useRole";
 import { ImpersonationProvider } from "@/hooks/useImpersonation";
 import { WorkspaceProvider } from "@/hooks/useWorkspace";
+import { TenantProvider } from "@/contexts/TenantContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -82,6 +83,7 @@ const App = () => (
                       <ImpersonationProvider>
                       <WorkspaceProvider>
                       <RoleProvider>
+                      <TenantProvider>
                       <AppLayout>
                         <ErrorBoundary>
                           <Routes>
@@ -106,6 +108,7 @@ const App = () => (
                           </Routes>
                         </ErrorBoundary>
                       </AppLayout>
+                      </TenantProvider>
                       </RoleProvider>
                       </WorkspaceProvider>
                       </ImpersonationProvider>
