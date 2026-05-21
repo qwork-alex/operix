@@ -7,9 +7,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Save, Trash2 } from "lucide-react";
+import { Save, Trash2, Lock } from "lucide-react";
 import {
-  useProductionOrders, PRODUCTION_STATUSES, PRIORITY_META,
+  useProductionOrders, PRODUCTION_STATUSES, PRIORITY_META, isOrderLocked,
   type ProductionOrder, type ProductionStatus, type ProductionPriority,
 } from "@/hooks/useProductionOrders";
 import { PhotoUploader } from "./PhotoUploader";
@@ -24,12 +24,16 @@ export function OrderDetailDialog({ order, onClose }: Props) {
   const { update, remove, create } = useProductionOrders();
   const [form, setForm] = useState<Partial<ProductionOrder>>({});
   const isNew = order?.id === "__new__";
+  const locked = !isNew && isOrderLocked(order?.status);
 
   useEffect(() => { setForm(order ?? {}); }, [order]);
 
   if (!order) return null;
 
-  const set = <K extends keyof ProductionOrder>(k: K, v: ProductionOrder[K]) => setForm(f => ({ ...f, [k]: v }));
+  const set = <K extends keyof ProductionOrder>(k: K, v: ProductionOrder[K]) => {
+    if (locked) return;
+    setForm(f => ({ ...f, [k]: v }));
+  };
 
   const save = async () => {
     if (isNew) {
