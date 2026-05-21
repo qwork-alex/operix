@@ -13,6 +13,7 @@ import {
   type ProductionOrder, type ProductionStatus, type ProductionPriority,
 } from "@/hooks/useProductionOrders";
 import { useAssignableUsers } from "@/hooks/useAssignableUsers";
+import { useProductionPhotos, PHOTO_CATEGORIES } from "@/hooks/useProductionPhotos";
 import { PhotoUploader } from "./PhotoUploader";
 import { OrderTimeline } from "./OrderTimeline";
 
