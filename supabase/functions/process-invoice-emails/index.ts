@@ -35,13 +35,44 @@ async function dispatchOne(admin: ReturnType<typeof db>, row: any) {
     pdfUrl = signed?.signedUrl ?? null;
   }
 
-  const subject = `Invoice ${inv?.invoice_number ?? row.invoice_id}`;
-  const message =
-    `Your invoice ${inv?.invoice_number ?? ""} is available.\n` +
-    `Issue date: ${inv?.issue_date ?? ""}\n` +
-    (inv?.due_date ? `Due date: ${inv.due_date}\n` : "") +
-    `Total: ${inv?.total ?? ""} ${inv?.currency ?? "EUR"}\n` +
-    (pdfUrl ? `\nDownload: ${pdfUrl}\n` : "");
+  const tpl: string = row.template ?? "invoice-issued";
+  const num = inv?.invoice_number ?? row.invoice_id;
+  const total = `${inv?.total ?? ""} ${inv?.currency ?? "EUR"}`;
+
+  let subject: string;
+  let message: string;
+  let kind = "initial";
+
+  switch (tpl) {
+    case "dunning-reminder":
+      subject = `Friendly reminder · invoice ${num}`;
+      message = `This is a friendly reminder that invoice ${num} (${total}) is past due. Please settle at your earliest convenience.\n` + (pdfUrl ? `\nDownload: ${pdfUrl}\n` : "");
+      kind = "reminder";
+      break;
+    case "dunning-warning":
+      subject = `Payment overdue · invoice ${num}`;
+      message = `Invoice ${num} (${total}) remains unpaid. Continued non-payment may limit your service access.\n` + (pdfUrl ? `\nDownload: ${pdfUrl}\n` : "");
+      kind = "warning";
+      break;
+    case "dunning-limited_mode":
+      subject = `Service limited · invoice ${num}`;
+      message = `Your workspace has been moved to limited mode due to unpaid invoice ${num} (${total}). Settle to restore full access.\n` + (pdfUrl ? `\nDownload: ${pdfUrl}\n` : "");
+      kind = "risk";
+      break;
+    case "dunning-suspension":
+      subject = `Workspace suspended · invoice ${num}`;
+      message = `Your workspace has been suspended due to unpaid invoice ${num} (${total}). Please contact billing or settle the invoice to reactivate.\n` + (pdfUrl ? `\nDownload: ${pdfUrl}\n` : "");
+      kind = "suspension";
+      break;
+    default:
+      subject = `Invoice ${num}`;
+      message =
+        `Your invoice ${num} is available.\n` +
+        `Issue date: ${inv?.issue_date ?? ""}\n` +
+        (inv?.due_date ? `Due date: ${inv.due_date}\n` : "") +
+        `Total: ${total}\n` +
+        (pdfUrl ? `\nDownload: ${pdfUrl}\n` : "");
+  }
 
   // Try the existing send-invoice-email function (decoupled provider adapter)
   try {
@@ -52,9 +83,10 @@ async function dispatchOne(admin: ReturnType<typeof db>, row: any) {
         subject,
         message,
         idempotencyKey: `inv-email-${row.id}`,
-        kind: "initial",
+        kind,
       },
     });
+
     if (r.error) throw r.error;
     return { ok: true };
   } catch (e) {
