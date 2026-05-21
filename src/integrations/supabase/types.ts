@@ -2238,6 +2238,193 @@ export type Database = {
         }
         Relationships: []
       }
+      platform_bank_accounts: {
+        Row: {
+          account_name: string
+          account_type: string
+          active: boolean
+          bank_name: string
+          bic: string | null
+          country: string
+          created_at: string
+          currency: string
+          iban: string | null
+          id: string
+          is_primary: boolean
+          notes: string | null
+          supported_methods: string[]
+          updated_at: string
+        }
+        Insert: {
+          account_name: string
+          account_type?: string
+          active?: boolean
+          bank_name: string
+          bic?: string | null
+          country?: string
+          created_at?: string
+          currency?: string
+          iban?: string | null
+          id?: string
+          is_primary?: boolean
+          notes?: string | null
+          supported_methods?: string[]
+          updated_at?: string
+        }
+        Update: {
+          account_name?: string
+          account_type?: string
+          active?: boolean
+          bank_name?: string
+          bic?: string | null
+          country?: string
+          created_at?: string
+          currency?: string
+          iban?: string | null
+          id?: string
+          is_primary?: boolean
+          notes?: string | null
+          supported_methods?: string[]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      platform_invoice_items: {
+        Row: {
+          amount: number
+          created_at: string
+          description: string
+          id: string
+          invoice_id: string
+          quantity: number
+          sort_order: number
+          unit_price: number
+          vat_rate: number
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          description: string
+          id?: string
+          invoice_id: string
+          quantity?: number
+          sort_order?: number
+          unit_price?: number
+          vat_rate?: number
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          description?: string
+          id?: string
+          invoice_id?: string
+          quantity?: number
+          sort_order?: number
+          unit_price?: number
+          vat_rate?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_invoice_items_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "platform_invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      platform_invoices: {
+        Row: {
+          created_at: string
+          currency: string
+          customer_address: Json | null
+          customer_country: string | null
+          customer_is_business: boolean
+          customer_name: string | null
+          customer_vat_number: string | null
+          cycle_id: string | null
+          due_date: string
+          id: string
+          invoice_number: string
+          issue_date: string
+          metadata: Json
+          paid_at: string | null
+          pdf_url: string | null
+          status: string
+          subscription_id: string | null
+          subtotal: number
+          total: number
+          updated_at: string
+          vat_amount: number
+          vat_exemption_reason: string | null
+          vat_rate: number
+          vat_reverse_charge: boolean
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          currency?: string
+          customer_address?: Json | null
+          customer_country?: string | null
+          customer_is_business?: boolean
+          customer_name?: string | null
+          customer_vat_number?: string | null
+          cycle_id?: string | null
+          due_date?: string
+          id?: string
+          invoice_number: string
+          issue_date?: string
+          metadata?: Json
+          paid_at?: string | null
+          pdf_url?: string | null
+          status?: string
+          subscription_id?: string | null
+          subtotal?: number
+          total?: number
+          updated_at?: string
+          vat_amount?: number
+          vat_exemption_reason?: string | null
+          vat_rate?: number
+          vat_reverse_charge?: boolean
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          customer_address?: Json | null
+          customer_country?: string | null
+          customer_is_business?: boolean
+          customer_name?: string | null
+          customer_vat_number?: string | null
+          cycle_id?: string | null
+          due_date?: string
+          id?: string
+          invoice_number?: string
+          issue_date?: string
+          metadata?: Json
+          paid_at?: string | null
+          pdf_url?: string | null
+          status?: string
+          subscription_id?: string | null
+          subtotal?: number
+          total?: number
+          updated_at?: string
+          vat_amount?: number
+          vat_exemption_reason?: string | null
+          vat_rate?: number
+          vat_reverse_charge?: boolean
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_invoices_cycle_id_fkey"
+            columns: ["cycle_id"]
+            isOneToOne: false
+            referencedRelation: "platform_subscription_cycles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       platform_owners: {
         Row: {
           created_at: string
@@ -2256,6 +2443,216 @@ export type Database = {
           email?: string
           notes?: string | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      platform_payment_methods: {
+        Row: {
+          code: string
+          config: Json
+          created_at: string
+          display_order: number
+          enabled: boolean
+          id: string
+          label: string
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          config?: Json
+          created_at?: string
+          display_order?: number
+          enabled?: boolean
+          id?: string
+          label: string
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          config?: Json
+          created_at?: string
+          display_order?: number
+          enabled?: boolean
+          id?: string
+          label?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      platform_subscription_cycles: {
+        Row: {
+          amount: number
+          created_at: string
+          currency: string
+          id: string
+          invoice_id: string | null
+          period_end: string
+          period_start: string
+          status: string
+          subscription_id: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          invoice_id?: string | null
+          period_end: string
+          period_start: string
+          status?: string
+          subscription_id?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          invoice_id?: string | null
+          period_end?: string
+          period_start?: string
+          status?: string
+          subscription_id?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      platform_subscription_payments: {
+        Row: {
+          amount: number
+          bank_account_id: string | null
+          created_at: string
+          currency: string
+          cycle_id: string | null
+          error_message: string | null
+          external_ref: string | null
+          id: string
+          invoice_id: string | null
+          metadata: Json
+          method: string
+          processed_at: string | null
+          status: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          amount: number
+          bank_account_id?: string | null
+          created_at?: string
+          currency?: string
+          cycle_id?: string | null
+          error_message?: string | null
+          external_ref?: string | null
+          id?: string
+          invoice_id?: string | null
+          metadata?: Json
+          method?: string
+          processed_at?: string | null
+          status?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          amount?: number
+          bank_account_id?: string | null
+          created_at?: string
+          currency?: string
+          cycle_id?: string | null
+          error_message?: string | null
+          external_ref?: string | null
+          id?: string
+          invoice_id?: string | null
+          metadata?: Json
+          method?: string
+          processed_at?: string | null
+          status?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_subscription_payments_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "platform_bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "platform_subscription_payments_cycle_id_fkey"
+            columns: ["cycle_id"]
+            isOneToOne: false
+            referencedRelation: "platform_subscription_cycles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      platform_vat_rules: {
+        Row: {
+          country: string
+          created_at: string
+          eu_member: boolean
+          id: string
+          notes: string | null
+          reverse_charge_when_business: boolean
+          standard_rate: number
+          updated_at: string
+        }
+        Insert: {
+          country: string
+          created_at?: string
+          eu_member?: boolean
+          id?: string
+          notes?: string | null
+          reverse_charge_when_business?: boolean
+          standard_rate?: number
+          updated_at?: string
+        }
+        Update: {
+          country?: string
+          created_at?: string
+          eu_member?: boolean
+          id?: string
+          notes?: string | null
+          reverse_charge_when_business?: boolean
+          standard_rate?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      platform_webhook_events: {
+        Row: {
+          attempts: number
+          created_at: string
+          event_type: string
+          id: string
+          last_error: string | null
+          payload: Json
+          processed_at: string | null
+          status: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          event_type: string
+          id?: string
+          last_error?: string | null
+          payload?: Json
+          processed_at?: string | null
+          status?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          event_type?: string
+          id?: string
+          last_error?: string | null
+          payload?: Json
+          processed_at?: string | null
+          status?: string
         }
         Relationships: []
       }
@@ -3682,6 +4079,10 @@ export type Database = {
         }
         Returns: number
       }
+      calculate_vat: {
+        Args: { _country: string; _is_business?: boolean; _vat_number?: string }
+        Returns: Json
+      }
       can_access_client: {
         Args: { _client_id: string; _user_id: string }
         Returns: boolean
@@ -3725,6 +4126,10 @@ export type Database = {
           _workspace_id: string
         }
         Returns: undefined
+      }
+      emit_platform_webhook_event: {
+        Args: { _event_type: string; _payload?: Json }
+        Returns: string
       }
       get_my_role: { Args: never; Returns: string }
       get_my_technician_id: { Args: never; Returns: string }
@@ -3827,6 +4232,7 @@ export type Database = {
         }
         Returns: string
       }
+      next_platform_invoice_number: { Args: never; Returns: string }
       owner_filter_uids: { Args: { _uid: string }; Returns: string[] }
       payment_order_has_active_billing: {
         Args: { _op_id: string }
