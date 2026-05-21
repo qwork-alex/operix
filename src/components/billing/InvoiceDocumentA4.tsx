@@ -215,7 +215,7 @@ export function InvoiceDocumentA4({
   const companyAddr  = company?.address || "";
   const companySiret = company?.siret || "";
   const companyTva   = company?.tva_number || "";
-  const companyLogo  = company?.logo_url || brandLogo;
+  // Procedural letter-based branding — no raster logos.
   const companyPhone = (company as any)?.phone || "";
   const companyEmail = (company as any)?.email || "";
   const companyIban  = (company as any)?.bank_iban || form.bank_iban || "";
