@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Send, X, Wifi, WifiOff, MapPin, AlertTriangle, CheckCircle2, Info,
-  Mic, Paperclip, Sparkles, Activity, ArrowRight,
+  Mic, Paperclip, Sparkles, Activity, ArrowRight, MessageSquare, Stethoscope,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -12,6 +12,9 @@ import { useOperationalSignals, type SignalLevel } from "@/hooks/useOperationalS
 import { deriveSuggestions, localReply } from "@/lib/agentRules";
 import { dispatchAgentAction, AGENT_NAV_EVENT, type AgentAction } from "@/lib/agentActions";
 import { loadPersistedAgentEvents } from "@/lib/operationalObserver";
+import { captureScreenshot } from "@/lib/screenshotCapture";
+import { AgentDiagnosticsView } from "./AgentDiagnosticsView";
+
 
 interface Msg {
   id: string;
