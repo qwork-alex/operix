@@ -16,6 +16,7 @@ import { useNotifications } from "@/hooks/useNotifications";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { AIControlCenter } from "./AIControlCenter";
 
 const typeIcon: Record<string, typeof Info> = {
   service_order: FileText,
@@ -179,6 +180,9 @@ export function TopBar() {
             </ScrollArea>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/* AI Control Center — fixed operational copilot between notifications and profile */}
+        <AIControlCenter />
 
         {/* User avatar + profile menu */}
         <DropdownMenu>

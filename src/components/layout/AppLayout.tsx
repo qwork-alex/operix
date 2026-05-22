@@ -6,8 +6,7 @@ import { ImpersonationBanner } from "./ImpersonationBanner";
 import { AppFooter } from "./AppFooter";
 import { ConsentGate } from "@/components/legal/ConsentGate";
 import { AccessStateBanner } from "@/components/billing/AccessStateBanner";
-import { AIProvider, AIPresenceLayer } from "@/agents/ai";
-import { ConversationBubble, AGENT_OPEN_REQUEST_EVENT } from "@/agents/conversation";
+import { AIProvider } from "@/agents/ai";
 import { useOperationalBusBoot } from "@/hooks/useOperationalBusBoot";
 import { useAgentRuntimeBoot } from "@/hooks/useAgentRuntimeBoot";
 import { useVirtualEngineerBoot } from "@/hooks/useVirtualEngineerBoot";
@@ -37,13 +36,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               </main>
               <AppFooter />
             </div>
-            {/* Single global AI entity — replaces FloatingAgent + PresenceOverlay + CharacterLayer */}
-            <AIPresenceLayer />
-            <ConversationBubble
-              onOpenDiagnostic={() =>
-                window.dispatchEvent(new CustomEvent(AGENT_OPEN_REQUEST_EVENT))
-              }
-            />
+            {/* AI is now a fixed control-center in the TopBar — no floating overlays */}
           </div>
         </AIProvider>
       </SidebarProvider>
