@@ -258,15 +258,21 @@ export default function AgentPanel({ onClose }: Props) {
         "fixed z-[59] flex flex-col overflow-hidden text-white",
         "border border-[hsl(195_100%_60%/0.18)]",
         "shadow-[0_20px_60px_-20px_hsl(220_90%_5%/0.85),0_0_0_1px_hsl(195_100%_60%/0.1)]",
-        "backdrop-blur-2xl bg-[hsl(220_50%_4%/0.92)] rounded-2xl",
-        // Mobile: contextual sheet below top bar
-        "inset-x-2 top-16 max-h-[calc(100vh-5rem)]",
+        "backdrop-blur-2xl bg-[hsl(220_50%_4%/0.92)]",
+        // Mobile: bottom sheet — full width, rounded top, slides up from bottom
+        "inset-x-0 bottom-0 max-h-[85vh] rounded-t-2xl pb-[env(safe-area-inset-bottom)]",
+        "animate-in slide-in-from-bottom duration-300 ease-out",
         // Desktop: contextual popover anchored under the AI button (top-right)
-        "md:inset-x-auto md:right-4 md:top-16 md:w-[360px] md:max-h-[70vh]",
-        "animate-in fade-in zoom-in-95 slide-in-from-top-2 duration-200 ease-out",
+        "md:inset-x-auto md:bottom-auto md:right-4 md:top-16 md:w-[380px] md:max-h-[70vh] md:rounded-2xl",
+        "md:animate-in md:fade-in md:zoom-in-95 md:slide-in-from-top-2 md:duration-200",
       )}
       style={{ transformOrigin: `top right` }}
     >
+      {/* Mobile drag handle */}
+      <div className="md:hidden flex justify-center pt-2 pb-1 shrink-0">
+        <div className="h-1 w-10 rounded-full bg-white/20" />
+      </div>
+
       {/* HUD grid overlay */}
       <div className="absolute inset-0 agent-hud-grid opacity-40 pointer-events-none" />
       <div
