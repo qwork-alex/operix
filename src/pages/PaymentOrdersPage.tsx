@@ -1,5 +1,7 @@
 import { useState, useCallback, useMemo } from "react";
-import { Wallet, ClipboardList } from "lucide-react";
+import { Wallet, ClipboardList, FolderTree } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import {
   HierarchyExplorer,
   applyHierarchyContext,
@@ -60,6 +62,11 @@ export default function PaymentOrdersPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     try { return localStorage.getItem("hierarchy.payment_orders.collapsed") === "1"; } catch { return false; }
   });
+  const [treeOpen, setTreeOpen] = useState(false);
+  const handleHierarchyContextChange = (ctx: HierarchyContext) => {
+    setHCtx(ctx);
+    setTreeOpen(false);
+  };
   const visibleOrders = useMemo(
     () => applyHierarchyContext(orders as any[], hCtx),
     [orders, hCtx],
@@ -260,13 +267,29 @@ export default function PaymentOrdersPage() {
             <p className="text-[11px] text-muted-foreground truncate">{t("po.subtitle") || "Validação e conciliação documental de pagamentos"}</p>
           </div>
         </div>
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 md:flex md:items-center">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 md:flex md:items-center">
+          <Button variant="outline" size="icon" className="h-11 w-11 md:hidden" onClick={() => setTreeOpen(true)} aria-label="Abrir contexto operacional">
+            <FolderTree className="h-4 w-4" />
+          </Button>
           <ContextualWorkspacePicker ctx={ctxWs} />
           <Can permission="payment_orders.create">
             <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} compact />
           </Can>
         </div>
       </header>
+
+      <Sheet open={treeOpen} onOpenChange={setTreeOpen}>
+        <SheetContent side="left" className="w-[min(22rem,calc(100vw-1rem))] p-0">
+          <HierarchyExplorer
+            records={orders as any}
+            storageKey="hierarchy.payment_orders"
+            context={hCtx}
+            onContextChange={handleHierarchyContextChange}
+            weekIcon={ClipboardList}
+            onDeleteYear={handleDeleteYear}
+          />
+        </SheetContent>
+      </Sheet>
 
       <div className="flex min-h-0 w-full flex-1 gap-3 overflow-visible md:overflow-hidden">
         <aside
