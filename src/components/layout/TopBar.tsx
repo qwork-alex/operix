@@ -88,18 +88,18 @@ export function TopBar() {
               )}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="bg-card border-border w-80">
+          <DropdownMenuContent align="end" className="z-[1002] bg-card border-border w-[calc(100vw-1.5rem)] max-w-80">
             <div className="flex items-center justify-between px-3 py-2">
               <span className="text-sm font-semibold text-foreground">{t("notif.title")}</span>
               <div className="flex gap-1">
                 {unreadCount > 0 && (
-                  <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px]" onClick={() => markAllRead()}>
+                    <Button variant="ghost" size="sm" className="min-h-9 md:min-h-6 px-2 text-[10px]" onClick={() => markAllRead()}>
                     <Check className="h-3 w-3 mr-1" />
                     {t("notif.markAllRead")}
                   </Button>
                 )}
                 {notifications.length > 0 && (
-                  <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px] text-destructive" onClick={() => clearAll()}>
+                    <Button variant="ghost" size="sm" className="min-h-9 md:min-h-6 px-2 text-[10px] text-destructive" onClick={() => clearAll()}>
                     <Trash2 className="h-3 w-3" />
                   </Button>
                 )}
