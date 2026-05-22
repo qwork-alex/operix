@@ -56,16 +56,13 @@ export function useOperationalKpis() {
 
   useEffect(() => {
     if (!workspaceId) return;
-    const ch = supabase
-      .channel(`op-kpis-${workspaceId}-${Math.random().toString(36).slice(2, 8)}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "platforms" },
-        () => qc.invalidateQueries({ queryKey: ["operational-kpis", workspaceId] }))
-      .on("postgres_changes", { event: "*", schema: "public", table: "ai_alerts" },
-        () => qc.invalidateQueries({ queryKey: ["operational-kpis", workspaceId] }))
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "service_orders" },
-        () => qc.invalidateQueries({ queryKey: ["operational-kpis", workspaceId] }))
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    const invalidate = () => qc.invalidateQueries({ queryKey: ["operational-kpis", workspaceId] });
+    const offs = [
+      RealtimeHub.subscribe({ table: "platforms", workspaceId }, invalidate),
+      RealtimeHub.subscribe({ table: "ai_alerts", workspaceId }, invalidate),
+      RealtimeHub.subscribe({ table: "service_orders", event: "INSERT", workspaceId }, invalidate),
+    ];
+    return () => { offs.forEach((off) => off()); };
   }, [workspaceId, qc]);
 
   return query;
