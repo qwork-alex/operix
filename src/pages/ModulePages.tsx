@@ -1394,7 +1394,7 @@ export function UsersPage() {
           {isAdmin && (
            <Dialog open={showCreate} onOpenChange={(v) => { if (!v) closeCreateDialog(); else setShowCreate(true); }}>
              <DialogTrigger asChild>
-               <Button size="sm"><Plus className="h-4 w-4 mr-1" />Adicionar usuário</Button>
+               <Button size="sm" variant="outline" className="h-8 px-3 text-xs font-medium"><Plus className="h-3.5 w-3.5 mr-1" />Novo</Button>
              </DialogTrigger>
             <DialogContent className="bg-card border-border">
               <DialogHeader><DialogTitle>Criar novo usuário</DialogTitle></DialogHeader>

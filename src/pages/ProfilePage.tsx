@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { User, Save, Loader2 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
+import { User, Save, Loader2, FolderOpen } from "lucide-react";
 import { AvatarCard } from "@/components/settings/AvatarCard";
 import { CompanyDataCard } from "@/components/settings/CompanyDataCard";
 import { useUserProfile } from "@/hooks/useUserProfile";
@@ -12,6 +14,7 @@ import { COUNTRIES } from "@/lib/countries";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { LoadingState } from "@/components/shared/LoadingState";
 import { PrivacyAndSessionsCard } from "@/components/settings/PrivacyAndSessionsCard";
+import { useCan } from "@/hooks/usePermission";
 
 interface AddrParts { street_number: string; street_name: string; postal_code: string; city: string; country: string; }
 const EMPTY_ADDR: AddrParts = { street_number: "", street_name: "", postal_code: "", city: "", country: "" };
@@ -41,6 +44,8 @@ function joinAddress(a: AddrParts): string {
 
 export default function ProfilePage() {
   const { profile, isLoading, save } = useUserProfile();
+  const { can } = useCan();
+  const canViewDocs = can("documents", "view").allowed;
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [addr, setAddr] = useState<AddrParts>(EMPTY_ADDR);
@@ -55,9 +60,24 @@ export default function ProfilePage() {
 
   const setA = <K extends keyof AddrParts>(k: K, v: AddrParts[K]) => setAddr((p) => ({ ...p, [k]: v }));
 
+  const headerActions = canViewDocs ? (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button asChild size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+            <Link to="/documents" aria-label="Documentos">
+              <FolderOpen className="h-4 w-4" />
+            </Link>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="left">Documentos</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  ) : undefined;
+
   return (
     <div className="module-shell">
-      <PageHeader icon={User} title="Perfil" subtitle="Dados da empresa e perfil pessoal" />
+      <PageHeader icon={User} title="Perfil" subtitle="Dados da empresa e perfil pessoal" actions={headerActions} />
 
       {/* SECTION 1 — Company data */}
       <CompanyDataCard />
