@@ -23,13 +23,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
     <ConsentGate>
       <SidebarProvider>
         <AIProvider>
-          <div className="min-h-screen flex w-full bg-background">
+          <div className="min-h-svh flex w-full bg-background overflow-hidden">
             <AppSidebar />
-            <div className="flex-1 flex flex-col min-w-0 max-w-full overflow-hidden">
+            <div className="flex-1 flex min-h-svh flex-col min-w-0 max-w-full overflow-hidden">
               <ImpersonationBanner />
               <TopBar />
-              <main className="flex-1 overflow-x-hidden overflow-y-auto p-3 sm:p-4 md:p-6 min-w-0 max-w-full">
-                <div className="min-w-0 max-w-full w-full space-y-3 sm:space-y-4">
+              <main className="flex-1 min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:px-4 sm:py-4 md:px-6 md:py-6 min-w-0 max-w-full">
+                <div className="min-w-0 max-w-full w-full space-y-4 md:space-y-6">
                   <AccessStateBanner />
                   {children}
                 </div>
