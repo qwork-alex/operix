@@ -181,6 +181,9 @@ export function TopBar() {
           </DropdownMenuContent>
         </DropdownMenu>
 
+        {/* AI Control Center — fixed operational copilot between notifications and profile */}
+        <AIControlCenter />
+
         {/* User avatar + profile menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
