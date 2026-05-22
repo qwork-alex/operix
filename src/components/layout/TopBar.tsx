@@ -187,7 +187,7 @@ export function TopBar() {
         {/* User avatar + profile menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="ml-2 flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-semibold hover:bg-primary/30 transition-colors overflow-hidden">
+            <button className="ml-1 sm:ml-2 flex h-10 w-10 md:h-8 md:w-8 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-semibold hover:bg-primary/30 transition-colors overflow-hidden">
               {avatarUrl ? (
                 <img src={avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
               ) : (
@@ -195,7 +195,7 @@ export function TopBar() {
               )}
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="bg-card border-border w-56">
+          <DropdownMenuContent align="end" className="z-[1002] bg-card border-border w-56 max-w-[calc(100vw-1.5rem)]">
             <div className="px-3 py-2">
               <p className="text-sm font-medium text-foreground truncate">
                 {workspaceName && workspaceName.toLowerCase() !== "default workspace" ? workspaceName : (profile?.full_name || t("common.user"))}
