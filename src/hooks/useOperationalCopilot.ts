@@ -5,7 +5,7 @@
  *
  * No UI is rendered. Surfaces opt in by calling this hook.
  */
-import { useEffect } from "react";
+
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useWorkspace } from "@/hooks/useWorkspace";
@@ -211,17 +211,6 @@ export function useOperationalCopilot(opts: UseOperationalCopilotOptions = {}) {
     },
   });
 
-  // Re-publish to subscribers even when TanStack returns from cache.
-  useEffect(() => {
-    if (query.data) OperationalCopilot.ingest({
-      ...({} as CopilotDataset),
-      // We intentionally do NOT re-ingest here on cached reads to avoid
-      // double-computation; subscribers already received the snapshot when
-      // the queryFn ran.
-    } as any);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   return {
     snapshot: query.data ?? null,
     isLoading: query.isLoading,
@@ -230,3 +219,4 @@ export function useOperationalCopilot(opts: UseOperationalCopilotOptions = {}) {
     refresh: () => query.refetch(),
   };
 }
+
