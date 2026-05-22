@@ -443,17 +443,18 @@ export default function AgentPanel({ onClose }: Props) {
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
           }}
-          placeholder="Fale com o agente…"
+          placeholder={busy ? "A pensar…" : "Fale com o agente…"}
+          disabled={busy}
           className={cn(
             "flex-1 resize-none bg-[hsl(220_50%_8%)] border border-[hsl(195_100%_60%/0.2)] rounded-md",
             "px-3 py-2 text-sm text-white placeholder:text-white/30",
             "focus:outline-none focus:ring-2 focus:ring-[hsl(195_100%_60%/0.4)] focus:border-[hsl(195_100%_60%/0.5)]",
-            "max-h-32",
+            "max-h-32 disabled:opacity-60",
           )}
         />
         <button
           onClick={handleSend}
-          disabled={!input.trim()}
+          disabled={!input.trim() || busy}
           aria-label="Enviar"
           className={cn(
             "h-9 w-9 shrink-0 rounded-md flex items-center justify-center",
