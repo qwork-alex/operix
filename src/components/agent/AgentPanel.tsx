@@ -237,6 +237,13 @@ export default function AgentPanel({ onClose }: Props) {
     : worst === "warn" ? "from-[hsl(30_70%_18%/0.85)] to-[hsl(220_60%_8%/0.95)]"
     : "from-[hsl(210_70%_14%/0.9)] to-[hsl(220_60%_6%/0.97)]";
 
+  // Emerge from the robot's actual screen position — single identity,
+  // no "panel slides in from the right" feel.
+  const robotCx = aiSnap.position.x + AGENT_OVERLAY_SIZE / 2;
+  const robotCy = aiSnap.position.y + AGENT_OVERLAY_SIZE / 2;
+  const originX = `${Math.round(robotCx)}px`;
+  const originY = `${Math.round(robotCy)}px`;
+
   return (
     <div
       role="dialog"
@@ -251,8 +258,9 @@ export default function AgentPanel({ onClose }: Props) {
         // Desktop: tall side dock
         "md:inset-y-4 md:right-4 md:bottom-auto md:top-auto md:max-h-none md:h-[calc(100vh-2rem)]",
         "md:w-[420px] md:rounded-2xl md:inset-x-auto",
-        "animate-in fade-in slide-in-from-right-4 duration-200",
+        "animate-in fade-in zoom-in-95 duration-300 ease-out",
       )}
+      style={{ transformOrigin: `${originX} ${originY}` }}
     >
       {/* HUD grid overlay */}
       <div className="absolute inset-0 agent-hud-grid opacity-40 pointer-events-none" />
