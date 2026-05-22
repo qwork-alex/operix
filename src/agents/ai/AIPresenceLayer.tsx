@@ -59,9 +59,8 @@ export function AIPresenceLayer() {
       originY: position.y,
       moved: false,
       longPressTimer: window.setTimeout(() => {
-        // Long press releases the pin
+        // Long press releases the pin and lets the robot roam again
         movementOrchestrator.setPinned(false);
-        // tiny haptic-style nudge
         if (dragState.current) dragState.current.moved = true;
       }, LONG_PRESS_MS),
     };
@@ -80,10 +79,9 @@ export function AIPresenceLayer() {
         window.clearTimeout(d.longPressTimer);
         d.longPressTimer = null;
       }
+      movementOrchestrator.beginDrag();
     }
-    const nextX = Math.max(8, Math.min(window.innerWidth - AGENT_OVERLAY_SIZE - 8, d.originX + dx));
-    const nextY = Math.max(8, Math.min(window.innerHeight - AGENT_OVERLAY_SIZE - 8, d.originY + dy));
-    movementOrchestrator.setManualPosition({ x: nextX, y: nextY });
+    movementOrchestrator.dragTo({ x: d.originX + dx, y: d.originY + dy });
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -94,11 +92,12 @@ export function AIPresenceLayer() {
     dragState.current = null;
     setDragging(false);
     if (wasDrag) {
-      // Persist as pinned position
-      movementOrchestrator.setPinned(true);
+      // Release with momentum + pin where it lands.
+      movementOrchestrator.endDrag({ pin: true });
     } else {
       toggle();
     }
+
   };
 
   return (
