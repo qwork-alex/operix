@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { RealtimeHub } from "@/lib/realtime/RealtimeHub";
+import { RuntimeHealthMonitor } from "@/lib/observability";
 import { AlertTriangle, Bell, Bot, Radio, Workflow, GitMerge } from "lucide-react";
 
 type EvtKind = "alert" | "recommendation" | "automation" | "discrepancy" | "ingest" | "backend";
