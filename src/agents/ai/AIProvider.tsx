@@ -18,6 +18,7 @@ import { idleTracker } from "@/agents/presence/IdleBehavior";
 import { movementOrchestrator, AGENT_OVERLAY_SIZE } from "@/agents/presence/MovementOrchestrator";
 import { robotAwareness } from "@/ai/entity/RobotAwareness";
 import { operationalMemory } from "@/ai/memory/OperationalMemory";
+import { prioritize, priorityGate } from "@/ai/memory/OperationalPriority";
 import { globalAI } from "./GlobalAIState";
 import { startAIReactor } from "./AIEventReactor";
 import { startAIRealtime } from "./AIRealtimeConnector";
@@ -164,35 +165,21 @@ export function AIProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(t);
   }, [location.pathname]);
 
-  // Operational guidance — fire ONLY when a meaningful new signal appears
-  // (warn/error or production anomaly). Each signal id is guided at most
-  // once per route to avoid hyperactivity.
+  // Operational guidance — priority-gated. HIGH interrupts within seconds,
+  // MEDIUM hints after a longer breather, LOW is silent (surface-only).
   useEffect(() => {
-    if (worst === "ok") {
-      lastSignalRef.current = "ok";
-      return;
-    }
-    const escalated =
-      lastSignalRef.current === "ok" ||
-      (lastSignalRef.current === "info" && (worst === "warn" || worst === "error")) ||
-      (lastSignalRef.current === "warn" && worst === "error");
     lastSignalRef.current = worst;
-
-    const candidate = signals.find(
-      (s) =>
-        s.level !== "ok" &&
-        s.id !== "all-ok" &&
-        !guidedSignalIdsRef.current.has(s.id),
+    const prioritized = prioritize(signals);
+    const candidate = priorityGate.pickInterruption(
+      prioritized.filter((p) => !guidedSignalIdsRef.current.has(p.signal.id)),
     );
     if (!candidate) return;
-    // Only guide on escalation OR on the very first non-ok signal of this route.
-    if (!escalated && guidedSignalIdsRef.current.size > 0) return;
+    guidedSignalIdsRef.current.add(candidate.signal.id);
 
-    guidedSignalIdsRef.current.add(candidate.id);
-    // Wait one frame for any related UI to mount before pointing.
+    const ttl = candidate.priority === "high" ? 6000 : 4200;
     const t = window.setTimeout(() => {
-      const el = resolveSignalElement(candidate.id);
-      if (el) guideToElement(el, `signal:${candidate.id}`, candidate.level === "error" ? 6000 : 4800);
+      const el = resolveSignalElement(candidate.signal.id);
+      if (el) guideToElement(el, `signal:${candidate.signal.id}:${candidate.priority}`, ttl);
       else robotAwareness.glanceAtElement("[data-op-alert], [role='alert']", 1400);
     }, 120);
     return () => window.clearTimeout(t);
