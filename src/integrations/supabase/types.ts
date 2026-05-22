@@ -3820,6 +3820,47 @@ export type Database = {
         }
         Relationships: []
       }
+      platform_state_log: {
+        Row: {
+          changed_by: string | null
+          created_at: string
+          from_state: Database["public"]["Enums"]["platform_state"] | null
+          id: string
+          platform_id: string
+          reason: string | null
+          to_state: Database["public"]["Enums"]["platform_state"]
+          workspace_id: string
+        }
+        Insert: {
+          changed_by?: string | null
+          created_at?: string
+          from_state?: Database["public"]["Enums"]["platform_state"] | null
+          id?: string
+          platform_id: string
+          reason?: string | null
+          to_state: Database["public"]["Enums"]["platform_state"]
+          workspace_id: string
+        }
+        Update: {
+          changed_by?: string | null
+          created_at?: string
+          from_state?: Database["public"]["Enums"]["platform_state"] | null
+          id?: string
+          platform_id?: string
+          reason?: string | null
+          to_state?: Database["public"]["Enums"]["platform_state"]
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_state_log_platform_id_fkey"
+            columns: ["platform_id"]
+            isOneToOne: false
+            referencedRelation: "platforms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       platform_subscription_cycles: {
         Row: {
           amount: number
@@ -3994,6 +4035,51 @@ export type Database = {
           payload?: Json
           processed_at?: string | null
           status?: string
+        }
+        Relationships: []
+      }
+      platforms: {
+        Row: {
+          color: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          last_heartbeat_at: string | null
+          last_ingest_at: string | null
+          metadata: Json
+          name: string
+          slug: string
+          state: Database["public"]["Enums"]["platform_state"]
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          last_heartbeat_at?: string | null
+          last_ingest_at?: string | null
+          metadata?: Json
+          name: string
+          slug: string
+          state?: Database["public"]["Enums"]["platform_state"]
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          last_heartbeat_at?: string | null
+          last_ingest_at?: string | null
+          metadata?: Json
+          name?: string
+          slug?: string
+          state?: Database["public"]["Enums"]["platform_state"]
+          updated_at?: string
+          workspace_id?: string
         }
         Relationships: []
       }
@@ -4614,6 +4700,7 @@ export type Database = {
           license_plate: string | null
           operational_unit: string | null
           platform: string | null
+          platform_id: string | null
           service_1_name: string | null
           service_1_price: number | null
           service_2_name: string | null
@@ -4651,6 +4738,7 @@ export type Database = {
           license_plate?: string | null
           operational_unit?: string | null
           platform?: string | null
+          platform_id?: string | null
           service_1_name?: string | null
           service_1_price?: number | null
           service_2_name?: string | null
@@ -4688,6 +4776,7 @@ export type Database = {
           license_plate?: string | null
           operational_unit?: string | null
           platform?: string | null
+          platform_id?: string | null
           service_1_name?: string | null
           service_1_price?: number | null
           service_2_name?: string | null
@@ -4715,6 +4804,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_orders_platform_id_fkey"
+            columns: ["platform_id"]
+            isOneToOne: false
+            referencedRelation: "platforms"
             referencedColumns: ["id"]
           },
           {
@@ -6451,6 +6547,7 @@ export type Database = {
       membership_role: "admin" | "tecnico" | "cliente" | "socio"
       membership_status: "active" | "pending"
       permission_scope: "own" | "team" | "all"
+      platform_state: "active" | "paused" | "archived" | "degraded"
       production_photo_category:
         | "before"
         | "during"
@@ -6673,6 +6770,7 @@ export const Constants = {
       membership_role: ["admin", "tecnico", "cliente", "socio"],
       membership_status: ["active", "pending"],
       permission_scope: ["own", "team", "all"],
+      platform_state: ["active", "paused", "archived", "degraded"],
       production_photo_category: [
         "before",
         "during",
