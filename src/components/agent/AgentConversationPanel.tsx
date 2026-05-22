@@ -199,7 +199,7 @@ export function AgentConversationPanel({ autoAttachSnapshot = true, className }:
       }
     }
     // Always send at least an empty text so the assistant has a textual cue
-    if (parts.every((p) => p.type !== "text")) {
+    if (!parts.some((p) => p.type === "text")) {
       parts.unshift({ type: "text", text: "(Analisa os anexos.)" });
     }
 
