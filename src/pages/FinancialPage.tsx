@@ -178,21 +178,21 @@ export default function FinancialPage() {
       {/* TABS — Phase 5C order */}
       <Tabs value={mainTab} onValueChange={setMainTab} className="space-y-4 min-w-0 max-w-full w-full">
         <TabsList className="flex h-auto max-w-full justify-start gap-1 overflow-x-auto rounded-lg bg-muted p-1">
-          <TabsTrigger value="confronto">{t("fin.tabs.confronto")}</TabsTrigger>
-          <TabsTrigger value="distribution">
+          <TabsTrigger value="confronto" className="shrink-0 whitespace-nowrap">{t("fin.tabs.confronto")}</TabsTrigger>
+          <TabsTrigger value="distribution" className="shrink-0 whitespace-nowrap">
             <PieChart className="h-3.5 w-3.5 mr-1" /> {t("fin.tabs.distribution")}
           </TabsTrigger>
-          <TabsTrigger value="accounting">
+          <TabsTrigger value="accounting" className="shrink-0 whitespace-nowrap">
             <BookOpen className="h-3.5 w-3.5 mr-1" /> {t("fin.tabs.accounting")}
           </TabsTrigger>
-          <TabsTrigger value="breakdown">{t("fin.tabs.breakdown")}</TabsTrigger>
-          <TabsTrigger value="participation">
+          <TabsTrigger value="breakdown" className="shrink-0 whitespace-nowrap">{t("fin.tabs.breakdown")}</TabsTrigger>
+          <TabsTrigger value="participation" className="shrink-0 whitespace-nowrap">
             <Users className="h-3.5 w-3.5 mr-1" /> {t("fin.tabs.participation")}
           </TabsTrigger>
-          <TabsTrigger value="audit">
+          <TabsTrigger value="audit" className="shrink-0 whitespace-nowrap">
             <ShieldCheck className="h-3.5 w-3.5 mr-1" /> {t("fin.tabs.audit")}
           </TabsTrigger>
-          <TabsTrigger value="integrity">
+          <TabsTrigger value="integrity" className="shrink-0 whitespace-nowrap">
             <ShieldAlert className="h-3.5 w-3.5 mr-1" /> {t("fin.tabs.integrity")}
           </TabsTrigger>
         </TabsList>
