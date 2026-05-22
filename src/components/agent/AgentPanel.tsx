@@ -228,6 +228,13 @@ export default function AgentPanel({ onClose }: Props) {
             tone={worst}
           />
         </div>
+
+        {/* Tab strip */}
+        <div className="mt-3 flex gap-1 p-0.5 rounded-md bg-black/40 border border-white/5">
+          <TabBtn active={tab === "chat"} icon={MessageSquare} label="Chat" onClick={() => setTab("chat")} />
+          <TabBtn active={tab === "diag"} icon={Stethoscope} label="Diagnóstico" onClick={() => setTab("diag")} />
+        </div>
+
       </div>
 
       {/* Signals */}
