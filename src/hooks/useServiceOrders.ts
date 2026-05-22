@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { RealtimeHub } from "@/lib/realtime/RealtimeHub";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import { useAuth } from "./useAuth";
 import { useCan } from "./usePermission";
@@ -87,20 +88,13 @@ export function useServiceOrders(filters?: {
     },
   });
 
-  // Real-time: refresh service orders when payment_orders change (status sync via trigger)
+  // Real-time: refresh service orders when payment_orders change (shared via RealtimeHub)
   useEffect(() => {
-    const channel = supabase
-      .channel(`so-po-sync:${workspaceId ?? 'global'}:${Math.random().toString(36).slice(2, 8)}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'payment_orders' },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ["service_orders"] });
-        }
-      )
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
+    const off = RealtimeHub.subscribe(
+      { table: "payment_orders", workspaceId: workspaceId ?? undefined },
+      () => queryClient.invalidateQueries({ queryKey: ["service_orders"] }),
+    );
+    return off;
   }, [queryClient, workspaceId]);
 
   const saveMutation = useMutation({

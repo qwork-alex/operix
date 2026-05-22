@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { toast } from "@/hooks/use-toast";
+import { RealtimeHub } from "@/lib/realtime/RealtimeHub";
 
 export type PlatformState = "active" | "paused" | "archived" | "degraded";
 
@@ -40,20 +41,14 @@ export function usePlatforms() {
     },
   });
 
-  // Realtime subscription
+  // Realtime subscription (shared via RealtimeHub)
   useEffect(() => {
     if (!workspaceId) return;
-    const ch = supabase
-      .channel(`platforms-${workspaceId}-${Math.random().toString(36).slice(2, 8)}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "platforms", filter: `workspace_id=eq.${workspaceId}` },
-        () => qc.invalidateQueries({ queryKey: [...QK, workspaceId] })
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
+    const off = RealtimeHub.subscribe(
+      { table: "platforms", workspaceId },
+      () => qc.invalidateQueries({ queryKey: [...QK, workspaceId] }),
+    );
+    return off;
   }, [workspaceId, qc]);
 
   const setState = useMutation({

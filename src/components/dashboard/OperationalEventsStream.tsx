@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useWorkspace } from "@/hooks/useWorkspace";
+import { RealtimeHub } from "@/lib/realtime/RealtimeHub";
 import { AlertTriangle, Bell, Bot, Radio, Workflow, GitMerge } from "lucide-react";
 
 type EvtKind = "alert" | "recommendation" | "automation" | "discrepancy" | "ingest" | "backend";
@@ -83,15 +84,14 @@ export function OperationalEventsStream() {
     }
 
     load();
-    const ch = supabase
-      .channel(`op-events-${workspaceId}-${Math.random().toString(36).slice(2, 8)}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "ai_alerts" }, load)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "ai_recommendations" }, load)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "automation_executions" }, load)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "discrepancies" }, load)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "hail_events" }, load)
-      .subscribe();
-    return () => { cancelled = true; supabase.removeChannel(ch); };
+    const offs = [
+      RealtimeHub.subscribe({ table: "ai_alerts", event: "INSERT", workspaceId }, load),
+      RealtimeHub.subscribe({ table: "ai_recommendations", event: "INSERT", workspaceId }, load),
+      RealtimeHub.subscribe({ table: "automation_executions", event: "INSERT", workspaceId }, load),
+      RealtimeHub.subscribe({ table: "discrepancies", event: "INSERT", workspaceId }, load),
+      RealtimeHub.subscribe({ table: "hail_events", event: "INSERT" }, load),
+    ];
+    return () => { cancelled = true; offs.forEach((off) => off()); };
   }, [workspaceId]);
 
   return (

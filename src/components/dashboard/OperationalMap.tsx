@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { RealtimeHub } from "@/lib/realtime/RealtimeHub";
 import { useLanguage } from "@/hooks/useLanguage";
 import { Skeleton } from "@/components/ui/skeleton";
 import maplibregl, { Map as MLMap, GeoJSONSource } from "maplibre-gl";
@@ -267,18 +268,15 @@ export function OperationalMap() {
     staleTime: 60_000,
   });
 
-  // Realtime: refresh on any hail_events change
+  // Realtime: refresh on any hail_events / hail_reports change (shared via RealtimeHub)
   useEffect(() => {
-    const ch = supabase
-      .channel(`op-map-hail-realtime-${Math.random().toString(36).slice(2, 8)}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "hail_events" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["op-map-hail"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "hail_reports" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["op-map-hail-reports"] });
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    const offs = [
+      RealtimeHub.subscribe({ table: "hail_events" }, () =>
+        queryClient.invalidateQueries({ queryKey: ["op-map-hail"] })),
+      RealtimeHub.subscribe({ table: "hail_reports" }, () =>
+        queryClient.invalidateQueries({ queryKey: ["op-map-hail-reports"] })),
+    ];
+    return () => { offs.forEach((off) => off()); };
   }, [queryClient]);
 
   /* -------- data: community hail reports (lifecycle window) -------- */

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { RealtimeHub } from "@/lib/realtime/RealtimeHub";
 
 export function useNotifications() {
   const { user } = useAuth();
@@ -60,34 +61,14 @@ export function useNotifications() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
   });
 
-  // Realtime subscription
+  // Realtime subscription (shared via RealtimeHub)
   useEffect(() => {
     if (!user) return;
-    const channelName = `notifications-realtime-${user.id}`;
-    // Remove any existing channel with this name first
-    const existing = supabase.getChannels().find(c => c.topic === `realtime:${channelName}`);
-    if (existing) {
-      supabase.removeChannel(existing);
-    }
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${user.id}`,
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ["notifications"] });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    const off = RealtimeHub.subscribe(
+      { table: "notifications", event: "INSERT", filter: `user_id=eq.${user.id}` },
+      () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+    );
+    return off;
   }, [user?.id, queryClient]);
 
   return {
