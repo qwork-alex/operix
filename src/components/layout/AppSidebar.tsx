@@ -37,7 +37,7 @@ type NavGroup = {
 };
 
 export function AppSidebar() {
-  const { state } = useSidebar();
+  const { state, isMobile, setOpenMobile } = useSidebar();
   const collapsed = state === "collapsed";
   const { t } = useLanguage();
   const { can, isLoading: permsLoading } = useCan();
@@ -175,11 +175,12 @@ export function AppSidebar() {
                       <NavLink
                         to={item.url}
                         end={item.end}
+                        onClick={() => { if (isMobile) setOpenMobile(false); }}
                         className="text-sidebar-foreground/85 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground transition-colors rounded-md"
                         activeClassName="bg-sidebar-accent text-primary font-medium"
                       >
                         <item.icon className="h-4 w-4 shrink-0" />
-                        {!collapsed && <span className="text-[13px]">{item.title}</span>}
+                        {!collapsed && <span className="text-[13px] md:text-[13px]">{item.title}</span>}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
