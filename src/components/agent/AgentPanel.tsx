@@ -40,12 +40,14 @@ interface Props {
 
 export default function AgentPanel({ onClose }: Props) {
   const ctx = useAgentContext();
+  const { signals, worst } = useOperationalSignals();
   const [messages, setMessages] = useState<Msg[]>(() => loadHistory());
   const [input, setInput] = useState("");
   const [events, setEvents] = useState<AgentEvent[]>(() =>
     agentBus.snapshot().slice(-20),
   );
   const listRef = useRef<HTMLDivElement>(null);
+  const announcedSignals = useRef<Set<string>>(new Set());
 
   // Welcome message on first open
   useEffect(() => {
@@ -54,12 +56,29 @@ export default function AgentPanel({ onClose }: Props) {
         id: "welcome",
         from: "agent",
         at: Date.now(),
-        text: `Olá. Sou o agente operacional do QWork Nexus. Estou observando o módulo "${ctx.label}". Esta é uma fase inicial — em breve poderei agir.`,
+        text: `Olá. Sou o agente operacional do QWork Nexus. Estou observando o módulo "${ctx.label}".`,
       };
       setMessages([welcome]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Proactive contextual messages — announce each new non-ok signal once per session
+  useEffect(() => {
+    const noteworthy = signals.filter((s) => s.level !== "ok" && s.id !== "all-ok");
+    const fresh = noteworthy.filter((s) => !announcedSignals.current.has(s.id));
+    if (!fresh.length) return;
+    fresh.forEach((s) => announcedSignals.current.add(s.id));
+    setMessages((m) => [
+      ...m,
+      ...fresh.map((s) => ({
+        id: `sig-${s.id}-${Date.now()}`,
+        from: "agent" as const,
+        at: Date.now(),
+        text: s.detail ? `${s.title} — ${s.detail}` : s.title,
+      })),
+    ]);
+  }, [signals]);
 
   // Persist history
   useEffect(() => {
@@ -69,6 +88,7 @@ export default function AgentPanel({ onClose }: Props) {
   // Subscribe to event bus (decoupled, single subscription per mount)
   useEffect(() => {
     const unsub = agentBus.subscribe((evt) => {
+      if (evt.meta?.silent) return;
       setEvents((prev) => [...prev.slice(-19), evt]);
     });
     return unsub;
@@ -79,18 +99,30 @@ export default function AgentPanel({ onClose }: Props) {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.length]);
 
+  const signalIcon = (level: SignalLevel) =>
+    level === "error" ? AlertTriangle : level === "warn" ? AlertTriangle : level === "info" ? Info : CheckCircle2;
+  const signalColor = (level: SignalLevel) =>
+    level === "error"
+      ? "text-destructive"
+      : level === "warn"
+        ? "text-[hsl(38_92%_55%)]"
+        : level === "info"
+          ? "text-[hsl(195_100%_60%)]"
+          : "text-[hsl(152_60%_45%)]";
+
   const statusLines = useMemo(
     () => [
-      { icon: MapPin, label: `Você está em ${ctx.label}`, ok: true },
+      { icon: MapPin, label: `Você está em ${ctx.label}`, level: "ok" as SignalLevel },
       {
         icon: ctx.online ? Wifi : WifiOff,
         label: ctx.online ? "Realtime operacional ativo" : "Offline — aguardando reconexão",
-        ok: ctx.online,
+        level: (ctx.online ? "ok" : "error") as SignalLevel,
       },
-      { icon: Activity, label: "Radar PDR sincronizado", ok: true },
+      ...signals.map((s) => ({ icon: signalIcon(s.level), label: s.title, level: s.level })),
     ],
-    [ctx.label, ctx.online],
+    [ctx.label, ctx.online, signals],
   );
+
 
   function handleSend() {
     const text = input.trim();
