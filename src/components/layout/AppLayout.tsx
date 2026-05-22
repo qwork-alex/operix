@@ -9,10 +9,12 @@ import { AccessStateBanner } from "@/components/billing/AccessStateBanner";
 import { FloatingAgent } from "@/components/agent/FloatingAgent";
 import { useOperationalBusBoot } from "@/hooks/useOperationalBusBoot";
 import { useAgentRuntimeBoot } from "@/hooks/useAgentRuntimeBoot";
+import { useVirtualEngineerBoot } from "@/hooks/useVirtualEngineerBoot";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   useOperationalBusBoot();
   useAgentRuntimeBoot();
+  useVirtualEngineerBoot();
   return (
     <ConsentGate>
       <SidebarProvider>
