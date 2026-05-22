@@ -4928,7 +4928,11 @@ export type Database = {
           extra_block_size: number
           id: string
           is_active: boolean
+          kind: Database["public"]["Enums"]["plan_kind"]
           name: string
+          sort_order: number
+          tier_max: number | null
+          tier_min: number | null
           yearly_discount_months: number
         }
         Insert: {
@@ -4940,7 +4944,11 @@ export type Database = {
           extra_block_size?: number
           id?: string
           is_active?: boolean
+          kind?: Database["public"]["Enums"]["plan_kind"]
           name: string
+          sort_order?: number
+          tier_max?: number | null
+          tier_min?: number | null
           yearly_discount_months?: number
         }
         Update: {
@@ -4952,7 +4960,11 @@ export type Database = {
           extra_block_size?: number
           id?: string
           is_active?: boolean
+          kind?: Database["public"]["Enums"]["plan_kind"]
           name?: string
+          sort_order?: number
+          tier_max?: number | null
+          tier_min?: number | null
           yearly_discount_months?: number
         }
         Relationships: []
@@ -4986,6 +4998,74 @@ export type Database = {
             columns: ["technician_id"]
             isOneToOne: false
             referencedRelation: "technicians"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      technician_subscriptions: {
+        Row: {
+          billing_cycle: string
+          cancelled_at: string | null
+          created_at: string
+          current_period_end: string | null
+          current_period_start: string | null
+          current_price: number
+          id: string
+          metadata: Json
+          plan_id: string
+          status: string
+          stripe_customer_id: string | null
+          stripe_environment: string | null
+          stripe_price_lookup_key: string | null
+          stripe_subscription_id: string | null
+          trial_ends_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          billing_cycle?: string
+          cancelled_at?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          current_price?: number
+          id?: string
+          metadata?: Json
+          plan_id: string
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_environment?: string | null
+          stripe_price_lookup_key?: string | null
+          stripe_subscription_id?: string | null
+          trial_ends_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          billing_cycle?: string
+          cancelled_at?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          current_price?: number
+          id?: string
+          metadata?: Json
+          plan_id?: string
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_environment?: string | null
+          stripe_price_lookup_key?: string | null
+          stripe_subscription_id?: string | null
+          trial_ends_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "technician_subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_plans"
             referencedColumns: ["id"]
           },
         ]
@@ -6206,6 +6286,7 @@ export type Database = {
       }
       get_my_role: { Args: never; Returns: string }
       get_my_technician_id: { Args: never; Returns: string }
+      get_technician_subscription: { Args: { _user_id: string }; Returns: Json }
       get_user_context: { Args: { _workspace_id?: string }; Returns: Json }
       get_user_ownership_map: { Args: { _uid: string }; Returns: Json }
       get_user_role: {
@@ -6598,6 +6679,7 @@ export type Database = {
       membership_role: "admin" | "tecnico" | "cliente" | "socio"
       membership_status: "active" | "pending"
       permission_scope: "own" | "team" | "all"
+      plan_kind: "workspace" | "technician"
       platform_state: "active" | "paused" | "archived" | "degraded"
       production_photo_category:
         | "before"
@@ -6821,6 +6903,7 @@ export const Constants = {
       membership_role: ["admin", "tecnico", "cliente", "socio"],
       membership_status: ["active", "pending"],
       permission_scope: ["own", "team", "all"],
+      plan_kind: ["workspace", "technician"],
       platform_state: ["active", "paused", "archived", "degraded"],
       production_photo_category: [
         "before",
