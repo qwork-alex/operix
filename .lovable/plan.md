@@ -1,106 +1,104 @@
-# Plano — Painel Operacional Realtime (SAFE MODE)
+# Comunicação Operacional Externa do Agente IA
 
-Escopo grande. Vou entregar em **5 fases independentes** para você validar entre uma e outra. Cada fase é um commit isolado, reversível, sem tocar tenancy, auth, RBAC, providers, edge functions, migrations destrutivas.
+Transformar o QWork Agent num posto de comando que pode reportar problemas para fora do produto — com aprovação humana, anti-spam e múltiplos canais.
 
-## Fase 1 — KPIs operacionais (topo do dashboard)
+## O que o utilizador vai ver
 
-**Arquivo:** `src/pages/Index.tsx` + novo `src/components/dashboard/OperationalKPIs.tsx`
+1. **Nova secção em Configurações → Agente Operacional**
+   - Contactos administrativos: WhatsApp admin, WhatsApp programador, e-mail de alertas, URL de webhook genérico.
+   - Toggle por canal (WhatsApp / Email / Webhook) e por severidade (info / warning / critical).
+   - Cooldown global (minutos) e janela de deduplicação.
 
-Remover os 4 KPICard atuais (Receita, Pagamentos pendentes, Serviços concluídos, Desempenho).
+2. **Fluxo de aprovação dentro do AgentPanel**
+   - Quando o agente deteta um sinal `warn`/`error`, mostra um cartão "Reportar este problema?" com:
+     - severidade detectada
+     - canais que serão usados
+     - botão **Gerar relatório** → pré-visualização (módulo, rota, timeline, screenshot opcional, análise)
+     - botões **Enviar agora** / **Descartar**
+   - Só envia depois da aprovação explícita do utilizador.
 
-Substituir por 6 cards realtime:
+3. **Histórico de alertas enviados** (nova aba na secção do agente)
+   - Lista os últimos N relatórios: severidade, canais, estado (`queued`/`sent`/`failed`), timestamp, link para ver payload.
+   - Mostra estado de cooldown ativo ("próximo envio possível em 04m21s").
 
+4. **Feedback de reparação**
+   - Quando o sinal que originou o alerta deixa de estar ativo, o agente acrescenta automaticamente uma mensagem local no chat ("Problema corrigido — Realtime estabilizado") e marca o alerta como `resolved`. Não envia segunda notificação externa (sem spam).
 
-| Card                   | Fonte                                                                                |
-| ---------------------- | ------------------------------------------------------------------------------------ |
-| Plataformas ativas     | `service_orders` distinct `platform` com `status in (in_progress, paused)`           |
-| Plataformas encerradas | `service_orders` com `status in (completed, confirmed)` agrupadas por mês corrente   |
-| Clientes ativos        | `clients` com OS criadas últimos 30d                                                 |
-| Técnicos ativos        | `user_roles role=technician` cruzado com `service_orders.technician_name` últimos 7d |
-| Dispatch IA            | `ai_recommendations` `status=pending`                                                |
-| Alertas operacionais   | `ai_alerts` `status=open` + `discrepancies` não resolvidas                           |
+## Severidades
 
+| Nível | Quando | Canais sugeridos (default) |
+|-------|--------|-----------------------------|
+| `info` | Apenas log local | nenhum |
+| `warning` | Sinais `warn` (plataforma degradada, radar parado >4h) | Email |
+| `critical` | Sinais `error` (runtime errors recorrentes, realtime caído) | Email + WhatsApp admin |
+| `operational` | Alertas marcados manualmente como operacionais | Webhook |
 
-Visual: mantém `glass-panel` existente, adiciona badge de status (dot pulsante para "live"), micro-animação `animate-fade-in` (já existe). Sem redesign do `KPICard`, criar variante `OperationalKPICard` ao lado.
+## Como funciona por dentro
 
-Realtime: 1 único `supabase.channel('dashboard-kpis')` escutando `service_orders`, `ai_recommendations`, `ai_alerts` → `queryClient.invalidateQueries(['op-kpis'])`. Throttle de 2s para evitar rerender storm.
+### Tabelas novas (`supabase/migrations`)
 
-## Fase 2 — Estado por plataforma (árvore operacional)
+- `agent_alert_settings` — singleton por workspace
+  - `workspace_id` (FK), `admin_whatsapp`, `dev_whatsapp`, `alert_email`, `webhook_url`
+  - `channels_enabled` jsonb (ex: `{whatsapp:true,email:true,webhook:false}`)
+  - `severity_routing` jsonb (mapa severidade → canais)
+  - `cooldown_minutes` int default 10
+  - `dedupe_window_minutes` int default 30
+  - RLS: apenas admin/owner do workspace lê/escreve.
 
-**Backend (migration leve, não destrutiva):**
+- `agent_alerts` — append-only
+  - `id`, `workspace_id`, `created_by`, `severity`, `signal_id`, `title`, `detail`
+  - `payload` jsonb (relatório completo: route, module, timeline, analysis, screenshot data url opcional)
+  - `channels` text[] (canais usados)
+  - `status` text (`pending_approval` / `approved` / `sent` / `partial` / `failed` / `discarded` / `resolved`)
+  - `dedupe_key` text (hash de `signal_id + module + dia`)
+  - `sent_at`, `resolved_at`
+  - Index em (`workspace_id`,`dedupe_key`,`created_at`) para cooldown lookup.
+  - RLS: workspace members veem; só admin escreve via edge function.
 
-- Adicionar coluna `platform_state text default 'active' check (platform_state in ('active','paused','closed','archived'))` em `service_orders` (nullable preserva compat).
-- Sem trigger novo. Sem RLS nova (herda das existentes).
+### Edge function `agent-dispatch-alert`
 
-**Frontend:**
+Recebe `{ alert_id }` autenticado. Carrega o alerta, valida:
+- workspace do utilizador,
+- cooldown (last alert mesmo `dedupe_key` < N min ⇒ 429 `cooldown_active`),
+- canais ativos vs severidade.
 
-- Localizar componente da árvore 2025→Cliente→Plataforma (provavelmente em `ServiceOrdersTable` ou `treeGrouping.ts`) e adicionar:
-  - Cor contextual da linha da plataforma (azul/cinza/vermelho/âmbar via classe semântica).
-  - Botão toggle (ícone) **só no hover** (`opacity-0 group-hover:opacity-100`).
-  - Mutation `update platform_state` com optimistic update.
-- Dashboard Fase 1 passa a contar por `platform_state`.
+Envia em paralelo:
+- **Email** via Lovable Emails (`send-transactional-email`) com template HTML rico (severidade, módulo, timeline, análise, screenshot inline se < 200 KB).
+- **WhatsApp** via Twilio connector (gateway). Texto curto + link para o produto. Só envia se número estiver configurado.
+- **Webhook** POST JSON cru para `webhook_url` (assinatura HMAC com `LOVABLE_API_KEY` truncado como segredo de integridade — sem expor).
 
-## Fase 3 — Eventos operacionais inteligentes
+Atualiza `agent_alerts.status` a `sent` / `partial` / `failed` e regista `email_send_log` / `backend_event_logs`.
 
-**Arquivo:** novo `src/components/dashboard/OperationalEvents.tsx`, remove `ServicePieChart` e `RecentActivity` do `Index.tsx`.
+### Cliente
 
-Stream unificado de eventos das tabelas já existentes:
+- `src/hooks/useAgentAlertSettings.ts` — get/update das settings com TanStack Query.
+- `src/hooks/useAgentAlerts.ts` — lista alertas + mutation `approveAndSend`, `discard`.
+- `src/lib/agentAlertEngine.ts` — pega nos sinais do `useOperationalSignals`, calcula severidade, gera `dedupe_key`, e propõe alerta. Aplica cooldown localmente (anti-spam de UI).
+- `src/components/agent/AgentAlertCard.tsx` — cartão de aprovação dentro do AgentPanel.
+- `src/components/agent/AgentAlertHistory.tsx` — nova tab "Alertas" no AgentPanel.
+- `src/components/settings/AgentAlertsSettings.tsx` — painel em Configurações.
 
-- `backend_event_logs` (login, alterações)
-- `ai_recommendations`, `ai_insights`, `ai_alerts`
-- `automation_executions` (dispatch automático)
-- `discrepancies`
+### Anti-spam (regras combinadas)
 
-Renderiza últimas 30 entradas com ícone, cor semântica, timestamp relativo, link contextual. Realtime via canal único. Virtualizado se >50 itens.
+1. **Cooldown** por `dedupe_key`: ignora aprovações repetidas dentro de `cooldown_minutes`.
+2. **Deduplicação**: se já existe alerta com o mesmo `dedupe_key` em `dedupe_window_minutes` com status `pending_approval` ou `sent`, atualiza o existente em vez de criar novo.
+3. **Agrupamento**: se 3+ sinais `warn` no mesmo módulo dentro de 5 min, cria um único alerta "Múltiplas anomalias em <módulo>" com todos os signal IDs no payload.
+4. **Resolução automática**: quando o sinal correspondente sai do snapshot durante `dedupe_window_minutes`, marca o alerta como `resolved` (sem nova notificação).
 
-## Fase 4 — Radar PDR (restauração) — **CRÍTICO**
+### Segurança
 
-Não vou reescrever. Vou diagnosticar primeiro:
+- Edge function valida JWT, confirma membership do workspace, e que o utilizador tem papel `admin` ou `socio` antes de despachar.
+- Nada é enviado sem registo em `agent_alerts` com `approved_by = auth.uid()`.
+- Toggle global "Pausar alertas externos" disponível para o admin.
 
-1. Inspecionar `OperationalMap.tsx` (1664 linhas) para identificar:
-  - `useEffect` com deps incorretas causando teardown do mapa
-  - subscriptions duplicadas (procurar múltiplos `supabase.channel`)
-  - polling de meteorologia (intervalos órfãos)
-  - race conditions em sources do maplibre
-2. Verificar edge function `ingest-hail` (última execução, logs).
-3. Verificar tabela `hail_events` (linhas recentes, `is_demo` flag).
-4. Fix cirúrgico — sem reescrita, só correções localizadas + cleanup de intervals/channels no unmount.
+## Pré-requisitos / dependências externas
 
-Entrego relatório do que estava quebrado + patch.
+- **Email**: usa Lovable Emails (já no projeto se houver domínio configurado).
+- **WhatsApp**: requer connector Twilio ativado (será sugerido na UI se ainda não estiver — sem bloquear o resto).
+- **Webhook**: nenhum, é só URL pública do destinatário.
 
-## Fase 5 — Refinos: RevenueChart, Oportunidades, performance
+## Fora de scope desta fase
 
-- `RevenueChart`: melhorar legenda/espaçamento (apenas CSS/tokens, sem mudar dados).
-- `OperationalOpportunities` já existe — promover para card lateral do dashboard com marketplace ativo (`marketplace_listings` recentes).
-- Sweep de performance: `React.memo` nos cards, `useMemo` em agregações pesadas, debounce 250ms em invalidações realtime.
-
-## Fora de escopo (não vou tocar)
-
-- Mapbox/Google/Windy: você pediu só "preparar arquitetura" — vou criar `src/lib/mapProviders.ts` como interface abstrata (não troca o provider atual maplibre).
-- Tenancy, auth, RBAC, memberships, automations engine, IA orchestrator, edge functions existentes, policies, triggers.
-- Sidebar (já reorganizado em fase anterior).
-
-## Ordem de entrega proposta
-
-Posso entregar **tudo numa única resposta** (5 fases em sequência), ou parar após cada fase para você validar. Dado o risco do radar (Fase 4), **recomendo entregar Fases 1+2+3 juntas e tratar Fase 4 separadamente** depois que eu inspecionar o radar e te mostrar o diagnóstico.
-
-## Pergunta antes de começar
-
-1. Confirmo a coluna `platform_state` em `service_orders`? (Fase 2 depende disso.)
-2. Entrego Fases 1+2+3 agora e Fase 4 (radar) em resposta separada com diagnóstico antes do fix? Ou prefere que eu ataque o radar primeiro?
-
-Pode seguir.
-
-IMPORTANTE:
-
-não quero modelar platform_state diretamente em service_orders.
-
-Quero avaliar arquitetura correta de plataformas para evitar dívida técnica futura.
-
-Antes da UI:
-
-mapear origem única do estado operacional e subscriptions realtime existentes.
-
-O radar PDR é feature estratégica core do produto.
-
-Priorizar estabilidade realtime e arquitetura extensível antes de refinamento visual.
+- Push notifications nativas.
+- Reply-bidirecional via WhatsApp (apenas envio).
+- Templates personalizáveis pelo utilizador (template fixo nesta fase, parametrizável depois).
