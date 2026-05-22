@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Send, X, Activity, Wifi, WifiOff, MapPin } from "lucide-react";
+import { Send, X, Activity, Wifi, WifiOff, MapPin, AlertTriangle, CheckCircle2, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { agentBus, type AgentEvent } from "@/lib/agentEventBus";
 import { useAgentContext } from "@/hooks/useAgentContext";
+import { useOperationalSignals, type SignalLevel } from "@/hooks/useOperationalSignals";
+
 
 interface Msg {
   id: string;
