@@ -54,23 +54,45 @@ export function ConversationBubble({ onOpenDiagnostic }: Props) {
   const s = URGENCY_STYLE[p.urgency] ?? URGENCY_STYLE.normal;
   const Icon = p.urgency === "critical" ? AlertCircle : AlertTriangle;
 
+  // Dock the bubble to the robot's actual screen position (single entity feel).
+  // Position above the robot, anchored to its right edge.
+  const bubbleWidth = 360;
+  const robotCx = aiSnap.position.x + AGENT_OVERLAY_SIZE / 2;
+  const robotTop = aiSnap.position.y;
+  const left = Math.max(12, Math.min(window.innerWidth - bubbleWidth - 12, robotCx - bubbleWidth / 2));
+  const top = Math.max(12, robotTop - 110);
+
   return (
     <div
       role="dialog"
       aria-label="Sugestão operacional do agente"
       className={cn(
-        "fixed z-[58] right-5 md:right-6 bottom-24 md:bottom-28",
-        "w-[min(360px,calc(100vw-2rem))]",
+        "fixed z-[58]",
         "rounded-2xl backdrop-blur-xl",
         "transition-all duration-300 ease-out",
         prompt ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2 pointer-events-none",
       )}
       style={{
+        top,
+        left,
+        width: `min(${bubbleWidth}px, calc(100vw - 24px))`,
         background: "hsl(220 50% 5% / 0.92)",
         border: `1px solid ${s.border}`,
         boxShadow: `0 20px 60px -20px hsl(220 90% 5% / 0.9), 0 0 24px ${s.glow}`,
       }}
     >
+      {/* notch pointing to the robot */}
+      <span
+        aria-hidden
+        className="absolute -bottom-1.5 h-3 w-3 rotate-45"
+        style={{
+          left: Math.max(16, Math.min(bubbleWidth - 28, robotCx - left - 6)),
+          background: "hsl(220 50% 5% / 0.92)",
+          borderRight: `1px solid ${s.border}`,
+          borderBottom: `1px solid ${s.border}`,
+        }}
+      />
+
       {/* Header row */}
       <button
         type="button"
@@ -78,18 +100,6 @@ export function ConversationBubble({ onOpenDiagnostic }: Props) {
         className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left"
         aria-expanded={expanded}
       >
-        <span
-          aria-hidden
-          className="relative inline-flex h-2 w-2 shrink-0 rounded-full"
-          style={{ background: s.dot, boxShadow: `0 0 10px ${s.dot}` }}
-        >
-          {p.urgency === "critical" && (
-            <span
-              className="absolute inset-0 rounded-full animate-ping"
-              style={{ background: s.dot, opacity: 0.6 }}
-            />
-          )}
-        </span>
         <Icon className="h-3.5 w-3.5 shrink-0" style={{ color: s.dot }} />
         <span className="flex-1 min-w-0 text-[12px] font-medium text-white/90 truncate">
           {p.question}
