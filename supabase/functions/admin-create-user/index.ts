@@ -288,10 +288,11 @@ Deno.serve(async (req) => {
 
     // ── DELETE USER (with cascade control) ──
     if (action === "delete_user") {
-      const { user_id, mode, reassign_to_user_id } = body as {
+      const { user_id, mode, reassign_to_user_id, transfer_workspace_to_user_id } = body as {
         user_id: string;
         mode?: "block" | "reassign" | "detach";
         reassign_to_user_id?: string;
+        transfer_workspace_to_user_id?: string;
       };
       if (!user_id) return jsonResp({ error: "user_id required" }, 400);
       const effectiveMode = mode ?? "block";
@@ -300,6 +301,40 @@ Deno.serve(async (req) => {
       const { data: targetAuth } = await adminClient.auth.admin.getUserById(user_id);
       if (targetAuth?.user?.email === "qwork@qworkgroup.com") {
         return jsonResp({ error: "owner_protected", message: "O proprietário do sistema não pode ser removido." }, 403);
+      }
+
+      // Preflight: workspace ownership. The DB now blocks app_user deletion
+      // when the user still owns any workspace — surface this clearly to admins
+      // and allow them to transfer ownership in the same call.
+      const { data: ownedAppUser } = await adminClient
+        .from("app_users").select("id").eq("auth_user_id", user_id).maybeSingle();
+      if (ownedAppUser?.id) {
+        const { data: ownedWorkspaces } = await adminClient
+          .from("workspaces").select("id, name").eq("owner_user_id", ownedAppUser.id);
+        if (ownedWorkspaces && ownedWorkspaces.length > 0) {
+          if (!transfer_workspace_to_user_id) {
+            return jsonResp({
+              error: "owns_workspaces",
+              message: "Este usuário ainda é proprietário de workspace(s). Transfira a propriedade antes de excluir.",
+              workspaces: ownedWorkspaces,
+            }, 409);
+          }
+          const { data: newOwnerApp } = await adminClient
+            .from("app_users").select("id, auth_user_id")
+            .or(`id.eq.${transfer_workspace_to_user_id},auth_user_id.eq.${transfer_workspace_to_user_id}`)
+            .maybeSingle();
+          if (!newOwnerApp?.id) {
+            return jsonResp({ error: "invalid_workspace_transfer_target" }, 400);
+          }
+          // DB trigger enforces that the new owner has admin global role.
+          const { error: transferErr } = await adminClient
+            .from("workspaces")
+            .update({ owner_user_id: newOwnerApp.id })
+            .eq("owner_user_id", ownedAppUser.id);
+          if (transferErr) {
+            return jsonResp({ error: "workspace_transfer_failed", message: transferErr.message }, 409);
+          }
+        }
       }
 
       // Always check dependencies first (canonical map)
