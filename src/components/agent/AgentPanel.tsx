@@ -51,6 +51,8 @@ export default function AgentPanel({ onClose }: Props) {
   const { signals, worst } = useOperationalSignals();
   const [messages, setMessages] = useState<Msg[]>(() => loadHistory());
   const [input, setInput] = useState("");
+  const [tab, setTab] = useState<"chat" | "diag">("chat");
+
   const [events, setEvents] = useState<AgentEvent[]>(() =>
     [...loadPersistedAgentEvents(), ...agentBus.snapshot()].slice(-30),
   );
