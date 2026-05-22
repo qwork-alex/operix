@@ -511,7 +511,9 @@ export default function AgentPanel({ onClose }: Props) {
       </>
       )}
     </div>
+    </>
   );
+
 }
 
 function TabBtn({
