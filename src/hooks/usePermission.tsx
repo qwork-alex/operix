@@ -1,9 +1,11 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { RealtimeHub } from "@/lib/realtime/RealtimeHub";
 import { useAuth } from "./useAuth";
 import { useRole } from "./useRole";
 import { useImpersonation } from "./useImpersonation";
+
 
 /**
  * Permission key format: "module.action"
@@ -42,16 +44,15 @@ function useMyPermissionsMap() {
 
   useEffect(() => {
     if (!permUserId) return;
-    const channelName = `perms-${permUserId}-${Math.random().toString(36).slice(2, 8)}`;
-    const channel = supabase
-      .channel(channelName)
-      .on("postgres_changes", { event: "*", schema: "public", table: "user_permissions", filter: `user_id=eq.${permUserId}` },
-        () => qc.invalidateQueries({ queryKey: PERMS_QUERY_KEY }))
-      .on("postgres_changes", { event: "*", schema: "public", table: "role_permissions" },
-        () => qc.invalidateQueries({ queryKey: PERMS_QUERY_KEY }))
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    const invalidate = () => qc.invalidateQueries({ queryKey: PERMS_QUERY_KEY });
+    const off1 = RealtimeHub.subscribe(
+      { table: "user_permissions", filter: `user_id=eq.${permUserId}` },
+      invalidate,
+    );
+    const off2 = RealtimeHub.subscribe({ table: "role_permissions" }, invalidate);
+    return () => { off1(); off2(); };
   }, [permUserId, qc]);
+
 
   return useQuery({
     queryKey: [...PERMS_QUERY_KEY, permUserId, dbRole, isImpersonating],
