@@ -1,10 +1,7 @@
-import { useState } from "react";
 import { usePlatforms, type Platform, type PlatformState } from "@/hooks/usePlatforms";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Activity, PauseCircle, Archive, AlertTriangle, Plus, Play, Radio } from "lucide-react";
+import { Activity, PauseCircle, Archive, AlertTriangle, Play, Radio } from "lucide-react";
 
 const STATE_META: Record<PlatformState, { label: string; cls: string; icon: any }> = {
   active: { label: "Ativa", cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30", icon: Activity },
