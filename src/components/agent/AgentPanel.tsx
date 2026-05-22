@@ -141,15 +141,76 @@ export default function AgentPanel({ onClose }: Props) {
     }, delay);
   }
 
-  function handleSend() {
+  async function handleSend() {
     const text = input.trim();
-    if (!text) return;
-    setMessages((m) => [...m, { id: `u-${Date.now()}`, from: "user", text, at: Date.now() }]);
+    if (!text || busy) return;
+
+    const userMsg: Msg = { id: `u-${Date.now()}`, from: "user", text, at: Date.now() };
+    setMessages((m) => [...m, userMsg]);
     setInput("");
     agentBus.emit({ kind: "user_message", level: "info", title: text });
-    const reply = localReply(text, signals);
-    pushAgentTyping(reply);
+
+    // Build conversation history from current messages (skip typing/system meta)
+    const history: AgentTurn[] = [...messages, userMsg]
+      .filter((m) => !m.typing && m.text)
+      .slice(-12)
+      .map((m) => ({ role: m.from === "user" ? "user" : "assistant", content: m.text }));
+
+    // Insert streaming assistant bubble
+    const streamId = `a-${Date.now()}-${Math.random()}`;
+    setMessages((m) => [...m, { id: streamId, from: "agent", text: "", at: Date.now(), typing: true }]);
+    setBusy(true);
+
+    let accumulated = "";
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+
+    try {
+      await streamAgentReply({
+        history,
+        context: {
+          route: ctx.pathname,
+          module: ctx.label,
+          online: ctx.online,
+          signals,
+          recentEvents: recent,
+        },
+        signal: ctrl.signal,
+        onDelta: (chunk) => {
+          accumulated += chunk;
+          setMessages((m) =>
+            m.map((x) => (x.id === streamId ? { ...x, text: accumulated, typing: false } : x)),
+          );
+        },
+        onDone: () => {
+          if (!accumulated) {
+            const fallback = localReply(text, signals);
+            setMessages((m) =>
+              m.map((x) => (x.id === streamId ? { ...x, text: fallback, typing: false } : x)),
+            );
+          }
+        },
+      });
+    } catch (err) {
+      const msg = err instanceof RateLimitedError
+        ? "⏱ Aguarda um instante antes de enviar outra mensagem."
+        : err instanceof Error
+          ? `⚠ ${err.message}`
+          : "⚠ Falha ao contactar o agente.";
+      const fallback = accumulated || `${msg}\n\n_Resposta local:_ ${localReply(text, signals)}`;
+      setMessages((m) =>
+        m.map((x) => (x.id === streamId ? { ...x, text: fallback, typing: false } : x)),
+      );
+      if (err instanceof RateLimitedError) toast.warning(msg);
+      else toast.error(msg);
+    } finally {
+      setBusy(false);
+      abortRef.current = null;
+    }
   }
+
+  // Cancel any in-flight stream on unmount
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   function runAction(action: AgentAction, label: string) {
     dispatchAgentAction(action);
