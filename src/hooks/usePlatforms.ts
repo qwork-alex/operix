@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { toast } from "@/hooks/use-toast";
+import { RealtimeHub } from "@/lib/realtime/RealtimeHub";
 
 export type PlatformState = "active" | "paused" | "archived" | "degraded";
 
