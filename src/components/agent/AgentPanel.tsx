@@ -13,6 +13,7 @@ import { deriveSuggestions, localReply } from "@/lib/agentRules";
 import { dispatchAgentAction, AGENT_NAV_EVENT, type AgentAction } from "@/lib/agentActions";
 import { loadPersistedAgentEvents } from "@/lib/operationalObserver";
 import { captureScreenshot } from "@/lib/screenshotCapture";
+import { streamAgentReply, RateLimitedError, type AgentTurn } from "@/lib/agentLLM";
 import { AgentDiagnosticsView } from "./AgentDiagnosticsView";
 
 
@@ -48,9 +49,11 @@ interface Props { onClose: () => void; }
 export default function AgentPanel({ onClose }: Props) {
   const ctx = useAgentContext();
   const navigate = useNavigate();
-  const { signals, worst } = useOperationalSignals();
+  const { signals, worst, recent } = useOperationalSignals();
   const [messages, setMessages] = useState<Msg[]>(() => loadHistory());
   const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
   const [tab, setTab] = useState<"chat" | "diag">("chat");
 
   const [events, setEvents] = useState<AgentEvent[]>(() =>
@@ -138,15 +141,76 @@ export default function AgentPanel({ onClose }: Props) {
     }, delay);
   }
 
-  function handleSend() {
+  async function handleSend() {
     const text = input.trim();
-    if (!text) return;
-    setMessages((m) => [...m, { id: `u-${Date.now()}`, from: "user", text, at: Date.now() }]);
+    if (!text || busy) return;
+
+    const userMsg: Msg = { id: `u-${Date.now()}`, from: "user", text, at: Date.now() };
+    setMessages((m) => [...m, userMsg]);
     setInput("");
     agentBus.emit({ kind: "user_message", level: "info", title: text });
-    const reply = localReply(text, signals);
-    pushAgentTyping(reply);
+
+    // Build conversation history from current messages (skip typing/system meta)
+    const history: AgentTurn[] = [...messages, userMsg]
+      .filter((m) => !m.typing && m.text)
+      .slice(-12)
+      .map((m) => ({ role: m.from === "user" ? "user" : "assistant", content: m.text }));
+
+    // Insert streaming assistant bubble
+    const streamId = `a-${Date.now()}-${Math.random()}`;
+    setMessages((m) => [...m, { id: streamId, from: "agent", text: "", at: Date.now(), typing: true }]);
+    setBusy(true);
+
+    let accumulated = "";
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+
+    try {
+      await streamAgentReply({
+        history,
+        context: {
+          route: ctx.pathname,
+          module: ctx.label,
+          online: ctx.online,
+          signals,
+          recentEvents: recent,
+        },
+        signal: ctrl.signal,
+        onDelta: (chunk) => {
+          accumulated += chunk;
+          setMessages((m) =>
+            m.map((x) => (x.id === streamId ? { ...x, text: accumulated, typing: false } : x)),
+          );
+        },
+        onDone: () => {
+          if (!accumulated) {
+            const fallback = localReply(text, signals);
+            setMessages((m) =>
+              m.map((x) => (x.id === streamId ? { ...x, text: fallback, typing: false } : x)),
+            );
+          }
+        },
+      });
+    } catch (err) {
+      const msg = err instanceof RateLimitedError
+        ? "⏱ Aguarda um instante antes de enviar outra mensagem."
+        : err instanceof Error
+          ? `⚠ ${err.message}`
+          : "⚠ Falha ao contactar o agente.";
+      const fallback = accumulated || `${msg}\n\n_Resposta local:_ ${localReply(text, signals)}`;
+      setMessages((m) =>
+        m.map((x) => (x.id === streamId ? { ...x, text: fallback, typing: false } : x)),
+      );
+      if (err instanceof RateLimitedError) toast.warning(msg);
+      else toast.error(msg);
+    } finally {
+      setBusy(false);
+      abortRef.current = null;
+    }
   }
+
+  // Cancel any in-flight stream on unmount
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   function runAction(action: AgentAction, label: string) {
     dispatchAgentAction(action);
@@ -379,17 +443,18 @@ export default function AgentPanel({ onClose }: Props) {
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
           }}
-          placeholder="Fale com o agente…"
+          placeholder={busy ? "A pensar…" : "Fale com o agente…"}
+          disabled={busy}
           className={cn(
             "flex-1 resize-none bg-[hsl(220_50%_8%)] border border-[hsl(195_100%_60%/0.2)] rounded-md",
             "px-3 py-2 text-sm text-white placeholder:text-white/30",
             "focus:outline-none focus:ring-2 focus:ring-[hsl(195_100%_60%/0.4)] focus:border-[hsl(195_100%_60%/0.5)]",
-            "max-h-32",
+            "max-h-32 disabled:opacity-60",
           )}
         />
         <button
           onClick={handleSend}
-          disabled={!input.trim()}
+          disabled={!input.trim() || busy}
           aria-label="Enviar"
           className={cn(
             "h-9 w-9 shrink-0 rounded-md flex items-center justify-center",
