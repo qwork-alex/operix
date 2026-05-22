@@ -41,7 +41,7 @@ export function CharacterProvider({ children }: { children: ReactNode }) {
     characterEngine.updateSignal({
       urgency,
       hasAlert: worst === "error" || worst === "warn",
-      signalKind: signals[0]?.kind,
+      signalKind: signals[0]?.id,
     });
   }, [worst, signals]);
 
