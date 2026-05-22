@@ -201,7 +201,7 @@ export function FileUploadZone({ onFilesSelected, isProcessing, compact = false 
             <Button
               variant="outline"
               size="icon"
-              className="h-8 w-8"
+              className="h-11 w-11 touch-manipulation md:h-8 md:w-8"
               disabled={isProcessing}
               aria-label={t("upload.add") || "Adicionar"}
             >
