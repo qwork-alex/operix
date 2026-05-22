@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { RealtimeHub } from "@/lib/realtime/RealtimeHub";
+import { RuntimeHealthMonitor } from "@/lib/observability";
 import { AlertTriangle, Bell, Bot, Radio, Workflow, GitMerge } from "lucide-react";
 
 type EvtKind = "alert" | "recommendation" | "automation" | "discrepancy" | "ingest" | "backend";
@@ -75,6 +76,14 @@ export function OperationalEventsStream() {
         ...(logs.data ?? []).map((r: any) => ({
           id: `l-${r.id}`, kind: "backend" as EvtKind, title: r.event_type ?? "Evento", ts: r.created_at,
         })),
+        // Live runtime telemetry — edge failures captured in-memory by the monitor
+        ...RuntimeHealthMonitor.getSnapshot().edgeFailures.slice(0, 10).map((f) => ({
+          id: `ef-${f.fn}-${f.at}`,
+          kind: "backend" as EvtKind,
+          title: `Edge ${f.fn} falhou`,
+          detail: f.message,
+          ts: new Date(f.at).toISOString(),
+        })),
       ].sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime()).slice(0, 30);
 
       if (!cancelled) {
@@ -90,6 +99,7 @@ export function OperationalEventsStream() {
       RealtimeHub.subscribe({ table: "automation_executions", event: "INSERT", workspaceId }, load),
       RealtimeHub.subscribe({ table: "discrepancies", event: "INSERT", workspaceId }, load),
       RealtimeHub.subscribe({ table: "hail_events", event: "INSERT" }, load),
+      RuntimeHealthMonitor.subscribe(() => load()),
     ];
     return () => { cancelled = true; offs.forEach((off) => off()); };
   }, [workspaceId]);

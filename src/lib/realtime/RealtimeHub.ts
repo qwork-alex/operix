@@ -17,6 +17,7 @@
  *  - No business logic. Pure plumbing.
  */
 import { supabase } from "@/integrations/supabase/client";
+import { recordRealtimeEvent } from "@/lib/observability";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 export type PgEvent = "INSERT" | "UPDATE" | "DELETE" | "*";
@@ -73,6 +74,7 @@ export function subscribe(opts: SubscribeOptions, handler: Listener): () => void
     const channel = supabase
       .channel(key)
       .on("postgres_changes", config, (payload: unknown) => {
+        recordRealtimeEvent();
         const e = registry.get(key);
         if (!e) return;
         for (const fn of e.listeners) {
