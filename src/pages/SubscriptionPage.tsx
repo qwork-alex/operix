@@ -258,7 +258,14 @@ export default function SubscriptionPage() {
             </div>
           </Card>
 
+          <WorkspacePlanMatrix
+            currentPlanCode={plan.code}
+            currentCycle={subscription.billing_cycle}
+            technicianCount={techCount}
+          />
+
           <BillingIntelligencePanel />
+
         </TabsContent>
 
         {/* ─── INVOICES ─── */}
