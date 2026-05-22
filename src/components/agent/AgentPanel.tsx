@@ -277,12 +277,20 @@ export default function AgentPanel({ onClose }: Props) {
               style={{ background: "radial-gradient(circle at 30% 25%, hsl(195 100% 65%), hsl(220 90% 25%) 70%)" }}>
               <span className="absolute inset-0 rounded-full border border-[hsl(195_100%_70%/0.5)] animate-[spin_8s_linear_infinite]"
                 style={{ borderTopColor: "transparent" }} />
-              <Sparkles className="relative h-4 w-4 text-white" />
-            </div>
+          <div className="flex items-center gap-3 min-w-0">
+            {/* state pip — mirrors the live robot identity, no duplicate avatar */}
+            <span
+              aria-hidden
+              className="relative inline-flex h-2.5 w-2.5 shrink-0 rounded-full"
+              style={{
+                background: `hsl(${aiSnap.visual.hue})`,
+                boxShadow: `0 0 10px hsl(${aiSnap.visual.hue} / 0.8)`,
+              }}
+            />
             <div className="min-w-0">
-              <div className="text-sm font-semibold tracking-wide leading-tight">QWORK · AGENT</div>
+              <div className="text-sm font-semibold tracking-wide leading-tight">QW · CONSOLE</div>
               <div className="text-[10px] uppercase tracking-[0.18em] text-[hsl(195_100%_75%)] truncate">
-                {ctx.label}
+                {aiSnap.visual.label} · {ctx.label}
               </div>
             </div>
           </div>
