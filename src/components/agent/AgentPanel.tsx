@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Send, X, Wifi, WifiOff, MapPin, AlertTriangle, CheckCircle2, Info,
   Mic, Paperclip, Sparkles, Activity, ArrowRight, MessageSquare, Stethoscope,
+  ImageIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -15,6 +16,7 @@ import { loadPersistedAgentEvents } from "@/lib/operationalObserver";
 import { captureScreenshot } from "@/lib/screenshotCapture";
 import { streamAgentReply, RateLimitedError, type AgentTurn } from "@/lib/agentLLM";
 import { AgentDiagnosticsView } from "./AgentDiagnosticsView";
+import { AgentConversationPanel } from "./AgentConversationPanel";
 
 
 interface Msg {
@@ -54,7 +56,7 @@ export default function AgentPanel({ onClose }: Props) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
-  const [tab, setTab] = useState<"chat" | "diag">("chat");
+  const [tab, setTab] = useState<"chat" | "talk" | "diag">("chat");
 
   const [events, setEvents] = useState<AgentEvent[]>(() =>
     [...loadPersistedAgentEvents(), ...agentBus.snapshot()].slice(-30),
@@ -296,6 +298,7 @@ export default function AgentPanel({ onClose }: Props) {
         {/* Tab strip */}
         <div className="mt-3 flex gap-1 p-0.5 rounded-md bg-black/40 border border-white/5">
           <TabBtn active={tab === "chat"} icon={MessageSquare} label="Chat" onClick={() => setTab("chat")} />
+          <TabBtn active={tab === "talk"} icon={ImageIcon} label="Conversar" onClick={() => setTab("talk")} />
           <TabBtn active={tab === "diag"} icon={Stethoscope} label="Diagnóstico" onClick={() => setTab("diag")} />
         </div>
 
@@ -318,6 +321,10 @@ export default function AgentPanel({ onClose }: Props) {
 
       {tab === "diag" && (
         <AgentDiagnosticsView route={ctx.pathname} module={ctx.label} online={ctx.online} />
+      )}
+
+      {tab === "talk" && (
+        <AgentConversationPanel autoAttachSnapshot className="flex-1 min-h-0" />
       )}
 
       {tab === "chat" && (
