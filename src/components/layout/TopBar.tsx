@@ -16,6 +16,7 @@ import { useNotifications } from "@/hooks/useNotifications";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { AIControlCenter } from "./AIControlCenter";
 
 const typeIcon: Record<string, typeof Info> = {
   service_order: FileText,
