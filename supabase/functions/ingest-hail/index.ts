@@ -395,8 +395,10 @@ Deno.serve(async (req) => {
     const cache = new CacheStore(supabase);
 
     const url = new URL(req.url);
-    const regionKey = url.searchParams.get("region") ?? "FR";
+    const regionParam = url.searchParams.get("region") ?? "all";
     const onlyKey = url.searchParams.get("provider"); // optional single provider
+    // When region=all, iterate every enabled provider using its native region.
+    const isAll = regionParam.toLowerCase() === "all";
 
     /* ---- Load provider registry sorted by priority ---- */
     let q = supabase.from("weather_providers")
