@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { TableLoadingRow } from "@/components/shared/TableStatusRows";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -350,7 +351,7 @@ export default function FleetDocumentsModule() {
 
               {/* Files */}
               {isLoading ? (
-                <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                <TableLoadingRow colSpan={5} />
               ) : filtered.length === 0 && folders.length === 0 ? (
                 <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Nenhum documento</TableCell></TableRow>
               ) : filtered.map((d: any) => (
