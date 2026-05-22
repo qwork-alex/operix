@@ -10,11 +10,13 @@ import { FloatingAgent } from "@/components/agent/FloatingAgent";
 import { useOperationalBusBoot } from "@/hooks/useOperationalBusBoot";
 import { useAgentRuntimeBoot } from "@/hooks/useAgentRuntimeBoot";
 import { useVirtualEngineerBoot } from "@/hooks/useVirtualEngineerBoot";
+import { useOperationalCopilotBoot } from "@/hooks/useOperationalCopilotBoot";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   useOperationalBusBoot();
   useAgentRuntimeBoot();
   useVirtualEngineerBoot();
+  useOperationalCopilotBoot();
   return (
     <ConsentGate>
       <SidebarProvider>
