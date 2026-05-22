@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CreditCard, Users, TrendingUp, Calendar, AlertCircle, CheckCircle2, Clock,
   FileText, Wallet, Building2, History, LayoutDashboard,
@@ -20,6 +20,7 @@ import { BillingAlerts } from "@/components/billing/BillingAlerts";
 import { WorkspaceInvoiceCenter } from "@/components/billing/WorkspaceInvoiceCenter";
 import { WorkspacePaymentMethods } from "@/components/billing/WorkspacePaymentMethods";
 import { BillingProfileCard } from "@/components/billing/BillingProfileCard";
+import { fetchWorkspaceTiers, resolveTier, type WorkspaceTier } from "@/lib/billing";
 
 const STATUS_META: Record<SubscriptionStatus, { label: string; tone: string; icon: typeof CheckCircle2 }> = {
   trial:        { label: "Em avaliação", tone: "bg-amber-500/10 text-amber-500 border-amber-500/30",  icon: Clock },
@@ -30,11 +31,10 @@ const STATUS_META: Record<SubscriptionStatus, { label: string; tone: string; ico
   cancelled:    { label: "Cancelada",     tone: "bg-muted text-muted-foreground border-border",        icon: AlertCircle },
 };
 
-function priceFor(techCount: number, cycle: "monthly" | "yearly", plan: { base_price_monthly: number; base_tech_included: number; extra_block_size: number; extra_block_price: number; yearly_discount_months: number; }) {
-  const extra = Math.max(0, techCount - plan.base_tech_included);
-  const blocks = Math.ceil(extra / plan.extra_block_size);
-  const monthly = plan.base_price_monthly + blocks * plan.extra_block_price;
-  return cycle === "yearly" ? Math.round(monthly * (12 - plan.yearly_discount_months) * 100) / 100 : monthly;
+function priceForTier(techCount: number, cycle: "monthly" | "yearly", tiers: WorkspaceTier[]): number {
+  const tier = resolveTier(tiers, techCount);
+  if (!tier) return 0;
+  return cycle === "yearly" ? tier.yearly_price : tier.base_price_monthly;
 }
 
 export default function SubscriptionPage() {
@@ -44,14 +44,14 @@ export default function SubscriptionPage() {
   const [simTechs, setSimTechs] = useState<number | null>(null);
   const [simCycle, setSimCycle] = useState<"monthly" | "yearly">("monthly");
   const [tab, setTab] = useState("overview");
+  const [tiers, setTiers] = useState<WorkspaceTier[]>([]);
+
+  useEffect(() => { void fetchWorkspaceTiers().then(setTiers); }, []);
 
   const techCount = snapshot?.usage?.technician_count ?? 0;
   const sim = simTechs ?? techCount;
 
-  const simulatedPrice = useMemo(() => {
-    if (!snapshot?.plan) return 0;
-    return priceFor(sim, simCycle, snapshot.plan);
-  }, [sim, simCycle, snapshot?.plan]);
+  const simulatedPrice = useMemo(() => priceForTier(sim, simCycle, tiers), [sim, simCycle, tiers]);
 
   if (isLoading) {
     return (
@@ -151,10 +151,10 @@ export default function SubscriptionPage() {
                   <CreditCard className="h-3.5 w-3.5" /> Preço atual
                 </div>
                 <p className="text-2xl font-semibold">
-                  {pricing!.current_monthly.toFixed(2)} €<span className="text-xs text-muted-foreground"> /mês</span>
+                  {pricing!.current_monthly.toFixed(2)} €<span className="text-xs text-muted-foreground"> + IVA aplicável /mês</span>
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Anual: {pricing!.current_yearly.toFixed(2)} € ({plan.yearly_discount_months} meses grátis)
+                  Anual: {pricing!.current_yearly.toFixed(2)} € + IVA aplicável
                 </p>
               </div>
             </Card>

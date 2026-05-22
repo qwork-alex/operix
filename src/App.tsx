@@ -47,6 +47,8 @@ import {
   CookiesPage,
   DataProcessingPage,
 } from "./pages/legal/LegalPages";
+import LandingPage from "./pages/LandingPage";
+import WorkspaceOnboardingPage from "./pages/onboarding/WorkspaceOnboardingPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -73,6 +75,8 @@ const App = () => (
             <Sonner />
             <BrowserRouter>
               <Routes>
+                <Route path="/landing" element={<LandingPage />} />
+                <Route path="/onboarding/workspace" element={<WorkspaceOnboardingPage />} />
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/legal/terms" element={<TermsPage />} />
                 <Route path="/legal/privacy" element={<PrivacyPage />} />

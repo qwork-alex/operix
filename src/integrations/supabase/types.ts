@@ -6377,6 +6377,18 @@ export type Database = {
           workspace_id: string
         }[]
       }
+      list_workspace_tiers: {
+        Args: never
+        Returns: {
+          base_price_monthly: number
+          code: string
+          name: string
+          sort_order: number
+          tier_max: number
+          tier_min: number
+          yearly_price: number
+        }[]
+      }
       log_audit_event: {
         Args: {
           _new?: Json
