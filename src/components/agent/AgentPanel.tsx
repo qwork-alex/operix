@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import {
   Send, X, Wifi, WifiOff, MapPin, AlertTriangle, CheckCircle2, Info,
@@ -244,10 +245,11 @@ export default function AgentPanel({ onClose }: Props) {
   const originX = `${Math.round(robotCx)}px`;
   const originY = `${Math.round(robotCy)}px`;
 
-  return (
-    <>
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div className="qw-overlay-layer">
       <div
-        className="fixed inset-0 z-[58] bg-transparent"
+        className="fixed inset-0 z-[1000] bg-black/20 md:bg-transparent"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -255,7 +257,7 @@ export default function AgentPanel({ onClose }: Props) {
       role="dialog"
       aria-label="QWork Agent"
       className={cn(
-        "fixed z-[59] flex flex-col overflow-hidden text-white",
+        "fixed z-[1001] flex flex-col overflow-hidden text-white isolate",
         "border border-[hsl(195_100%_60%/0.18)]",
         "shadow-[0_20px_60px_-20px_hsl(220_90%_5%/0.85),0_0_0_1px_hsl(195_100%_60%/0.1)]",
         "backdrop-blur-2xl bg-[hsl(220_50%_4%/0.92)]",
@@ -517,7 +519,8 @@ export default function AgentPanel({ onClose }: Props) {
       </>
       )}
     </div>
-    </>
+    </div>,
+    document.body,
   );
 
 }
