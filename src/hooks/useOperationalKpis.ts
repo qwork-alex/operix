@@ -57,7 +57,7 @@ export function useOperationalKpis() {
   useEffect(() => {
     if (!workspaceId) return;
     const ch = supabase
-      .channel(`op-kpis-${workspaceId}`)
+      .channel(`op-kpis-${workspaceId}-${Math.random().toString(36).slice(2, 8)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "platforms" },
         () => qc.invalidateQueries({ queryKey: ["operational-kpis", workspaceId] }))
       .on("postgres_changes", { event: "*", schema: "public", table: "ai_alerts" },
