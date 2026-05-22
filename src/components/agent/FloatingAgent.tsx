@@ -41,6 +41,13 @@ export function FloatingAgent() {
     return () => clearInterval(id);
   }, []);
 
+  // Conversational layer: open panel when bubble requests it
+  useEffect(() => {
+    const handler = () => setOpen(true);
+    window.addEventListener("qwork:agent:open-request", handler);
+    return () => window.removeEventListener("qwork:agent:open-request", handler);
+  }, []);
+
   const urgent = worst === "warn" || worst === "error";
 
   return (

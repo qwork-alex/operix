@@ -9,6 +9,7 @@ import { AccessStateBanner } from "@/components/billing/AccessStateBanner";
 import { FloatingAgent } from "@/components/agent/FloatingAgent";
 import { PresenceOverlay } from "@/agents/presence";
 import { CharacterLayer } from "@/agents/character";
+import { ConversationBubble, AGENT_OPEN_REQUEST_EVENT } from "@/agents/conversation";
 import { useOperationalBusBoot } from "@/hooks/useOperationalBusBoot";
 import { useAgentRuntimeBoot } from "@/hooks/useAgentRuntimeBoot";
 import { useVirtualEngineerBoot } from "@/hooks/useVirtualEngineerBoot";
@@ -38,6 +39,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <FloatingAgent />
           <PresenceOverlay />
           <CharacterLayer />
+          <ConversationBubble
+            onOpenDiagnostic={() =>
+              window.dispatchEvent(new CustomEvent(AGENT_OPEN_REQUEST_EVENT))
+            }
+          />
         </div>
       </SidebarProvider>
     </ConsentGate>
