@@ -146,56 +146,75 @@ const RainViewer: WeatherProvider = {
   // for the radar capability via the cache layer.
 };
 
-/* ----- Météo-France Vigilance (hail+severe alerts, no key, FR) ----------- */
+/* ----- MeteoAlarm (EU severe alerts incl. FR, no key) ------------------- */
+//  Replaces the discontinued public MeteoFrance vigilance XML feed.
+//  Uses the open MeteoAlarm v1 JSON API. Filters thunderstorm (awareness
+//  type 3 — covers hail) at orange/red level (>= 3), computes centroids
+//  from the GeoJSON polygons.
 const MeteoFrance: WeatherProvider = {
   key: "meteofrance",
   capabilities: ["alerts", "hail", "severe"],
   async fetchHail(ctx) {
-    // Public Vigilance JSON (mirror exposed via meteoalarm-style feed)
-    // Endpoint may evolve; kept resilient.
-    const cacheKey = `mf:vigilance:${ctx.regionKey}`;
+    const cacheKey = `mfalarm:${ctx.regionKey}`;
     const cached = await ctx.cache.get(cacheKey);
     if (cached) return cached as HailEvent[];
 
-    const url = "https://meteofrance.com/meteo/vigilance/data/NXFR33_LFPW_.xml";
-    const res = await fetch(url, { headers: { accept: "application/xml" } });
-    if (!res.ok) throw new Error(`MeteoFrance vigilance ${res.status}`);
-    const xml = await res.text();
+    const countryMap: Record<string, string> = {
+      FR: "france", DE: "germany", ES: "spain", IT: "italy",
+      BE: "belgium", NL: "netherlands", PT: "portugal", CH: "switzerland",
+      AT: "austria", LU: "luxembourg",
+    };
+    const country = countryMap[ctx.regionKey] ?? "france";
+    const url = `https://feeds.meteoalarm.org/api/v1/warnings/feeds-${country}`;
 
-    // Lightweight extraction: find <DD ...> with phenomenon "grele"/"orages"
-    // and color level. We avoid an XML parser dependency.
+    const res = await fetch(url, {
+      headers: {
+        accept: "application/json",
+        "user-agent": "Lovable-OperationalMap (+nexus.qworkgroup.com)",
+      },
+    });
+    if (!res.ok) throw new Error(`MeteoAlarm ${country} ${res.status}`);
+    const json = await res.json().catch(() => ({}));
+
     const events: HailEvent[] = [];
-    const blockRe = /<DD[^>]*dep="(\d+)"[^>]*>([\s\S]*?)<\/DD>/g;
-    const phenoRe = /<phenomene[^>]*phenomene="(\d+)"[^>]*couleur="(\d+)"/g;
-    // 4 = orages, 6 = neige/verglas, 9 = vagues-submersion ; hail is folded
-    // into phenomene 4 (orages) with couleur >= 3.
+    const warnings: any[] = json?.warnings ?? json?.features ?? [];
+    for (const w of warnings) {
+      const props = w.properties ?? w;
+      const type = Number(props.awareness_type ?? props.awarenessType ?? 0);
+      const level = Number(props.awareness_level ?? props.awarenessLevel ?? 0);
+      if (type !== 3 || level < 3) continue;
 
-    let m: RegExpExecArray | null;
-    while ((m = blockRe.exec(xml))) {
-      const dep = m[1];
-      const inner = m[2];
-      let p: RegExpExecArray | null;
-      while ((p = phenoRe.exec(inner))) {
-        const pheno = p[1]; const col = parseInt(p[2], 10);
-        if (pheno !== "4" || col < 3) continue;
-        const sev: Severity = col >= 4 ? "extreme" : col === 3 ? "severe" : "moderate";
-        const coords = FR_DEPARTMENT_COORDS[dep];
-        if (!coords) continue;
-        events.push({
-          source: "meteofrance",
-          external_id: `mf-${dep}-${new Date().toISOString().slice(0, 10)}`,
-          city: null, region: `FR-${dep}`, country: "FR",
-          lat: coords[1], lng: coords[0],
-          radius_km: 60,
-          severity: sev,
-          status: "forecast",
-          probability: col >= 4 ? 0.85 : 0.6,
-          intensity: col * 25,
-          forecast_time: new Date().toISOString(),
-          expires_at: new Date(Date.now() + 6 * 3600_000).toISOString(),
-          metadata: { phenomenon: "orages", vigilance_color: col },
-        });
+      const sev: Severity = level >= 4 ? "extreme" : "severe";
+      const geom = w.geometry ?? props.geometry;
+      let lat = 46.5, lng = 2.5, n = 0;
+      if (geom?.type === "Polygon") {
+        n = 0; lat = 0; lng = 0;
+        for (const ring of geom.coordinates) for (const [x, y] of ring) { lng += x; lat += y; n++; }
+        if (n) { lng /= n; lat /= n; } else { lat = 46.5; lng = 2.5; }
+      } else if (geom?.type === "MultiPolygon") {
+        n = 0; lat = 0; lng = 0;
+        for (const poly of geom.coordinates)
+          for (const ring of poly)
+            for (const [x, y] of ring) { lng += x; lat += y; n++; }
+        if (n) { lng /= n; lat /= n; } else { lat = 46.5; lng = 2.5; }
       }
+
+      const id =
+        props.identifier ?? props.id ?? w.id ??
+        `ma-${country}-${props.onset ?? props.effective ?? Date.now()}`;
+      events.push({
+        source: "meteofrance",
+        external_id: String(id),
+        city: null, region: country.toUpperCase(), country: ctx.regionKey,
+        lat, lng, radius_km: 80,
+        severity: sev,
+        status: "forecast",
+        probability: level >= 4 ? 0.85 : 0.65,
+        intensity: level * 25,
+        forecast_time: props.onset ?? props.effective ?? new Date().toISOString(),
+        expires_at: props.expires ?? new Date(Date.now() + 6 * 3600_000).toISOString(),
+        metadata: { source_feed: "meteoalarm", country, level, type },
+      });
     }
 
     await ctx.cache.set({
@@ -376,8 +395,10 @@ Deno.serve(async (req) => {
     const cache = new CacheStore(supabase);
 
     const url = new URL(req.url);
-    const regionKey = url.searchParams.get("region") ?? "FR";
+    const regionParam = url.searchParams.get("region") ?? "all";
     const onlyKey = url.searchParams.get("provider"); // optional single provider
+    // When region=all, iterate every enabled provider using its native region.
+    const isAll = regionParam.toLowerCase() === "all";
 
     /* ---- Load provider registry sorted by priority ---- */
     let q = supabase.from("weather_providers")
@@ -409,9 +430,13 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Region scope filter (global providers always pass)
-      if (!row.regions.includes("global") && !row.regions.includes(regionKey)) {
-        providerStatus[row.key] = `region_skip:${regionKey}`;
+      // Region scope: when isAll, pick the provider's first concrete region
+      // (or "global"); otherwise honour the explicit ?region= filter.
+      let regionKey = regionParam;
+      if (isAll) {
+        regionKey = row.regions.find((r) => r !== "global") ?? "global";
+      } else if (!row.regions.includes("global") && !row.regions.includes(regionParam)) {
+        providerStatus[row.key] = `region_skip:${regionParam}`;
         continue;
       }
 
@@ -464,7 +489,7 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({
       ok: true,
-      region: regionKey,
+      region: regionParam,
       duration_ms: Date.now() - t0,
       providers: providerStatus,
       events_received: allEvents.length,
