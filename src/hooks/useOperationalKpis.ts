@@ -24,7 +24,7 @@ export function useOperationalKpis() {
       const [plat, alerts, events, so] = await Promise.all([
         supabase.from("platforms").select("state").eq("workspace_id", workspaceId!),
         supabase.from("ai_alerts").select("id", { count: "exact", head: true })
-          .eq("workspace_id", workspaceId!).eq("resolved", false),
+          .eq("workspace_id", workspaceId!).neq("status", "resolved"),
         supabase.from("backend_event_logs").select("id", { count: "exact", head: true })
           .gte("created_at", since),
         supabase.from("service_orders")
