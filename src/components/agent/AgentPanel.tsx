@@ -262,10 +262,10 @@ export default function AgentPanel({ onClose }: Props) {
         "shadow-[0_20px_60px_-20px_hsl(220_90%_5%/0.85),0_0_0_1px_hsl(195_100%_60%/0.1)]",
         "backdrop-blur-2xl bg-[hsl(220_50%_4%/0.92)]",
         // Mobile: bottom sheet — full width, rounded top, slides up from bottom
-        "inset-x-0 bottom-0 max-h-[85vh] rounded-t-2xl pb-[env(safe-area-inset-bottom)]",
+        "inset-x-0 bottom-0 max-h-[min(88svh,720px)] rounded-t-2xl pb-[env(safe-area-inset-bottom)]",
         "animate-in slide-in-from-bottom duration-300 ease-out",
         // Desktop: contextual popover anchored under the AI button (top-right)
-        "md:inset-x-auto md:bottom-auto md:right-4 md:top-16 md:w-[380px] md:max-h-[70vh] md:rounded-2xl",
+        "md:inset-x-auto md:bottom-auto md:right-4 md:top-16 md:w-[380px] md:max-h-[min(70svh,720px)] md:rounded-2xl",
         "md:animate-in md:fade-in md:zoom-in-95 md:slide-in-from-top-2 md:duration-200",
       )}
       style={{ transformOrigin: `top right` }}
