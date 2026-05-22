@@ -195,7 +195,7 @@ export function AIControlCenter() {
 
       {expanded && (
         <Suspense fallback={null}>
-          <AgentPanel onClose={() => window.dispatchEvent(new CustomEvent("qwork:agent:close-request"))} />
+          <AgentPanel onClose={close} />
         </Suspense>
       )}
     </>
