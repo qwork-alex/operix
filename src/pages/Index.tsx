@@ -1,70 +1,53 @@
-import { Euro, CreditCard, CheckCircle2, TrendingUp } from "lucide-react";
-import { KPICard } from "@/components/dashboard/KPICard";
-import { RevenueChart } from "@/components/dashboard/RevenueChart";
-import { ServicePieChart } from "@/components/dashboard/ServicePieChart";
+import { OperationalKPIs } from "@/components/dashboard/OperationalKPIs";
+import { PlatformsPanel } from "@/components/dashboard/PlatformsPanel";
+import { OperationalEventsStream } from "@/components/dashboard/OperationalEventsStream";
 import { OperationalMap } from "@/components/dashboard/OperationalMap";
+import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { RecentActivity } from "@/components/dashboard/RecentActivity";
-import { useDashboardStats } from "@/hooks/useDashboardData";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useGeolocation } from "@/hooks/useGeolocation";
 
 const Dashboard = () => {
-  const { data, isLoading } = useDashboardStats();
-  const { t, formatCurrency } = useLanguage();
-  useGeolocation(); // Track user location on dashboard visit
+  const { t } = useLanguage();
+  useGeolocation();
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-foreground">{t("dashboard.title")}</h1>
-        <p className="text-sm text-muted-foreground">{t("dashboard.subtitle")}</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-foreground">{t("dashboard.title")}</h1>
+          <p className="text-sm text-muted-foreground">Centro operacional em tempo real</p>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-75" />
+            <span className="relative rounded-full bg-emerald-400 h-2 w-2" />
+          </span>
+          Realtime activo
+        </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPICard
-          title={t("dashboard.revenue")}
-          value={isLoading ? "..." : formatCurrency(data?.totalRevenue ?? 0)}
-          change={0}
-          icon={<Euro className="h-5 w-5" />}
-          glowClass="glow-gold"
-        />
-        <KPICard
-          title={t("dashboard.pendingPayments")}
-          value={isLoading ? "..." : formatCurrency(data?.pendingPayments ?? 0)}
-          change={0}
-          icon={<CreditCard className="h-5 w-5" />}
-          glowClass="glow-blue"
-        />
-        <KPICard
-          title={t("dashboard.completedServices")}
-          value={isLoading ? "..." : String(data?.completedServices ?? 0)}
-          change={0}
-          icon={<CheckCircle2 className="h-5 w-5" />}
-          glowClass="glow-green"
-        />
-        <KPICard
-          title={t("dashboard.performance")}
-          value={isLoading ? "..." : `${data?.performance ?? 0}%`}
-          change={0}
-          icon={<TrendingUp className="h-5 w-5" />}
-          glowClass="glow-purple"
-        />
-      </div>
+      {/* Operational KPIs */}
+      <OperationalKPIs />
 
-      {/* Revenue Chart - full width */}
-      <RevenueChart />
+      {/* Platforms lifecycle */}
+      <ErrorBoundary>
+        <PlatformsPanel />
+      </ErrorBoundary>
 
-      {/* Map - full width */}
+      {/* Radar PDR — full width */}
       <ErrorBoundary>
         <OperationalMap />
       </ErrorBoundary>
 
-      {/* Service Status + Recent Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ServicePieChart />
-        <RecentActivity />
+      {/* Stream + Revenue */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2">
+          <RevenueChart />
+        </div>
+        <ErrorBoundary>
+          <OperationalEventsStream />
+        </ErrorBoundary>
       </div>
     </div>
   );
