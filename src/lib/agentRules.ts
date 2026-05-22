@@ -39,12 +39,42 @@ export function deriveSuggestions(
         action: { kind: "navigate", to: "/", focus: "platforms-panel" },
       });
     }
-    if (s.id === "runtime-errors") {
+    if (s.id === "runtime-errors" || s.id === "alert-spike") {
       out.push({
         id: `sug-${s.id}`,
-        label: "Mostrar últimos erros",
+        label: s.id === "alert-spike" ? "Investigar pico de alertas" : "Mostrar últimos erros",
         tone: "error",
         action: { kind: "show_errors" },
+      });
+    }
+    if (s.id === "so-stalled") {
+      out.push({
+        id: `sug-${s.id}`,
+        label: "Rever ordens inativas",
+        tone: "warn",
+        action: { kind: "navigate", to: "/service-orders" },
+      });
+    }
+    if (s.id === "production-drop" || s.id === "workspace-idle") {
+      out.push({
+        id: `sug-${s.id}`,
+        label: "Abrir produção",
+        action: { kind: "navigate", to: "/production" },
+      });
+    }
+    if (s.id === "payments-overdue") {
+      out.push({
+        id: `sug-${s.id}`,
+        label: "Rever pagamentos em atraso",
+        tone: "warn",
+        action: { kind: "navigate", to: "/payment-orders" },
+      });
+    }
+    if (s.id === "techs-inactive") {
+      out.push({
+        id: `sug-${s.id}`,
+        label: "Ver equipa técnica",
+        action: { kind: "navigate", to: "/users" },
       });
     }
   }
