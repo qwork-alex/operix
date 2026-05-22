@@ -55,6 +55,7 @@ export default function AgentPanel({ onClose }: Props) {
   const ctx = useAgentContext();
   const navigate = useNavigate();
   const { signals, worst, recent } = useOperationalSignals();
+  const { snapshot: aiSnap } = useAI();
   const [messages, setMessages] = useState<Msg[]>(() => loadHistory());
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
