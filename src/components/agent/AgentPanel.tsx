@@ -17,6 +17,7 @@ import { captureScreenshot } from "@/lib/screenshotCapture";
 import { streamAgentReply, RateLimitedError, type AgentTurn } from "@/lib/agentLLM";
 import { AgentDiagnosticsView } from "./AgentDiagnosticsView";
 import { AgentConversationPanel } from "./AgentConversationPanel";
+import { MultimodalPanel } from "@/agents/multimodal";
 
 
 interface Msg {
@@ -56,7 +57,7 @@ export default function AgentPanel({ onClose }: Props) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
-  const [tab, setTab] = useState<"chat" | "talk" | "diag">("chat");
+  const [tab, setTab] = useState<"chat" | "talk" | "diag" | "media">("chat");
 
   const [events, setEvents] = useState<AgentEvent[]>(() =>
     [...loadPersistedAgentEvents(), ...agentBus.snapshot()].slice(-30),
@@ -299,6 +300,7 @@ export default function AgentPanel({ onClose }: Props) {
         <div className="mt-3 flex gap-1 p-0.5 rounded-md bg-black/40 border border-white/5">
           <TabBtn active={tab === "chat"} icon={MessageSquare} label="Chat" onClick={() => setTab("chat")} />
           <TabBtn active={tab === "talk"} icon={ImageIcon} label="Conversar" onClick={() => setTab("talk")} />
+          <TabBtn active={tab === "media"} icon={Paperclip} label="Mídia" onClick={() => setTab("media")} />
           <TabBtn active={tab === "diag"} icon={Stethoscope} label="Diagnóstico" onClick={() => setTab("diag")} />
         </div>
 
@@ -325,6 +327,12 @@ export default function AgentPanel({ onClose }: Props) {
 
       {tab === "talk" && (
         <AgentConversationPanel autoAttachSnapshot className="flex-1 min-h-0" />
+      )}
+
+      {tab === "media" && (
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <MultimodalPanel />
+        </div>
       )}
 
       {tab === "chat" && (
