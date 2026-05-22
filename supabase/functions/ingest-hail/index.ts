@@ -489,7 +489,7 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({
       ok: true,
-      region: regionKey,
+      region: regionParam,
       duration_ms: Date.now() - t0,
       providers: providerStatus,
       events_received: allEvents.length,
