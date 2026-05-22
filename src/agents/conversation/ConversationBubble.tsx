@@ -14,6 +14,8 @@ import { useEffect, useState } from "react";
 import { AlertTriangle, AlertCircle, ChevronDown, X, BellOff, Stethoscope, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useConversationPrompt } from "./useConversationPrompt";
+import { useAI } from "@/agents/ai";
+import { AGENT_OVERLAY_SIZE } from "@/agents/presence/MovementOrchestrator";
 
 interface Props {
   /** Called when user accepts → opens the full Agent diagnostic panel. */
