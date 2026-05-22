@@ -33,7 +33,7 @@ export function ProductionBoard({ onOpen }: Props) {
   };
 
   return (
-    <div className="flex gap-3 overflow-x-auto pb-4">
+    <div className="grid grid-cols-1 gap-3 pb-4 md:flex md:gap-3 md:overflow-x-auto">
       {PRODUCTION_STATUSES.map(col => {
         const items = grouped.get(col.value) ?? [];
         return (
@@ -41,9 +41,9 @@ export function ProductionBoard({ onOpen }: Props) {
             key={col.value}
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => onDrop(e, col.value)}
-            className="flex-shrink-0 w-72 bg-muted/30 rounded-xl p-3 max-h-[calc(100vh-280px)] overflow-y-auto"
+            className="min-w-0 rounded-xl bg-muted/30 p-3 md:w-72 md:flex-shrink-0 md:max-h-[calc(100svh-280px)] md:overflow-y-auto"
           >
-            <div className="flex items-center justify-between mb-3 sticky top-0 bg-muted/30 backdrop-blur py-1 z-10">
+            <div className="sticky top-0 z-10 mb-3 flex items-center justify-between bg-muted/30 py-2 backdrop-blur md:py-1">
               <div className="flex items-center gap-2">
                 <div className={`h-2 w-2 rounded-full ${col.color}`} />
                 <h3 className="text-sm font-semibold">{col.label}</h3>
@@ -57,7 +57,7 @@ export function ProductionBoard({ onOpen }: Props) {
                   draggable
                   onDragStart={(e) => e.dataTransfer.setData("text/plain", o.id)}
                   onClick={() => onOpen(o)}
-                  className="p-3 cursor-pointer hover:shadow-md hover:border-primary/40 transition-all space-y-1.5"
+                  className="min-h-[96px] cursor-pointer space-y-2 p-4 touch-manipulation transition-all hover:border-primary/40 hover:shadow-md md:min-h-0 md:p-3 md:space-y-1.5"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <span className="text-xs font-mono text-muted-foreground">{o.code}</span>
@@ -67,10 +67,10 @@ export function ProductionBoard({ onOpen }: Props) {
                       </Badge>
                     )}
                   </div>
-                  <div className="font-medium text-sm truncate">
+                  <div className="font-medium text-sm leading-snug md:truncate">
                     {o.license_plate || "Sem placa"} {o.brand && `· ${o.brand}`}
                   </div>
-                  {o.client_name && <div className="text-xs text-muted-foreground truncate">{o.client_name}</div>}
+                  {o.client_name && <div className="text-xs text-muted-foreground md:truncate">{o.client_name}</div>}
                   <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1">
                     {o.technician_name ? (
                       <span className="flex items-center gap-1"><User className="h-3 w-3" />{o.technician_name.split(" ")[0]}</span>
