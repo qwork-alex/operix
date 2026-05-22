@@ -6,6 +6,7 @@ import { ImpersonationBanner } from "./ImpersonationBanner";
 import { AppFooter } from "./AppFooter";
 import { ConsentGate } from "@/components/legal/ConsentGate";
 import { AccessStateBanner } from "@/components/billing/AccessStateBanner";
+import { FloatingAgent } from "@/components/agent/FloatingAgent";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   return (
@@ -24,6 +25,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             </main>
             <AppFooter />
           </div>
+          <FloatingAgent />
         </div>
       </SidebarProvider>
     </ConsentGate>
