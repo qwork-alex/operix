@@ -9,11 +9,13 @@
  *
  * Exposes the live snapshot through React context.
  */
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { useLocation } from "react-router-dom";
 import { useOperationalSignals } from "@/hooks/useOperationalSignals";
 import { presenceEngine } from "@/agents/presence/PresenceEngine";
 import { idleTracker } from "@/agents/presence/IdleBehavior";
 import { movementOrchestrator } from "@/agents/presence/MovementOrchestrator";
+import { robotAwareness } from "@/ai/entity/RobotAwareness";
 import { globalAI } from "./GlobalAIState";
 import { startAIReactor } from "./AIEventReactor";
 import { startAIRealtime } from "./AIRealtimeConnector";
@@ -30,7 +32,9 @@ const Ctx = createContext<AICtx | null>(null);
 
 export function AIProvider({ children }: { children: ReactNode }) {
   const { worst } = useOperationalSignals();
+  const location = useLocation();
   const [snapshot, setSnapshot] = useState<AIEntitySnapshot>(() => globalAI.current());
+  const lastSignalRef = useRef(worst);
 
   // Boot all engines once
   useEffect(() => {
@@ -57,6 +61,29 @@ export function AIProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     globalAI.setSignal(worst);
   }, [worst]);
+
+  // Contextual gaze — soft glance toward the page's main content when the
+  // route changes (the robot "checks out the new module") and toward the
+  // first visible alert when the worst signal changes.
+  useEffect(() => {
+    // Wait a tick for the new route to mount, then aim at <main> / banner.
+    const t = window.setTimeout(() => {
+      robotAwareness.glanceAtElement("main h1, main [role='heading'], main", 1600);
+    }, 180);
+    return () => window.clearTimeout(t);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (worst === lastSignalRef.current) return;
+    lastSignalRef.current = worst;
+    if (worst === "ok") return;
+    // Glance toward whichever alert just appeared, if any rendered.
+    const t = window.setTimeout(() => {
+      robotAwareness.glanceAtElement("[data-op-alert], [role='alert']", 1400);
+    }, 80);
+    return () => window.clearTimeout(t);
+  }, [worst]);
+
 
   const api: AICtx = {
     snapshot,

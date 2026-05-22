@@ -228,7 +228,10 @@ function Robot() {
   const head = useRef<THREE.Group>(null);
   const torso = useRef<THREE.Group>(null);
   const blinkRef = useRef(1);
-  const blinkTimer = useRef(0);
+  /** seconds until next blink — randomized for natural cadence */
+  const nextBlinkIn = useRef(2 + Math.random() * 3);
+  /** queue a second blink shortly after the first (double-blink) */
+  const doubleBlinkPending = useRef(false);
   const lookTarget = useRef({ x: 0, y: 0 });
   const tiltRef = useRef(0);
   const raiseRef = useRef(0); // right arm raise (0..1)
@@ -256,16 +259,17 @@ function Robot() {
 
   useFrame((s, dt) => {
     const t = s.clock.elapsedTime;
-    // hover bob — slow vertical drift + tiny roll, mechanical inertia
+    // hover bob — slow vertical drift + a barely-there lateral sway
     if (root.current) {
       root.current.position.y = Math.sin(t * frame.bobSpeed) * frame.bob * 0.8;
+      root.current.position.x = Math.sin(t * frame.bobSpeed * 0.37) * 0.012; // soft horizontal hover
       root.current.rotation.z = Math.sin(t * frame.bobSpeed * 0.55) * 0.015;
     }
     // torso counter-balance for life-like weight shift
     if (torso.current) {
       torso.current.rotation.y = Math.sin(t * 0.6) * 0.04;
     }
-    // head tracking — damped follow toward cursor + personality tilt
+    // head tracking — damped follow of (cursor ⊕ attention point) + personality tilt
     if (head.current) {
       const look = robotAwareness.lookFrom(canvasCenter.current, 360);
       lookTarget.current.x = damp(lookTarget.current.x, look.x * 0.42, 5 * frame.trackSpeed, dt);
@@ -286,11 +290,22 @@ function Robot() {
     raiseRef.current = damp(raiseRef.current, wantRaise, 3.5, dt);
     pointRef.current = damp(pointRef.current, wantPoint, 3.5, dt);
 
-    // blink — eyelid snap then ease open
-    blinkTimer.current += dt * frame.blinkRate;
-    if (blinkTimer.current > 1) {
-      blinkTimer.current = 0;
+    // Blink — irregular cadence, occasional double-blink. The eyelid
+    // snaps closed then eases open via damp() so it never feels mechanical.
+    nextBlinkIn.current -= dt;
+    if (nextBlinkIn.current <= 0) {
       blinkRef.current = 0.05;
+      if (doubleBlinkPending.current) {
+        doubleBlinkPending.current = false;
+        nextBlinkIn.current = 0.22; // quick second blink
+      } else {
+        // base interval scaled by frame.blinkRate (kept for mood expression)
+        const base = 3.5 + Math.random() * 4.5;
+        const k = Math.max(0.2, frame.blinkRate);
+        nextBlinkIn.current = base / Math.max(0.4, k * 1.6);
+        // ~12% chance of a double-blink for life-like cadence
+        doubleBlinkPending.current = Math.random() < 0.12;
+      }
     } else {
       blinkRef.current = damp(blinkRef.current, 1, 16, dt);
     }
