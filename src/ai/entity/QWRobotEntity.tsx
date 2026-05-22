@@ -228,7 +228,10 @@ function Robot() {
   const head = useRef<THREE.Group>(null);
   const torso = useRef<THREE.Group>(null);
   const blinkRef = useRef(1);
-  const blinkTimer = useRef(0);
+  /** seconds until next blink — randomized for natural cadence */
+  const nextBlinkIn = useRef(2 + Math.random() * 3);
+  /** queue a second blink shortly after the first (double-blink) */
+  const doubleBlinkPending = useRef(false);
   const lookTarget = useRef({ x: 0, y: 0 });
   const tiltRef = useRef(0);
   const raiseRef = useRef(0); // right arm raise (0..1)
