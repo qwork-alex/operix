@@ -75,6 +75,8 @@ const App = () => (
             <Sonner />
             <BrowserRouter>
               <Routes>
+                <Route path="/landing" element={<LandingPage />} />
+                <Route path="/onboarding/workspace" element={<WorkspaceOnboardingPage />} />
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/legal/terms" element={<TermsPage />} />
                 <Route path="/legal/privacy" element={<PrivacyPage />} />
