@@ -7,6 +7,7 @@ import { AppFooter } from "./AppFooter";
 import { ConsentGate } from "@/components/legal/ConsentGate";
 import { AccessStateBanner } from "@/components/billing/AccessStateBanner";
 import { FloatingAgent } from "@/components/agent/FloatingAgent";
+import { PresenceOverlay } from "@/agents/presence";
 import { useOperationalBusBoot } from "@/hooks/useOperationalBusBoot";
 import { useAgentRuntimeBoot } from "@/hooks/useAgentRuntimeBoot";
 import { useVirtualEngineerBoot } from "@/hooks/useVirtualEngineerBoot";
@@ -34,6 +35,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <AppFooter />
           </div>
           <FloatingAgent />
+          <PresenceOverlay />
         </div>
       </SidebarProvider>
     </ConsentGate>
