@@ -94,7 +94,7 @@ export default function FleetPage() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="min-w-0 max-w-full space-y-4 animate-fade-in md:space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
@@ -108,7 +108,7 @@ export default function FleetPage() {
 
       {/* Global Active Trip Bar(s) — supports multiple */}
       {activeTrips.map((trip: any) => (
-        <div key={trip.id} className="sticky top-0 z-50 flex items-center gap-3 rounded-lg border border-green-500/30 bg-green-500/5 backdrop-blur-sm px-4 py-3 animate-fade-in shadow-sm">
+        <div key={trip.id} className="sticky top-0 z-30 flex flex-col gap-3 rounded-lg border border-green-500/30 bg-green-500/5 px-3 py-3 shadow-sm backdrop-blur-sm animate-fade-in sm:flex-row sm:items-center sm:px-4">
           <div className="flex items-center gap-2">
             <div className="h-2.5 w-2.5 rounded-full bg-green-500 animate-pulse" />
             <span className="text-sm font-semibold text-green-600 dark:text-green-400">Trajeto em andamento</span>
@@ -116,11 +116,11 @@ export default function FleetPage() {
           <span className="text-xs text-muted-foreground hidden sm:inline">
             {getVehicleLabel(trip.vehicle_id)} — {getDriverName(trip.driver_id)} — KM: {Number(trip.km_start).toLocaleString()}
           </span>
-          <div className="ml-auto flex gap-2">
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleResume(trip.id)}>
+          <div className="grid w-full grid-cols-2 gap-2 sm:ml-auto sm:flex sm:w-auto">
+            <Button size="sm" variant="outline" className="h-10 text-xs sm:h-7" onClick={() => handleResume(trip.id)}>
               <Navigation className="h-3 w-3 mr-1" /> Continuar
             </Button>
-            <Button size="sm" variant="default" className="h-7 text-xs bg-green-600 hover:bg-green-700" onClick={() => handleResume(trip.id)}>
+            <Button size="sm" variant="default" className="h-10 text-xs bg-green-600 hover:bg-green-700 sm:h-7" onClick={() => handleResume(trip.id)}>
               Finalizar
             </Button>
           </div>
@@ -144,7 +144,7 @@ export default function FleetPage() {
 
       {/* Tabs */}
       <div className="space-y-4">
-        <div className="flex w-full rounded-xl bg-muted/40 p-1 gap-0.5 border border-border/30">
+        <div className="flex w-full gap-0.5 overflow-x-auto rounded-xl border border-border/30 bg-muted/40 p-1 md:overflow-visible">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.value;
             const color = TAB_COLORS[tab.value];
@@ -153,7 +153,7 @@ export default function FleetPage() {
                 key={tab.value}
                 onClick={() => setActiveTab(tab.value)}
                 className={`
-                  relative flex-1 flex items-center justify-center gap-2 rounded-lg px-3 py-3
+                  relative min-w-[72px] flex-1 flex items-center justify-center gap-2 rounded-lg px-3 py-3
                   text-[13px] sm:text-sm font-semibold tracking-wide transition-all duration-300 ease-out
                   ${isActive ? "text-foreground shadow-md" : "text-muted-foreground hover:text-foreground/60"}
                 `}
