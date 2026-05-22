@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CreditCard, Users, TrendingUp, Calendar, AlertCircle, CheckCircle2, Clock,
   FileText, Wallet, Building2, History, LayoutDashboard,
@@ -20,6 +20,7 @@ import { BillingAlerts } from "@/components/billing/BillingAlerts";
 import { WorkspaceInvoiceCenter } from "@/components/billing/WorkspaceInvoiceCenter";
 import { WorkspacePaymentMethods } from "@/components/billing/WorkspacePaymentMethods";
 import { BillingProfileCard } from "@/components/billing/BillingProfileCard";
+import { fetchWorkspaceTiers, resolveTier, type WorkspaceTier } from "@/lib/billing";
 
 const STATUS_META: Record<SubscriptionStatus, { label: string; tone: string; icon: typeof CheckCircle2 }> = {
   trial:        { label: "Em avaliação", tone: "bg-amber-500/10 text-amber-500 border-amber-500/30",  icon: Clock },
