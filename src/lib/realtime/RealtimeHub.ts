@@ -17,6 +17,7 @@
  *  - No business logic. Pure plumbing.
  */
 import { supabase } from "@/integrations/supabase/client";
+import { recordRealtimeEvent } from "@/lib/observability";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 export type PgEvent = "INSERT" | "UPDATE" | "DELETE" | "*";
