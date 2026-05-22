@@ -267,18 +267,15 @@ export function OperationalMap() {
     staleTime: 60_000,
   });
 
-  // Realtime: refresh on any hail_events change
+  // Realtime: refresh on any hail_events / hail_reports change (shared via RealtimeHub)
   useEffect(() => {
-    const ch = supabase
-      .channel(`op-map-hail-realtime-${Math.random().toString(36).slice(2, 8)}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "hail_events" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["op-map-hail"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "hail_reports" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["op-map-hail-reports"] });
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    const offs = [
+      RealtimeHub.subscribe({ table: "hail_events" }, () =>
+        queryClient.invalidateQueries({ queryKey: ["op-map-hail"] })),
+      RealtimeHub.subscribe({ table: "hail_reports" }, () =>
+        queryClient.invalidateQueries({ queryKey: ["op-map-hail-reports"] })),
+    ];
+    return () => { offs.forEach((off) => off()); };
   }, [queryClient]);
 
   /* -------- data: community hail reports (lifecycle window) -------- */
