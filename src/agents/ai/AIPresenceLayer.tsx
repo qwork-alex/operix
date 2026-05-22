@@ -18,11 +18,11 @@
  * diagnostics, multimodal) — it is no longer a separate identity but
  * the EXPANDED form of the same entity.
  */
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAI } from "./AIProvider";
 import { AGENT_OVERLAY_SIZE } from "@/agents/presence/MovementOrchestrator";
-import type { AIVisualFrame } from "./types";
+import { QWRobotEntity } from "@/ai/entity";
 
 const AgentPanel = lazy(() => import("@/components/agent/AgentPanel"));
 
