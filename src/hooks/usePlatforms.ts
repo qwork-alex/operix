@@ -40,20 +40,14 @@ export function usePlatforms() {
     },
   });
 
-  // Realtime subscription
+  // Realtime subscription (shared via RealtimeHub)
   useEffect(() => {
     if (!workspaceId) return;
-    const ch = supabase
-      .channel(`platforms-${workspaceId}-${Math.random().toString(36).slice(2, 8)}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "platforms", filter: `workspace_id=eq.${workspaceId}` },
-        () => qc.invalidateQueries({ queryKey: [...QK, workspaceId] })
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
+    const off = RealtimeHub.subscribe(
+      { table: "platforms", workspaceId },
+      () => qc.invalidateQueries({ queryKey: [...QK, workspaceId] }),
+    );
+    return off;
   }, [workspaceId, qc]);
 
   const setState = useMutation({
