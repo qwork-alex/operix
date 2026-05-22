@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Send, X, Wifi, WifiOff, MapPin, AlertTriangle, CheckCircle2, Info,
-  Mic, Paperclip, Sparkles, Activity, ArrowRight,
+  Mic, Paperclip, Sparkles, Activity, ArrowRight, MessageSquare, Stethoscope,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -12,6 +12,9 @@ import { useOperationalSignals, type SignalLevel } from "@/hooks/useOperationalS
 import { deriveSuggestions, localReply } from "@/lib/agentRules";
 import { dispatchAgentAction, AGENT_NAV_EVENT, type AgentAction } from "@/lib/agentActions";
 import { loadPersistedAgentEvents } from "@/lib/operationalObserver";
+import { captureScreenshot } from "@/lib/screenshotCapture";
+import { AgentDiagnosticsView } from "./AgentDiagnosticsView";
+
 
 interface Msg {
   id: string;
@@ -48,6 +51,8 @@ export default function AgentPanel({ onClose }: Props) {
   const { signals, worst } = useOperationalSignals();
   const [messages, setMessages] = useState<Msg[]>(() => loadHistory());
   const [input, setInput] = useState("");
+  const [tab, setTab] = useState<"chat" | "diag">("chat");
+
   const [events, setEvents] = useState<AgentEvent[]>(() =>
     [...loadPersistedAgentEvents(), ...agentBus.snapshot()].slice(-30),
   );
@@ -223,10 +228,17 @@ export default function AgentPanel({ onClose }: Props) {
             tone={worst}
           />
         </div>
+
+        {/* Tab strip */}
+        <div className="mt-3 flex gap-1 p-0.5 rounded-md bg-black/40 border border-white/5">
+          <TabBtn active={tab === "chat"} icon={MessageSquare} label="Chat" onClick={() => setTab("chat")} />
+          <TabBtn active={tab === "diag"} icon={Stethoscope} label="Diagnóstico" onClick={() => setTab("diag")} />
+        </div>
+
       </div>
 
-      {/* Signals */}
-      {signals.length > 0 && (
+      {/* Signals (chat tab only) */}
+      {tab === "chat" && signals.length > 0 && (
         <div className="relative px-3 py-2 border-b border-[hsl(195_100%_60%/0.1)] space-y-1 bg-black/20">
           {signals.slice(0, 4).map((s) => {
             const Icon = signalIcon(s.level);
@@ -239,6 +251,14 @@ export default function AgentPanel({ onClose }: Props) {
           })}
         </div>
       )}
+
+      {tab === "diag" && (
+        <AgentDiagnosticsView route={ctx.pathname} module={ctx.label} online={ctx.online} />
+      )}
+
+      {tab === "chat" && (
+      <>
+
 
       {/* Messages */}
       <div ref={listRef} className="relative flex-1 overflow-y-auto px-3 py-3 space-y-2 min-h-[160px]">
@@ -329,12 +349,21 @@ export default function AgentPanel({ onClose }: Props) {
       <div className="relative p-2 border-t border-[hsl(195_100%_60%/0.15)] bg-black/40 flex items-end gap-1.5">
         <button
           type="button"
-          aria-label="Anexar imagem"
-          onClick={() => toast("Upload chega na próxima fase", { description: "Em breve poderá enviar screenshots para análise." })}
+          aria-label="Capturar ecrã"
+          onClick={async () => {
+            const d = await captureScreenshot();
+            if (d) {
+              toast.success("Ecrã capturado localmente.");
+              setTab("diag");
+            } else {
+              toast.error("Captura cancelada ou não suportada.");
+            }
+          }}
           className="h-9 w-9 shrink-0 rounded-md flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition"
         >
           <Paperclip className="h-4 w-4" />
         </button>
+
         <button
           type="button"
           aria-label="Ditar"
@@ -371,9 +400,31 @@ export default function AgentPanel({ onClose }: Props) {
           <Send className="h-4 w-4" />
         </button>
       </div>
+      </>
+      )}
     </div>
   );
 }
+
+function TabBtn({
+  active, icon: Icon, label, onClick,
+}: { active: boolean; icon: typeof MessageSquare; label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-[11px] rounded transition",
+        active
+          ? "bg-[hsl(195_100%_60%/0.15)] text-[hsl(195_100%_80%)] border border-[hsl(195_100%_60%/0.4)]"
+          : "text-white/50 hover:text-white/80 border border-transparent",
+      )}
+    >
+      <Icon className="h-3.5 w-3.5" />
+      <span className="font-medium tracking-wide">{label}</span>
+    </button>
+  );
+}
+
 
 function Telemetry({
   icon: Icon, label, tone,
