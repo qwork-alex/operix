@@ -11,7 +11,7 @@ import type {
   NotificationChannel,
   NotificationPayload,
   NotifyDeliveryResult,
-} from "./types";
+} from "../types";
 
 export const InternalChannel: NotificationChannel = {
   key: "internal",

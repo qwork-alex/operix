@@ -9,7 +9,7 @@ import type {
   NotificationChannel,
   NotificationPayload,
   NotifyDeliveryResult,
-} from "./types";
+} from "../types";
 
 export const EmailChannel: NotificationChannel = {
   key: "email",
