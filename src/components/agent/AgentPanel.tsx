@@ -349,12 +349,21 @@ export default function AgentPanel({ onClose }: Props) {
       <div className="relative p-2 border-t border-[hsl(195_100%_60%/0.15)] bg-black/40 flex items-end gap-1.5">
         <button
           type="button"
-          aria-label="Anexar imagem"
-          onClick={() => toast("Upload chega na próxima fase", { description: "Em breve poderá enviar screenshots para análise." })}
+          aria-label="Capturar ecrã"
+          onClick={async () => {
+            const d = await captureScreenshot();
+            if (d) {
+              toast.success("Ecrã capturado localmente.");
+              setTab("diag");
+            } else {
+              toast.error("Captura cancelada ou não suportada.");
+            }
+          }}
           className="h-9 w-9 shrink-0 rounded-md flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition"
         >
           <Paperclip className="h-4 w-4" />
         </button>
+
         <button
           type="button"
           aria-label="Ditar"
