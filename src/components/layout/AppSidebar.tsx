@@ -1,15 +1,14 @@
 import { Link } from "react-router-dom";
 import {
-  LayoutDashboard, FileText, CreditCard, TrendingUp, PieChart,
-  BookOpen, Car, FolderOpen, Users, Settings, Receipt, Shield, Wrench, Store, Zap, Brain,
+  LayoutDashboard, FileText, CreditCard, TrendingUp, BarChart3,
+  Car, Users, Receipt, Shield, Wrench, Store, Zap, Brain,
 } from "lucide-react";
 import { useIsPlatformOwner } from "@/hooks/useSubscription";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
-  SidebarFooter, useSidebar,
+  useSidebar,
 } from "@/components/ui/sidebar";
-// (useIsPlatformOwner imported above)
 import { NavLink } from "@/components/NavLink";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useCan } from "@/hooks/usePermission";
@@ -19,6 +18,23 @@ import { BrandNameEditor, type BrandConfig } from "@/components/layout/BrandName
 import { BrandLogo } from "@/components/BrandLogo";
 import { brandConfig as appBrand } from "@/brand.config";
 import { toast } from "sonner";
+import type { LucideIcon } from "lucide-react";
+
+type NavItem = {
+  title: string;
+  url: string;
+  icon: LucideIcon;
+  module: string;
+  action: string;
+  end?: boolean;
+  enabled?: boolean; // extra gating (e.g. platform owner)
+};
+
+type NavGroup = {
+  /** Optional label. When omitted, items render flush without a section header. */
+  label?: string;
+  items: NavItem[];
+};
 
 export function AppSidebar() {
   const { state } = useSidebar();
@@ -38,32 +54,68 @@ export function AppSidebar() {
     }
   };
 
-  // Dynamic display name: explicit brand override → workspace name → app default
   const displayName = brandConfig.name || workspaceName || appBrand.appName;
 
-  // Single source of truth — useCan() resolves everything (admin, override, role, deny).
-  const allNav = [
-    { title: t("nav.dashboard"), url: "/", icon: LayoutDashboard, module: "dashboard", action: "view" },
-    { title: "Produção", url: "/production", icon: Wrench, module: "service_orders", action: "view" },
-    { title: t("nav.serviceOrders"), url: "/service-orders", icon: FileText, module: "service_orders", action: "view" },
-    { title: t("nav.paymentOrders"), url: "/payment-orders", icon: CreditCard, module: "payment_orders", action: "view" },
-    { title: "Faturamento", url: "/billing", icon: Receipt, module: "accounting", action: "view" },
-    { title: t("nav.financial"), url: "/financial", icon: TrendingUp, module: "financial", action: "view" },
-    // Phase 5C: Profit Distribution is now embedded in /financial?tab=distribution.
-    // Standalone /profit route is preserved for backward compat but removed from sidebar.
-    { title: t("nav.fleet"), url: "/fleet", icon: Car, module: "fleet", action: "view" },
-    { title: t("nav.documents"), url: "/documents", icon: FolderOpen, module: "documents", action: "view" },
-    { title: t("nav.users"), url: "/users", icon: Users, module: "users", action: "view" },
-    { title: "Automações", url: "/automations", icon: Zap, module: "settings", action: "edit" },
-    { title: "QWork AI", url: "/ai", icon: Brain, module: "dashboard", action: "view" },
+  // Architecture: declarative groups → easy to collapse / reorder later.
+  const groups: NavGroup[] = [
+    {
+      // Painel — no label, acts as the top anchor
+      items: [
+        { title: t("nav.dashboard"), url: "/", icon: LayoutDashboard, module: "dashboard", action: "view", end: true },
+      ],
+    },
+    {
+      label: "Operações",
+      items: [
+        { title: "Produção", url: "/production", icon: Wrench, module: "service_orders", action: "view" },
+        { title: t("nav.serviceOrders"), url: "/service-orders", icon: FileText, module: "service_orders", action: "view" },
+        { title: t("nav.paymentOrders"), url: "/payment-orders", icon: CreditCard, module: "payment_orders", action: "view" },
+      ],
+    },
+    {
+      label: "Contabilidade",
+      items: [
+        { title: "Faturamento", url: "/billing", icon: Receipt, module: "accounting", action: "view" },
+        { title: t("nav.financial"), url: "/financial", icon: TrendingUp, module: "financial", action: "view" },
+        { title: "Plataforma", url: "/platform", icon: BarChart3, module: "dashboard", action: "view", enabled: !!isPlatformOwner },
+      ],
+    },
+    {
+      label: "Inteligência",
+      items: [
+        { title: "Automações", url: "/automations", icon: Zap, module: "settings", action: "edit" },
+        { title: "QWork AI", url: "/ai", icon: Brain, module: "dashboard", action: "view" },
+      ],
+    },
+    {
+      label: "Oportunidades",
+      items: [
+        { title: t("nav.fleet"), url: "/fleet", icon: Car, module: "fleet", action: "view" },
+        { title: "Marketplace", url: "/marketplace", icon: Store, module: "dashboard", action: "view" },
+      ],
+    },
+    {
+      label: "Contas",
+      items: [
+        { title: t("nav.users"), url: "/users", icon: Users, module: "users", action: "view" },
+        { title: "Assinaturas", url: "/subscription", icon: Shield, module: "dashboard", action: "view" },
+      ],
+    },
   ];
 
-  const mainNav = permsLoading ? [] : allNav.filter((item) => can(item.module, item.action).allowed);
-  const showSettings = !permsLoading && can("settings", "view").allowed;
+  const visibleGroups: NavGroup[] = permsLoading
+    ? []
+    : groups
+        .map((g) => ({
+          ...g,
+          items: g.items.filter(
+            (i) => (i.enabled === undefined || i.enabled) && can(i.module, i.action).allowed,
+          ),
+        }))
+        .filter((g) => g.items.length > 0);
 
   return (
     <Sidebar collapsible="icon" className="border-r border-border/50">
-
       <div className={`flex h-14 items-center border-b border-border/50 ${collapsed ? "justify-center px-0" : "px-4"}`}>
         {!collapsed && (
           <div className="flex items-center gap-2.5 overflow-hidden">
@@ -104,84 +156,39 @@ export function AppSidebar() {
         )}
       </div>
 
-      <SidebarContent className="pt-2">
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-muted-foreground/60 text-[10px] uppercase tracking-widest">
-            {t("nav.operations")}
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {mainNav.map((item) => (
-                <SidebarMenuItem key={item.url}>
-                  <SidebarMenuButton asChild>
-                    <NavLink
-                      to={item.url}
-                      end={item.url === "/"}
-                      className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
-                      activeClassName="bg-sidebar-accent text-primary font-medium"
-                    >
-                      <item.icon className="h-4 w-4 shrink-0" />
-                      {!collapsed && <span>{item.title}</span>}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup className="mt-auto">
-          <SidebarGroupLabel className="text-muted-foreground/60 text-[10px] uppercase tracking-widest">
-            Conta
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <NavLink
-                    to="/marketplace"
-                    className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
-                    activeClassName="bg-sidebar-accent text-primary font-medium"
-                  >
-                    <Store className="h-4 w-4 shrink-0" />
-                    {!collapsed && <span>Marketplace</span>}
-                  </NavLink>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <NavLink
-                    to="/subscription"
-                    className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
-                    activeClassName="bg-sidebar-accent text-primary font-medium"
-                  >
-                    <CreditCard className="h-4 w-4 shrink-0" />
-                    {!collapsed && <span>Assinaturas</span>}
-                  </NavLink>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              {isPlatformOwner && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild>
-                    <NavLink
-                      to="/platform"
-                      className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
-                      activeClassName="bg-sidebar-accent text-primary font-medium"
-                    >
-                      <Shield className="h-4 w-4 shrink-0" />
-                      {!collapsed && <span>Plataforma</span>}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+      <SidebarContent className="pt-3 gap-1">
+        {visibleGroups.map((group, idx) => (
+          <SidebarGroup
+            key={group.label ?? `__top-${idx}`}
+            className={group.label ? "pt-3" : "pt-0"}
+          >
+            {group.label && (
+              <SidebarGroupLabel className="text-muted-foreground/50 text-[10px] font-medium uppercase tracking-[0.14em] px-2 mb-1">
+                {group.label}
+              </SidebarGroupLabel>
+            )}
+            <SidebarGroupContent>
+              <SidebarMenu className="gap-0.5">
+                {group.items.map((item) => (
+                  <SidebarMenuItem key={item.url}>
+                    <SidebarMenuButton asChild tooltip={collapsed ? item.title : undefined}>
+                      <NavLink
+                        to={item.url}
+                        end={item.end}
+                        className="text-sidebar-foreground/85 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground transition-colors rounded-md"
+                        activeClassName="bg-sidebar-accent text-primary font-medium"
+                      >
+                        <item.icon className="h-4 w-4 shrink-0" />
+                        {!collapsed && <span className="text-[13px]">{item.title}</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
       </SidebarContent>
-
-      {/* Settings moved into the profile dropdown (top-right). */}
-
-
     </Sidebar>
   );
 }
