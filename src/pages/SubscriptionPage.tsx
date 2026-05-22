@@ -44,14 +44,14 @@ export default function SubscriptionPage() {
   const [simTechs, setSimTechs] = useState<number | null>(null);
   const [simCycle, setSimCycle] = useState<"monthly" | "yearly">("monthly");
   const [tab, setTab] = useState("overview");
+  const [tiers, setTiers] = useState<WorkspaceTier[]>([]);
+
+  useEffect(() => { void fetchWorkspaceTiers().then(setTiers); }, []);
 
   const techCount = snapshot?.usage?.technician_count ?? 0;
   const sim = simTechs ?? techCount;
 
-  const simulatedPrice = useMemo(() => {
-    if (!snapshot?.plan) return 0;
-    return priceFor(sim, simCycle, snapshot.plan);
-  }, [sim, simCycle, snapshot?.plan]);
+  const simulatedPrice = useMemo(() => priceForTier(sim, simCycle, tiers), [sim, simCycle, tiers]);
 
   if (isLoading) {
     return (
