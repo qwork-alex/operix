@@ -36,13 +36,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               </main>
               <AppFooter />
             </div>
-            {/* Single global AI entity — replaces FloatingAgent + PresenceOverlay + CharacterLayer */}
-            <AIPresenceLayer />
-            <ConversationBubble
-              onOpenDiagnostic={() =>
-                window.dispatchEvent(new CustomEvent(AGENT_OPEN_REQUEST_EVENT))
-              }
-            />
+            {/* AI is now a fixed control-center in the TopBar — no floating overlays */}
           </div>
         </AIProvider>
       </SidebarProvider>
