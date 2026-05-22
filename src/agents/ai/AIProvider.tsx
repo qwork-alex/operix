@@ -110,6 +110,50 @@ export function AIProvider({ children }: { children: ReactNode }) {
     globalAI.setSignal(worst);
   }, [worst]);
 
+  // ── Operational Memory ────────────────────────────────────────────
+  // Bind memory scope to the active workspace.
+  useEffect(() => {
+    operationalMemory.setWorkspace(workspaceId ?? null);
+  }, [workspaceId]);
+
+  // Record meaningful signals once per appearance (info/warn/error).
+  useEffect(() => {
+    signals.forEach((s) => {
+      if (s.level === "ok" || s.id === "all-ok") return;
+      if (recordedSignalIdsRef.current.has(s.id)) return;
+      recordedSignalIdsRef.current.add(s.id);
+      operationalMemory.recordSignal({ id: s.id, level: s.level, title: s.title });
+    });
+  }, [signals]);
+
+  // Record visited modules (route changes).
+  useEffect(() => {
+    operationalMemory.recordModule(location.pathname);
+    // allow same-route re-recording if user navigates away and back
+    recordedSignalIdsRef.current.clear();
+  }, [location.pathname]);
+
+  // Record repeated user actions (clicks on actionable elements).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onClick = (e: MouseEvent) => {
+      const target = e.target as Element | null;
+      if (!target) return;
+      const el = target.closest(
+        "[data-action], button, a, [role='button']",
+      ) as HTMLElement | null;
+      if (!el) return;
+      const key =
+        el.getAttribute("data-action") ||
+        el.getAttribute("aria-label") ||
+        (el.textContent || "").trim().slice(0, 48);
+      if (!key) return;
+      operationalMemory.recordAction(`${location.pathname}::${key}`);
+    };
+    window.addEventListener("click", onClick, true);
+    return () => window.removeEventListener("click", onClick, true);
+  }, [location.pathname]);
+
   // Reset per-route guidance memory so the robot can re-guide on a new page
   useEffect(() => {
     guidedSignalIdsRef.current.clear();
