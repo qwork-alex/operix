@@ -430,9 +430,13 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Region scope filter (global providers always pass)
-      if (!row.regions.includes("global") && !row.regions.includes(regionKey)) {
-        providerStatus[row.key] = `region_skip:${regionKey}`;
+      // Region scope: when isAll, pick the provider's first concrete region
+      // (or "global"); otherwise honour the explicit ?region= filter.
+      let regionKey = regionParam;
+      if (isAll) {
+        regionKey = row.regions.find((r) => r !== "global") ?? "global";
+      } else if (!row.regions.includes("global") && !row.regions.includes(regionParam)) {
+        providerStatus[row.key] = `region_skip:${regionParam}`;
         continue;
       }
 
