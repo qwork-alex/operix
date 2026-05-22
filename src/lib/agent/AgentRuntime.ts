@@ -25,6 +25,7 @@ import {
   type OpSource,
 } from "@/lib/operationalBus/OperationalEventBus";
 import { RuntimeHealthMonitor, type HealthSnapshot } from "@/lib/observability";
+import { notify } from "@/lib/notifications";
 import type {
   AgentContext,
   AgentListener,
@@ -139,6 +140,7 @@ function recompute() {
   detectFromHealth(now);
   detectIngestStalled(now);
 
+  dispatchCriticalNotifications();
   fanout();
 }
 
@@ -376,6 +378,27 @@ function buildContext(): AgentContext {
 function fanout() {
   const ctx = buildContext();
   listeners.forEach((l) => { try { l(ctx); } catch { /* swallow */ } });
+}
+
+/**
+ * Routes high/critical signals to the NotificationRegistry. Dedup, cooldown
+ * and rate limiting are enforced downstream by the registry, so this is safe
+ * to call on every recompute.
+ */
+function dispatchCriticalNotifications() {
+  for (const sig of signals.values()) {
+    if (sig.urgency !== "high" && sig.urgency !== "critical") continue;
+    void notify({
+      key: `agent:${sig.correlationKey}`,
+      title: sig.title,
+      body: [sig.detail, sig.suggestion].filter(Boolean).join("\n\n"),
+      audience: sig.urgency === "critical" ? ["admin", "developer", "owner"] : ["admin", "ops"],
+      priority: sig.urgency,
+      source: "agent",
+      metadata: { kind: sig.kind, count: sig.count, ...sig.metadata },
+      occurredAt: sig.lastSeenAt,
+    });
+  }
 }
 
 /* ---------------------------------------------------------- export --- */
