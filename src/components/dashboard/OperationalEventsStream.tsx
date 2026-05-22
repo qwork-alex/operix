@@ -108,37 +108,55 @@ export function OperationalEventsStream() {
     <section className="glass-panel rounded-xl p-4 space-y-3">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-base font-semibold flex items-center gap-2">
-            <Radio className="h-4 w-4 text-emerald-400 animate-pulse" />
+          <h2 className="text-sm font-semibold tracking-tight flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-60" />
+              <span className="relative rounded-full bg-emerald-400 h-2 w-2" />
+            </span>
             Stream operacional
           </h2>
-          <p className="text-xs text-muted-foreground">Eventos em tempo real do workspace</p>
+          <p className="text-[11px] text-muted-foreground">Eventos em tempo real do workspace</p>
         </div>
-        <span className="text-[10px] text-muted-foreground tabular-nums">{events.length} evento(s)</span>
+        <span className="text-[10px] font-medium tabular-nums text-muted-foreground/80 border border-border/60 rounded px-1.5 py-0.5">
+          {events.length}
+        </span>
       </div>
 
-      <div className="max-h-96 overflow-y-auto space-y-1.5 -mx-1 px-1">
+      <div className="max-h-96 overflow-y-auto space-y-0.5 -mx-1 px-1">
         {loading ? (
-          <div className="text-sm text-muted-foreground">A carregar…</div>
+          <div className="space-y-1.5 py-1">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="flex items-center gap-2 py-1.5 px-2 animate-pulse">
+                <div className="h-3 w-3 rounded-full bg-muted/50" />
+                <div className="h-3 flex-1 rounded bg-muted/30" />
+                <div className="h-3 w-8 rounded bg-muted/30" />
+              </div>
+            ))}
+          </div>
         ) : events.length === 0 ? (
-          <div className="text-sm text-muted-foreground text-center py-6">
-            Sem eventos operacionais recentes.
+          <div className="text-center py-8 space-y-2">
+            <Radio className="h-5 w-5 mx-auto text-muted-foreground/60" />
+            <p className="text-xs text-muted-foreground">Sem eventos operacionais recentes.</p>
+            <p className="text-[10px] text-muted-foreground/60">O stream actualiza automaticamente.</p>
           </div>
         ) : (
           events.map((e) => {
             const meta = KIND_META[e.kind];
             const Icon = meta.icon;
             return (
-              <div key={e.id} className="flex items-start gap-2.5 py-1.5 px-2 rounded-md hover:bg-muted/30 transition-colors">
+              <div
+                key={e.id}
+                className="flex items-start gap-2.5 py-1.5 px-2 rounded-md hover:bg-muted/30 transition-colors border-l border-transparent hover:border-l-primary/40"
+              >
                 <Icon className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${meta.cls}`} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <span className={`text-[9px] font-bold uppercase tracking-wider ${meta.cls}`}>{meta.label}</span>
+                    <span className={`text-[9px] font-bold uppercase tracking-[0.1em] ${meta.cls}`}>{meta.label}</span>
                     <span className="text-xs font-medium truncate">{e.title}</span>
                   </div>
                   {e.detail && <p className="text-[11px] text-muted-foreground truncate">{e.detail}</p>}
                 </div>
-                <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">{timeAgo(e.ts)}</span>
+                <span className="text-[10px] text-muted-foreground/80 tabular-nums shrink-0 mt-0.5">{timeAgo(e.ts)}</span>
               </div>
             );
           })
