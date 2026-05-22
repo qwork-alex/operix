@@ -19,8 +19,8 @@ const Dashboard = () => {
   useGeolocation();
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="min-w-0 max-w-full space-y-4 md:space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-bold text-foreground">{t("dashboard.title")}</h1>
           <p className="text-sm text-muted-foreground">Centro operacional em tempo real</p>
@@ -54,7 +54,7 @@ const Dashboard = () => {
       </ErrorBoundary>
 
       {/* Stream + Revenue */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <RevenueChart />
         </div>
