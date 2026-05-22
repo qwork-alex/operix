@@ -84,7 +84,7 @@ export function OperationalEventsStream() {
 
     load();
     const ch = supabase
-      .channel(`op-events-${workspaceId}`)
+      .channel(`op-events-${workspaceId}-${Math.random().toString(36).slice(2, 8)}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "ai_alerts" }, load)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "ai_recommendations" }, load)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "automation_executions" }, load)

@@ -44,7 +44,7 @@ export function usePlatforms() {
   useEffect(() => {
     if (!workspaceId) return;
     const ch = supabase
-      .channel(`platforms-${workspaceId}`)
+      .channel(`platforms-${workspaceId}-${Math.random().toString(36).slice(2, 8)}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "platforms", filter: `workspace_id=eq.${workspaceId}` },
