@@ -12,10 +12,12 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { useOperationalSignals } from "@/hooks/useOperationalSignals";
+import { useWorkspace } from "@/hooks/useWorkspace";
 import { presenceEngine } from "@/agents/presence/PresenceEngine";
 import { idleTracker } from "@/agents/presence/IdleBehavior";
 import { movementOrchestrator, AGENT_OVERLAY_SIZE } from "@/agents/presence/MovementOrchestrator";
 import { robotAwareness } from "@/ai/entity/RobotAwareness";
+import { operationalMemory } from "@/ai/memory/OperationalMemory";
 import { globalAI } from "./GlobalAIState";
 import { startAIReactor } from "./AIEventReactor";
 import { startAIRealtime } from "./AIRealtimeConnector";
