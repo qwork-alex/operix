@@ -391,9 +391,31 @@ export default function AgentPanel({ onClose }: Props) {
           <Send className="h-4 w-4" />
         </button>
       </div>
+      </>
+      )}
     </div>
   );
 }
+
+function TabBtn({
+  active, icon: Icon, label, onClick,
+}: { active: boolean; icon: typeof MessageSquare; label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-[11px] rounded transition",
+        active
+          ? "bg-[hsl(195_100%_60%/0.15)] text-[hsl(195_100%_80%)] border border-[hsl(195_100%_60%/0.4)]"
+          : "text-white/50 hover:text-white/80 border border-transparent",
+      )}
+    >
+      <Icon className="h-3.5 w-3.5" />
+      <span className="font-medium tracking-wide">{label}</span>
+    </button>
+  );
+}
+
 
 function Telemetry({
   icon: Icon, label, tone,
