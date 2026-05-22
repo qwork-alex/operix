@@ -1080,82 +1080,104 @@ export function OperationalMap() {
         : `${host}${path}/256/{z}/{x}/{y}/7/1_1.png`;
 
     (async () => {
+      // Graceful degradation: short timeout + status check prevent a stuck
+      // /radar/ request from holding the layer in an invalid render state.
+      const ctrl = new AbortController();
+      const timeoutId = window.setTimeout(() => ctrl.abort(), 8000);
+      let json: any = null;
       try {
-        const res = await fetch("https://api.rainviewer.com/public/weather-maps.json");
-        const json = await res.json();
-        if (cancelled) return;
-        const past = json?.radar?.past ?? [];
-        const nowcast = json?.radar?.nowcast ?? [];
-        const frames = [...past, ...nowcast];
-        if (!frames.length) return;
-        const host = json.host as string;
-        radarFramesRef.current = { host, frames };
-        radarIdxRef.current = past.length - 1; // start at "now"
+        const res = await fetch("https://api.rainviewer.com/public/weather-maps.json", {
+          signal: ctrl.signal,
+        });
+        if (!res.ok) throw new Error(`radar_sync_failure_${res.status}`);
+        json = await res.json();
+      } catch (e: any) {
+        // Network/abort/5xx — silently degrade. Hail + base map continue working.
+        if (e?.name !== "AbortError") {
+          console.warn("[OperationalMap] radar sync_failure — degrading", e?.message ?? e);
+        }
+        return;
+      } finally {
+        window.clearTimeout(timeoutId);
+      }
+      if (cancelled || !json) return;
 
-        const reconcile = (kind: "radar" | "storms", active: boolean) => {
-          const srcId = `${kind}-src`;
-          const layerId = `${kind}-layer`;
-          const hasLayer = !!map.getLayer(layerId);
-          const hasSrc = !!map.getSource(srcId);
-          if (active) {
-            if (hasLayer) return;
-            if (!hasSrc) {
-              try {
-                map.addSource(srcId, {
-                  type: "raster",
-                  tiles: [buildUrl(host, frames[radarIdxRef.current].path, kind)],
-                  tileSize: 256,
-                });
-              } catch {}
-            }
+      const past = json?.radar?.past ?? [];
+      const nowcast = json?.radar?.nowcast ?? [];
+      const frames = [...past, ...nowcast];
+      const host = typeof json?.host === "string" ? json.host : null;
+      if (!frames.length || !host) return;
+      radarFramesRef.current = { host, frames };
+      radarIdxRef.current = past.length - 1; // start at "now"
+
+      const reconcile = (kind: "radar" | "storms", active: boolean) => {
+        const srcId = `${kind}-src`;
+        const layerId = `${kind}-layer`;
+        const hasLayer = !!map.getLayer(layerId);
+        const hasSrc = !!map.getSource(srcId);
+        if (active) {
+          if (hasLayer) return;
+          if (!hasSrc) {
             try {
-              map.addLayer({
-                id: layerId,
+              map.addSource(srcId, {
                 type: "raster",
-                source: srcId,
-                paint: {
-                  "raster-opacity": kind === "radar" ? 0.55 : 0.65,
-                    "raster-fade-duration": 0,
-                },
-              }, map.getLayer("hail-halo") ? "hail-halo" : undefined);
+                tiles: [buildUrl(host, frames[radarIdxRef.current].path, kind)],
+                tileSize: 256,
+              });
             } catch {}
-          } else {
-            if (hasLayer) { try { map.removeLayer(layerId); } catch {} }
-            if (hasSrc) { try { map.removeSource(srcId); } catch {} }
           }
-        };
+          try {
+            map.addLayer({
+              id: layerId,
+              type: "raster",
+              source: srcId,
+              paint: {
+                "raster-opacity": kind === "radar" ? 0.55 : 0.65,
+                "raster-fade-duration": 0,
+              },
+            }, map.getLayer("hail-halo") ? "hail-halo" : undefined);
+          } catch {}
+        } else {
+          if (hasLayer) { try { map.removeLayer(layerId); } catch {} }
+          if (hasSrc) { try { map.removeSource(srcId); } catch {} }
+        }
+      };
 
+      try {
         reconcile("radar", !!layers.radar);
         if (layers.radar && layers.storms) {
           radarStaggerTimerRef.current = window.setTimeout(() => reconcile("storms", true), 120);
         } else {
           reconcile("storms", !!layers.storms);
         }
-
-        // Animate: cycle frames smoothly — only for currently-active layers
-        if (radarIntervalRef.current) window.clearInterval(radarIntervalRef.current);
-        radarIntervalRef.current = window.setInterval(() => {
-          if (gpuContextLostRef.current) return;
-          const data = radarFramesRef.current;
-          if (!data) return;
-          radarIdxRef.current = (radarIdxRef.current + 1) % data.frames.length;
-          const path = data.frames[radarIdxRef.current].path;
-          const updateRaster = (kind: "radar" | "storms") => {
-            if (!map.getLayer(`${kind}-layer`)) return;
-            const src = map.getSource(`${kind}-src`) as any;
-            if (src && typeof src.setTiles === "function") {
-              try { src.setTiles([buildUrl(data.host, path, kind)]); } catch {}
-            }
-          };
-          updateRaster("radar");
-          if (map.getLayer("storms-layer")) {
-            if (radarStaggerTimerRef.current) window.clearTimeout(radarStaggerTimerRef.current);
-            radarStaggerTimerRef.current = window.setTimeout(() => updateRaster("storms"), 160);
-          }
-        }, 2400);
       } catch (e) {
-        console.warn("[OperationalMap] radar fetch failed", e);
+        console.warn("[OperationalMap] radar layer reconcile failed", e);
       }
+
+      // Animate: cycle frames smoothly — only for currently-active layers.
+      // Each frame swap is fully guarded so a single tile failure cannot
+      // cascade into a broken render cycle.
+      if (radarIntervalRef.current) window.clearInterval(radarIntervalRef.current);
+      radarIntervalRef.current = window.setInterval(() => {
+        if (gpuContextLostRef.current) return;
+        const data = radarFramesRef.current;
+        if (!data || !data.frames.length) return;
+        radarIdxRef.current = (radarIdxRef.current + 1) % data.frames.length;
+        const path = data.frames[radarIdxRef.current]?.path;
+        if (!path) return;
+        const updateRaster = (kind: "radar" | "storms") => {
+          if (!map.getLayer(`${kind}-layer`)) return;
+          const src = map.getSource(`${kind}-src`) as any;
+          if (src && typeof src.setTiles === "function") {
+            try { src.setTiles([buildUrl(data.host, path, kind)]); } catch {}
+          }
+        };
+        updateRaster("radar");
+        if (map.getLayer("storms-layer")) {
+          if (radarStaggerTimerRef.current) window.clearTimeout(radarStaggerTimerRef.current);
+          radarStaggerTimerRef.current = window.setTimeout(() => updateRaster("storms"), 160);
+        }
+      }, 2400);
     })();
 
     return () => {
