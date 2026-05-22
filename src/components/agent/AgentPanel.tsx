@@ -18,6 +18,8 @@ import { streamAgentReply, RateLimitedError, type AgentTurn } from "@/lib/agentL
 import { AgentDiagnosticsView } from "./AgentDiagnosticsView";
 import { AgentConversationPanel } from "./AgentConversationPanel";
 import { MultimodalPanel } from "@/agents/multimodal";
+import { useAI } from "@/agents/ai";
+import { AGENT_OVERLAY_SIZE } from "@/agents/presence/MovementOrchestrator";
 
 
 interface Msg {
@@ -53,6 +55,7 @@ export default function AgentPanel({ onClose }: Props) {
   const ctx = useAgentContext();
   const navigate = useNavigate();
   const { signals, worst, recent } = useOperationalSignals();
+  const { snapshot: aiSnap } = useAI();
   const [messages, setMessages] = useState<Msg[]>(() => loadHistory());
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -234,6 +237,13 @@ export default function AgentPanel({ onClose }: Props) {
     : worst === "warn" ? "from-[hsl(30_70%_18%/0.85)] to-[hsl(220_60%_8%/0.95)]"
     : "from-[hsl(210_70%_14%/0.9)] to-[hsl(220_60%_6%/0.97)]";
 
+  // Emerge from the robot's actual screen position — single identity,
+  // no "panel slides in from the right" feel.
+  const robotCx = aiSnap.position.x + AGENT_OVERLAY_SIZE / 2;
+  const robotCy = aiSnap.position.y + AGENT_OVERLAY_SIZE / 2;
+  const originX = `${Math.round(robotCx)}px`;
+  const originY = `${Math.round(robotCy)}px`;
+
   return (
     <div
       role="dialog"
@@ -248,8 +258,9 @@ export default function AgentPanel({ onClose }: Props) {
         // Desktop: tall side dock
         "md:inset-y-4 md:right-4 md:bottom-auto md:top-auto md:max-h-none md:h-[calc(100vh-2rem)]",
         "md:w-[420px] md:rounded-2xl md:inset-x-auto",
-        "animate-in fade-in slide-in-from-right-4 duration-200",
+        "animate-in fade-in zoom-in-95 duration-300 ease-out",
       )}
+      style={{ transformOrigin: `${originX} ${originY}` }}
     >
       {/* HUD grid overlay */}
       <div className="absolute inset-0 agent-hud-grid opacity-40 pointer-events-none" />
@@ -262,16 +273,28 @@ export default function AgentPanel({ onClose }: Props) {
       <div className={cn("relative px-4 py-3 border-b border-[hsl(195_100%_60%/0.15)] bg-gradient-to-br", headerTint)}>
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="relative h-9 w-9 rounded-full flex items-center justify-center"
-              style={{ background: "radial-gradient(circle at 30% 25%, hsl(195 100% 65%), hsl(220 90% 25%) 70%)" }}>
-              <span className="absolute inset-0 rounded-full border border-[hsl(195_100%_70%/0.5)] animate-[spin_8s_linear_infinite]"
-                style={{ borderTopColor: "transparent" }} />
-              <Sparkles className="relative h-4 w-4 text-white" />
-            </div>
+            {/* state pip — mirrors the live robot identity, no duplicate avatar */}
+            <span
+              aria-hidden
+              className="relative inline-flex h-2.5 w-2.5 shrink-0 rounded-full"
+              style={{
+                background: `hsl(${aiSnap.visual.hue})`,
+                boxShadow: `0 0 10px hsl(${aiSnap.visual.hue} / 0.8)`,
+              }}
+            />
+            {/* state pip — mirrors the live robot identity, no duplicate avatar */}
+            <span
+              aria-hidden
+              className="relative inline-flex h-2.5 w-2.5 shrink-0 rounded-full"
+              style={{
+                background: `hsl(${aiSnap.visual.hue})`,
+                boxShadow: `0 0 10px hsl(${aiSnap.visual.hue} / 0.8)`,
+              }}
+            />
             <div className="min-w-0">
-              <div className="text-sm font-semibold tracking-wide leading-tight">QWORK · AGENT</div>
+              <div className="text-sm font-semibold tracking-wide leading-tight">QW · CONSOLE</div>
               <div className="text-[10px] uppercase tracking-[0.18em] text-[hsl(195_100%_75%)] truncate">
-                {ctx.label}
+                {aiSnap.visual.label} · {ctx.label}
               </div>
             </div>
           </div>
