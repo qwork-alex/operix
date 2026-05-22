@@ -31,6 +31,7 @@ const URGENCY_STYLE = {
 
 export function ConversationBubble({ onOpenDiagnostic }: Props) {
   const { prompt, dismiss, mute, consume } = useConversationPrompt();
+  const { snapshot: aiSnap } = useAI();
   const [expanded, setExpanded] = useState(false);
   const [mounted, setMounted] = useState(false);
 
