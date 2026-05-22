@@ -25,6 +25,7 @@ import {
   type OpSource,
 } from "@/lib/operationalBus/OperationalEventBus";
 import { RuntimeHealthMonitor, type HealthSnapshot } from "@/lib/observability";
+import { notify } from "@/lib/notifications";
 import type {
   AgentContext,
   AgentListener,
@@ -139,6 +140,7 @@ function recompute() {
   detectFromHealth(now);
   detectIngestStalled(now);
 
+  dispatchCriticalNotifications();
   fanout();
 }
 
