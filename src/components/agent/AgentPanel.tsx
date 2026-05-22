@@ -191,12 +191,8 @@ export default function AgentPanel({ onClose }: Props) {
       <div className="px-4 py-2 border-b border-border bg-muted/30 space-y-1">
         {statusLines.map((s, i) => (
           <div key={i} className="flex items-center gap-2 text-[11px]">
-            <s.icon
-              className={cn(
-                "h-3 w-3 shrink-0",
-                s.ok ? "text-[hsl(152_60%_45%)]" : "text-destructive",
-              )}
-            />
+            <s.icon className={cn("h-3 w-3 shrink-0", signalColor(s.level))} />
+
             <span className="text-muted-foreground truncate">{s.label}</span>
           </div>
         ))}
