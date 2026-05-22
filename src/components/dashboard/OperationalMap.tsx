@@ -1190,6 +1190,31 @@ export function OperationalMap() {
           <p className="text-xs text-muted-foreground">
             {t("chart.techDistribution") || "Equipes, ordens e clima em tempo real"}
           </p>
+          {/* Ingest health badge — exposes silent failures of the weather pipeline */}
+          {(() => {
+            const latest = hailEvents.reduce((max, h) => {
+              const ts = h.observed_time || h.forecast_time;
+              if (!ts) return max;
+              const ms = new Date(ts).getTime();
+              return ms > max ? ms : max;
+            }, 0);
+            if (!latest) {
+              return (
+                <p className="text-[10px] mt-1 flex items-center gap-1 text-amber-400/80">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                  Sem dados meteorológicos na janela — aguardando próxima sincronização
+                </p>
+              );
+            }
+            const ageMin = Math.round((Date.now() - latest) / 60000);
+            const stale = ageMin > 60;
+            return (
+              <p className={`text-[10px] mt-1 flex items-center gap-1 ${stale ? "text-amber-400/80" : "text-emerald-400/80"}`}>
+                <span className={`inline-block h-1.5 w-1.5 rounded-full ${stale ? "bg-amber-400" : "bg-emerald-400 animate-pulse"}`} />
+                Última leitura há {ageMin < 60 ? `${ageMin}min` : `${Math.round(ageMin / 60)}h`} · {hailEvents.length} eventos · {hailReports.length} reports
+              </p>
+            );
+          })()}
         </div>
         <div className="flex flex-wrap gap-1.5 items-center">
           {LAYER_DEFS.map(({ key, label, icon: Icon, color }) => {
