@@ -92,7 +92,7 @@ export default function FinancialPage() {
     <div className="space-y-6 animate-fade-in min-w-0 max-w-full w-full overflow-x-hidden">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
             <BarChart3 className="h-5 w-5 text-primary" />
@@ -177,7 +177,7 @@ export default function FinancialPage() {
 
       {/* TABS — Phase 5C order */}
       <Tabs value={mainTab} onValueChange={setMainTab} className="space-y-4 min-w-0 max-w-full w-full">
-        <TabsList className="bg-muted flex flex-wrap h-auto max-w-full">
+        <TabsList className="flex h-auto max-w-full justify-start gap-1 overflow-x-auto rounded-lg bg-muted p-1">
           <TabsTrigger value="confronto">{t("fin.tabs.confronto")}</TabsTrigger>
           <TabsTrigger value="distribution">
             <PieChart className="h-3.5 w-3.5 mr-1" /> {t("fin.tabs.distribution")}
@@ -226,7 +226,7 @@ export default function FinancialPage() {
         </TabsContent>
 
         <TabsContent value="accounting" className="space-y-4 min-w-0 max-w-full">
-          <div className="min-h-[600px] min-w-0 max-w-full w-full overflow-hidden">
+          <div className="min-h-[60svh] min-w-0 max-w-full w-full overflow-visible md:min-h-[600px] md:overflow-hidden">
             <AccountingControlCenter embedded />
           </div>
         </TabsContent>
