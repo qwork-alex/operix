@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { RealtimeHub } from "@/lib/realtime/RealtimeHub";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import { useAuth } from "./useAuth";
 import { useCan } from "./usePermission";
