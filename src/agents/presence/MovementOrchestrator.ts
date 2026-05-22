@@ -228,7 +228,7 @@ class Orchestrator {
             ? Math.min(window.innerHeight - AGENT_OVERLAY_SIZE - EDGE_MARGIN, r.bottom + 16)
             : Math.max(EDGE_MARGIN, r.top - AGENT_OVERLAY_SIZE - 16);
           this.setContextualAnchor({ x, y }, "alert", 10, ALERT_HOLD_MS);
-          if (this.state !== "emergency") this.setState("alert");
+          if (this.state !== "alert") this.setState("alert");
         });
       }
     });
