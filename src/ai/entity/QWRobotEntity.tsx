@@ -279,14 +279,19 @@ function Robot() {
       head.current.rotation.x = lookTarget.current.y;
       head.current.rotation.z = tiltRef.current;
     }
-    // arm pointing — raise on alert / focused moods, point in cursor direction
-    const wantRaise =
+    // arm pointing — raise on alert / focused moods, point in cursor direction.
+    // Active operational guidance overrides mood and forces a clear pointing
+    // gesture toward the target the robot is directing the user to.
+    const guiding = robotAwareness.isGuiding();
+    const moodRaise =
       frame.mood === "alert" || frame.mood === "concerned" ? 0.95 :
       frame.mood === "focused" ? 0.45 :
       frame.mood === "curious" ? 0.25 : 0.0;
-    const wantPoint =
+    const moodPoint =
       frame.mood === "alert" || frame.mood === "concerned" ? 1.0 :
       frame.mood === "focused" ? 0.5 : 0.0;
+    const wantRaise = guiding ? Math.max(moodRaise, 0.9) : moodRaise;
+    const wantPoint = guiding ? 1.0 : moodPoint;
     raiseRef.current = damp(raiseRef.current, wantRaise, 3.5, dt);
     pointRef.current = damp(pointRef.current, wantPoint, 3.5, dt);
 
