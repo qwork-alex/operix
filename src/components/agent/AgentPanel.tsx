@@ -237,8 +237,8 @@ export default function AgentPanel({ onClose }: Props) {
 
       </div>
 
-      {/* Signals */}
-      {signals.length > 0 && (
+      {/* Signals (chat tab only) */}
+      {tab === "chat" && signals.length > 0 && (
         <div className="relative px-3 py-2 border-b border-[hsl(195_100%_60%/0.1)] space-y-1 bg-black/20">
           {signals.slice(0, 4).map((s) => {
             const Icon = signalIcon(s.level);
@@ -251,6 +251,14 @@ export default function AgentPanel({ onClose }: Props) {
           })}
         </div>
       )}
+
+      {tab === "diag" && (
+        <AgentDiagnosticsView route={ctx.pathname} module={ctx.label} online={ctx.online} />
+      )}
+
+      {tab === "chat" && (
+      <>
+
 
       {/* Messages */}
       <div ref={listRef} className="relative flex-1 overflow-y-auto px-3 py-3 space-y-2 min-h-[160px]">
