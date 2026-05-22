@@ -1,27 +1,45 @@
 /**
- * AIPresenceLayer — THE single global AI entity.
+ * AIPresenceLayer — THE single global AI entity (friendly companion).
  *
- * Visual core is now the 3D QWRobotEntity. State, position and
- * click-to-expand behaviour come from the unchanged AIProvider /
- * GlobalAIState / MovementOrchestrator pipeline.
+ * Renders the 3D QWRobotEntity at the position computed by the
+ * MovementOrchestrator. Removes the legacy halo/alarm orb visuals
+ * in favor of subtle character-driven cues from the robot itself.
+ *
+ * Adds:
+ *   - drag-to-reposition (pointer drag) with momentum-free settle
+ *   - persistent pinned position (localStorage)
+ *   - long-press to unpin (release back to auto-positioning)
+ *   - subtle floating shadow that follows the robot
  */
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAI } from "./AIProvider";
-import { AGENT_OVERLAY_SIZE } from "@/agents/presence/MovementOrchestrator";
+import { AGENT_OVERLAY_SIZE, movementOrchestrator } from "@/agents/presence/MovementOrchestrator";
 import { QWRobotEntity } from "@/ai/entity";
 
 const AgentPanel = lazy(() => import("@/components/agent/AgentPanel"));
 
-// Robot needs a bit more canvas room than the legacy orb.
 const ROBOT_SIZE = Math.round(AGENT_OVERLAY_SIZE * 1.6);
+const DRAG_THRESHOLD = 4; // px before a click becomes a drag
+const LONG_PRESS_MS = 650;
 
 export function AIPresenceLayer() {
   const { snapshot, open, close, toggle } = useAI();
   const { visual, position, mode, visible, lastEvent } = snapshot;
   const [hover, setHover] = useState(false);
+  const [dragging, setDragging] = useState(false);
 
-  // Conversation bubble → open expanded console
+  // refs for drag bookkeeping
+  const dragState = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    originX: number;
+    originY: number;
+    moved: boolean;
+    longPressTimer: number | null;
+  } | null>(null);
+
   useEffect(() => {
     const h = () => open();
     window.addEventListener("qwork:agent:open-request", h);
@@ -30,77 +48,98 @@ export function AIPresenceLayer() {
 
   const expanded = mode === "expanded";
 
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (expanded) return;
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    dragState.current = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      originX: position.x,
+      originY: position.y,
+      moved: false,
+      longPressTimer: window.setTimeout(() => {
+        // Long press releases the pin
+        movementOrchestrator.setPinned(false);
+        // tiny haptic-style nudge
+        if (dragState.current) dragState.current.moved = true;
+      }, LONG_PRESS_MS),
+    };
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = dragState.current;
+    if (!d || d.pointerId !== e.pointerId) return;
+    const dx = e.clientX - d.startX;
+    const dy = e.clientY - d.startY;
+    if (!d.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+    if (!d.moved) {
+      d.moved = true;
+      setDragging(true);
+      if (d.longPressTimer) {
+        window.clearTimeout(d.longPressTimer);
+        d.longPressTimer = null;
+      }
+    }
+    const nextX = Math.max(8, Math.min(window.innerWidth - AGENT_OVERLAY_SIZE - 8, d.originX + dx));
+    const nextY = Math.max(8, Math.min(window.innerHeight - AGENT_OVERLAY_SIZE - 8, d.originY + dy));
+    movementOrchestrator.setManualPosition({ x: nextX, y: nextY });
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = dragState.current;
+    if (!d || d.pointerId !== e.pointerId) return;
+    if (d.longPressTimer) window.clearTimeout(d.longPressTimer);
+    const wasDrag = d.moved;
+    dragState.current = null;
+    setDragging(false);
+    if (wasDrag) {
+      // Persist as pinned position
+      movementOrchestrator.setPinned(true);
+    } else {
+      toggle();
+    }
+  };
+
   return (
     <>
-      <button
-        type="button"
-        aria-label={expanded ? "Recolher robô operacional" : "Abrir robô operacional"}
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={expanded ? "Recolher assistente" : "Abrir assistente"}
         aria-expanded={expanded}
         title={lastEvent ?? visual.label}
-        onClick={toggle}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            toggle();
+          }
+        }}
         className={cn(
-          "fixed top-0 left-0 z-[60] outline-none rounded-full",
+          "fixed top-0 left-0 z-[60] outline-none rounded-full select-none",
           visible ? "opacity-100" : "opacity-0 pointer-events-none",
-          "focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[hsl(195_100%_60%)]",
+          "focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[hsl(205_95%_70%)]",
         )}
         style={{
           width: ROBOT_SIZE,
           height: ROBOT_SIZE,
-          // re-center: keep the entity anchor consistent with the
-          // legacy orb footprint so MovementOrchestrator math stays valid.
-          transform: `translate3d(${position.x - (ROBOT_SIZE - AGENT_OVERLAY_SIZE) / 2}px, ${position.y - (ROBOT_SIZE - AGENT_OVERLAY_SIZE) / 2}px, 0) scale(${hover ? 1.05 : 1})`,
-          transition: "transform 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 700ms ease-out",
+          transform: `translate3d(${position.x - (ROBOT_SIZE - AGENT_OVERLAY_SIZE) / 2}px, ${position.y - (ROBOT_SIZE - AGENT_OVERLAY_SIZE) / 2}px, 0) scale(${hover && !dragging ? 1.04 : 1})`,
+          transition: dragging
+            ? "none"
+            : "transform 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 700ms ease-out",
           willChange: "transform, opacity",
-          background: "transparent",
-          border: "none",
-          padding: 0,
-          cursor: "pointer",
+          cursor: dragging ? "grabbing" : "grab",
+          touchAction: "none",
         }}
       >
-        {/* halo behind robot */}
-        <span
-          aria-hidden
-          className="absolute inset-0 rounded-full pointer-events-none"
-          style={{
-            background: `radial-gradient(circle, hsl(${visual.hue} / ${0.18 * visual.glow}) 0%, transparent 65%)`,
-            filter: `blur(${6 + visual.glow * 10}px)`,
-          }}
-        />
         <QWRobotEntity size={ROBOT_SIZE} />
-        {/* alarm pulse */}
-        {visual.alarm && (
-          <span
-            aria-hidden
-            className="absolute inset-3 rounded-full pointer-events-none"
-            style={{
-              border: `1.5px solid hsl(${visual.hue})`,
-              animation: "agent-pulse-ring 1s ease-out infinite",
-              opacity: 0.5,
-            }}
-          />
-        )}
-        {/* label */}
-        <span
-          aria-hidden
-          className={cn(
-            "absolute left-1/2 -translate-x-1/2 -bottom-2",
-            "px-2 py-0.5 rounded-full text-[9px] font-semibold tracking-[0.18em]",
-            "border backdrop-blur-md whitespace-nowrap",
-            "transition-opacity duration-200",
-            hover || visual.alarm ? "opacity-100" : "opacity-0",
-          )}
-          style={{
-            background: "hsl(220 50% 5% / 0.85)",
-            borderColor: `hsl(${visual.hue} / 0.5)`,
-            color: `hsl(${visual.hue})`,
-            textShadow: `0 0 8px hsl(${visual.hue} / 0.7)`,
-          }}
-        >
-          {visual.label}
-        </span>
-      </button>
+      </div>
 
       {expanded && (
         <Suspense fallback={null}>

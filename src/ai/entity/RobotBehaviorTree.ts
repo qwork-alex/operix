@@ -1,10 +1,8 @@
 /**
- * RobotBehaviorTree — high-level decisions that bias the visual
- * frame based on operational context (alarm, expanded, focus mode).
+ * RobotBehaviorTree — tiny decoration layer for contextual mood.
  *
- * Kept tiny on purpose: the heavy lifting already lives in the
- * AIStateMachine. This layer can override specific frame fields
- * (e.g. force more rings during expanded console mode).
+ * Keeps the friendly base frame intact and just nudges intensity
+ * when the operator opens the console.
  */
 import type { RobotFrame } from "./RobotStateMachine";
 import type { AIEntitySnapshot } from "@/agents/ai/types";
@@ -13,9 +11,8 @@ export function decorateFrame(frame: RobotFrame, snap: AIEntitySnapshot): RobotF
   if (snap.mode === "expanded") {
     return {
       ...frame,
-      rings: Math.max(frame.rings, 2),
-      ringSpeed: Math.max(frame.ringSpeed, 0.8),
-      eyeIntensity: Math.max(frame.eyeIntensity, 1.6),
+      eyeIntensity: Math.max(frame.eyeIntensity, 1.5),
+      trackSpeed: Math.max(frame.trackSpeed, 1.0),
       label: "OPERACIONAL",
     };
   }

@@ -1,21 +1,20 @@
 /**
- * QWRobotEntity — the living operational AI robot for QW Nexus.
+ * QWRobotEntity — friendly cinematic AI companion for QW Nexus.
  *
- * A real React-Three-Fiber scene rendered inside the global AI
- * entity footprint. Procedurally built (no GLB asset required):
- *   - titanium-white body with black glossy faceplate
- *   - twin glowing eyes (color reacts to state)
- *   - chest "QW" emissive logo
- *   - twin antennas with sway
- *   - holographic rotating rings
- *   - jet thrust particles below
- *   - breathing / inertia / eye-tracking driven by RobotBrain
+ * Rebuilt from the ground up: no more spinning rings, no jet flares,
+ * no alarm orbs. The character is a compact, rounded Pixar-readable
+ * robot — large soft head, glossy black visor, twin oval eyes that
+ * track the cursor and blink, a tiny red operational pilot light on
+ * the chest, a single short antenna, and a soft ground shadow.
  *
- * Intentionally compact in geometry count so it renders at 60fps
- * even on modest GPUs. SAFE MODE (driven by MovementOrchestrator)
- * lowers ring count and freezes secondary motion.
+ * State is conveyed through subtle micro-animation: eye color,
+ * squint/wide eye shape, head tilt, breathing speed, and pilot LED
+ * pulse — never through aggressive overlays.
+ *
+ * Procedurally built via react-three-fiber. Lightweight enough for
+ * 60fps on integrated GPUs.
  */
-import { Suspense, useMemo, useRef, useState, useEffect } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { useRobotBrain } from "./RobotBrain";
@@ -24,152 +23,77 @@ import { damp } from "./RobotMotionEngine";
 import { robotAwareness } from "./RobotAwareness";
 
 /* -------------------------------------------------------------- */
-/*  Sub-pieces                                                    */
+/*  Helpers                                                       */
 /* -------------------------------------------------------------- */
 
-function hsl(str: string, alpha = 1) {
+function hsl(str: string) {
   const [h, s, l] = str.split(" ");
-  const css = `hsla(${h}, ${s}, ${l}, ${alpha})`;
   const c = new THREE.Color();
-  c.setStyle(css);
+  c.setStyle(`hsl(${h}, ${s}, ${l})`);
   return c;
 }
 
-function HoloRing({ radius, speed, color, tilt = 0 }: {
-  radius: number; speed: number; color: THREE.Color; tilt?: number;
-}) {
-  const ref = useRef<THREE.Mesh>(null);
-  useFrame((_, dt) => {
-    if (!ref.current) return;
-    ref.current.rotation.z += speed * dt;
-  });
-  return (
-    <mesh ref={ref} rotation={[Math.PI / 2 + tilt, 0, 0]}>
-      <torusGeometry args={[radius, 0.012, 8, 64]} />
-      <meshBasicMaterial color={color} transparent opacity={0.75} toneMapped={false} />
-    </mesh>
-  );
-}
+/* -------------------------------------------------------------- */
+/*  Sub-pieces                                                    */
+/* -------------------------------------------------------------- */
 
-function Eye({ x, color, intensity, blink }: {
-  x: number; color: THREE.Color; intensity: number; blink: number;
+function Eye({ x, color, intensity, blink, shape }: {
+  x: number; color: THREE.Color; intensity: number; blink: number; shape: number;
 }) {
+  // Oval, expressive — scale Y to convey shape (squint / wide).
   return (
-    <group position={[x, 0.05, 0.42]}>
+    <group position={[x, 0.04, 0.36]} scale={[1, shape * blink, 1]}>
       <mesh>
-        <sphereGeometry args={[0.07, 16, 16]} />
+        <sphereGeometry args={[0.075, 24, 24]} />
         <meshStandardMaterial
           color={color}
           emissive={color}
-          emissiveIntensity={intensity * blink}
-          roughness={0.2}
-          metalness={0.1}
+          emissiveIntensity={intensity}
+          roughness={0.25}
+          metalness={0.05}
         />
       </mesh>
-      {/* outer halo */}
-      <mesh position={[0, 0, 0.01]}>
-        <ringGeometry args={[0.075, 0.11, 24]} />
-        <meshBasicMaterial color={color} transparent opacity={0.4 * blink} toneMapped={false} />
+      {/* tiny white catchlight — gives "alive" feeling */}
+      <mesh position={[-0.022, 0.022, 0.06]}>
+        <sphereGeometry args={[0.018, 12, 12]} />
+        <meshBasicMaterial color="#ffffff" toneMapped={false} />
       </mesh>
     </group>
   );
 }
 
-function Antenna({ x, sway, color }: { x: number; sway: number; color: THREE.Color }) {
-  const ref = useRef<THREE.Group>(null);
-  const t = useRef(0);
-  useFrame((_, dt) => {
-    if (!ref.current) return;
-    t.current += dt;
-    ref.current.rotation.z = Math.sin(t.current * 2 + x) * sway;
-  });
-  return (
-    <group ref={ref} position={[x, 0.65, 0]}>
-      <mesh position={[0, 0.18, 0]}>
-        <cylinderGeometry args={[0.012, 0.012, 0.36, 6]} />
-        <meshStandardMaterial color="#cfd5dc" metalness={0.9} roughness={0.3} />
-      </mesh>
-      <mesh position={[0, 0.4, 0]}>
-        <sphereGeometry args={[0.05, 12, 12]} />
-        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.6} />
-      </mesh>
-    </group>
-  );
-}
-
-function ChestCore({ color, pulse }: { color: THREE.Color; pulse: number }) {
+function PilotLED({ color, pulse, on }: { color: THREE.Color; pulse: number; on: boolean }) {
   const ref = useRef<THREE.Mesh>(null);
   useFrame((s) => {
     if (!ref.current) return;
-    const k = 1 + Math.sin(s.clock.elapsedTime * pulse * Math.PI) * 0.08;
-    ref.current.scale.set(k, k, k);
+    const m = ref.current.material as THREE.MeshStandardMaterial;
+    const k = on ? 0.55 + (Math.sin(s.clock.elapsedTime * pulse * Math.PI) + 1) * 0.5 : 0;
+    m.emissiveIntensity = k * 1.8;
   });
   return (
-    <group position={[0, -0.05, 0.43]}>
-      {/* core dot */}
-      <mesh ref={ref}>
-        <circleGeometry args={[0.09, 24]} />
-        <meshBasicMaterial color={color} toneMapped={false} />
-      </mesh>
-      {/* QW text — drawn via canvas texture */}
-      <QWLogo color={color} />
-    </group>
-  );
-}
-
-function QWLogo({ color }: { color: THREE.Color }) {
-  const tex = useMemo(() => {
-    const c = document.createElement("canvas");
-    c.width = 128; c.height = 128;
-    const ctx = c.getContext("2d")!;
-    ctx.clearRect(0, 0, 128, 128);
-    ctx.fillStyle = `rgb(${color.r * 255},${color.g * 255},${color.b * 255})`;
-    ctx.font = "bold 64px Inter, system-ui, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.shadowColor = ctx.fillStyle as string;
-    ctx.shadowBlur = 14;
-    ctx.fillText("QW", 64, 70);
-    const t = new THREE.CanvasTexture(c);
-    t.anisotropy = 2;
-    return t;
-  }, [color.r, color.g, color.b]);
-  return (
-    <mesh position={[0, 0, 0.002]}>
-      <planeGeometry args={[0.22, 0.22]} />
-      <meshBasicMaterial map={tex} transparent toneMapped={false} />
+    <mesh ref={ref} position={[0, -0.18, 0.4]}>
+      <sphereGeometry args={[0.028, 16, 16]} />
+      <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1} />
     </mesh>
   );
 }
 
-function Jets({ count, color }: { count: number; color: THREE.Color }) {
-  const group = useRef<THREE.Group>(null);
-  const items = useMemo(
-    () => Array.from({ length: count }).map((_, i) => ({
-      x: (i - (count - 1) / 2) * 0.12,
-      phase: i * 0.4,
-    })),
-    [count],
-  );
+function Antenna() {
+  const ref = useRef<THREE.Group>(null);
   useFrame((s) => {
-    if (!group.current) return;
-    group.current.children.forEach((child, i) => {
-      const m = child as THREE.Mesh;
-      const t = (s.clock.elapsedTime * 2.4 + items[i].phase) % 1;
-      m.position.y = -0.65 - t * 0.5;
-      (m.material as THREE.MeshBasicMaterial).opacity = (1 - t) * 0.85;
-      const sc = 1 - t * 0.7;
-      m.scale.set(sc, sc, sc);
-    });
+    if (!ref.current) return;
+    ref.current.rotation.z = Math.sin(s.clock.elapsedTime * 1.4) * 0.05;
   });
   return (
-    <group ref={group}>
-      {items.map((p, i) => (
-        <mesh key={i} position={[p.x, -0.65, 0.2]}>
-          <sphereGeometry args={[0.05, 8, 8]} />
-          <meshBasicMaterial color={color} transparent opacity={0.8} toneMapped={false} />
-        </mesh>
-      ))}
+    <group ref={ref} position={[0, 0.62, 0]}>
+      <mesh position={[0, 0.12, 0]}>
+        <cylinderGeometry args={[0.008, 0.01, 0.24, 8]} />
+        <meshStandardMaterial color="#c3c8cf" metalness={0.9} roughness={0.35} />
+      </mesh>
+      <mesh position={[0, 0.27, 0]}>
+        <sphereGeometry args={[0.035, 16, 16]} />
+        <meshStandardMaterial color="#ffffff" emissive="#ffd9d9" emissiveIntensity={0.7} metalness={0.4} roughness={0.3} />
+      </mesh>
     </group>
   );
 }
@@ -183,141 +107,125 @@ function Robot() {
   const frame = useMemo(() => decorateFrame(rawFrame, snapshot), [rawFrame, snapshot]);
 
   const eyeColor = useMemo(() => hsl(frame.hue), [frame.hue]);
-  const accentColor = useMemo(() => hsl(frame.accent), [frame.accent]);
+  const pilotColor = useMemo(() => hsl(frame.accent), [frame.accent]);
 
   const root = useRef<THREE.Group>(null);
   const head = useRef<THREE.Group>(null);
   const blinkRef = useRef(1);
   const blinkTimer = useRef(0);
   const lookTarget = useRef({ x: 0, y: 0 });
+  const tiltRef = useRef(0);
 
-  // Sync pointer awareness — set the anchor to viewport center of
-  // the canvas DOM node every frame for accuracy.
+  // anchor for cursor tracking
   const canvasCenter = useRef({ x: 0, y: 0 });
   useEffect(() => {
-    const updateAnchor = () => {
+    const update = () => {
       const el = document.getElementById("qw-robot-canvas");
       if (!el) return;
       const r = el.getBoundingClientRect();
       canvasCenter.current = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
     };
-    updateAnchor();
-    const t = window.setInterval(updateAnchor, 500);
-    window.addEventListener("scroll", updateAnchor, true);
-    window.addEventListener("resize", updateAnchor);
+    update();
+    const t = window.setInterval(update, 400);
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
     return () => {
       window.clearInterval(t);
-      window.removeEventListener("scroll", updateAnchor, true);
-      window.removeEventListener("resize", updateAnchor);
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
     };
   }, []);
 
   useFrame((s, dt) => {
     const t = s.clock.elapsedTime;
-    // breathing bob
+    // breathing bob — slow vertical drift + tiny roll
     if (root.current) {
       root.current.position.y = Math.sin(t * frame.bobSpeed) * frame.bob;
-      root.current.rotation.z = Math.sin(t * frame.bobSpeed * 0.7) * 0.03;
+      root.current.rotation.z = Math.sin(t * frame.bobSpeed * 0.6) * 0.02;
     }
-    // head tracking
+    // head tracking — soft damped follow toward cursor + personality tilt
     if (head.current) {
-      const look = robotAwareness.lookFrom(canvasCenter.current, 320);
-      lookTarget.current.x = damp(lookTarget.current.x, look.x * 0.35, 6 * frame.trackSpeed, dt);
-      lookTarget.current.y = damp(lookTarget.current.y, -look.y * 0.25, 6 * frame.trackSpeed, dt);
+      const look = robotAwareness.lookFrom(canvasCenter.current, 360);
+      lookTarget.current.x = damp(lookTarget.current.x, look.x * 0.32, 5 * frame.trackSpeed, dt);
+      lookTarget.current.y = damp(lookTarget.current.y, -look.y * 0.22, 5 * frame.trackSpeed, dt);
+      tiltRef.current = damp(tiltRef.current, frame.headTilt, 4, dt);
       head.current.rotation.y = lookTarget.current.x;
       head.current.rotation.x = lookTarget.current.y;
+      head.current.rotation.z = tiltRef.current;
     }
-    // blink
+    // blink — eyelid snap then ease open
     blinkTimer.current += dt * frame.blinkRate;
     if (blinkTimer.current > 1) {
       blinkTimer.current = 0;
-      blinkRef.current = 0;
+      blinkRef.current = 0.05;
     } else {
-      blinkRef.current = damp(blinkRef.current, 1, 18, dt);
+      blinkRef.current = damp(blinkRef.current, 1, 16, dt);
     }
   });
 
   return (
     <group ref={root}>
-      {/* holographic rings */}
-      {Array.from({ length: frame.rings }).map((_, i) => (
-        <HoloRing
-          key={i}
-          radius={0.95 + i * 0.16}
-          speed={(i % 2 === 0 ? 1 : -1) * frame.ringSpeed * (1 + i * 0.3)}
-          color={accentColor}
-          tilt={i * 0.18}
-        />
-      ))}
-
-      {/* jets */}
-      {frame.jets > 0 && <Jets count={frame.jets} color={accentColor} />}
-
-      {/* body */}
-      <mesh position={[0, -0.15, 0]}>
-        <capsuleGeometry args={[0.42, 0.22, 8, 24]} />
-        <meshStandardMaterial color="#e9edf2" metalness={0.85} roughness={0.28} />
+      {/* soft ground shadow disc */}
+      <mesh position={[0, -0.78, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[0.55, 32]} />
+        <meshBasicMaterial color="#000000" transparent opacity={0.18} />
       </mesh>
 
-      {/* chest plate */}
-      <mesh position={[0, -0.05, 0.4]}>
-        <circleGeometry args={[0.32, 32]} />
-        <meshStandardMaterial color="#0a0d12" metalness={0.4} roughness={0.2} />
+      {/* body — rounded, compact, soft white */}
+      <mesh position={[0, -0.18, 0]}>
+        <sphereGeometry args={[0.42, 32, 32]} />
+        <meshStandardMaterial color="#f3f5f8" metalness={0.55} roughness={0.42} />
       </mesh>
-      <ChestCore color={eyeColor} pulse={frame.corePulse} />
 
-      {/* head */}
-      <group ref={head} position={[0, 0.42, 0]}>
+      {/* chest faceplate (subtle, recessed) */}
+      <mesh position={[0, -0.18, 0.36]}>
+        <circleGeometry args={[0.22, 32]} />
+        <meshStandardMaterial color="#0d1014" metalness={0.5} roughness={0.25} />
+      </mesh>
+      <PilotLED color={pilotColor} pulse={frame.pilotPulse} on={frame.pilotOn} />
+
+      {/* neck connector */}
+      <mesh position={[0, 0.1, 0]}>
+        <cylinderGeometry args={[0.07, 0.09, 0.1, 16]} />
+        <meshStandardMaterial color="#b9bfc6" metalness={0.85} roughness={0.3} />
+      </mesh>
+
+      {/* HEAD — large, rounded, friendly proportions */}
+      <group ref={head} position={[0, 0.32, 0]}>
         {/* skull */}
         <mesh>
-          <sphereGeometry args={[0.4, 32, 32]} />
-          <meshStandardMaterial color="#f0f3f7" metalness={0.9} roughness={0.22} />
+          <sphereGeometry args={[0.42, 40, 40]} />
+          <meshStandardMaterial color="#fafbfd" metalness={0.55} roughness={0.35} />
         </mesh>
-        {/* visor */}
-        <mesh position={[0, 0.02, 0.18]} rotation={[-0.08, 0, 0]}>
-          <sphereGeometry args={[0.34, 32, 32, 0, Math.PI * 2, 0.4, 0.9]} />
+        {/* black glossy visor — wraps front */}
+        <mesh position={[0, 0.02, 0.08]} scale={[1, 0.62, 1]}>
+          <sphereGeometry args={[0.39, 40, 40]} />
           <meshStandardMaterial
-            color="#06080c"
+            color="#070a0f"
             metalness={0.95}
-            roughness={0.08}
-            envMapIntensity={1.2}
+            roughness={0.06}
+            envMapIntensity={1.4}
           />
         </mesh>
         {/* eyes */}
-        <Eye x={-0.13} color={eyeColor} intensity={frame.eyeIntensity} blink={blinkRef.current} />
-        <Eye x={0.13} color={eyeColor} intensity={frame.eyeIntensity} blink={blinkRef.current} />
-        {/* ear units */}
-        <mesh position={[-0.38, -0.02, 0]}>
-          <boxGeometry args={[0.08, 0.16, 0.16]} />
-          <meshStandardMaterial color="#aeb4bc" metalness={0.85} roughness={0.3} />
+        <Eye x={-0.12} color={eyeColor} intensity={frame.eyeIntensity} blink={blinkRef.current} shape={frame.eyeShape} />
+        <Eye x={0.12} color={eyeColor} intensity={frame.eyeIntensity} blink={blinkRef.current} shape={frame.eyeShape} />
+        {/* small side audio pods */}
+        <mesh position={[-0.4, -0.02, 0]}>
+          <sphereGeometry args={[0.07, 16, 16]} />
+          <meshStandardMaterial color="#c8cdd4" metalness={0.85} roughness={0.3} />
         </mesh>
-        <mesh position={[0.38, -0.02, 0]}>
-          <boxGeometry args={[0.08, 0.16, 0.16]} />
-          <meshStandardMaterial color="#aeb4bc" metalness={0.85} roughness={0.3} />
+        <mesh position={[0.4, -0.02, 0]}>
+          <sphereGeometry args={[0.07, 16, 16]} />
+          <meshStandardMaterial color="#c8cdd4" metalness={0.85} roughness={0.3} />
         </mesh>
-        {/* antennas */}
-        <Antenna x={-0.18} sway={frame.antennaSway} color={accentColor} />
-        <Antenna x={0.18} sway={frame.antennaSway} color={accentColor} />
+        {/* single small antenna with soft red blinker */}
+        <Antenna />
       </group>
 
-      {/* shoulder pauldrons */}
-      <mesh position={[-0.48, -0.05, 0]}>
-        <sphereGeometry args={[0.16, 16, 16]} />
-        <meshStandardMaterial color="#cfd5dc" metalness={0.9} roughness={0.28} />
-      </mesh>
-      <mesh position={[0.48, -0.05, 0]}>
-        <sphereGeometry args={[0.16, 16, 16]} />
-        <meshStandardMaterial color="#cfd5dc" metalness={0.9} roughness={0.28} />
-      </mesh>
-
-      {/* ground halo */}
-      <mesh position={[0, -0.85, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.35, 0.6, 32]} />
-        <meshBasicMaterial color={accentColor} transparent opacity={0.35} toneMapped={false} />
-      </mesh>
-
-      {/* point light to light the body with state color */}
-      <pointLight color={eyeColor} intensity={1.4 + frame.eyeIntensity * 0.6} distance={4} position={[0, 0, 1.2]} />
+      {/* soft state-tinted rim light to give it cinematic lighting */}
+      <pointLight color={eyeColor} intensity={0.9} distance={3.5} position={[0, 0.1, 1.1]} />
+      <pointLight color={pilotColor} intensity={0.35} distance={1.6} position={[0, -0.2, 0.6]} />
     </group>
   );
 }
@@ -327,7 +235,6 @@ function Robot() {
 /* -------------------------------------------------------------- */
 
 export function QWRobotEntity({ size }: { size: number }) {
-  // suppress R3F-internal context to avoid clipping
   const [reduced, setReduced] = useState(false);
   useEffect(() => {
     const mql = window.matchMedia?.("(prefers-reduced-motion: reduce)");
@@ -339,16 +246,17 @@ export function QWRobotEntity({ size }: { size: number }) {
   }, []);
 
   return (
-    <div id="qw-robot-canvas" style={{ width: size, height: size }}>
+    <div id="qw-robot-canvas" style={{ width: size, height: size, pointerEvents: "none" }}>
       <Canvas
-        camera={{ position: [0, 0.05, 2.6], fov: 38 }}
+        camera={{ position: [0, 0.05, 2.5], fov: 36 }}
         dpr={[1, reduced ? 1.25 : 2]}
         gl={{ alpha: true, antialias: true, powerPreference: "high-performance" }}
         style={{ width: "100%", height: "100%", background: "transparent" }}
       >
-        <ambientLight intensity={0.55} />
-        <directionalLight position={[2, 3, 2]} intensity={1.2} />
-        <directionalLight position={[-2, 1, -1]} intensity={0.5} color="#7bd0ff" />
+        {/* warm key + cool fill for soft cinematic lighting */}
+        <ambientLight intensity={0.65} />
+        <directionalLight position={[2.2, 3, 2]} intensity={1.15} color="#fff4e6" />
+        <directionalLight position={[-2, 1, -1]} intensity={0.55} color="#9cd4ff" />
         <Suspense fallback={null}>
           <Robot />
         </Suspense>
