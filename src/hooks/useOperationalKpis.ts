@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useWorkspace } from "@/hooks/useWorkspace";
+import { RealtimeHub } from "@/lib/realtime/RealtimeHub";
 
 export interface OperationalKpis {
   platformsActive: number;
