@@ -77,9 +77,7 @@ function PlatformCard({ p }: { p: Platform }) {
 }
 
 export function PlatformsPanel() {
-  const { platforms, isLoading, create } = usePlatforms();
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
+  const { platforms, isLoading } = usePlatforms();
 
   const visible = platforms.filter((p) => p.state !== "archived");
 
@@ -88,25 +86,10 @@ export function PlatformsPanel() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-base font-semibold tracking-tight">Plataformas operacionais</h2>
-          <p className="text-xs text-muted-foreground">Lifecycle e heartbeat em tempo real</p>
+          <p className="text-xs text-muted-foreground">
+            Geradas automaticamente pelo ciclo de vida das Ordens de Serviço
+          </p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="gap-1.5">
-              <Plus className="h-3.5 w-3.5" /> Nova plataforma
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Nova plataforma</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              <Input placeholder="Nome (ex.: Lyon)" value={name} onChange={(e) => setName(e.target.value)} />
-              <Button className="w-full" disabled={!name.trim() || create.isPending}
-                onClick={() => create.mutate({ name }, { onSuccess: () => { setName(""); setOpen(false); } })}>
-                Criar
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
       </div>
 
       {isLoading ? (
@@ -120,17 +103,14 @@ export function PlatformsPanel() {
           ))}
         </div>
       ) : visible.length === 0 ? (
-        <div className="glass-panel rounded-xl p-8 text-center space-y-3">
+        <div className="glass-panel rounded-xl p-8 text-center space-y-2">
           <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-md border border-border/60 bg-muted/40 text-muted-foreground">
             <Activity className="h-4 w-4" />
           </div>
-          <div className="space-y-1">
-            <p className="text-sm font-medium">Nenhuma plataforma activa</p>
-            <p className="text-xs text-muted-foreground">Cria a primeira para começar a receber heartbeats em tempo real.</p>
-          </div>
-          <Button size="sm" className="gap-1.5" onClick={() => setOpen(true)}>
-            <Plus className="h-3.5 w-3.5" /> Criar plataforma
-          </Button>
+          <p className="text-sm font-medium">Nenhuma plataforma activa</p>
+          <p className="text-xs text-muted-foreground">
+            As plataformas aparecem aqui automaticamente quando Ordens de Serviço são criadas.
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
