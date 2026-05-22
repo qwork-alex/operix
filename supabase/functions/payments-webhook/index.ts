@@ -48,14 +48,67 @@ async function resolveWorkspaceByCustomer(customerId: string | null): Promise<st
   return (data as any)?.workspace_id ?? null;
 }
 
+function isTechnicianLookupKey(key: string | null | undefined): boolean {
+  return !!key && key.startsWith("technician_");
+}
+
+async function resolveTechnicianPlanId(lookupKey: string): Promise<string | null> {
+  // lookupKey shape: technician_<code>_<cycle>  →  plan code = lookupKey without _<cycle>
+  const planCode = lookupKey.replace(/_(monthly|yearly)$/, "");
+  const { data } = await db()
+    .from("subscription_plans")
+    .select("id")
+    .eq("code", planCode)
+    .maybeSingle();
+  return (data as any)?.id ?? null;
+}
+
+async function handleTechnicianSubscriptionUpsert(sub: any, env: StripeEnv, lookupKey: string | null) {
+  const userId = sub.metadata?.userId;
+  if (!userId) {
+    console.warn("[technician-sub] missing userId metadata", sub.id);
+    return;
+  }
+  const planId = lookupKey ? await resolveTechnicianPlanId(lookupKey) : null;
+  const item = sub.items?.data?.[0];
+  const periodStart = item?.current_period_start ?? sub.current_period_start;
+  const periodEnd = item?.current_period_end ?? sub.current_period_end;
+  const internalStatus = STRIPE_TO_INTERNAL_STATUS[sub.status] ?? "active";
+
+  await db()
+    .from("technician_subscriptions")
+    .upsert(
+      {
+        user_id: userId,
+        ...(planId ? { plan_id: planId } : {}),
+        status: internalStatus,
+        stripe_subscription_id: sub.id,
+        stripe_customer_id: sub.customer,
+        stripe_price_lookup_key: lookupKey,
+        stripe_environment: env,
+        current_period_start: periodStart ? new Date(periodStart * 1000).toISOString() : null,
+        current_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+        cancelled_at: sub.canceled_at ? new Date(sub.canceled_at * 1000).toISOString() : null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" },
+    );
+}
+
 async function handleSubscriptionUpsert(sub: any, env: StripeEnv) {
+  const item = sub.items?.data?.[0];
+  const lookupKey = item?.price?.lookup_key ?? null;
+
+  // Route by lookup_key prefix: technician vs workspace billing.
+  if (isTechnicianLookupKey(lookupKey)) {
+    return handleTechnicianSubscriptionUpsert(sub, env, lookupKey);
+  }
+
   const workspaceId = sub.metadata?.workspaceId ?? (await resolveWorkspaceByCustomer(sub.customer));
   if (!workspaceId) {
     console.warn("subscription without workspaceId", sub.id);
     return;
   }
-  const item = sub.items?.data?.[0];
-  const lookupKey = item?.price?.lookup_key ?? null;
   const periodStart = item?.current_period_start ?? sub.current_period_start;
   const periodEnd = item?.current_period_end ?? sub.current_period_end;
   const internalStatus = STRIPE_TO_INTERNAL_STATUS[sub.status] ?? "active";
@@ -83,6 +136,17 @@ async function handleSubscriptionUpsert(sub: any, env: StripeEnv) {
 }
 
 async function handleSubscriptionDeleted(sub: any) {
+  const item = sub.items?.data?.[0];
+  const lookupKey = item?.price?.lookup_key ?? null;
+  if (isTechnicianLookupKey(lookupKey)) {
+    const userId = sub.metadata?.userId;
+    if (!userId) return;
+    await db()
+      .from("technician_subscriptions")
+      .update({ status: "cancelled", cancelled_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq("user_id", userId);
+    return;
+  }
   const workspaceId = sub.metadata?.workspaceId ?? (await resolveWorkspaceByCustomer(sub.customer));
   if (!workspaceId) return;
   await db()
@@ -98,6 +162,7 @@ async function handleSubscriptionDeleted(sub: any) {
     stripe_subscription_id: sub.id,
   });
 }
+
 
 async function handleInvoicePaid(inv: any) {
   const workspaceId = inv.subscription_details?.metadata?.workspaceId
