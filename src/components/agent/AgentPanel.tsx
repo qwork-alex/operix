@@ -273,11 +273,15 @@ export default function AgentPanel({ onClose }: Props) {
       <div className={cn("relative px-4 py-3 border-b border-[hsl(195_100%_60%/0.15)] bg-gradient-to-br", headerTint)}>
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="relative h-9 w-9 rounded-full flex items-center justify-center"
-              style={{ background: "radial-gradient(circle at 30% 25%, hsl(195 100% 65%), hsl(220 90% 25%) 70%)" }}>
-              <span className="absolute inset-0 rounded-full border border-[hsl(195_100%_70%/0.5)] animate-[spin_8s_linear_infinite]"
-                style={{ borderTopColor: "transparent" }} />
-          <div className="flex items-center gap-3 min-w-0">
+            {/* state pip — mirrors the live robot identity, no duplicate avatar */}
+            <span
+              aria-hidden
+              className="relative inline-flex h-2.5 w-2.5 shrink-0 rounded-full"
+              style={{
+                background: `hsl(${aiSnap.visual.hue})`,
+                boxShadow: `0 0 10px hsl(${aiSnap.visual.hue} / 0.8)`,
+              }}
+            />
             {/* state pip — mirrors the live robot identity, no duplicate avatar */}
             <span
               aria-hidden
