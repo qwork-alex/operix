@@ -1,151 +1,108 @@
-# Plano — Painel Operacional Realtime (SAFE MODE)
+# Billing Restructure + Stabilization Plan
 
-Escopo grande. Vou entregar em **5 fases independentes** para você validar entre uma e outra. Cada fase é um commit isolado, reversível, sem tocar tenancy, auth, RBAC, providers, edge functions, migrations destrutivas.
+This is a large, multi-phase change. I'll break it into approval gates so we don't ship a half-migrated billing system.
 
-## Fase 1 — KPIs operacionais (topo do dashboard)
+---
 
-**Arquivo:** `src/pages/Index.tsx` + novo `src/components/dashboard/OperationalKPIs.tsx`
+## Phase 1 — Billing Model Separation (DB + Pricing)
 
-Remover os 4 KPICard atuais (Receita, Pagamentos pendentes, Serviços concluídos, Desempenho).
+**New plan taxonomy** in `subscription_plans`:
 
-Substituir por 6 cards realtime:
+| code | kind | price/mo | tech range |
+|---|---|---|---|
+| `technician_pro` | technician | 24.99€ | n/a (per seat) |
+| `workspace_t1` | workspace | 24.99€ | 1–15 |
+| `workspace_t2` | workspace | 44.99€ | 16–30 |
+| `workspace_t3` | workspace | 59.99€ | 31–45 |
+| `workspace_t4` | workspace | 79.99€ | 46–60 |
 
+**DB migration**
+- Add `subscription_plans.kind` enum (`workspace` | `technician`), `tier_min`, `tier_max`.
+- New table `technician_subscriptions` (user_id, status, stripe_*, current_period_end, environment) — mirrors `workspace_subscriptions` shape but per-user.
+- Replace tier-recalculation trigger: pick workspace plan by `count(active technicians in workspace)` falling into `[tier_min, tier_max]`.
+- Backfill existing workspaces onto the matching `workspace_tN` tier.
+- New RPC `get_technician_subscription(_user_id)` + update `get_workspace_access_state` so workspace blocks no longer depend on per-tech billing.
+- New view `v_workspace_active_tech_count` used by trigger + UI.
 
-| Card                   | Fonte                                                                                |
-| ---------------------- | ------------------------------------------------------------------------------------ |
-| Plataformas ativas     | `service_orders` distinct `platform` com `status in (in_progress, paused)`           |
-| Plataformas encerradas | `service_orders` com `status in (completed, confirmed)` agrupadas por mês corrente   |
-| Clientes ativos        | `clients` com OS criadas últimos 30d                                                 |
-| Técnicos ativos        | `user_roles role=technician` cruzado com `service_orders.technician_name` últimos 7d |
-| Dispatch IA            | `ai_recommendations` `status=pending`                                                |
-| Alertas operacionais   | `ai_alerts` `status=open` + `discrepancies` não resolvidas                           |
+**Stripe products (sandbox)**
+Use `payments--batch_create_product` with `lookup_key` = plan code + cycle:
+- `technician_pro` → prices `technician_pro_monthly` (2499) / `technician_pro_yearly` (24990 = 10 months)
+- `workspace_t1..t4` → same monthly/yearly pair each
+- tax_code `txcd_10103001` (SaaS)
 
+**VAT copy**
+Replace existing aggressive VAT banners with neutral suffix `" + IVA aplicável"` in:
+- `CheckoutPage`, `SubscriptionPage`, plan cards, invoice previews.
 
-Visual: mantém `glass-panel` existente, adiciona badge de status (dot pulsante para "live"), micro-animação `animate-fade-in` (já existe). Sem redesign do `KPICard`, criar variante `OperationalKPICard` ao lado.
+---
 
-Realtime: 1 único `supabase.channel('dashboard-kpis')` escutando `service_orders`, `ai_recommendations`, `ai_alerts` → `queryClient.invalidateQueries(['op-kpis'])`. Throttle de 2s para evitar rerender storm.
+## Phase 2 — Onboarding Flows
 
-## Fase 2 — Estado por plataforma (árvore operacional)
+**Workspace onboarding** (new route group `/onboarding/workspace/*`):
+```
+Landing → CreateWorkspace → Subscription(pickTier) → CompanySetup → PlatformAccess
+```
+- Driven by a single `WorkspaceOnboardingProvider` (step state in URL).
+- Plan picker shows the 4 tiers + estimated price by declared tech count.
+- Subscription step opens existing `StripeEmbeddedCheckout` with the resolved `workspace_tN_*` lookup key.
+- Company Setup writes to `company_settings`.
+- Platform Access = success screen → redirect to dashboard.
 
-**Backend (migration leve, não destrutiva):**
+**Technician onboarding** (already invite-only):
+```
+Invite link → Accept → CreateProfile → EnterWorkspace
+```
+- After profile creation, prompt for `technician_pro` checkout (skippable for workspace-paid seats — to confirm with you, see Open Questions).
+- Reuses existing invite/join flow in `JoinPage`.
 
-- Adicionar coluna `platform_state text default 'active' check (platform_state in ('active','paused','closed','archived'))` em `service_orders` (nullable preserva compat).
-- Sem trigger novo. Sem RLS nova (herda das existentes).
+**Landing**
+- Add `/` (or `/landing`) marketing page with two CTAs: "Criar Workspace" / "Sou Técnico (tenho convite)".
 
-**Frontend:**
+---
 
-- Localizar componente da árvore 2025→Cliente→Plataforma (provavelmente em `ServiceOrdersTable` ou `treeGrouping.ts`) e adicionar:
-  - Cor contextual da linha da plataforma (azul/cinza/vermelho/âmbar via classe semântica).
-  - Botão toggle (ícone) **só no hover** (`opacity-0 group-hover:opacity-100`).
-  - Mutation `update platform_state` com optimistic update.
-- Dashboard Fase 1 passa a contar por `platform_state`.
+## Phase 3 — Billing Abstraction Layer
 
-## Fase 3 — Eventos operacionais inteligentes
+New `src/lib/billing/`:
+- `billingProvider.ts` — single interface: `getWorkspaceSubscription`, `getTechnicianSubscription`, `openCheckout(kind, lookupKey)`, `openPortal()`.
+- `seatCounter.ts` — `useActiveTechnicianCount(workspaceId)`.
+- `subscriptionGuards.tsx` — `<RequireWorkspaceSub/>`, `<RequireTechnicianSub/>` wrapping `AccessGuard`.
+- `lifecycleBus.ts` — emits `subscription.activated|suspended|tier_changed|seat_added|seat_removed` on the existing `OperationalEventBus`.
 
-**Arquivo:** novo `src/components/dashboard/OperationalEvents.tsx`, remove `ServicePieChart` e `RecentActivity` do `Index.tsx`.
+Update `payments-webhook` edge function to route by `lookup_key` prefix: `technician_*` → `technician_subscriptions`, `workspace_*` → `workspace_subscriptions`.
 
-Stream unificado de eventos das tabelas já existentes:
+---
 
-- `backend_event_logs` (login, alterações)
-- `ai_recommendations`, `ai_insights`, `ai_alerts`
-- `automation_executions` (dispatch automático)
-- `discrepancies`
+## Phase 4 — Stabilization Sweep
 
-Renderiza últimas 30 entradas com ícone, cor semântica, timestamp relativo, link contextual. Realtime via canal único. Virtualizado se >50 itens.
+Done as one PR after Phase 1–3 land:
+- **Audit**: run `tsc --noEmit`-equivalent via build + `bun test`; fix dead imports.
+- **Realtime**: re-init `RealtimeHub` channels on auth change; reconnect-on-visibility.
+- **Providers**: verify `AIProvider`, `TenantContext`, `WorkspaceProvider`, `ConsentGate` mount order; remove any duplicated providers found.
+- **i18n**: run `scripts/i18n-audit.mjs`; add missing PT/EN keys for new billing/onboarding strings.
+- **UI consistency**: enforce semantic tokens in new billing screens; remove hard-coded colors.
+- **Permissions**: smoke-test `RoleGuard` + `AccessGuard` on every new route.
+- **Cleanup**: delete unused components flagged by audit (esp. old PresenceOverlay/CharacterLayer if fully superseded).
+- **Event system**: dedupe listeners in `OperationalEventBus`; ensure unsubscribes on unmount.
+- **Loading states**: add skeletons to onboarding steps + subscription cards.
+- **Responsive**: verify onboarding at 375 / 768 / 1280.
+- **Observability**: confirm `useObservabilityBoot` captures new lifecycle events.
 
-## Fase 4 — Radar PDR (restauração) — **CRÍTICO**
+---
 
-Não vou reescrever. Vou diagnosticar primeiro:
+## Technical Notes
 
-1. Inspecionar `OperationalMap.tsx` (1664 linhas) para identificar:
-  - `useEffect` com deps incorretas causando teardown do mapa
-  - subscriptions duplicadas (procurar múltiplos `supabase.channel`)
-  - polling de meteorologia (intervalos órfãos)
-  - race conditions em sources do maplibre
-2. Verificar edge function `ingest-hail` (última execução, logs).
-3. Verificar tabela `hail_events` (linhas recentes, `is_demo` flag).
-4. Fix cirúrgico — sem reescrita, só correções localizadas + cleanup de intervals/channels no unmount.
+- `payments--batch_create_product` is sandbox-only; live syncs at publish.
+- `stripe_price_lookup_key` pattern stays `{plan_code}_{cycle}` — no checkout/webhook code changes beyond plan codes.
+- Owner account `qwork@qworkgroup.com` bypass remains intact.
+- All migrations RLS-protected; `technician_subscriptions` policy: user reads own row, service_role writes.
 
-Entrego relatório do que estava quebrado + patch.
+---
 
-## Fase 5 — Refinos: RevenueChart, Oportunidades, performance
+## Open Questions (need answers before Phase 1)
 
-- `RevenueChart`: melhorar legenda/espaçamento (apenas CSS/tokens, sem mudar dados).
-- `OperationalOpportunities` já existe — promover para card lateral do dashboard com marketplace ativo (`marketplace_listings` recentes).
-- Sweep de performance: `React.memo` nos cards, `useMemo` em agregações pesadas, debounce 250ms em invalidações realtime.
+1. **Tech seat billing model**: when a workspace pays tier T1–T4, is `technician_pro` *additional* (each tech pays their own 24.99€ for Siltech/AI/mobile) or *included* (workspace tier already covers everything for seats up to its cap)?
+2. **Existing data**: any live workspaces today? If yes — grandfather pricing or force-migrate at next renewal?
+3. **Yearly cycle**: keep current "10 months for 12" discount, or remove and only offer monthly?
+4. **Landing page**: build a real marketing landing, or a minimal 2-CTA splash for now?
 
-## Fora de escopo (não vou tocar)
-
-- Mapbox/Google/Windy: você pediu só "preparar arquitetura" — vou criar `src/lib/mapProviders.ts` como interface abstrata (não troca o provider atual maplibre).
-- Tenancy, auth, RBAC, memberships, automations engine, IA orchestrator, edge functions existentes, policies, triggers.
-- Sidebar (já reorganizado em fase anterior).
-
-## Ordem de entrega proposta
-
-Posso entregar **tudo numa única resposta** (5 fases em sequência), ou parar após cada fase para você validar. Dado o risco do radar (Fase 4), **recomendo entregar Fases 1+2+3 juntas e tratar Fase 4 separadamente** depois que eu inspecionar o radar e te mostrar o diagnóstico.
-
-## Pergunta antes de começar
-
-1. Confirmo a coluna `platform_state` em `service_orders`? (Fase 2 depende disso.)
-2. Entrego Fases 1+2+3 agora e Fase 4 (radar) em resposta separada com diagnóstico antes do fix? Ou prefere que eu ataque o radar primeiro?
-
-Pode seguir.
-
-IMPORTANTE:
-
-não quero modelar platform_state diretamente em service_orders.
-
-Quero avaliar arquitetura correta de plataformas para evitar dívida técnica futura.
-
-Antes da UI:
-
-mapear origem única do estado operacional e subscriptions realtime existentes.
-
-O radar PDR é feature estratégica core do produto.
-
-Priorizar estabilidade realtime e arquitetura extensível antes de refinamento visual.
-
-Pode seguir.
-
-PRIORIDADE ABSOLUTA nesta implementação:
-
-1. estabilidade realtime
-2. radar PDR
-3. ingestão operacional
-4. subscriptions
-5. arquitetura desacoplada
-6. runtime seguro
-
-NÃO priorizar:
-
-- redesign visual
-- animações excessivas
-- polish cosmético
-- efeitos gráficos
-
-O radar PDR é feature core estratégica do produto.  
-Quero foco principal em:
-
-- confiabilidade
-- persistência de eventos
-- realtime resiliente
-- ingest consistente
-- lifecycle operacional correto
-- observabilidade
-
-IMPORTANTE:  
-não criar polling agressivo.  
-não duplicar channels websocket.  
-não criar providers globais desnecessários.  
-não criar dependência circular.  
-não acoplar estado operacional em service_orders.
-
-Quero arquitetura extensível para:
-
-- múltiplos providers meteorológicos
-- múltiplos mapas futuros
-- múltiplos motores IA
-- múltiplos canais realtime
-
-Antes de qualquer refinamento visual:  
-validar estabilidade do runtime operacional.
+I'll wait for answers on these 4 before starting Phase 1, since they materially change the schema and Stripe catalog.
