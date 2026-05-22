@@ -68,7 +68,7 @@ function RobotHead({ level }: { level: SignalLevel }) {
 }
 
 export function AIControlCenter() {
-  const { snapshot, open } = useAI();
+  const { snapshot, open, close } = useAI();
   const { signals } = useOperationalSignals();
   const [menuOpen, setMenuOpen] = useState(false);
 
