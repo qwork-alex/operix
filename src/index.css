@@ -443,3 +443,38 @@
     page-break-before: always !important;
   }
 }
+
+/* ===== Agent UI ===== */
+@keyframes agent-pulse-ring {
+  0%   { box-shadow: 0 0 0 0 hsl(195 100% 60% / 0.55), 0 0 0 0 hsl(195 100% 60% / 0.0); }
+  60%  { box-shadow: 0 0 0 12px hsl(195 100% 60% / 0.0), 0 0 24px 6px hsl(195 100% 60% / 0.45); }
+  100% { box-shadow: 0 0 0 0 hsl(195 100% 60% / 0.0); }
+}
+.agent-highlight-pulse {
+  position: relative;
+  border-radius: 0.75rem;
+  animation: agent-pulse-ring 1.2s ease-out 2;
+  outline: 1px solid hsl(195 100% 60% / 0.55);
+  outline-offset: 2px;
+}
+@keyframes agent-typing-dot {
+  0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+  30%           { opacity: 1;    transform: translateY(-2px); }
+}
+.agent-typing span {
+  display: inline-block;
+  width: 4px; height: 4px;
+  margin: 0 1px;
+  border-radius: 9999px;
+  background: hsl(195 100% 65%);
+  animation: agent-typing-dot 1.2s infinite ease-in-out;
+}
+.agent-typing span:nth-child(2) { animation-delay: 0.15s; }
+.agent-typing span:nth-child(3) { animation-delay: 0.3s; }
+
+.agent-hud-grid {
+  background-image:
+    linear-gradient(hsl(195 100% 60% / 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(195 100% 60% / 0.05) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
