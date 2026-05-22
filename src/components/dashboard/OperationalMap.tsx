@@ -270,7 +270,7 @@ export function OperationalMap() {
   // Realtime: refresh on any hail_events change
   useEffect(() => {
     const ch = supabase
-      .channel("op-map-hail-realtime")
+      .channel(`op-map-hail-realtime-${Math.random().toString(36).slice(2, 8)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "hail_events" }, () => {
         queryClient.invalidateQueries({ queryKey: ["op-map-hail"] });
       })
