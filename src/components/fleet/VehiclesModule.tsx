@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { TableLoadingRow } from "@/components/shared/TableStatusRows";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -245,7 +246,7 @@ export default function VehiclesModule() {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                <TableLoadingRow colSpan={8} />
               ) : vehicles.length === 0 ? (
                 <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum veículo registrado</TableCell></TableRow>
               ) : vehicles.map((v: any) => {
