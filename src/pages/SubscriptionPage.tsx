@@ -20,7 +20,10 @@ import { BillingAlerts } from "@/components/billing/BillingAlerts";
 import { WorkspaceInvoiceCenter } from "@/components/billing/WorkspaceInvoiceCenter";
 import { WorkspacePaymentMethods } from "@/components/billing/WorkspacePaymentMethods";
 import { BillingProfileCard } from "@/components/billing/BillingProfileCard";
+import { WorkspacePlanMatrix } from "@/components/billing/WorkspacePlanMatrix";
+import { useWorkspaceStripeSync } from "@/hooks/useWorkspaceStripeSync";
 import { fetchWorkspaceTiers, resolveTier, type WorkspaceTier } from "@/lib/billing";
+
 
 const STATUS_META: Record<SubscriptionStatus, { label: string; tone: string; icon: typeof CheckCircle2 }> = {
   trial:        { label: "Em avaliação", tone: "bg-amber-500/10 text-amber-500 border-amber-500/30",  icon: Clock },
@@ -40,7 +43,9 @@ function priceForTier(techCount: number, cycle: "monthly" | "yearly", tiers: Wor
 export default function SubscriptionPage() {
   const { workspaceName, isAdmin } = useWorkspace();
   const { data: snapshot, isLoading } = useSubscription();
+  const { data: stripeSync } = useWorkspaceStripeSync();
   const { data: isPlatformOwner } = useIsPlatformOwner();
+
   const [simTechs, setSimTechs] = useState<number | null>(null);
   const [simCycle, setSimCycle] = useState<"monthly" | "yearly">("monthly");
   const [tab, setTab] = useState("overview");
@@ -138,9 +143,35 @@ export default function SubscriptionPage() {
                   )}
                 </div>
               </div>
-              <Badge variant="outline" className="text-xs">{plan.name}</Badge>
+              <div className="flex items-center gap-2 flex-wrap">
+                {stripeSync && (
+                  <Badge
+                    variant="outline"
+                    className={
+                      stripeSync.state === "synced"
+                        ? "text-[10px] uppercase tracking-wider border-emerald-500/40 text-emerald-500"
+                        : stripeSync.state === "customer_only"
+                          ? "text-[10px] uppercase tracking-wider border-amber-500/40 text-amber-500"
+                          : "text-[10px] uppercase tracking-wider border-muted-foreground/30 text-muted-foreground"
+                    }
+                    title={
+                      stripeSync.state === "synced"
+                        ? `Sincronizado com Stripe (${stripeSync.stripe_environment ?? "sandbox"})`
+                        : stripeSync.state === "customer_only"
+                          ? "Checkout iniciado — aguardando confirmação"
+                          : "Sem ligação Stripe ativa"
+                    }
+                  >
+                    {stripeSync.state === "synced" ? "Stripe • sincronizado"
+                      : stripeSync.state === "customer_only" ? "Stripe • a aguardar"
+                      : "Stripe • não ligado"}
+                  </Badge>
+                )}
+                <Badge variant="outline" className="text-xs">{plan.name}</Badge>
+              </div>
             </div>
           </Card>
+
 
           {/* KPIs */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -227,7 +258,14 @@ export default function SubscriptionPage() {
             </div>
           </Card>
 
+          <WorkspacePlanMatrix
+            currentPlanCode={plan.code}
+            currentCycle={subscription.billing_cycle}
+            technicianCount={techCount}
+          />
+
           <BillingIntelligencePanel />
+
         </TabsContent>
 
         {/* ─── INVOICES ─── */}
