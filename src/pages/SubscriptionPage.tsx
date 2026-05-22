@@ -31,11 +31,10 @@ const STATUS_META: Record<SubscriptionStatus, { label: string; tone: string; ico
   cancelled:    { label: "Cancelada",     tone: "bg-muted text-muted-foreground border-border",        icon: AlertCircle },
 };
 
-function priceFor(techCount: number, cycle: "monthly" | "yearly", plan: { base_price_monthly: number; base_tech_included: number; extra_block_size: number; extra_block_price: number; yearly_discount_months: number; }) {
-  const extra = Math.max(0, techCount - plan.base_tech_included);
-  const blocks = Math.ceil(extra / plan.extra_block_size);
-  const monthly = plan.base_price_monthly + blocks * plan.extra_block_price;
-  return cycle === "yearly" ? Math.round(monthly * (12 - plan.yearly_discount_months) * 100) / 100 : monthly;
+function priceForTier(techCount: number, cycle: "monthly" | "yearly", tiers: WorkspaceTier[]): number {
+  const tier = resolveTier(tiers, techCount);
+  if (!tier) return 0;
+  return cycle === "yearly" ? tier.yearly_price : tier.base_price_monthly;
 }
 
 export default function SubscriptionPage() {
