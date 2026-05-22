@@ -14,6 +14,8 @@ type Listener = (s: PresenceSnapshot) => void;
 const REPLAN_INTERVAL_MS = 4000;
 const SAFE_FPS_THRESHOLD = 28;
 
+const PIN_STORAGE_KEY = "qw:robot:pinned-position";
+
 class Orchestrator {
   private position: PresencePosition = { x: 0, y: 0 };
   private target: PresencePosition = { x: 0, y: 0 };
@@ -30,12 +32,27 @@ class Orchestrator {
   private fps = 60;
   private safeMode = false;
   private started = false;
+  private pinned = false;
 
   start() {
     if (this.started || typeof window === "undefined") return;
     this.started = true;
-    // Initial position: bottom-right
-    this.position = { x: window.innerWidth - 140, y: window.innerHeight - 220 };
+    // Restore pinned position if user dragged the robot before.
+    let restored: PresencePosition | null = null;
+    try {
+      const raw = window.localStorage.getItem(PIN_STORAGE_KEY);
+      if (raw) {
+        const p = JSON.parse(raw) as PresencePosition;
+        if (Number.isFinite(p.x) && Number.isFinite(p.y)) {
+          restored = {
+            x: Math.max(8, Math.min(window.innerWidth - AGENT_OVERLAY_SIZE - 8, p.x)),
+            y: Math.max(8, Math.min(window.innerHeight - AGENT_OVERLAY_SIZE - 8, p.y)),
+          };
+          this.pinned = true;
+        }
+      }
+    } catch { /* ignore */ }
+    this.position = restored ?? { x: window.innerWidth - 140, y: window.innerHeight - 220 };
     this.target = { ...this.position };
     this.moveFrom = { ...this.position };
     const loop = (t: number) => {
