@@ -109,6 +109,7 @@ class Orchestrator {
 
   replan(force = false) {
     if (typeof window === "undefined") return;
+    if (this.pinned) return; // user is in charge
     const map = buildSpatialMap();
     const next = findSafePosition(this.position, map);
     const dist = Math.hypot(next.x - this.target.x, next.y - this.target.y);
@@ -120,6 +121,35 @@ class Orchestrator {
       if (this.visible && this.state !== "alert") this.setState("moving");
     }
   }
+
+  /** Move the robot instantly to a viewport-space coord (used by drag). */
+  setManualPosition(p: PresencePosition) {
+    this.position = { ...p };
+    this.target = { ...p };
+    this.moveFrom = { ...p };
+    this.moveStart = performance.now();
+    this.emit();
+  }
+
+  /** Pin / unpin the robot. Pinned robots ignore auto-replan. */
+  setPinned(v: boolean, persist = true) {
+    this.pinned = v;
+    if (persist && typeof window !== "undefined") {
+      try {
+        if (v) {
+          window.localStorage.setItem(
+            PIN_STORAGE_KEY,
+            JSON.stringify(this.position),
+          );
+        } else {
+          window.localStorage.removeItem(PIN_STORAGE_KEY);
+        }
+      } catch { /* ignore */ }
+    }
+  }
+
+  isPinned() { return this.pinned; }
+
 
   subscribe(fn: Listener): () => void {
     this.listeners.add(fn);
