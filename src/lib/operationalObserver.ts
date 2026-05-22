@@ -13,9 +13,11 @@
  * Persists last 30 events to localStorage so the agent has memory across reloads.
  */
 import { agentBus, type AgentEvent } from "./agentEventBus";
+import "./runtimeDiagnostics"; // start passive runtime + realtime monitoring
 
 const LS_KEY = "qwork.agent.events.v1";
 const HEARTBEAT_MS = 60_000;
+
 
 let started = false;
 
