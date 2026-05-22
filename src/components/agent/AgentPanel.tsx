@@ -18,6 +18,8 @@ import { streamAgentReply, RateLimitedError, type AgentTurn } from "@/lib/agentL
 import { AgentDiagnosticsView } from "./AgentDiagnosticsView";
 import { AgentConversationPanel } from "./AgentConversationPanel";
 import { MultimodalPanel } from "@/agents/multimodal";
+import { useAI } from "@/agents/ai";
+import { AGENT_OVERLAY_SIZE } from "@/agents/presence/MovementOrchestrator";
 
 
 interface Msg {
