@@ -245,22 +245,27 @@ export default function AgentPanel({ onClose }: Props) {
   const originY = `${Math.round(robotCy)}px`;
 
   return (
+    <>
+      <div
+        className="fixed inset-0 z-[58] bg-transparent"
+        onClick={onClose}
+        aria-hidden="true"
+      />
     <div
       role="dialog"
       aria-label="QWork Agent"
       className={cn(
         "fixed z-[59] flex flex-col overflow-hidden text-white",
         "border border-[hsl(195_100%_60%/0.18)]",
-        "shadow-[0_30px_80px_-20px_hsl(220_90%_5%/0.9),0_0_0_1px_hsl(195_100%_60%/0.1)]",
-        "backdrop-blur-xl bg-[hsl(220_50%_4%/0.92)]",
-        // Mobile: bottom sheet
-        "inset-x-2 bottom-24 max-h-[75vh] rounded-2xl",
-        // Desktop: tall side dock
-        "md:inset-y-4 md:right-4 md:bottom-auto md:top-auto md:max-h-none md:h-[calc(100vh-2rem)]",
-        "md:w-[420px] md:rounded-2xl md:inset-x-auto",
-        "animate-in fade-in zoom-in-95 duration-300 ease-out",
+        "shadow-[0_20px_60px_-20px_hsl(220_90%_5%/0.85),0_0_0_1px_hsl(195_100%_60%/0.1)]",
+        "backdrop-blur-2xl bg-[hsl(220_50%_4%/0.92)] rounded-2xl",
+        // Mobile: contextual sheet below top bar
+        "inset-x-2 top-16 max-h-[calc(100vh-5rem)]",
+        // Desktop: contextual popover anchored under the AI button (top-right)
+        "md:inset-x-auto md:right-4 md:top-16 md:w-[360px] md:max-h-[70vh]",
+        "animate-in fade-in zoom-in-95 slide-in-from-top-2 duration-200 ease-out",
       )}
-      style={{ transformOrigin: `${originX} ${originY}` }}
+      style={{ transformOrigin: `top right` }}
     >
       {/* HUD grid overlay */}
       <div className="absolute inset-0 agent-hud-grid opacity-40 pointer-events-none" />
@@ -506,7 +511,9 @@ export default function AgentPanel({ onClose }: Props) {
       </>
       )}
     </div>
+    </>
   );
+
 }
 
 function TabBtn({
