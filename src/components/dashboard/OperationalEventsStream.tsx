@@ -99,6 +99,7 @@ export function OperationalEventsStream() {
       RealtimeHub.subscribe({ table: "automation_executions", event: "INSERT", workspaceId }, load),
       RealtimeHub.subscribe({ table: "discrepancies", event: "INSERT", workspaceId }, load),
       RealtimeHub.subscribe({ table: "hail_events", event: "INSERT" }, load),
+      RuntimeHealthMonitor.subscribe(() => load()),
     ];
     return () => { cancelled = true; offs.forEach((off) => off()); };
   }, [workspaceId]);
