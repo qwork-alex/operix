@@ -54,9 +54,9 @@ export function TopBar() {
     : "?";
 
   return (
-    <header className="relative flex h-14 items-center justify-between border-b border-border/50 px-4 glass-panel">
+    <header className="relative z-40 flex h-14 shrink-0 items-center justify-between border-b border-border/50 px-3 sm:px-4 glass-panel supports-[backdrop-filter]:bg-card/80">
       <div className="flex items-center gap-2">
-        <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
+        <SidebarTrigger className="h-10 w-10 md:h-8 md:w-8 text-muted-foreground hover:text-foreground" />
       </div>
 
       {collapsed && (
@@ -66,7 +66,7 @@ export function TopBar() {
         </div>
       )}
 
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1.5 sm:gap-1">
         {role && (
           <span
             className="hidden sm:inline text-[10px] uppercase tracking-widest text-muted-foreground/60 mr-2 px-2 py-0.5 rounded bg-muted/30"
@@ -79,7 +79,7 @@ export function TopBar() {
         {/* Notifications */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative text-muted-foreground hover:text-foreground">
+            <Button variant="ghost" size="icon" className="relative h-10 w-10 md:h-8 md:w-8 text-muted-foreground hover:text-foreground">
               <Bell className="h-4 w-4" />
               {totalAlertCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground">
