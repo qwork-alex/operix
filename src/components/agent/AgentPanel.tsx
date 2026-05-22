@@ -49,9 +49,11 @@ interface Props { onClose: () => void; }
 export default function AgentPanel({ onClose }: Props) {
   const ctx = useAgentContext();
   const navigate = useNavigate();
-  const { signals, worst } = useOperationalSignals();
+  const { signals, worst, recent } = useOperationalSignals();
   const [messages, setMessages] = useState<Msg[]>(() => loadHistory());
   const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
   const [tab, setTab] = useState<"chat" | "diag">("chat");
 
   const [events, setEvents] = useState<AgentEvent[]>(() =>
