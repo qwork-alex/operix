@@ -1,18 +1,20 @@
 /**
- * QWRobotEntity — friendly cinematic AI companion for QW Nexus.
+ * QWRobotEntity — premium automotive operational AI copilot.
  *
- * Rebuilt from the ground up: no more spinning rings, no jet flares,
- * no alarm orbs. The character is a compact, rounded Pixar-readable
- * robot — large soft head, glossy black visor, twin oval eyes that
- * track the cursor and blink, a tiny red operational pilot light on
- * the chest, a single short antenna, and a soft ground shadow.
+ * Visual direction: Tesla Optimus × Iron Man × F1 telemetry × BMW
+ * cockpit AI. Not a mascot. Not a toy. A slim, articulated, metallic
+ * field engineer that hovers on twin thrusters beside the operator.
  *
- * State is conveyed through subtle micro-animation: eye color,
- * squint/wide eye shape, head tilt, breathing speed, and pilot LED
- * pulse — never through aggressive overlays.
+ * Architecture:
+ *   - smaller serious helmet with dark visor + horizontal eye band
+ *   - slim graphite torso with titanium chest plate and operational LED
+ *   - fully articulated shoulders / upper arms / forearms / hands
+ *   - tucked legs over twin thrusters (floating propulsion)
+ *   - cinematic damped motion: head tracks cursor, arm points on alert,
+ *     subtle breathing bob and idle scan
  *
- * Procedurally built via react-three-fiber. Lightweight enough for
- * 60fps on integrated GPUs.
+ * Materials: metallic graphite #1f2328, titanium silver #b4bac3,
+ * electric blue accents, restrained red operational pilot light.
  */
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
@@ -33,66 +35,179 @@ function hsl(str: string) {
   return c;
 }
 
+const MAT = {
+  graphite: "#1f2328",
+  graphiteDark: "#11141a",
+  titanium: "#b4bac3",
+  titaniumDark: "#6b7280",
+  visor: "#04070c",
+} as const;
+
 /* -------------------------------------------------------------- */
 /*  Sub-pieces                                                    */
 /* -------------------------------------------------------------- */
 
+/** Single glowing eye dot inside the visor band. */
 function Eye({ x, color, intensity, blink, shape }: {
   x: number; color: THREE.Color; intensity: number; blink: number; shape: number;
 }) {
-  // Oval, expressive — scale Y to convey shape (squint / wide).
   return (
-    <group position={[x, 0.04, 0.36]} scale={[1, shape * blink, 1]}>
+    <group position={[x, 0.0, 0.27]} scale={[1, Math.max(0.05, shape * blink), 1]}>
       <mesh>
-        <sphereGeometry args={[0.075, 24, 24]} />
+        <sphereGeometry args={[0.045, 20, 20]} />
         <meshStandardMaterial
           color={color}
           emissive={color}
-          emissiveIntensity={intensity}
-          roughness={0.25}
-          metalness={0.05}
+          emissiveIntensity={intensity * 1.4}
+          roughness={0.2}
+          metalness={0.0}
+          toneMapped={false}
         />
-      </mesh>
-      {/* tiny white catchlight — gives "alive" feeling */}
-      <mesh position={[-0.022, 0.022, 0.06]}>
-        <sphereGeometry args={[0.018, 12, 12]} />
-        <meshBasicMaterial color="#ffffff" toneMapped={false} />
       </mesh>
     </group>
   );
 }
 
+/** Operational pilot LED on the chest. */
 function PilotLED({ color, pulse, on }: { color: THREE.Color; pulse: number; on: boolean }) {
   const ref = useRef<THREE.Mesh>(null);
   useFrame((s) => {
     if (!ref.current) return;
     const m = ref.current.material as THREE.MeshStandardMaterial;
-    const k = on ? 0.55 + (Math.sin(s.clock.elapsedTime * pulse * Math.PI) + 1) * 0.5 : 0;
-    m.emissiveIntensity = k * 1.8;
+    const k = on ? 0.45 + (Math.sin(s.clock.elapsedTime * pulse * Math.PI) + 1) * 0.45 : 0;
+    m.emissiveIntensity = k * 1.6;
   });
   return (
-    <mesh ref={ref} position={[0, -0.18, 0.4]}>
-      <sphereGeometry args={[0.028, 16, 16]} />
-      <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1} />
+    <mesh ref={ref} position={[0, -0.05, 0.18]}>
+      <sphereGeometry args={[0.022, 16, 16]} />
+      <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1} toneMapped={false} />
     </mesh>
   );
 }
 
-function Antenna() {
-  const ref = useRef<THREE.Group>(null);
+/** Twin underglow thrusters — floating propulsion. */
+function Thrusters({ color }: { color: THREE.Color }) {
+  const left = useRef<THREE.Mesh>(null);
+  const right = useRef<THREE.Mesh>(null);
   useFrame((s) => {
-    if (!ref.current) return;
-    ref.current.rotation.z = Math.sin(s.clock.elapsedTime * 1.4) * 0.05;
+    const k = 0.55 + Math.sin(s.clock.elapsedTime * 4) * 0.15;
+    [left, right].forEach((r) => {
+      if (!r.current) return;
+      (r.current.material as THREE.MeshStandardMaterial).emissiveIntensity = k * 1.8;
+    });
   });
   return (
-    <group ref={ref} position={[0, 0.62, 0]}>
-      <mesh position={[0, 0.12, 0]}>
-        <cylinderGeometry args={[0.008, 0.01, 0.24, 8]} />
-        <meshStandardMaterial color="#c3c8cf" metalness={0.9} roughness={0.35} />
+    <group position={[0, -0.78, 0]}>
+      {[-0.12, 0.12].map((x, i) => (
+        <group key={i} position={[x, 0, 0]}>
+          {/* nozzle */}
+          <mesh position={[0, 0.04, 0]}>
+            <cylinderGeometry args={[0.07, 0.055, 0.08, 16]} />
+            <meshStandardMaterial color={MAT.graphiteDark} metalness={0.95} roughness={0.25} />
+          </mesh>
+          {/* hot core */}
+          <mesh ref={i === 0 ? left : right} position={[0, -0.01, 0]}>
+            <cylinderGeometry args={[0.052, 0.04, 0.04, 16]} />
+            <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.5} toneMapped={false} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
+/** Articulated arm — shoulder → upper → forearm → hand. */
+function Arm({
+  side, raise, point, accent,
+}: {
+  side: "L" | "R"; raise: number; point: number; accent: THREE.Color;
+}) {
+  const shoulder = useRef<THREE.Group>(null);
+  const elbow = useRef<THREE.Group>(null);
+  const dir = side === "L" ? -1 : 1;
+
+  useFrame((s) => {
+    const t = s.clock.elapsedTime;
+    if (shoulder.current) {
+      // base idle sway + raise blends toward "pointing forward"
+      const idleSway = Math.sin(t * 1.1 + (side === "L" ? 0 : Math.PI / 2)) * 0.04;
+      // raise: 0 = arm down by side, 1 = arm extended forward & up ~45°
+      shoulder.current.rotation.x = -raise * 1.2 + idleSway;
+      shoulder.current.rotation.z = dir * (0.18 - raise * 0.18);
+    }
+    if (elbow.current) {
+      // bend less when pointing — straighter arm to indicate direction
+      const bend = 0.55 - point * 0.5;
+      elbow.current.rotation.x = bend + Math.sin(t * 1.4 + dir) * 0.02;
+    }
+  });
+
+  return (
+    <group position={[dir * 0.21, 0.04, 0]}>
+      {/* shoulder pauldron */}
+      <mesh>
+        <sphereGeometry args={[0.075, 20, 20]} />
+        <meshStandardMaterial color={MAT.titanium} metalness={0.92} roughness={0.28} />
       </mesh>
-      <mesh position={[0, 0.27, 0]}>
-        <sphereGeometry args={[0.035, 16, 16]} />
-        <meshStandardMaterial color="#ffffff" emissive="#ffd9d9" emissiveIntensity={0.7} metalness={0.4} roughness={0.3} />
+      <group ref={shoulder}>
+        {/* upper arm */}
+        <mesh position={[0, -0.11, 0]}>
+          <cylinderGeometry args={[0.035, 0.04, 0.22, 14]} />
+          <meshStandardMaterial color={MAT.graphite} metalness={0.85} roughness={0.35} />
+        </mesh>
+        {/* elbow joint */}
+        <group position={[0, -0.22, 0]} ref={elbow}>
+          <mesh>
+            <sphereGeometry args={[0.045, 16, 16]} />
+            <meshStandardMaterial color={MAT.titaniumDark} metalness={0.9} roughness={0.3} />
+          </mesh>
+          {/* forearm */}
+          <mesh position={[0, -0.11, 0]}>
+            <cylinderGeometry args={[0.03, 0.034, 0.22, 14]} />
+            <meshStandardMaterial color={MAT.graphite} metalness={0.85} roughness={0.35} />
+          </mesh>
+          {/* hand / manipulator with accent LED */}
+          <group position={[0, -0.24, 0]}>
+            <mesh>
+              <boxGeometry args={[0.07, 0.07, 0.05]} />
+              <meshStandardMaterial color={MAT.graphiteDark} metalness={0.9} roughness={0.28} />
+            </mesh>
+            {/* accent strip on the manipulator — glows brighter when pointing */}
+            <mesh position={[0, -0.02, 0.027]}>
+              <boxGeometry args={[0.05, 0.012, 0.005]} />
+              <meshStandardMaterial
+                color={accent}
+                emissive={accent}
+                emissiveIntensity={0.6 + point * 1.8}
+                toneMapped={false}
+              />
+            </mesh>
+          </group>
+        </group>
+      </group>
+    </group>
+  );
+}
+
+/** Tucked leg over thruster — purely cosmetic, no walking. */
+function Leg({ side }: { side: "L" | "R" }) {
+  const dir = side === "L" ? -1 : 1;
+  return (
+    <group position={[dir * 0.1, -0.5, 0.02]} rotation={[0.45, 0, dir * -0.05]}>
+      {/* thigh */}
+      <mesh>
+        <cylinderGeometry args={[0.045, 0.05, 0.18, 14]} />
+        <meshStandardMaterial color={MAT.graphite} metalness={0.85} roughness={0.35} />
+      </mesh>
+      {/* knee */}
+      <mesh position={[0, -0.1, 0.04]}>
+        <sphereGeometry args={[0.04, 16, 16]} />
+        <meshStandardMaterial color={MAT.titaniumDark} metalness={0.9} roughness={0.3} />
+      </mesh>
+      {/* shin */}
+      <mesh position={[0, -0.18, 0.08]} rotation={[-0.55, 0, 0]}>
+        <cylinderGeometry args={[0.035, 0.04, 0.16, 14]} />
+        <meshStandardMaterial color={MAT.graphite} metalness={0.85} roughness={0.35} />
       </mesh>
     </group>
   );
@@ -111,10 +226,13 @@ function Robot() {
 
   const root = useRef<THREE.Group>(null);
   const head = useRef<THREE.Group>(null);
+  const torso = useRef<THREE.Group>(null);
   const blinkRef = useRef(1);
   const blinkTimer = useRef(0);
   const lookTarget = useRef({ x: 0, y: 0 });
   const tiltRef = useRef(0);
+  const raiseRef = useRef(0); // right arm raise (0..1)
+  const pointRef = useRef(0); // right arm pointing extension (0..1)
 
   // anchor for cursor tracking
   const canvasCenter = useRef({ x: 0, y: 0 });
@@ -138,21 +256,36 @@ function Robot() {
 
   useFrame((s, dt) => {
     const t = s.clock.elapsedTime;
-    // breathing bob — slow vertical drift + tiny roll
+    // hover bob — slow vertical drift + tiny roll, mechanical inertia
     if (root.current) {
-      root.current.position.y = Math.sin(t * frame.bobSpeed) * frame.bob;
-      root.current.rotation.z = Math.sin(t * frame.bobSpeed * 0.6) * 0.02;
+      root.current.position.y = Math.sin(t * frame.bobSpeed) * frame.bob * 0.8;
+      root.current.rotation.z = Math.sin(t * frame.bobSpeed * 0.55) * 0.015;
     }
-    // head tracking — soft damped follow toward cursor + personality tilt
+    // torso counter-balance for life-like weight shift
+    if (torso.current) {
+      torso.current.rotation.y = Math.sin(t * 0.6) * 0.04;
+    }
+    // head tracking — damped follow toward cursor + personality tilt
     if (head.current) {
       const look = robotAwareness.lookFrom(canvasCenter.current, 360);
-      lookTarget.current.x = damp(lookTarget.current.x, look.x * 0.32, 5 * frame.trackSpeed, dt);
-      lookTarget.current.y = damp(lookTarget.current.y, -look.y * 0.22, 5 * frame.trackSpeed, dt);
+      lookTarget.current.x = damp(lookTarget.current.x, look.x * 0.42, 5 * frame.trackSpeed, dt);
+      lookTarget.current.y = damp(lookTarget.current.y, -look.y * 0.26, 5 * frame.trackSpeed, dt);
       tiltRef.current = damp(tiltRef.current, frame.headTilt, 4, dt);
       head.current.rotation.y = lookTarget.current.x;
       head.current.rotation.x = lookTarget.current.y;
       head.current.rotation.z = tiltRef.current;
     }
+    // arm pointing — raise on alert / focused moods, point in cursor direction
+    const wantRaise =
+      frame.mood === "alert" || frame.mood === "concerned" ? 0.95 :
+      frame.mood === "focused" ? 0.45 :
+      frame.mood === "curious" ? 0.25 : 0.0;
+    const wantPoint =
+      frame.mood === "alert" || frame.mood === "concerned" ? 1.0 :
+      frame.mood === "focused" ? 0.5 : 0.0;
+    raiseRef.current = damp(raiseRef.current, wantRaise, 3.5, dt);
+    pointRef.current = damp(pointRef.current, wantPoint, 3.5, dt);
+
     // blink — eyelid snap then ease open
     blinkTimer.current += dt * frame.blinkRate;
     if (blinkTimer.current > 1) {
@@ -165,67 +298,111 @@ function Robot() {
 
   return (
     <group ref={root}>
-      {/* soft ground shadow disc */}
-      <mesh position={[0, -0.78, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[0.55, 32]} />
-        <meshBasicMaterial color="#000000" transparent opacity={0.18} />
+      {/* soft ground shadow — small, beneath thrusters */}
+      <mesh position={[0, -0.92, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[0.38, 32]} />
+        <meshBasicMaterial color="#000000" transparent opacity={0.22} />
       </mesh>
 
-      {/* body — rounded, compact, soft white */}
-      <mesh position={[0, -0.18, 0]}>
-        <sphereGeometry args={[0.42, 32, 32]} />
-        <meshStandardMaterial color="#f3f5f8" metalness={0.55} roughness={0.42} />
-      </mesh>
+      {/* TORSO — slim graphite chassis */}
+      <group ref={torso}>
+        {/* upper torso block */}
+        <mesh position={[0, -0.05, 0]}>
+          <boxGeometry args={[0.36, 0.34, 0.24]} />
+          <meshStandardMaterial color={MAT.graphite} metalness={0.92} roughness={0.32} />
+        </mesh>
+        {/* titanium chest plate — F1 inspired */}
+        <mesh position={[0, 0.0, 0.125]}>
+          <boxGeometry args={[0.26, 0.22, 0.02]} />
+          <meshStandardMaterial color={MAT.titanium} metalness={0.95} roughness={0.22} />
+        </mesh>
+        {/* horizontal vent slits */}
+        {[-0.04, 0.0, 0.04].map((y, i) => (
+          <mesh key={i} position={[0, y, 0.137]}>
+            <boxGeometry args={[0.18, 0.008, 0.004]} />
+            <meshStandardMaterial color={MAT.graphiteDark} metalness={0.6} roughness={0.6} />
+          </mesh>
+        ))}
+        {/* operational pilot LED */}
+        <PilotLED color={pilotColor} pulse={frame.pilotPulse} on={frame.pilotOn} />
+        {/* hip / lower spine */}
+        <mesh position={[0, -0.28, 0]}>
+          <boxGeometry args={[0.28, 0.12, 0.2]} />
+          <meshStandardMaterial color={MAT.graphiteDark} metalness={0.92} roughness={0.3} />
+        </mesh>
+        {/* spinal accent strip */}
+        <mesh position={[0, -0.05, -0.12]}>
+          <boxGeometry args={[0.04, 0.32, 0.005]} />
+          <meshStandardMaterial color={eyeColor} emissive={eyeColor} emissiveIntensity={0.7} toneMapped={false} />
+        </mesh>
 
-      {/* chest faceplate (subtle, recessed) */}
-      <mesh position={[0, -0.18, 0.36]}>
-        <circleGeometry args={[0.22, 32]} />
-        <meshStandardMaterial color="#0d1014" metalness={0.5} roughness={0.25} />
-      </mesh>
-      <PilotLED color={pilotColor} pulse={frame.pilotPulse} on={frame.pilotOn} />
+        {/* shoulders + arms */}
+        <group position={[0, 0.08, 0]}>
+          <Arm side="L" raise={0} point={0} accent={eyeColor} />
+          <Arm side="R" raise={raiseRef.current} point={pointRef.current} accent={eyeColor} />
+        </group>
 
-      {/* neck connector */}
-      <mesh position={[0, 0.1, 0]}>
-        <cylinderGeometry args={[0.07, 0.09, 0.1, 16]} />
-        <meshStandardMaterial color="#b9bfc6" metalness={0.85} roughness={0.3} />
-      </mesh>
-
-      {/* HEAD — large, rounded, friendly proportions */}
-      <group ref={head} position={[0, 0.32, 0]}>
-        {/* skull */}
-        <mesh>
-          <sphereGeometry args={[0.42, 40, 40]} />
-          <meshStandardMaterial color="#fafbfd" metalness={0.55} roughness={0.35} />
-        </mesh>
-        {/* black glossy visor — wraps front */}
-        <mesh position={[0, 0.02, 0.08]} scale={[1, 0.62, 1]}>
-          <sphereGeometry args={[0.39, 40, 40]} />
-          <meshStandardMaterial
-            color="#070a0f"
-            metalness={0.95}
-            roughness={0.06}
-            envMapIntensity={1.4}
-          />
-        </mesh>
-        {/* eyes */}
-        <Eye x={-0.12} color={eyeColor} intensity={frame.eyeIntensity} blink={blinkRef.current} shape={frame.eyeShape} />
-        <Eye x={0.12} color={eyeColor} intensity={frame.eyeIntensity} blink={blinkRef.current} shape={frame.eyeShape} />
-        {/* small side audio pods */}
-        <mesh position={[-0.4, -0.02, 0]}>
-          <sphereGeometry args={[0.07, 16, 16]} />
-          <meshStandardMaterial color="#c8cdd4" metalness={0.85} roughness={0.3} />
-        </mesh>
-        <mesh position={[0.4, -0.02, 0]}>
-          <sphereGeometry args={[0.07, 16, 16]} />
-          <meshStandardMaterial color="#c8cdd4" metalness={0.85} roughness={0.3} />
-        </mesh>
-        {/* single small antenna with soft red blinker */}
-        <Antenna />
+        {/* legs (decorative, tucked) */}
+        <Leg side="L" />
+        <Leg side="R" />
       </group>
 
-      {/* soft state-tinted rim light to give it cinematic lighting */}
-      <pointLight color={eyeColor} intensity={0.9} distance={3.5} position={[0, 0.1, 1.1]} />
-      <pointLight color={pilotColor} intensity={0.35} distance={1.6} position={[0, -0.2, 0.6]} />
+      {/* neck — exposed mechanical joint */}
+      <mesh position={[0, 0.17, 0]}>
+        <cylinderGeometry args={[0.045, 0.06, 0.08, 14]} />
+        <meshStandardMaterial color={MAT.titaniumDark} metalness={0.95} roughness={0.28} />
+      </mesh>
+
+      {/* HEAD — compact, serious helmet */}
+      <group ref={head} position={[0, 0.32, 0]}>
+        {/* helmet shell */}
+        <mesh>
+          <boxGeometry args={[0.32, 0.28, 0.3]} />
+          <meshStandardMaterial color={MAT.graphite} metalness={0.92} roughness={0.32} />
+        </mesh>
+        {/* rounded crown */}
+        <mesh position={[0, 0.13, 0]}>
+          <sphereGeometry args={[0.17, 24, 24]} />
+          <meshStandardMaterial color={MAT.graphite} metalness={0.92} roughness={0.32} />
+        </mesh>
+        {/* dark visor band */}
+        <mesh position={[0, 0.0, 0.151]}>
+          <boxGeometry args={[0.3, 0.11, 0.005]} />
+          <meshStandardMaterial
+            color={MAT.visor}
+            metalness={0.98}
+            roughness={0.05}
+            envMapIntensity={1.6}
+          />
+        </mesh>
+        {/* eye dots inside visor */}
+        <Eye x={-0.07} color={eyeColor} intensity={frame.eyeIntensity} blink={blinkRef.current} shape={frame.eyeShape} />
+        <Eye x={0.07} color={eyeColor} intensity={frame.eyeIntensity} blink={blinkRef.current} shape={frame.eyeShape} />
+        {/* jaw / chin plate */}
+        <mesh position={[0, -0.13, 0.04]}>
+          <boxGeometry args={[0.22, 0.06, 0.18]} />
+          <meshStandardMaterial color={MAT.titaniumDark} metalness={0.95} roughness={0.28} />
+        </mesh>
+        {/* side temple sensors */}
+        {[-0.17, 0.17].map((x, i) => (
+          <mesh key={i} position={[x, 0, 0.0]}>
+            <boxGeometry args={[0.025, 0.08, 0.12]} />
+            <meshStandardMaterial color={MAT.titaniumDark} metalness={0.95} roughness={0.28} />
+          </mesh>
+        ))}
+        {/* tiny rear antenna pin */}
+        <mesh position={[0, 0.22, -0.04]}>
+          <cylinderGeometry args={[0.005, 0.006, 0.12, 8]} />
+          <meshStandardMaterial color={MAT.titanium} metalness={0.95} roughness={0.3} />
+        </mesh>
+      </group>
+
+      {/* propulsion */}
+      <Thrusters color={eyeColor} />
+
+      {/* state-tinted rim light for cinematic readability */}
+      <pointLight color={eyeColor} intensity={1.0} distance={3.2} position={[0, 0.15, 1.2]} />
+      <pointLight color={pilotColor} intensity={0.4} distance={1.6} position={[0, -0.85, 0.4]} />
     </group>
   );
 }
@@ -248,15 +425,16 @@ export function QWRobotEntity({ size }: { size: number }) {
   return (
     <div id="qw-robot-canvas" style={{ width: size, height: size, pointerEvents: "none" }}>
       <Canvas
-        camera={{ position: [0, 0.05, 2.5], fov: 36 }}
+        camera={{ position: [0, 0.0, 2.6], fov: 32 }}
         dpr={[1, reduced ? 1.25 : 2]}
         gl={{ alpha: true, antialias: true, powerPreference: "high-performance" }}
         style={{ width: "100%", height: "100%", background: "transparent" }}
       >
-        {/* warm key + cool fill for soft cinematic lighting */}
-        <ambientLight intensity={0.65} />
-        <directionalLight position={[2.2, 3, 2]} intensity={1.15} color="#fff4e6" />
-        <directionalLight position={[-2, 1, -1]} intensity={0.55} color="#9cd4ff" />
+        {/* cool key + warm fill — automotive showroom lighting */}
+        <ambientLight intensity={0.55} />
+        <directionalLight position={[2.2, 3, 2]} intensity={1.0} color="#dceaff" />
+        <directionalLight position={[-2, 1.4, -1]} intensity={0.45} color="#ffb27a" />
+        <directionalLight position={[0, -2, 1.5]} intensity={0.25} color="#7ec8ff" />
         <Suspense fallback={null}>
           <Robot />
         </Suspense>
