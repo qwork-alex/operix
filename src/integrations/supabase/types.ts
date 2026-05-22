@@ -3172,6 +3172,57 @@ export type Database = {
         }
         Relationships: []
       }
+      operational_events: {
+        Row: {
+          correlation_key: string | null
+          created_at: string
+          detail: string | null
+          id: string
+          kind: string
+          metadata: Json
+          occurred_at: string
+          priority: number
+          ref_id: string | null
+          ref_table: string | null
+          severity: string
+          source: string
+          title: string
+          workspace_id: string | null
+        }
+        Insert: {
+          correlation_key?: string | null
+          created_at?: string
+          detail?: string | null
+          id?: string
+          kind: string
+          metadata?: Json
+          occurred_at?: string
+          priority?: number
+          ref_id?: string | null
+          ref_table?: string | null
+          severity?: string
+          source: string
+          title: string
+          workspace_id?: string | null
+        }
+        Update: {
+          correlation_key?: string | null
+          created_at?: string
+          detail?: string | null
+          id?: string
+          kind?: string
+          metadata?: Json
+          occurred_at?: string
+          priority?: number
+          ref_id?: string | null
+          ref_table?: string | null
+          severity?: string
+          source?: string
+          title?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
       participation_diffs: {
         Row: {
           created_at: string
