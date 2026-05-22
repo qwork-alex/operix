@@ -12,10 +12,12 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { useOperationalSignals } from "@/hooks/useOperationalSignals";
+import { useWorkspace } from "@/hooks/useWorkspace";
 import { presenceEngine } from "@/agents/presence/PresenceEngine";
 import { idleTracker } from "@/agents/presence/IdleBehavior";
 import { movementOrchestrator, AGENT_OVERLAY_SIZE } from "@/agents/presence/MovementOrchestrator";
 import { robotAwareness } from "@/ai/entity/RobotAwareness";
+import { operationalMemory } from "@/ai/memory/OperationalMemory";
 import { globalAI } from "./GlobalAIState";
 import { startAIReactor } from "./AIEventReactor";
 import { startAIRealtime } from "./AIRealtimeConnector";
@@ -75,9 +77,11 @@ function guideToElement(el: HTMLElement, reason: string, ttl = 5200) {
 
 export function AIProvider({ children }: { children: ReactNode }) {
   const { signals, worst } = useOperationalSignals();
+  const { workspaceId } = useWorkspace();
   const location = useLocation();
   const [snapshot, setSnapshot] = useState<AIEntitySnapshot>(() => globalAI.current());
   const lastSignalRef = useRef(worst);
+  const recordedSignalIdsRef = useRef<Set<string>>(new Set());
   const guidedSignalIdsRef = useRef<Set<string>>(new Set());
 
   // Boot all engines once
@@ -105,6 +109,50 @@ export function AIProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     globalAI.setSignal(worst);
   }, [worst]);
+
+  // ── Operational Memory ────────────────────────────────────────────
+  // Bind memory scope to the active workspace.
+  useEffect(() => {
+    operationalMemory.setWorkspace(workspaceId ?? null);
+  }, [workspaceId]);
+
+  // Record meaningful signals once per appearance (info/warn/error).
+  useEffect(() => {
+    signals.forEach((s) => {
+      if (s.level === "ok" || s.id === "all-ok") return;
+      if (recordedSignalIdsRef.current.has(s.id)) return;
+      recordedSignalIdsRef.current.add(s.id);
+      operationalMemory.recordSignal({ id: s.id, level: s.level, title: s.title });
+    });
+  }, [signals]);
+
+  // Record visited modules (route changes).
+  useEffect(() => {
+    operationalMemory.recordModule(location.pathname);
+    // allow same-route re-recording if user navigates away and back
+    recordedSignalIdsRef.current.clear();
+  }, [location.pathname]);
+
+  // Record repeated user actions (clicks on actionable elements).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onClick = (e: MouseEvent) => {
+      const target = e.target as Element | null;
+      if (!target) return;
+      const el = target.closest(
+        "[data-action], button, a, [role='button']",
+      ) as HTMLElement | null;
+      if (!el) return;
+      const key =
+        el.getAttribute("data-action") ||
+        el.getAttribute("aria-label") ||
+        (el.textContent || "").trim().slice(0, 48);
+      if (!key) return;
+      operationalMemory.recordAction(`${location.pathname}::${key}`);
+    };
+    window.addEventListener("click", onClick, true);
+    return () => window.removeEventListener("click", onClick, true);
+  }, [location.pathname]);
 
   // Reset per-route guidance memory so the robot can re-guide on a new page
   useEffect(() => {
