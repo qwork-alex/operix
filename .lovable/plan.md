@@ -1,109 +1,106 @@
-# Automation Engine — Plano de implementação
+# Plano — Painel Operacional Realtime (SAFE MODE)
 
-Engine central de automações operacionais, isolado por workspace, sem tocar em tenancy/auth/RBAC. Reutiliza a infraestrutura já existente (`audit_log`, `notifications`, `backend_event_logs`, RLS via `is_workspace_member`).
+Escopo grande. Vou entregar em **5 fases independentes** para você validar entre uma e outra. Cada fase é um commit isolado, reversível, sem tocar tenancy, auth, RBAC, providers, edge functions, migrations destrutivas.
 
-## Arquitetura
+## Fase 1 — KPIs operacionais (topo do dashboard)
 
-```text
-  EVENTO no DB                EDGE FUNCTION                 TABELAS
-  (trigger SQL)               run-automation-engine         automation_rules
-        │                            │                       automation_executions
-        ▼                            ▼                       automation_dead_letter
-  automation_queue  ─────►  fetch pending, match rules,
-  (insert + NOTIFY)         exec actions (notification,
-                            audit-log, status update,
-                            retry com backoff)
-                                     │
-                                     ▼
-                              audit_log + notifications
-```
+**Arquivo:** `src/pages/Index.tsx` + novo `src/components/dashboard/OperationalKPIs.tsx`
 
-- **Triggers SQL leves** só fazem `INSERT` em `automation_queue` (não executam nada — zero risco de loop bloqueante).
-- **Edge function** consome a fila (cron de 1 min + invocação manual), avalia condições, executa actions, regista cada passo em `automation_executions`. Erros após N tentativas vão para `automation_dead_letter`.
-- **Anti-recursão**: cada evento carrega `source_correlation_id`; o engine recusa eventos cuja origem foi o próprio engine, e limita profundidade a 3.
-- **Tenant-safe**: `workspace_id` obrigatório em todas as tabelas, RLS via `is_workspace_member`, edge function valida `workspace_id` antes de cada action.
+Remover os 4 KPICard atuais (Receita, Pagamentos pendentes, Serviços concluídos, Desempenho).
 
-## Schema (migration)
+Substituir por 6 cards realtime:
 
-- `automation_rules` — `id`, `workspace_id`, `name`, `description`, `trigger_type`, `trigger_config jsonb`, `conditions jsonb`, `actions jsonb`, `delay_seconds`, `max_retries`, `retry_backoff_seconds`, `enabled bool`, `safe_mode bool` (dry-run), `created_by`, timestamps.
-- `automation_queue` — `id`, `workspace_id`, `rule_id` (nullable até match), `event_type`, `entity_type`, `entity_id`, `payload jsonb`, `source_correlation_id`, `depth int`, `scheduled_at`, `status` (pending/processing/done/failed/dead).
-- `automation_executions` — `id`, `workspace_id`, `rule_id`, `queue_id`, `started_at`, `finished_at`, `status`, `attempt int`, `actions_log jsonb[]`, `error text`, `dry_run bool`.
-- `automation_dead_letter` — `id`, `workspace_id`, `queue_id`, `rule_id`, `last_error text`, `attempts int`, `payload jsonb`, `created_at`.
 
-RLS:
-- SELECT/INSERT/UPDATE/DELETE em `automation_rules` para membros do workspace com role admin/socio (reutiliza `is_workspace_member` + `effective_role`).
-- `automation_executions` / `automation_dead_letter` / `automation_queue` — SELECT-only para membros; INSERT/UPDATE só via SECURITY DEFINER (edge function via service role).
+| Card                   | Fonte                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------ |
+| Plataformas ativas     | `service_orders` distinct `platform` com `status in (in_progress, paused)`           |
+| Plataformas encerradas | `service_orders` com `status in (completed, confirmed)` agrupadas por mês corrente   |
+| Clientes ativos        | `clients` com OS criadas últimos 30d                                                 |
+| Técnicos ativos        | `user_roles role=technician` cruzado com `service_orders.technician_name` últimos 7d |
+| Dispatch IA            | `ai_recommendations` `status=pending`                                                |
+| Alertas operacionais   | `ai_alerts` `status=open` + `discrepancies` não resolvidas                           |
 
-## Triggers SQL (apenas enfileiram)
 
-Pequenos `AFTER INSERT/UPDATE` em `service_orders`, `payment_orders`, `invoices`, `fleet_fuel_logs`, `marketplace_listings`, `auth_users_view`. Cada um faz:
-```sql
-INSERT INTO automation_queue (workspace_id, event_type, entity_type, entity_id, payload, source_correlation_id, depth)
-VALUES (NEW.workspace_id, 'service_order.created', 'service_order', NEW.id, to_jsonb(NEW), NULL, 0);
-```
-Triggers ignoram eventos cuja `source_correlation_id` é prefixada `engine:` → anti-recursão.
+Visual: mantém `glass-panel` existente, adiciona badge de status (dot pulsante para "live"), micro-animação `animate-fade-in` (já existe). Sem redesign do `KPICard`, criar variante `OperationalKPICard` ao lado.
 
-## Edge function `run-automation-engine`
+Realtime: 1 único `supabase.channel('dashboard-kpis')` escutando `service_orders`, `ai_recommendations`, `ai_alerts` → `queryClient.invalidateQueries(['op-kpis'])`. Throttle de 2s para evitar rerender storm.
 
-Cron a cada minuto via `pg_cron` + endpoint manual.
-- Carrega lote de até 100 itens `pending` ordenados por `scheduled_at`.
-- Para cada item: marca `processing`, faz match contra `automation_rules` (workspace + trigger_type + condições JSON-logic simples), executa actions, regista `automation_executions`.
-- Retry com backoff exponencial até `max_retries`. Após esgotar → `automation_dead_letter`.
-- `safe_mode = true` registra a execução mas não emite efeitos (dry-run).
+## Fase 2 — Estado por plataforma (árvore operacional)
 
-### Tipos de action suportados (v1)
-- `notify` — cria registo em `notifications`.
-- `update_status` — update validado por whitelist de colunas seguras (status, prioridade, observação).
-- `audit` — escreve em `audit_log` com `origin = 'automation'`.
-- `webhook` — POST a URL configurada (com timeout 5s).
-- `assign_user` — set de `assigned_user_id` em entidade.
+**Backend (migration leve, não destrutiva):**
 
-Cross-workspace bloqueado: action recebe `workspace_id` do queue item e valida que a entidade alvo pertence ao mesmo workspace.
+- Adicionar coluna `platform_state text default 'active' check (platform_state in ('active','paused','closed','archived'))` em `service_orders` (nullable preserva compat).
+- Sem trigger novo. Sem RLS nova (herda das existentes).
 
-## UI
+**Frontend:**
 
-Nova página `/automations` (admin/sócio only) com 3 tabs:
+- Localizar componente da árvore 2025→Cliente→Plataforma (provavelmente em `ServiceOrdersTable` ou `treeGrouping.ts`) e adicionar:
+  - Cor contextual da linha da plataforma (azul/cinza/vermelho/âmbar via classe semântica).
+  - Botão toggle (ícone) **só no hover** (`opacity-0 group-hover:opacity-100`).
+  - Mutation `update platform_state` com optimistic update.
+- Dashboard Fase 1 passa a contar por `platform_state`.
 
-1. **Regras** — lista de `automation_rules`, toggle on/off, duplicar, exportar JSON, importar JSON, abrir builder.
-2. **Builder visual** — formulário com:
-   - Trigger (dropdown dos event_types disponíveis)
-   - Condições (lista de `field op value`)
-   - Ações (lista ordenada com tipo + config)
-   - Delay, retries, safe_mode
-3. **Execuções** — feed paginado de `automation_executions` com filtros (regra, status, range), expandir para ver `actions_log` e erros. Botão "Re-tentar" para dead-letter.
+## Fase 3 — Eventos operacionais inteligentes
 
-Painel de monitorização no topo: KPIs (execuções 24h, sucessos, falhas, dead-letter, fila pendente).
+**Arquivo:** novo `src/components/dashboard/OperationalEvents.tsx`, remove `ServicePieChart` e `RecentActivity` do `Index.tsx`.
 
-## Integrações
+Stream unificado de eventos das tabelas já existentes:
 
-- **Auditoria**: cada execução escreve em `audit_log` (operation `AUTOMATION`).
-- **Notificações**: action `notify` usa pipeline existente.
-- **Permissões**: a UI usa `useCan('automacao', 'gerir')` (mapeamento adicionado ao catálogo já presente em `UserPermissionsDialog`). Edge function valida via service role + workspace.
+- `backend_event_logs` (login, alterações)
+- `ai_recommendations`, `ai_insights`, `ai_alerts`
+- `automation_executions` (dispatch automático)
+- `discrepancies`
 
-## Performance & segurança
+Renderiza últimas 30 entradas com ícone, cor semântica, timestamp relativo, link contextual. Realtime via canal único. Virtualizado se >50 itens.
 
-- Fila assíncrona → frontend nunca bloqueia.
-- Idempotência: chave única `(rule_id, queue_id, attempt)` em `automation_executions`.
-- Anti-loop: depth máx. 3, source_correlation_id rejeitado se prefixo `engine:`.
-- Timeout por action: 5s. Limite global por execução: 30s.
-- Tenant isolation: WHERE workspace_id obrigatório em toda query do engine.
+## Fase 4 — Radar PDR (restauração) — **CRÍTICO**
 
-## O que NÃO muda (SAFE MODE)
+Não vou reescrever. Vou diagnosticar primeiro:
 
-- Nenhuma alteração em `auth.*`, `memberships`, `user_roles`, `effective_role`, providers, RLS de tabelas existentes.
-- Nenhum trigger novo em tabelas Supabase reservadas.
-- UI existente intacta; só adiciona rota `/automations` e entrada de sidebar gated.
+1. Inspecionar `OperationalMap.tsx` (1664 linhas) para identificar:
+  - `useEffect` com deps incorretas causando teardown do mapa
+  - subscriptions duplicadas (procurar múltiplos `supabase.channel`)
+  - polling de meteorologia (intervalos órfãos)
+  - race conditions em sources do maplibre
+2. Verificar edge function `ingest-hail` (última execução, logs).
+3. Verificar tabela `hail_events` (linhas recentes, `is_demo` flag).
+4. Fix cirúrgico — sem reescrita, só correções localizadas + cleanup de intervals/channels no unmount.
 
-## Entregáveis
+Entrego relatório do que estava quebrado + patch.
 
-1. Migration: 4 tabelas + RLS + função `enqueue_automation_event` + triggers nas tabelas operacionais.
-2. Edge function `run-automation-engine` + cron schedule (1 min).
-3. Hooks: `useAutomationRules`, `useAutomationExecutions`, `useAutomationQueueStats`.
-4. Páginas: `AutomationsPage` (3 tabs) + builder.
-5. Catálogo de permissões atualizado (`automacao.gerir`, `automacao.ver`).
+## Fase 5 — Refinos: RevenueChart, Oportunidades, performance
 
-## Fora do escopo desta fase
+- `RevenueChart`: melhorar legenda/espaçamento (apenas CSS/tokens, sem mudar dados).
+- `OperationalOpportunities` já existe — promover para card lateral do dashboard com marketplace ativo (`marketplace_listings` recentes).
+- Sweep de performance: `React.memo` nos cards, `useMemo` em agregações pesadas, debounce 250ms em invalidações realtime.
 
-- Builder gráfico drag-and-drop estilo n8n (entregamos formulário estruturado; nó visual é fase 2).
-- Conectores externos além de webhook genérico.
-- Versionamento de regras (mantemos `updated_at`; histórico completo é fase 2).
+## Fora de escopo (não vou tocar)
+
+- Mapbox/Google/Windy: você pediu só "preparar arquitetura" — vou criar `src/lib/mapProviders.ts` como interface abstrata (não troca o provider atual maplibre).
+- Tenancy, auth, RBAC, memberships, automations engine, IA orchestrator, edge functions existentes, policies, triggers.
+- Sidebar (já reorganizado em fase anterior).
+
+## Ordem de entrega proposta
+
+Posso entregar **tudo numa única resposta** (5 fases em sequência), ou parar após cada fase para você validar. Dado o risco do radar (Fase 4), **recomendo entregar Fases 1+2+3 juntas e tratar Fase 4 separadamente** depois que eu inspecionar o radar e te mostrar o diagnóstico.
+
+## Pergunta antes de começar
+
+1. Confirmo a coluna `platform_state` em `service_orders`? (Fase 2 depende disso.)
+2. Entrego Fases 1+2+3 agora e Fase 4 (radar) em resposta separada com diagnóstico antes do fix? Ou prefere que eu ataque o radar primeiro?
+
+Pode seguir.
+
+IMPORTANTE:
+
+não quero modelar platform_state diretamente em service_orders.
+
+Quero avaliar arquitetura correta de plataformas para evitar dívida técnica futura.
+
+Antes da UI:
+
+mapear origem única do estado operacional e subscriptions realtime existentes.
+
+O radar PDR é feature estratégica core do produto.
+
+Priorizar estabilidade realtime e arquitetura extensível antes de refinamento visual.
