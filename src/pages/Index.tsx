@@ -32,12 +32,16 @@ const Dashboard = () => {
 
       {/* Platforms lifecycle */}
       <ErrorBoundary>
-        <PlatformsPanel />
+        <div data-agent-focus="platforms-panel">
+          <PlatformsPanel />
+        </div>
       </ErrorBoundary>
 
       {/* Radar PDR — full width */}
       <ErrorBoundary>
-        <OperationalMap />
+        <div data-agent-focus="operational-map">
+          <OperationalMap />
+        </div>
       </ErrorBoundary>
 
       {/* Stream + Revenue */}
@@ -46,9 +50,12 @@ const Dashboard = () => {
           <RevenueChart />
         </div>
         <ErrorBoundary>
-          <OperationalEventsStream />
+          <div data-agent-focus="operational-events">
+            <OperationalEventsStream />
+          </div>
         </ErrorBoundary>
       </div>
+
     </div>
   );
 };
