@@ -18,6 +18,7 @@ import { idleTracker } from "@/agents/presence/IdleBehavior";
 import { movementOrchestrator, AGENT_OVERLAY_SIZE } from "@/agents/presence/MovementOrchestrator";
 import { robotAwareness } from "@/ai/entity/RobotAwareness";
 import { operationalMemory } from "@/ai/memory/OperationalMemory";
+import { prioritize, priorityGate } from "@/ai/memory/OperationalPriority";
 import { globalAI } from "./GlobalAIState";
 import { startAIReactor } from "./AIEventReactor";
 import { startAIRealtime } from "./AIRealtimeConnector";
