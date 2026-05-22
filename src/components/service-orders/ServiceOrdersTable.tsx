@@ -403,19 +403,19 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
     <div className="space-y-4">
       {/* Bulk actions bar */}
       {selected.size > 0 && (
-        <div className="flex items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2">
+        <div className="flex flex-col gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-3 md:flex-row md:items-center md:gap-3 md:px-4 md:py-2">
           <span className="text-sm font-medium">{selected.size} selecionado(s)</span>
           <Can permission="service_orders.delete">
             <Button
               variant="destructive"
               size="sm"
-              className="h-7 text-xs"
+              className="h-10 text-xs md:h-7"
               onClick={() => setShowDeleteDialog(true)}
             >
               <Trash2 className="h-3 w-3 mr-1" /> Excluir selecionados
             </Button>
           </Can>
-          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setSelected(new Set())}>
+          <Button variant="ghost" size="sm" className="h-10 text-xs md:h-7" onClick={() => setSelected(new Set())}>
             Limpar seleção
           </Button>
         </div>
