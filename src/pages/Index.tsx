@@ -1,11 +1,18 @@
+import { lazy, Suspense } from "react";
 import { OperationalKPIs } from "@/components/dashboard/OperationalKPIs";
 import { PlatformsPanel } from "@/components/dashboard/PlatformsPanel";
 import { OperationalEventsStream } from "@/components/dashboard/OperationalEventsStream";
-import { OperationalMap } from "@/components/dashboard/OperationalMap";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useGeolocation } from "@/hooks/useGeolocation";
+
+// Map is heavy (maplibre + 1.7k LOC). Split it off so KPIs and panels
+// paint instantly; the map streams in below the fold.
+const OperationalMap = lazy(() =>
+  import("@/components/dashboard/OperationalMap").then((m) => ({ default: m.OperationalMap })),
+);
 
 const Dashboard = () => {
   const { t } = useLanguage();
@@ -37,10 +44,12 @@ const Dashboard = () => {
         </div>
       </ErrorBoundary>
 
-      {/* Radar PDR — full width */}
+      {/* Radar PDR — full width, streamed in */}
       <ErrorBoundary>
         <div data-agent-focus="operational-map">
-          <OperationalMap />
+          <Suspense fallback={<Skeleton className="h-[420px] w-full rounded-lg" />}>
+            <OperationalMap />
+          </Suspense>
         </div>
       </ErrorBoundary>
 
