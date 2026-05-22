@@ -13,6 +13,7 @@ import { deriveSuggestions, localReply } from "@/lib/agentRules";
 import { dispatchAgentAction, AGENT_NAV_EVENT, type AgentAction } from "@/lib/agentActions";
 import { loadPersistedAgentEvents } from "@/lib/operationalObserver";
 import { captureScreenshot } from "@/lib/screenshotCapture";
+import { streamAgentReply, RateLimitedError, type AgentTurn } from "@/lib/agentLLM";
 import { AgentDiagnosticsView } from "./AgentDiagnosticsView";
 
 
