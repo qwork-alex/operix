@@ -179,16 +179,21 @@
 }
 
 @layer utilities {
-  .glow-gold   { box-shadow: 0 0 20px hsl(38 92% 55% / 0.20), 0 0 40px hsl(38 92% 55% / 0.07); }
-  .glow-blue   { box-shadow: 0 0 20px hsl(210 80% 55% / 0.15), 0 0 40px hsl(210 80% 55% / 0.05); }
-  .glow-green  { box-shadow: 0 0 20px hsl(152 60% 45% / 0.15), 0 0 40px hsl(152 60% 45% / 0.05); }
-  .glow-purple { box-shadow: 0 0 20px hsl(270 70% 60% / 0.18), 0 0 40px hsl(270 70% 60% / 0.06); }
-  .glow-red    { box-shadow: 0 0 20px hsl(0 72% 55% / 0.15), 0 0 40px hsl(0 72% 55% / 0.05); }
-  .glow-white  { box-shadow: 0 0 20px hsl(0 0% 100% / 0.06), 0 0 40px hsl(0 0% 100% / 0.03); }
+  /* Calmer ambient glows — clarity over decoration. Reduced ~35%
+     and stripped the secondary 40px halo to cut visual clutter. */
+  .glow-gold   { box-shadow: 0 0 16px hsl(38 92% 55% / 0.14); }
+  .glow-blue   { box-shadow: 0 0 16px hsl(210 80% 55% / 0.11); }
+  .glow-green  { box-shadow: 0 0 16px hsl(152 60% 45% / 0.11); }
+  .glow-purple { box-shadow: 0 0 16px hsl(270 70% 60% / 0.13); }
+  .glow-red    { box-shadow: 0 0 16px hsl(0 72% 55% / 0.12); }
+  .glow-white  { box-shadow: 0 0 16px hsl(0 0% 100% / 0.05); }
 
+  /* Industrial surface: solid card, hairline border, no heavy blur.
+     Cheaper to paint and easier to read than the previous xl-blur. */
   .glass-panel {
-    @apply bg-card/70 backdrop-blur-xl border border-border/50;
+    @apply bg-card/90 border border-border/60 backdrop-blur-sm;
   }
+
 
   /* ─── Premium surface system ─── */
   .surface-card {
