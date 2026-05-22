@@ -47,6 +47,8 @@ import {
   CookiesPage,
   DataProcessingPage,
 } from "./pages/legal/LegalPages";
+import LandingPage from "./pages/LandingPage";
+import WorkspaceOnboardingPage from "./pages/onboarding/WorkspaceOnboardingPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
