@@ -76,6 +76,14 @@ export function OperationalEventsStream() {
         ...(logs.data ?? []).map((r: any) => ({
           id: `l-${r.id}`, kind: "backend" as EvtKind, title: r.event_type ?? "Evento", ts: r.created_at,
         })),
+        // Live runtime telemetry — edge failures captured in-memory by the monitor
+        ...RuntimeHealthMonitor.getSnapshot().edgeFailures.slice(0, 10).map((f) => ({
+          id: `ef-${f.fn}-${f.at}`,
+          kind: "backend" as EvtKind,
+          title: `Edge ${f.fn} falhou`,
+          detail: f.message,
+          ts: new Date(f.at).toISOString(),
+        })),
       ].sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime()).slice(0, 30);
 
       if (!cancelled) {
