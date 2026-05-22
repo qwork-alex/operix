@@ -200,11 +200,11 @@ export default function FinancialPage() {
         {/* CONFRONTO — UNTOUCHED */}
         <TabsContent value="confronto" className="space-y-4">
           <Tabs value={confrontoTab} onValueChange={setConfrontoTab}>
-            <TabsList className="bg-muted/50">
-              <TabsTrigger value="fusao">
+            <TabsList className="flex h-auto max-w-full justify-start gap-1 overflow-x-auto bg-muted/50 p-1">
+              <TabsTrigger value="fusao" className="shrink-0 whitespace-nowrap">
                 <Link2 className="h-3.5 w-3.5 mr-1" /> {t("fin.confronto.fusao")}
               </TabsTrigger>
-              <TabsTrigger value="pendentes" className="relative">
+              <TabsTrigger value="pendentes" className="relative shrink-0 whitespace-nowrap">
                 <AlertTriangle className="h-3.5 w-3.5 mr-1" /> {t("fin.confronto.pendentes")}
                 {pendingItems.length > 0 && (
                   <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive/20 text-destructive text-[9px] px-1">
@@ -212,7 +212,7 @@ export default function FinancialPage() {
                   </span>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="historico">{t("fin.confronto.historico")}</TabsTrigger>
+              <TabsTrigger value="historico" className="shrink-0 whitespace-nowrap">{t("fin.confronto.historico")}</TabsTrigger>
             </TabsList>
 
             <TabsContent value="fusao"><FusaoManualTab /></TabsContent>
