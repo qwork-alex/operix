@@ -77,9 +77,11 @@ function guideToElement(el: HTMLElement, reason: string, ttl = 5200) {
 
 export function AIProvider({ children }: { children: ReactNode }) {
   const { signals, worst } = useOperationalSignals();
+  const { workspaceId } = useWorkspace();
   const location = useLocation();
   const [snapshot, setSnapshot] = useState<AIEntitySnapshot>(() => globalAI.current());
   const lastSignalRef = useRef(worst);
+  const recordedSignalIdsRef = useRef<Set<string>>(new Set());
   const guidedSignalIdsRef = useRef<Set<string>>(new Set());
 
   // Boot all engines once
