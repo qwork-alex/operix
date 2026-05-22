@@ -7,8 +7,10 @@ import { AppFooter } from "./AppFooter";
 import { ConsentGate } from "@/components/legal/ConsentGate";
 import { AccessStateBanner } from "@/components/billing/AccessStateBanner";
 import { FloatingAgent } from "@/components/agent/FloatingAgent";
+import { useOperationalBusBoot } from "@/hooks/useOperationalBusBoot";
 
 export function AppLayout({ children }: { children: ReactNode }) {
+  useOperationalBusBoot();
   return (
     <ConsentGate>
       <SidebarProvider>
