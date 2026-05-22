@@ -248,9 +248,9 @@ export default function PaymentOrdersPage() {
   }, [queryClient]);
 
   return (
-    <div className="animate-fade-in flex h-[calc(100vh-3.5rem)] w-full flex-col p-2 gap-2">
+    <div className="animate-fade-in flex min-h-full w-full min-w-0 flex-col gap-3 overflow-visible md:gap-2">
       {/* HEADER — sits ABOVE the operational tree, full width */}
-      <header className="flex items-center justify-between gap-3 border-b border-border/40 px-1 pb-2 shrink-0">
+      <header className="sticky top-0 z-30 -mx-3 flex shrink-0 flex-col gap-3 border-b border-border/40 bg-background/95 px-3 pb-3 pt-1 backdrop-blur sm:-mx-4 sm:px-4 md:static md:mx-0 md:flex-row md:items-center md:justify-between md:bg-transparent md:px-1 md:pb-2 md:pt-0 md:backdrop-blur-none">
         <div className="flex items-center gap-3 min-w-0">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10">
             <Wallet className="h-4 w-4 text-primary" />
@@ -260,7 +260,7 @@ export default function PaymentOrdersPage() {
             <p className="text-[11px] text-muted-foreground truncate">{t("po.subtitle") || "Validação e conciliação documental de pagamentos"}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 md:flex md:items-center">
           <ContextualWorkspacePicker ctx={ctxWs} />
           <Can permission="payment_orders.create">
             <FileUploadZone onFilesSelected={handleFiles} isProcessing={isProcessing} compact />
@@ -268,7 +268,7 @@ export default function PaymentOrdersPage() {
         </div>
       </header>
 
-      <div className="flex flex-1 min-h-0 w-full gap-3">
+      <div className="flex min-h-0 w-full flex-1 gap-3 overflow-visible md:overflow-hidden">
         <aside
           className={`hidden md:flex shrink-0 transition-[width] duration-200 ${sidebarCollapsed ? "w-12" : "w-56"}`}
         >
@@ -285,7 +285,7 @@ export default function PaymentOrdersPage() {
           />
         </aside>
 
-        <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-auto">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-visible md:overflow-auto">
           {hasExtractions && extractions.map((extraction) => (
             <ActiveDocumentBand
               key={extraction._id}
