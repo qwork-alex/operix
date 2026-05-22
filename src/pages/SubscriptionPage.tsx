@@ -151,10 +151,10 @@ export default function SubscriptionPage() {
                   <CreditCard className="h-3.5 w-3.5" /> Preço atual
                 </div>
                 <p className="text-2xl font-semibold">
-                  {pricing!.current_monthly.toFixed(2)} €<span className="text-xs text-muted-foreground"> /mês</span>
+                  {pricing!.current_monthly.toFixed(2)} €<span className="text-xs text-muted-foreground"> + IVA aplicável /mês</span>
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Anual: {pricing!.current_yearly.toFixed(2)} € ({plan.yearly_discount_months} meses grátis)
+                  Anual: {pricing!.current_yearly.toFixed(2)} € + IVA aplicável
                 </p>
               </div>
             </Card>
