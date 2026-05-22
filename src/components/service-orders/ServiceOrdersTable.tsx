@@ -403,19 +403,19 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
     <div className="space-y-4">
       {/* Bulk actions bar */}
       {selected.size > 0 && (
-        <div className="flex items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2">
+        <div className="flex flex-col gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-3 md:flex-row md:items-center md:gap-3 md:px-4 md:py-2">
           <span className="text-sm font-medium">{selected.size} selecionado(s)</span>
           <Can permission="service_orders.delete">
             <Button
               variant="destructive"
               size="sm"
-              className="h-7 text-xs"
+              className="h-10 text-xs md:h-7"
               onClick={() => setShowDeleteDialog(true)}
             >
               <Trash2 className="h-3 w-3 mr-1" /> Excluir selecionados
             </Button>
           </Can>
-          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setSelected(new Set())}>
+          <Button variant="ghost" size="sm" className="h-10 text-xs md:h-7" onClick={() => setSelected(new Set())}>
             Limpar seleção
           </Button>
         </div>
@@ -427,12 +427,12 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
         return (
         <div key={group.key} className="space-y-1">
           {/* Group header */}
-          <div className="flex items-center justify-between rounded-lg bg-secondary/40 px-3 py-2">
+          <div className="flex flex-col gap-2 rounded-lg bg-secondary/40 px-3 py-3 md:flex-row md:items-center md:justify-between md:py-2">
             <div className="flex items-center gap-2 min-w-0 flex-1">
               <button
                 type="button"
                 onClick={() => toggleCollapse(group.key)}
-                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-sm hover:bg-background/40 text-muted-foreground"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-background/40 md:h-5 md:w-5"
                 title={isCollapsed ? "Expandir" : "Recolher"}
                 aria-label={isCollapsed ? "Expandir" : "Recolher"}
               >
@@ -441,7 +441,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
               <Button
                 variant={group.orders.every(o => selected.has(o.id)) ? "secondary" : "outline"}
                 size="sm"
-                className="h-6 text-[10px] px-2 shrink-0"
+                className="h-9 shrink-0 px-3 text-xs md:h-6 md:px-2 md:text-[10px]"
                 onClick={() => toggleGroupSelection(group.orders)}
               >
                 {group.week}
@@ -454,7 +454,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
                 <span>·</span><span>{group.year}</span>
               </span>
             </div>
-            <div className="flex items-center gap-3 shrink-0">
+            <div className="flex items-center justify-between gap-3 shrink-0 pl-11 md:justify-start md:pl-0">
               <span className="text-xs text-muted-foreground">
                 {group.orders.length} itens · {formatCurrency(group.total)}
               </span>
@@ -465,7 +465,94 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
           </div>
 
           {!isCollapsed && (
-          <div className="rounded-lg border border-border/50 overflow-hidden">
+          <div className="space-y-2 md:hidden">
+            {group.orders.map((o) => {
+              const isEditing = editingId === o.id && editForm;
+              const ps = getPaymentStatus(o);
+              const services = [o.service_1_name, o.service_2_name, o.service_3_name, o.service_4_name].filter(Boolean);
+              const rowAlert = ps !== "paid" ? getRowAlertLevel(o.created_at) : "none";
+              const daysOld = Math.floor((Date.now() - new Date(o.created_at).getTime()) / 86400000);
+              const techName = o.technician_name || o.technicians?.name;
+              const dbPct = (o as any).technician_percentage;
+              const dbEarn = (o as any).technician_earning;
+              const techEarn = (dbPct != null && dbPct > 0)
+                ? { percentage: dbPct, earnings: dbEarn ?? 0 }
+                : getTechEarnings(techName, o.total, earningsMap);
+              const computedTotal = isEditing
+                ? (Number(editForm.service_1_price) || 0) + (Number(editForm.service_2_price) || 0) + (Number(editForm.service_3_price) || 0) + (Number(editForm.service_4_price) || 0)
+                : Number(o.total) || 0;
+              return (
+                <div key={o.id} className={cn("rounded-lg border border-border/50 bg-card p-3 shadow-sm", paymentTextStyle[ps], alertStyle[rowAlert])}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Checkbox checked={selected.has(o.id)} onCheckedChange={() => toggleOne(o.id)} />
+                        <AlertIcon level={rowAlert} days={daysOld} />
+                        <span className="truncate text-sm font-semibold">{o.client_name || o.clients?.name || "—"}</span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <span className="font-mono text-foreground">{formatLicensePlate(o.license_plate) || "Sem placa"}</span>
+                        <span>{o.car_name || "Sem viatura"}</span>
+                        <span>{techName || "Sem técnico"}</span>
+                      </div>
+                    </div>
+                    <Badge variant="outline" className={cn("shrink-0 text-[10px]", paymentBadgeStyle[ps])}>{paymentLabel[ps]}</Badge>
+                  </div>
+
+                  {isEditing ? (
+                    <div className="mt-3 space-y-2 rounded-md border border-border/50 bg-background/50 p-2">
+                      <div className="grid grid-cols-1 gap-2">
+                        <Select value={editForm.client_id} onValueChange={(value) => updateField("client_id", value)}>
+                          <SelectTrigger className="h-11 text-xs bg-background"><SelectValue placeholder={t("label.client")} /></SelectTrigger>
+                          <SelectContent><SelectItem value={EMPTY_RELATION_VALUE}>—</SelectItem>{clients.map((client) => <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>)}</SelectContent>
+                        </Select>
+                        <Select value={editForm.assigned_user_id} onValueChange={(value) => updateField("assigned_user_id", value)}>
+                          <SelectTrigger className="h-11 text-xs bg-background"><SelectValue placeholder={t("label.technician")} /></SelectTrigger>
+                          <SelectContent><SelectItem value={EMPTY_RELATION_VALUE}>—</SelectItem>{technicians.map((technician) => <SelectItem key={technician.user_id} value={technician.user_id}>{technician.name}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input className="h-11 text-xs" value={editForm.platform} placeholder={t("label.platform")} onChange={(e) => updateField("platform", e.target.value)} />
+                        <Input className="h-11 text-xs" value={editForm.week} placeholder={t("label.week")} onChange={(e) => updateField("week", e.target.value)} />
+                        <Input className="h-11 text-xs" value={editForm.car_name} placeholder={t("label.car")} onChange={(e) => updateField("car_name", e.target.value)} />
+                        <Input className="h-11 font-mono text-xs" value={editForm.license_plate} placeholder={t("label.plate")} onChange={(e) => updateField("license_plate", e.target.value)} />
+                      </div>
+                      {[1, 2, 3, 4].map((i) => (
+                        <div key={i} className="grid grid-cols-[minmax(0,1fr)_96px] gap-2">
+                          <Input className="h-10 text-xs" value={(editForm as any)[`service_${i}_name`]} placeholder={`Serviço ${i}`} onChange={(e) => updateField(`service_${i}_name` as keyof EditState, e.target.value)} />
+                          <Input className="h-10 text-right text-xs tabular-nums" type="number" step="0.01" value={(editForm as any)[`service_${i}_price`]} onChange={(e) => updateField(`service_${i}_price` as keyof EditState, Number(e.target.value) || 0)} />
+                        </div>
+                      ))}
+                      <div className="flex items-center justify-between border-t border-border/50 pt-2">
+                        <span className="text-sm font-semibold text-primary tabular-nums">{formatCurrency(computedTotal)}</span>
+                        <div className="flex gap-2">
+                          <Button variant="outline" size="sm" className="h-10" onClick={cancelEdit}><X className="h-4 w-4" /></Button>
+                          <Button size="sm" className="h-10" onClick={() => updateMutation.mutate(o.id)} disabled={updateMutation.isPending}>{updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}</Button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-3 space-y-3">
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div><span className="text-muted-foreground">Plataforma</span><p className="font-medium">{o.platform || "—"}</p></div>
+                        <div><span className="text-muted-foreground">Total</span><p className="font-semibold text-primary tabular-nums">{o.total != null ? formatCurrency(Number(o.total)) : "—"}</p></div>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{services.length ? services.join(", ") : "Sem serviços"}</p>
+                      {techEarn && <p className="text-[11px] text-muted-foreground">Tec. {techEarn.percentage}% · <span className="text-foreground">{formatCurrency(techEarn.earnings)}</span></p>}
+                      <div className="flex justify-end gap-2 border-t border-border/50 pt-2">
+                        <Can permission="service_orders.edit"><Button variant="outline" size="sm" className="h-10" onClick={() => startEdit(o)}><Pencil className="h-4 w-4 mr-1" />Editar</Button></Can>
+                        <Can permission="service_orders.delete"><Button variant="ghost" size="sm" className="h-10 text-destructive" onClick={() => deleteMutation.mutate(o.id)}><Trash2 className="h-4 w-4" /></Button></Can>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          )}
+
+          {!isCollapsed && (
+          <div className="hidden rounded-lg border border-border/50 overflow-hidden md:block">
             <Table className="table-cols-zebra">
               <TableHeader>
                 <TableRow className="bg-secondary/30">

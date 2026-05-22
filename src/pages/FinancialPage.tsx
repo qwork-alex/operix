@@ -92,7 +92,7 @@ export default function FinancialPage() {
     <div className="space-y-6 animate-fade-in min-w-0 max-w-full w-full overflow-x-hidden">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
             <BarChart3 className="h-5 w-5 text-primary" />
@@ -177,22 +177,22 @@ export default function FinancialPage() {
 
       {/* TABS — Phase 5C order */}
       <Tabs value={mainTab} onValueChange={setMainTab} className="space-y-4 min-w-0 max-w-full w-full">
-        <TabsList className="bg-muted flex flex-wrap h-auto max-w-full">
-          <TabsTrigger value="confronto">{t("fin.tabs.confronto")}</TabsTrigger>
-          <TabsTrigger value="distribution">
+        <TabsList className="flex h-auto max-w-full justify-start gap-1 overflow-x-auto rounded-lg bg-muted p-1">
+          <TabsTrigger value="confronto" className="shrink-0 whitespace-nowrap">{t("fin.tabs.confronto")}</TabsTrigger>
+          <TabsTrigger value="distribution" className="shrink-0 whitespace-nowrap">
             <PieChart className="h-3.5 w-3.5 mr-1" /> {t("fin.tabs.distribution")}
           </TabsTrigger>
-          <TabsTrigger value="accounting">
+          <TabsTrigger value="accounting" className="shrink-0 whitespace-nowrap">
             <BookOpen className="h-3.5 w-3.5 mr-1" /> {t("fin.tabs.accounting")}
           </TabsTrigger>
-          <TabsTrigger value="breakdown">{t("fin.tabs.breakdown")}</TabsTrigger>
-          <TabsTrigger value="participation">
+          <TabsTrigger value="breakdown" className="shrink-0 whitespace-nowrap">{t("fin.tabs.breakdown")}</TabsTrigger>
+          <TabsTrigger value="participation" className="shrink-0 whitespace-nowrap">
             <Users className="h-3.5 w-3.5 mr-1" /> {t("fin.tabs.participation")}
           </TabsTrigger>
-          <TabsTrigger value="audit">
+          <TabsTrigger value="audit" className="shrink-0 whitespace-nowrap">
             <ShieldCheck className="h-3.5 w-3.5 mr-1" /> {t("fin.tabs.audit")}
           </TabsTrigger>
-          <TabsTrigger value="integrity">
+          <TabsTrigger value="integrity" className="shrink-0 whitespace-nowrap">
             <ShieldAlert className="h-3.5 w-3.5 mr-1" /> {t("fin.tabs.integrity")}
           </TabsTrigger>
         </TabsList>
@@ -200,11 +200,11 @@ export default function FinancialPage() {
         {/* CONFRONTO — UNTOUCHED */}
         <TabsContent value="confronto" className="space-y-4">
           <Tabs value={confrontoTab} onValueChange={setConfrontoTab}>
-            <TabsList className="bg-muted/50">
-              <TabsTrigger value="fusao">
+            <TabsList className="flex h-auto max-w-full justify-start gap-1 overflow-x-auto bg-muted/50 p-1">
+              <TabsTrigger value="fusao" className="shrink-0 whitespace-nowrap">
                 <Link2 className="h-3.5 w-3.5 mr-1" /> {t("fin.confronto.fusao")}
               </TabsTrigger>
-              <TabsTrigger value="pendentes" className="relative">
+              <TabsTrigger value="pendentes" className="relative shrink-0 whitespace-nowrap">
                 <AlertTriangle className="h-3.5 w-3.5 mr-1" /> {t("fin.confronto.pendentes")}
                 {pendingItems.length > 0 && (
                   <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive/20 text-destructive text-[9px] px-1">
@@ -212,7 +212,7 @@ export default function FinancialPage() {
                   </span>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="historico">{t("fin.confronto.historico")}</TabsTrigger>
+              <TabsTrigger value="historico" className="shrink-0 whitespace-nowrap">{t("fin.confronto.historico")}</TabsTrigger>
             </TabsList>
 
             <TabsContent value="fusao"><FusaoManualTab /></TabsContent>
@@ -226,7 +226,7 @@ export default function FinancialPage() {
         </TabsContent>
 
         <TabsContent value="accounting" className="space-y-4 min-w-0 max-w-full">
-          <div className="min-h-[600px] min-w-0 max-w-full w-full overflow-hidden">
+          <div className="min-h-[60svh] min-w-0 max-w-full w-full overflow-visible md:min-h-[600px] md:overflow-hidden">
             <AccountingControlCenter embedded />
           </div>
         </TabsContent>

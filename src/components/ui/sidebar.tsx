@@ -156,7 +156,7 @@ const Sidebar = React.forwardRef<
         <SheetContent
           data-sidebar="sidebar"
           data-mobile="true"
-          className="w-[--sidebar-width] bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
+          className="z-[1000] w-[min(var(--sidebar-width),calc(100vw-2rem))] border-sidebar-border bg-sidebar/95 p-0 text-sidebar-foreground shadow-2xl backdrop-blur-xl [&>button]:hidden"
           style={
             {
               "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
@@ -226,7 +226,7 @@ const SidebarTrigger = React.forwardRef<React.ElementRef<typeof Button>, React.C
         data-sidebar="trigger"
         variant="ghost"
         size="icon"
-        className={cn("h-7 w-7", className)}
+        className={cn("h-10 w-10 touch-manipulation md:h-7 md:w-7", className)}
         onClick={(event) => {
           onClick?.(event);
           toggleSidebar();
@@ -450,7 +450,7 @@ const SidebarMenuButton = React.forwardRef<
       data-sidebar="menu-button"
       data-size={size}
       data-active={isActive}
-      className={cn(sidebarMenuButtonVariants({ variant, size }), className)}
+      className={cn(sidebarMenuButtonVariants({ variant, size }), isMobile && "min-h-11 px-3 text-[15px]", className)}
       {...props}
     />
   );

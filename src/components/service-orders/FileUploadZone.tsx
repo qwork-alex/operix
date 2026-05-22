@@ -201,7 +201,7 @@ export function FileUploadZone({ onFilesSelected, isProcessing, compact = false 
             <Button
               variant="outline"
               size="icon"
-              className="h-8 w-8"
+              className="h-11 w-11 touch-manipulation md:h-8 md:w-8"
               disabled={isProcessing}
               aria-label={t("upload.add") || "Adicionar"}
             >
@@ -235,7 +235,7 @@ export function FileUploadZone({ onFilesSelected, isProcessing, compact = false 
           disabled={isProcessing}
         />
         <Dialog open={cameraOpen} onOpenChange={(o) => { if (!o) stopCamera(); }}>
-          <DialogContent className="max-w-lg p-0 overflow-hidden">
+          <DialogContent className="max-h-[calc(100svh-1rem)] max-w-lg overflow-y-auto p-0">
             <DialogHeader className="p-4 pb-2">
               <DialogTitle>{cameraMode === "scan" ? (t("upload.scanMode") || "Scan Document") : (t("upload.photoMode") || "Take Photo")}</DialogTitle>
               <DialogDescription>
@@ -254,7 +254,7 @@ export function FileUploadZone({ onFilesSelected, isProcessing, compact = false 
                 <div className="relative bg-black">
                   <img src={preview.url} alt="Captured" className="w-full max-h-[60vh] object-contain" />
                 </div>
-                <div className="flex items-center justify-between p-4">
+                <div className="grid grid-cols-1 gap-2 p-4 sm:flex sm:items-center sm:justify-between">
                   <Button variant="ghost" size="sm" onClick={retakeCapture}>
                     <RotateCcw className="h-4 w-4 mr-1" /> {t("upload.retake") || "Retake"}
                   </Button>
@@ -383,7 +383,7 @@ export function FileUploadZone({ onFilesSelected, isProcessing, compact = false 
 
       {/* Camera Dialog */}
       <Dialog open={cameraOpen} onOpenChange={(o) => { if (!o) stopCamera(); }}>
-        <DialogContent className="max-w-lg p-0 overflow-hidden">
+          <DialogContent className="max-h-[calc(100svh-1rem)] max-w-lg overflow-y-auto p-0">
           <DialogHeader className="p-4 pb-2">
             <DialogTitle>{cameraMode === "scan" ? (t("upload.scanMode") || "Scan Document") : (t("upload.photoMode") || "Take Photo")}</DialogTitle>
             <DialogDescription>
@@ -406,7 +406,7 @@ export function FileUploadZone({ onFilesSelected, isProcessing, compact = false 
               <div className="relative bg-black">
                 <img src={preview.url} alt="Captured" className="w-full max-h-[60vh] object-contain" />
               </div>
-              <div className="flex items-center justify-between p-4">
+              <div className="grid grid-cols-1 gap-2 p-4 sm:flex sm:items-center sm:justify-between">
                 <Button variant="ghost" size="sm" onClick={retakeCapture}>
                   <RotateCcw className="h-4 w-4 mr-1" /> {t("upload.retake") || "Retake"}
                 </Button>
@@ -434,7 +434,7 @@ export function FileUploadZone({ onFilesSelected, isProcessing, compact = false 
                   </div>
                 )}
               </div>
-              <div className="flex items-center justify-between p-4">
+              <div className="grid grid-cols-1 gap-2 p-4 sm:flex sm:items-center sm:justify-between">
                 <Button variant="ghost" size="sm" onClick={stopCamera}>
                   <X className="h-4 w-4 mr-1" /> {t("label.close") || "Close"}
                 </Button>

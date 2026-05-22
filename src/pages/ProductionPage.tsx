@@ -21,22 +21,22 @@ export default function ProductionPage() {
   const [open, setOpen] = useState<ProductionOrder | null>(null);
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+    <div className="min-w-0 max-w-full space-y-4 md:space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Produção</h1>
+          <h1 className="text-xl font-bold tracking-tight md:text-2xl">Produção</h1>
           <p className="text-sm text-muted-foreground">Pipeline operacional de veículos em tempo real.</p>
         </div>
-        <Button onClick={() => setOpen(BLANK)} className="gap-2">
+        <Button onClick={() => setOpen(BLANK)} className="h-11 w-full gap-2 sm:w-auto md:h-10">
           <Plus className="h-4 w-4" /> Nova Ordem
         </Button>
       </div>
 
-      <Tabs defaultValue="board">
-        <TabsList>
-          <TabsTrigger value="board"><LayoutGrid className="h-4 w-4 mr-2" /> Pipeline</TabsTrigger>
-          <TabsTrigger value="my"><Wrench className="h-4 w-4 mr-2" /> Minhas Ordens</TabsTrigger>
-          <TabsTrigger value="dashboard"><BarChart3 className="h-4 w-4 mr-2" /> Painel de Bordo</TabsTrigger>
+      <Tabs defaultValue="board" className="min-w-0 max-w-full">
+        <TabsList className="grid h-auto w-full grid-cols-3 gap-1 p-1 md:inline-flex md:w-auto">
+          <TabsTrigger value="board" className="min-h-10 gap-1.5 px-2 text-xs md:text-sm"><LayoutGrid className="h-4 w-4" /> <span className="truncate">Pipeline</span></TabsTrigger>
+          <TabsTrigger value="my" className="min-h-10 gap-1.5 px-2 text-xs md:text-sm"><Wrench className="h-4 w-4" /> <span className="truncate">Minhas</span></TabsTrigger>
+          <TabsTrigger value="dashboard" className="min-h-10 gap-1.5 px-2 text-xs md:text-sm"><BarChart3 className="h-4 w-4" /> <span className="truncate">Painel</span></TabsTrigger>
         </TabsList>
         <TabsContent value="board" className="mt-4">
           <ProductionBoard onOpen={setOpen} />

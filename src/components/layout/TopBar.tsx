@@ -54,9 +54,9 @@ export function TopBar() {
     : "?";
 
   return (
-    <header className="relative flex h-14 items-center justify-between border-b border-border/50 px-4 glass-panel">
+    <header className="relative z-40 flex h-14 shrink-0 items-center justify-between border-b border-border/50 px-3 sm:px-4 glass-panel supports-[backdrop-filter]:bg-card/80">
       <div className="flex items-center gap-2">
-        <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
+        <SidebarTrigger className="h-10 w-10 md:h-8 md:w-8 text-muted-foreground hover:text-foreground" />
       </div>
 
       {collapsed && (
@@ -66,7 +66,7 @@ export function TopBar() {
         </div>
       )}
 
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1.5 sm:gap-1">
         {role && (
           <span
             className="hidden sm:inline text-[10px] uppercase tracking-widest text-muted-foreground/60 mr-2 px-2 py-0.5 rounded bg-muted/30"
@@ -79,7 +79,7 @@ export function TopBar() {
         {/* Notifications */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative text-muted-foreground hover:text-foreground">
+            <Button variant="ghost" size="icon" className="relative h-10 w-10 md:h-8 md:w-8 text-muted-foreground hover:text-foreground">
               <Bell className="h-4 w-4" />
               {totalAlertCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground">
@@ -88,18 +88,18 @@ export function TopBar() {
               )}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="bg-card border-border w-80">
+          <DropdownMenuContent align="end" className="z-[1002] bg-card border-border w-[calc(100vw-1.5rem)] max-w-80">
             <div className="flex items-center justify-between px-3 py-2">
               <span className="text-sm font-semibold text-foreground">{t("notif.title")}</span>
               <div className="flex gap-1">
                 {unreadCount > 0 && (
-                  <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px]" onClick={() => markAllRead()}>
+                    <Button variant="ghost" size="sm" className="min-h-9 md:min-h-6 px-2 text-[10px]" onClick={() => markAllRead()}>
                     <Check className="h-3 w-3 mr-1" />
                     {t("notif.markAllRead")}
                   </Button>
                 )}
                 {notifications.length > 0 && (
-                  <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px] text-destructive" onClick={() => clearAll()}>
+                    <Button variant="ghost" size="sm" className="min-h-9 md:min-h-6 px-2 text-[10px] text-destructive" onClick={() => clearAll()}>
                     <Trash2 className="h-3 w-3" />
                   </Button>
                 )}
@@ -187,7 +187,7 @@ export function TopBar() {
         {/* User avatar + profile menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="ml-2 flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-semibold hover:bg-primary/30 transition-colors overflow-hidden">
+            <button className="ml-1 sm:ml-2 flex h-10 w-10 md:h-8 md:w-8 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-semibold hover:bg-primary/30 transition-colors overflow-hidden">
               {avatarUrl ? (
                 <img src={avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
               ) : (
@@ -195,7 +195,7 @@ export function TopBar() {
               )}
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="bg-card border-border w-56">
+          <DropdownMenuContent align="end" className="z-[1002] bg-card border-border w-56 max-w-[calc(100vw-1.5rem)]">
             <div className="px-3 py-2">
               <p className="text-sm font-medium text-foreground truncate">
                 {workspaceName && workspaceName.toLowerCase() !== "default workspace" ? workspaceName : (profile?.full_name || t("common.user"))}
