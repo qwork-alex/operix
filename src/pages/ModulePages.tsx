@@ -1698,6 +1698,13 @@ export function UsersPage() {
         userName={permsTarget?.name}
         userRole={permsTarget?.role}
       />
+
+      {/* Add existing user by ID (workspace invite by display_code) */}
+      {isAdmin && (
+        <div className="pt-2">
+          <AddExistingUserPanel />
+        </div>
+      )}
     </div>
   );
 }
