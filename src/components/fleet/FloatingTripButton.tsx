@@ -151,7 +151,9 @@ export function FloatingTripButton() {
     if (!activeTrip) return;
     if (location.pathname !== "/fleet") navigate("/fleet");
     setTimeout(() => {
-      window.dispatchEvent(new CustomEvent("fleet:resume-trip", { detail: activeTrip.draft ? {} : { tripId: activeTrip.id } }));
+      const detail = activeTrip.draft ? {} : { tripId: activeTrip.id };
+      window.dispatchEvent(new CustomEvent("fleet:open-trips", { detail }));
+      window.dispatchEvent(new CustomEvent("fleet:resume-trip", { detail }));
     }, 250);
   }, [activeTrip, location.pathname, navigate]);
 
