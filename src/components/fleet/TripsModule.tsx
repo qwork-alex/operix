@@ -176,6 +176,8 @@ export default function TripsModule() {
   const [completeOpen, setCompleteOpen] = useState(false);
   const [completeTripId, setCompleteTripId] = useState("");
   const [completeKm, setCompleteKm] = useState("");
+  const [endConfirmOpen, setEndConfirmOpen] = useState(false);
+  const [endingTrip, setEndingTrip] = useState(false);
 
   /* ─── Queries ─── */
   const { data: vehicles = [] } = useQuery({
