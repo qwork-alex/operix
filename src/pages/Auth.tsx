@@ -52,8 +52,12 @@ export default function Auth() {
 
   const handleCreateWorkspace = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!workspaceName.trim() || !fullName.trim() || !email.trim() || password.length < 8) {
-      toast.error("Preencha todos os campos. Senha mínima de 8 caracteres.");
+    if (!workspaceName.trim() || !fullName.trim() || !email.trim()) {
+      toast.error("Preencha todos os campos.");
+      return;
+    }
+    if (!isPasswordStrong(password)) {
+      toast.error("A senha precisa de no mínimo 8 caracteres, 1 maiúscula e 1 número.");
       return;
     }
 
