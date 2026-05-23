@@ -6,12 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Loader2, Eye, EyeOff, Building2, LogIn, ShieldCheck, Mail, Users } from "lucide-react";
+import { Loader2, Eye, EyeOff, Building2, LogIn, ShieldCheck, Mail, Users, Wrench } from "lucide-react";
 import { brandConfig } from "@/brand.config";
 import { BrandLogo } from "@/components/BrandLogo";
 import { supabase } from "@/integrations/supabase/client";
 
-type Mode = "signin" | "create-workspace";
+type Mode = "signin" | "create-workspace" | "create-technician";
 
 export default function Auth() {
   const { session, loading, signIn } = useAuth();
