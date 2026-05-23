@@ -13,6 +13,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { PasswordStrength, isPasswordStrong } from "@/components/auth/PasswordStrength";
 import { ForgotPasswordDialog, DuplicateEmailDialog } from "@/components/auth/AuthDialogs";
 
+type Mode = "signin" | "create-workspace" | "create-technician";
+
 export default function Auth() {
   const { session, loading, signIn } = useAuth();
   const { t } = useLanguage();
