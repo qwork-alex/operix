@@ -96,6 +96,7 @@ const App = () => (
                   <Route path="/landing" element={<LandingPage />} />
                   <Route path="/onboarding/workspace" element={<WorkspaceOnboardingPage />} />
                   <Route path="/auth" element={<Auth />} />
+                  <Route path="/reset-password" element={<ResetPassword />} />
                   <Route path="/legal/terms" element={<TermsPage />} />
                   <Route path="/legal/privacy" element={<PrivacyPage />} />
                   <Route path="/legal/gdpr" element={<GdprPage />} />
