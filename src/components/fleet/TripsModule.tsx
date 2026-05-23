@@ -12,9 +12,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Save, Trash2, MapPin, Navigation, Loader2, CheckCircle, Locate, Plus, ArrowRight, Minus, Clock, ChevronDown, ChevronRight, Eye } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Save, Trash2, MapPin, Navigation, Loader2, CheckCircle, Locate, Plus, ArrowRight, Minus, Clock, ChevronDown, ChevronRight, Eye, X } from "lucide-react";
 import { useContextualWorkspace } from "@/hooks/useContextualWorkspace";
 import { ContextualWorkspacePicker } from "@/components/workspace/ContextualWorkspacePicker";
+import { finalizeTripWithCurrentGps } from "@/lib/fleet/tripActions";
 
 /* ─── Types ─── */
 interface TripPoint {
@@ -174,6 +176,8 @@ export default function TripsModule() {
   const [completeOpen, setCompleteOpen] = useState(false);
   const [completeTripId, setCompleteTripId] = useState("");
   const [completeKm, setCompleteKm] = useState("");
+  const [endConfirmOpen, setEndConfirmOpen] = useState(false);
+  const [endingTrip, setEndingTrip] = useState(false);
 
   /* ─── Queries ─── */
   const { data: vehicles = [] } = useQuery({
@@ -724,6 +728,32 @@ export default function TripsModule() {
 
   const isActiveSession = !!activeTripId;
 
+  // Origin must be filled before user can add intermediate or final points.
+  const origin = points[0];
+  const originReady = !!(origin && (origin.latitude || origin.street || origin.city));
+
+  const requestEnd = () => setEndConfirmOpen(true);
+
+  const confirmEndTrip = async () => {
+    if (!activeTripId) return;
+    setEndingTrip(true);
+    try {
+      toast.info("A capturar GPS final e a calcular rota...");
+      // Persist any in-memory edits first so they are not lost.
+      try { await persistPointsToTrip(activeTripId, points); } catch { /* tolerant */ }
+      await finalizeTripWithCurrentGps(activeTripId);
+      toast.success("Trajeto encerrado");
+      qc.invalidateQueries({ queryKey: ["fleet_trips"] });
+      qc.invalidateQueries({ queryKey: ["fleet_active_trip_global"] });
+      setEndConfirmOpen(false);
+      resetAndClose();
+    } catch (e: any) {
+      toast.error(e?.message || "Falha ao encerrar trajeto");
+    } finally {
+      setEndingTrip(false);
+    }
+  };
+
   const formatDuration = (min: number) => {
     if (min < 60) return `${Math.round(min)} min`;
     const h = Math.floor(min / 60);
@@ -743,20 +773,7 @@ export default function TripsModule() {
         </Button>
       </div>
 
-      {/* Minimized bar */}
-      {minimized && activeTripId && (
-        <div className="sticky top-0 z-40 flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 backdrop-blur-sm px-4 py-2 animate-fade-in shadow-sm cursor-pointer" onClick={restoreDialog}>
-          <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-          <span className="text-xs font-semibold text-primary">Trajeto minimizado</span>
-          <span className="text-xs text-muted-foreground">{getVehicleLabel(form.vehicle_id)}</span>
-          {totalApiDistance > 0 && (
-            <span className="text-xs font-semibold text-foreground">{totalApiDistance.toFixed(1)} km</span>
-          )}
-          <Button size="sm" variant="outline" className="ml-auto h-6 text-xs" onClick={(e) => { e.stopPropagation(); restoreDialog(); }}>
-            Restaurar
-          </Button>
-        </div>
-      )}
+      {/* Inline minimized bar removed — replaced by global FloatingTripButton */}
 
       {/* Trips Table */}
       <Card>
@@ -874,12 +891,18 @@ export default function TripsModule() {
               <div className="flex items-center gap-1">
                 {!isActiveSession && <ContextualWorkspacePicker ctx={ctxWs} />}
                 {isActiveSession && (
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={minimizeDialog} title="Minimizar">
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={minimizeDialog} title="Minimizar — mantém trajeto ativo">
                     <Minus className="h-4 w-4" />
                   </Button>
                 )}
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={isActiveSession ? minimizeDialog : resetAndClose} title="Fechar">
-                  <span className="text-lg leading-none">×</span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={isActiveSession ? requestEnd : resetAndClose}
+                  title={isActiveSession ? "Encerrar trajeto" : "Fechar"}
+                >
+                  <X className="h-4 w-4" />
                 </Button>
               </div>
             </div>
@@ -942,12 +965,19 @@ export default function TripsModule() {
 
             <div>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-sm font-semibold">Pontos de Passagem</p>
+                <div>
+                  <p className="text-sm font-semibold">Pontos de Passagem</p>
+                  {!originReady && (
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      Preencha o <span className="font-semibold text-foreground">Ponto de Partida</span> (GPS ou morada) para libertar os próximos pontos.
+                    </p>
+                  )}
+                </div>
                 <div className="flex gap-1">
-                  <Button size="sm" variant="outline" onClick={addIntermediatePoint} className="h-7 text-xs">
+                  <Button size="sm" variant="outline" onClick={addIntermediatePoint} className="h-7 text-xs" disabled={!originReady} title={!originReady ? "Registe primeiro o Ponto de Partida" : ""}>
                     <Plus className="h-3 w-3 mr-1" /> Ponto
                   </Button>
-                  <Button size="sm" variant="outline" onClick={addFinalPoint} className="h-7 text-xs">
+                  <Button size="sm" variant="outline" onClick={addFinalPoint} className="h-7 text-xs" disabled={!originReady} title={!originReady ? "Registe primeiro o Ponto de Partida" : ""}>
                     <MapPin className="h-3 w-3 mr-1" /> Destino Final
                   </Button>
                 </div>
@@ -1041,14 +1071,11 @@ export default function TripsModule() {
               {isActiveSession && (
                 <Button
                   variant="default"
-                  onClick={() => {
-                    const kmEnd = form.km_end ? parseFloat(form.km_end) : null;
-                    finalizeMutation.mutate({ id: activeTripId!, km_end: kmEnd });
-                  }}
-                  disabled={finalizeMutation.isPending}
+                  onClick={requestEnd}
+                  disabled={endingTrip}
                 >
-                  {finalizeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CheckCircle className="h-4 w-4 mr-1" />}
-                  Finalizar Trajeto
+                  {endingTrip ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CheckCircle className="h-4 w-4 mr-1" />}
+                  Encerrar Trajeto
                 </Button>
               )}
             </div>
@@ -1076,6 +1103,26 @@ export default function TripsModule() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Encerrar Trajeto — confirmação */}
+      <AlertDialog open={endConfirmOpen} onOpenChange={(o) => !endingTrip && setEndConfirmOpen(o)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Deseja encerrar o trajeto?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A posição GPS atual será registada automaticamente como destino final
+              e o trajeto passará a "Concluído".
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={endingTrip}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={(e) => { e.preventDefault(); confirmEndTrip(); }} disabled={endingTrip}>
+              {endingTrip ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CheckCircle className="h-4 w-4 mr-1" />}
+              Encerrar Trajeto
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -12,6 +12,7 @@ import { useAgentRuntimeBoot } from "@/hooks/useAgentRuntimeBoot";
 import { useVirtualEngineerBoot } from "@/hooks/useVirtualEngineerBoot";
 import { useOperationalCopilotBoot } from "@/hooks/useOperationalCopilotBoot";
 import { useObservabilityBoot } from "@/hooks/useObservabilityBoot";
+import { FloatingTripButton } from "@/components/fleet/FloatingTripButton";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   useOperationalBusBoot();
@@ -37,6 +38,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
               <AppFooter />
             </div>
+            <FloatingTripButton />
             {/* AI is now a fixed control-center in the TopBar — no floating overlays */}
           </div>
         </AIProvider>
