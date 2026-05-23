@@ -1071,14 +1071,11 @@ export default function TripsModule() {
               {isActiveSession && (
                 <Button
                   variant="default"
-                  onClick={() => {
-                    const kmEnd = form.km_end ? parseFloat(form.km_end) : null;
-                    finalizeMutation.mutate({ id: activeTripId!, km_end: kmEnd });
-                  }}
-                  disabled={finalizeMutation.isPending}
+                  onClick={requestEnd}
+                  disabled={endingTrip}
                 >
-                  {finalizeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CheckCircle className="h-4 w-4 mr-1" />}
-                  Finalizar Trajeto
+                  {endingTrip ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CheckCircle className="h-4 w-4 mr-1" />}
+                  Encerrar Trajeto
                 </Button>
               )}
             </div>
