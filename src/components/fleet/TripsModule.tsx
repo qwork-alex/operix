@@ -728,6 +728,32 @@ export default function TripsModule() {
 
   const isActiveSession = !!activeTripId;
 
+  // Origin must be filled before user can add intermediate or final points.
+  const origin = points[0];
+  const originReady = !!(origin && (origin.latitude || origin.street || origin.city));
+
+  const requestEnd = () => setEndConfirmOpen(true);
+
+  const confirmEndTrip = async () => {
+    if (!activeTripId) return;
+    setEndingTrip(true);
+    try {
+      toast.info("A capturar GPS final e a calcular rota...");
+      // Persist any in-memory edits first so they are not lost.
+      try { await persistPointsToTrip(activeTripId, points); } catch { /* tolerant */ }
+      await finalizeTripWithCurrentGps(activeTripId);
+      toast.success("Trajeto encerrado");
+      qc.invalidateQueries({ queryKey: ["fleet_trips"] });
+      qc.invalidateQueries({ queryKey: ["fleet_active_trip_global"] });
+      setEndConfirmOpen(false);
+      resetAndClose();
+    } catch (e: any) {
+      toast.error(e?.message || "Falha ao encerrar trajeto");
+    } finally {
+      setEndingTrip(false);
+    }
+  };
+
   const formatDuration = (min: number) => {
     if (min < 60) return `${Math.round(min)} min`;
     const h = Math.floor(min / 60);
