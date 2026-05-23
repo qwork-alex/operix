@@ -17,6 +17,7 @@ import { useWorkspace } from "@/hooks/useWorkspace";
 import { BrandNameEditor, type BrandConfig } from "@/components/layout/BrandNameEditor";
 import { BrandLogo } from "@/components/BrandLogo";
 import { brandConfig as appBrand } from "@/brand.config";
+import { buildBrandTextStyle } from "@/lib/brandStyles";
 import { toast } from "sonner";
 import type { LucideIcon } from "lucide-react";
 
@@ -121,32 +122,21 @@ export function AppSidebar() {
           <div className="flex items-center gap-2.5 overflow-hidden">
             <BrandLogo size={brandConfig.logoSizeNum ?? 30} />
             {(() => {
-              const nameStyle: import("react").CSSProperties = {
-                fontFamily: brandConfig.fontFamily || undefined,
-                color: brandConfig.color || undefined,
-                fontSize: brandConfig.fontSize || undefined,
-                fontWeight: brandConfig.bold ? 700 : 600,
-                fontStyle: brandConfig.italic ? "italic" : undefined,
-                textShadow:
-                  (brandConfig.glowIntensity ?? 0) > 0
-                    ? `0 0 ${brandConfig.glowIntensity}px ${brandConfig.color || "hsl(var(--primary))"}`
-                    : undefined,
-                letterSpacing: "-0.01em",
-              };
+              const nameStyle = buildBrandTextStyle(brandConfig);
               return can("settings", "edit").allowed ? (
                 <BrandNameEditor config={brandConfig} onSave={handleBrandSave}>
                   <button
                     className="overflow-hidden hover:opacity-80 transition-opacity cursor-pointer text-left font-display"
                     title={t("brand.editTooltip")}
                   >
-                    <span className="text-sm text-foreground truncate" style={nameStyle}>
+                    <span className="truncate inline-block" style={nameStyle}>
                       {displayName}
                     </span>
                   </button>
                 </BrandNameEditor>
               ) : (
                 <Link to="/" className="overflow-hidden font-display">
-                  <span className="text-sm text-foreground truncate" style={nameStyle}>
+                  <span className="truncate inline-block" style={nameStyle}>
                     {displayName}
                   </span>
                 </Link>
