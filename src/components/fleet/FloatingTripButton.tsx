@@ -151,12 +151,12 @@ export function FloatingTripButton() {
     if (!activeTrip) return;
     if (location.pathname !== "/fleet") navigate("/fleet");
     setTimeout(() => {
-      window.dispatchEvent(new CustomEvent("fleet:resume-trip", { detail: { tripId: activeTrip.id } }));
+      window.dispatchEvent(new CustomEvent("fleet:resume-trip", { detail: activeTrip.draft ? {} : { tripId: activeTrip.id } }));
     }, 250);
   }, [activeTrip, location.pathname, navigate]);
 
   const handleCheckpoint = useCallback(async () => {
-    if (!activeTrip || busy) return;
+    if (!activeTrip || busy || activeTrip.draft) return;
     setBusy("checkpoint");
     try {
       const gps = await registerCheckpoint(activeTrip.id);
@@ -172,7 +172,7 @@ export function FloatingTripButton() {
   }, [activeTrip, busy, qc]);
 
   const handleEnd = useCallback(async () => {
-    if (!activeTrip || busy) return;
+    if (!activeTrip || busy || activeTrip.draft) return;
     setBusy("end");
     try {
       toast.info("A capturar GPS final e a calcular rota...");
