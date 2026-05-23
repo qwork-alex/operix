@@ -25,6 +25,7 @@ interface ActiveTripSummary {
   driver_id: string | null;
   date: string | null;
   km_start: number | null;
+  draft?: boolean;
 }
 
 function loadLocalActiveTrip(): ActiveTripSummary | null {
@@ -38,6 +39,7 @@ function loadLocalActiveTrip(): ActiveTripSummary | null {
       driver_id: latest.form?.driver_id || null,
       date: latest.form?.date || null,
       km_start: latest.form?.km_start ? Number(latest.form.km_start) : null,
+      draft: latest.tripId === "draft",
     };
   } catch { return null; }
 }
