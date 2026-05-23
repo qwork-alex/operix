@@ -160,6 +160,8 @@ export function FloatingTripButton() {
       const gps = await registerCheckpoint(activeTrip.id);
       toast.success(`Ponto registado: ${gps.city || gps.display_address}`);
       qc.invalidateQueries({ queryKey: ["fleet_trips"] });
+      qc.invalidateQueries({ queryKey: ["fleet_active_trip_global"] });
+      window.dispatchEvent(new CustomEvent("fleet:session-updated"));
     } catch (e: any) {
       toast.error(e?.message || "Falha ao registar ponto");
     } finally {
@@ -176,6 +178,8 @@ export function FloatingTripButton() {
       toast.success("Trajeto encerrado");
       qc.invalidateQueries({ queryKey: ["fleet_trips"] });
       qc.invalidateQueries({ queryKey: ["fleet_active_trip_global"] });
+      setLocalTrip(null);
+      window.dispatchEvent(new CustomEvent("fleet:session-updated"));
       setConfirmEnd(false);
     } catch (e: any) {
       toast.error(e?.message || "Falha ao encerrar trajeto");
