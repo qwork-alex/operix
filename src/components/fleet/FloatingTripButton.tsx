@@ -220,9 +220,18 @@ export function FloatingTripButton() {
           {/* close (X) - sits above drag handle */}
           <button
             onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => { e.stopPropagation(); setConfirmEnd(true); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (activeTrip.draft) {
+                try { localStorage.setItem(ACTIVE_TRIPS_KEY, JSON.stringify([])); } catch { /* noop */ }
+                setLocalTrip(null);
+                window.dispatchEvent(new CustomEvent("fleet:session-updated"));
+                return;
+              }
+              setConfirmEnd(true);
+            }}
             className="absolute top-1.5 right-1.5 z-10 h-6 w-6 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-foreground/10 transition-colors"
-            aria-label="Encerrar trajeto"
+            aria-label={activeTrip.draft ? "Descartar trajeto minimizado" : "Encerrar trajeto"}
           >
             <X className="h-3.5 w-3.5" />
           </button>
