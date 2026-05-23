@@ -734,7 +734,11 @@ export default function TripsModule() {
     const handler = (e: Event) => {
       const tripId = (e as CustomEvent).detail?.tripId;
       if (tripId) openTripDialog(tripId);
-      else { const first = trips.find((t: any) => t.status === "in_progress"); if (first) openTripDialog(first.id); }
+      else {
+        const draft = loadSessions().find(s => s.tripId === "draft");
+        if (draft) openTripDialog();
+        else { const first = trips.find((t: any) => t.status === "in_progress"); if (first) openTripDialog(first.id); }
+      }
     };
     window.addEventListener("fleet:resume-trip", handler);
     return () => window.removeEventListener("fleet:resume-trip", handler);
