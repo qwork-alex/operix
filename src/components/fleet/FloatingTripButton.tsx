@@ -72,9 +72,10 @@ export function FloatingTripButton() {
   const dragRef = useRef<{ dx: number; dy: number; moved: boolean } | null>(null);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [busy, setBusy] = useState<"checkpoint" | "end" | null>(null);
+  const [localTrip, setLocalTrip] = useState<ActiveTripSummary | null>(() => loadLocalActiveTrip());
 
   // Poll for in-progress trips (lightweight; throttled)
-  const { data: activeTrip } = useQuery({
+  const { data: activeTripFromDb } = useQuery({
     queryKey: ["fleet_active_trip_global"],
     enabled: !!user,
     refetchInterval: 30_000,
@@ -88,6 +89,20 @@ export function FloatingTripButton() {
       return (data && data[0]) || null;
     },
   });
+
+  const activeTrip = (activeTripFromDb || localTrip) as ActiveTripSummary | null;
+
+  useEffect(() => {
+    const syncLocalTrip = () => setLocalTrip(loadLocalActiveTrip());
+    window.addEventListener("storage", syncLocalTrip);
+    window.addEventListener("fleet:session-updated", syncLocalTrip);
+    const id = window.setInterval(syncLocalTrip, 1500);
+    return () => {
+      window.removeEventListener("storage", syncLocalTrip);
+      window.removeEventListener("fleet:session-updated", syncLocalTrip);
+      window.clearInterval(id);
+    };
+  }, []);
 
   // re-clamp on viewport resize
   useEffect(() => {
