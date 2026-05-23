@@ -656,9 +656,7 @@ export default function TripsModule() {
   };
 
   const minimizeDialog = () => {
-    if (activeTripId || form.vehicle_id || form.driver_id || points.some((point) => point.street || point.city || point.latitude || point.longitude)) {
-      upsertSession(activeTripId || "draft", form.vehicle_id, form, points);
-    }
+    upsertSession(activeTripId || "draft", form.vehicle_id, form, points);
     setOpen(false);
     window.dispatchEvent(new CustomEvent("fleet:session-updated"));
   };
