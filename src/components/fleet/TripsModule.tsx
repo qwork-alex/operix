@@ -539,6 +539,7 @@ export default function TripsModule() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["fleet_trips"] });
       qc.invalidateQueries({ queryKey: ["fleet_active_trip_global"] });
+      removeSession("draft");
       toast.success("Trajeto iniciado com sucesso");
     },
     onError: (e) => toast.error((e as Error).message),
