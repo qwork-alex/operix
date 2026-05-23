@@ -165,7 +165,6 @@ export default function TripsModule() {
   const qc = useQueryClient();
   const ctxWs = useContextualWorkspace("fleet");
   const [open, setOpen] = useState(false);
-  const [minimized, setMinimized] = useState(false);
   const [form, setForm] = useState<TripForm>(defaultForm());
   const [points, setPoints] = useState<TripPoint[]>([makePoint("Ponto de Partida")]);
   const [gpsLoading, setGpsLoading] = useState<number | null>(null);
@@ -651,12 +650,11 @@ export default function TripsModule() {
   });
 
   const resetAndClose = () => {
-    setOpen(false); setMinimized(false); setForm(defaultForm());
+    setOpen(false); setForm(defaultForm());
     setPoints([makePoint("Ponto de Partida")]); setActiveTripId(null);
   };
 
-  const minimizeDialog = () => { setOpen(false); setMinimized(true); };
-  const restoreDialog = () => { setMinimized(false); setOpen(true); };
+  const minimizeDialog = () => { setOpen(false); window.dispatchEvent(new CustomEvent("fleet:session-updated")); };
 
   /* ─── Open / Resume trip ─── */
   const openTripDialog = async (tripId?: string) => {
@@ -716,7 +714,6 @@ export default function TripsModule() {
       setPoints([makePoint("Ponto de Partida")]);
       setActiveTripId(null);
     }
-    setMinimized(false);
     setOpen(true);
   };
 
