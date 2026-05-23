@@ -124,8 +124,12 @@ export default function Auth() {
 
   const handleCreateTechnician = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName.trim() || !email.trim() || password.length < 8) {
-      toast.error("Preencha todos os campos. Senha mínima de 8 caracteres.");
+    if (!fullName.trim() || !email.trim()) {
+      toast.error("Preencha todos os campos.");
+      return;
+    }
+    if (!isPasswordStrong(password)) {
+      toast.error("A senha precisa de no mínimo 8 caracteres, 1 maiúscula e 1 número.");
       return;
     }
     try { localStorage.removeItem("invite_token"); sessionStorage.removeItem("invite_token"); } catch {}
@@ -144,11 +148,15 @@ export default function Auth() {
       });
       if (error) {
         const msg = error.message || "";
-        if (msg.toLowerCase().includes("registered")) {
-          toast.error("Este email já está registrado. Faça login.");
+        if (msg.toLowerCase().includes("registered") || msg.toLowerCase().includes("already")) {
+          setDuplicateEmail(email.trim().toLowerCase());
         } else {
           toast.error(msg);
         }
+        return;
+      }
+      if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+        setDuplicateEmail(email.trim().toLowerCase());
         return;
       }
       supabase.from("backend_event_logs").insert({
