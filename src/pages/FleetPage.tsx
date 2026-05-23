@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/hooks/useLanguage";
@@ -92,6 +92,15 @@ export default function FleetPage() {
     setActiveTab("trips");
     setTimeout(() => window.dispatchEvent(new CustomEvent("fleet:resume-trip", { detail: { tripId } })), 100);
   };
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      setActiveTab("trips");
+      setTimeout(() => window.dispatchEvent(new CustomEvent("fleet:resume-trip", { detail: (event as CustomEvent).detail || {} })), 120);
+    };
+    window.addEventListener("fleet:open-trips", handler);
+    return () => window.removeEventListener("fleet:open-trips", handler);
+  }, []);
 
   return (
     <div className="min-w-0 max-w-full space-y-4 animate-fade-in md:space-y-6">

@@ -88,6 +88,7 @@ function loadSessions(): TripSession[] {
 
 function saveSessionToStorage(sessions: TripSession[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+  window.dispatchEvent(new CustomEvent("fleet:session-updated"));
 }
 
 function upsertSession(tripId: string, vehicleId: string, form: TripForm, points: TripPoint[]) {
@@ -164,7 +165,6 @@ export default function TripsModule() {
   const qc = useQueryClient();
   const ctxWs = useContextualWorkspace("fleet");
   const [open, setOpen] = useState(false);
-  const [minimized, setMinimized] = useState(false);
   const [form, setForm] = useState<TripForm>(defaultForm());
   const [points, setPoints] = useState<TripPoint[]>([makePoint("Ponto de Partida")]);
   const [gpsLoading, setGpsLoading] = useState<number | null>(null);
@@ -538,6 +538,8 @@ export default function TripsModule() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["fleet_trips"] });
+      qc.invalidateQueries({ queryKey: ["fleet_active_trip_global"] });
+      removeSession("draft");
       toast.success("Trajeto iniciado com sucesso");
     },
     onError: (e) => toast.error((e as Error).message),
@@ -586,6 +588,7 @@ export default function TripsModule() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["fleet_trips"] });
+      qc.invalidateQueries({ queryKey: ["fleet_active_trip_global"] });
       toast.success("Trajeto finalizado com sucesso");
       resetAndClose();
     },
@@ -629,6 +632,7 @@ export default function TripsModule() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["fleet_trips"] });
+      qc.invalidateQueries({ queryKey: ["fleet_active_trip_global"] });
       setCompleteOpen(false);
       toast.success("Trajeto finalizado");
     },
@@ -647,12 +651,15 @@ export default function TripsModule() {
   });
 
   const resetAndClose = () => {
-    setOpen(false); setMinimized(false); setForm(defaultForm());
+    setOpen(false); setForm(defaultForm());
     setPoints([makePoint("Ponto de Partida")]); setActiveTripId(null);
   };
 
-  const minimizeDialog = () => { setOpen(false); setMinimized(true); };
-  const restoreDialog = () => { setMinimized(false); setOpen(true); };
+  const minimizeDialog = () => {
+    upsertSession(activeTripId || "draft", form.vehicle_id, form, points);
+    setOpen(false);
+    window.dispatchEvent(new CustomEvent("fleet:session-updated"));
+  };
 
   /* ─── Open / Resume trip ─── */
   const openTripDialog = async (tripId?: string) => {
@@ -703,6 +710,14 @@ export default function TripsModule() {
 
       setPoints(mergedPoints.length ? mergedPoints : [makePoint("Ponto de Partida")]);
     } else {
+      const draft = loadSessions().find(s => s.tripId === "draft");
+      if (draft) {
+        setForm(draft.form || defaultForm());
+        setPoints(draft.points?.length ? draft.points : [makePoint("Ponto de Partida")]);
+        setActiveTripId(null);
+        setOpen(true);
+        return;
+      }
       const f = defaultForm();
       if (assignments.length === 1) {
         f.vehicle_id = (assignments[0] as any).vehicle_id;
@@ -712,7 +727,6 @@ export default function TripsModule() {
       setPoints([makePoint("Ponto de Partida")]);
       setActiveTripId(null);
     }
-    setMinimized(false);
     setOpen(true);
   };
 
@@ -720,7 +734,11 @@ export default function TripsModule() {
     const handler = (e: Event) => {
       const tripId = (e as CustomEvent).detail?.tripId;
       if (tripId) openTripDialog(tripId);
-      else { const first = trips.find((t: any) => t.status === "in_progress"); if (first) openTripDialog(first.id); }
+      else {
+        const draft = loadSessions().find(s => s.tripId === "draft");
+        if (draft) openTripDialog();
+        else { const first = trips.find((t: any) => t.status === "in_progress"); if (first) openTripDialog(first.id); }
+      }
     };
     window.addEventListener("fleet:resume-trip", handler);
     return () => window.removeEventListener("fleet:resume-trip", handler);
@@ -873,34 +891,38 @@ export default function TripsModule() {
       </Card>
 
       {/* ─── Trip Dialog ─── */}
-      <Dialog open={open} onOpenChange={() => {}}>
+      <Dialog open={open} onOpenChange={(nextOpen) => {
+        if (nextOpen) return;
+        if (isActiveSession) requestEnd();
+        else resetAndClose();
+      }}>
         <DialogContent
+          hideCloseButton
           className="max-w-2xl max-h-[90vh] overflow-y-auto"
           onPointerDownOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}
           onInteractOutside={(e) => e.preventDefault()}
         >
           <DialogHeader>
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex items-start justify-between gap-3 pr-0">
+              <div className="min-w-0">
                 <DialogTitle>{isActiveSession ? "Trajeto em Curso" : "Iniciar Trajeto"}</DialogTitle>
                 <DialogDescription>
                   {isActiveSession ? "Continue a registar pontos. Distâncias calculadas automaticamente." : "Registe um novo trajeto com cálculo automático de rotas."}
                 </DialogDescription>
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex shrink-0 items-center gap-1.5">
                 {!isActiveSession && <ContextualWorkspacePicker ctx={ctxWs} />}
-                {isActiveSession && (
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={minimizeDialog} title="Minimizar — mantém trajeto ativo">
-                    <Minus className="h-4 w-4" />
-                  </Button>
-                )}
+                <Button variant="outline" size="icon" className="h-8 w-8 border-primary/30 bg-primary/10 hover:bg-primary/20" onClick={minimizeDialog} title={isActiveSession ? "Minimizar — mantém trajeto ativo" : "Minimizar formulário"} aria-label="Minimizar trajeto">
+                  <Minus className="h-4 w-4" />
+                </Button>
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="icon"
-                  className="h-7 w-7"
+                  className="h-8 w-8 border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive"
                   onClick={isActiveSession ? requestEnd : resetAndClose}
                   title={isActiveSession ? "Encerrar trajeto" : "Fechar"}
+                  aria-label={isActiveSession ? "Encerrar trajeto" : "Fechar modal"}
                 >
                   <X className="h-4 w-4" />
                 </Button>

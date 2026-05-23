@@ -12,11 +12,37 @@ import { useAuth } from "@/hooks/useAuth";
 import { registerCheckpoint, finalizeTripWithCurrentGps } from "@/lib/fleet/tripActions";
 
 const POS_KEY = "fleet_floating_pos_v1";
+const ACTIVE_TRIPS_KEY = "fleet_active_trips";
 const EDGE_PEEK = 14; // pixels still visible when snapped off-screen
 const PANEL_W = 240;
 const PANEL_H = 116;
 
 interface Pos { x: number; y: number; }
+
+interface ActiveTripSummary {
+  id: string;
+  vehicle_id: string | null;
+  driver_id: string | null;
+  date: string | null;
+  km_start: number | null;
+  draft?: boolean;
+}
+
+function loadLocalActiveTrip(): ActiveTripSummary | null {
+  try {
+    const sessions = JSON.parse(localStorage.getItem(ACTIVE_TRIPS_KEY) || "[]");
+    const latest = Array.isArray(sessions) ? sessions.sort((a: any, b: any) => Number(b?.ts || 0) - Number(a?.ts || 0))[0] : null;
+    if (!latest?.tripId) return null;
+    return {
+      id: latest.tripId,
+      vehicle_id: latest.vehicleId || latest.form?.vehicle_id || null,
+      driver_id: latest.form?.driver_id || null,
+      date: latest.form?.date || null,
+      km_start: latest.form?.km_start ? Number(latest.form.km_start) : null,
+      draft: latest.tripId === "draft",
+    };
+  } catch { return null; }
+}
 
 function loadPos(): Pos {
   try {
@@ -48,9 +74,10 @@ export function FloatingTripButton() {
   const dragRef = useRef<{ dx: number; dy: number; moved: boolean } | null>(null);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [busy, setBusy] = useState<"checkpoint" | "end" | null>(null);
+  const [localTrip, setLocalTrip] = useState<ActiveTripSummary | null>(() => loadLocalActiveTrip());
 
   // Poll for in-progress trips (lightweight; throttled)
-  const { data: activeTrip } = useQuery({
+  const { data: activeTripFromDb } = useQuery({
     queryKey: ["fleet_active_trip_global"],
     enabled: !!user,
     refetchInterval: 30_000,
@@ -64,6 +91,20 @@ export function FloatingTripButton() {
       return (data && data[0]) || null;
     },
   });
+
+  const activeTrip = (activeTripFromDb || localTrip) as ActiveTripSummary | null;
+
+  useEffect(() => {
+    const syncLocalTrip = () => setLocalTrip(loadLocalActiveTrip());
+    window.addEventListener("storage", syncLocalTrip);
+    window.addEventListener("fleet:session-updated", syncLocalTrip);
+    const id = window.setInterval(syncLocalTrip, 1500);
+    return () => {
+      window.removeEventListener("storage", syncLocalTrip);
+      window.removeEventListener("fleet:session-updated", syncLocalTrip);
+      window.clearInterval(id);
+    };
+  }, []);
 
   // re-clamp on viewport resize
   useEffect(() => {
@@ -110,17 +151,21 @@ export function FloatingTripButton() {
     if (!activeTrip) return;
     if (location.pathname !== "/fleet") navigate("/fleet");
     setTimeout(() => {
-      window.dispatchEvent(new CustomEvent("fleet:resume-trip", { detail: { tripId: activeTrip.id } }));
+      const detail = activeTrip.draft ? {} : { tripId: activeTrip.id };
+      window.dispatchEvent(new CustomEvent("fleet:open-trips", { detail }));
+      window.dispatchEvent(new CustomEvent("fleet:resume-trip", { detail }));
     }, 250);
   }, [activeTrip, location.pathname, navigate]);
 
   const handleCheckpoint = useCallback(async () => {
-    if (!activeTrip || busy) return;
+    if (!activeTrip || busy || activeTrip.draft) return;
     setBusy("checkpoint");
     try {
       const gps = await registerCheckpoint(activeTrip.id);
       toast.success(`Ponto registado: ${gps.city || gps.display_address}`);
       qc.invalidateQueries({ queryKey: ["fleet_trips"] });
+      qc.invalidateQueries({ queryKey: ["fleet_active_trip_global"] });
+      window.dispatchEvent(new CustomEvent("fleet:session-updated"));
     } catch (e: any) {
       toast.error(e?.message || "Falha ao registar ponto");
     } finally {
@@ -129,7 +174,7 @@ export function FloatingTripButton() {
   }, [activeTrip, busy, qc]);
 
   const handleEnd = useCallback(async () => {
-    if (!activeTrip || busy) return;
+    if (!activeTrip || busy || activeTrip.draft) return;
     setBusy("end");
     try {
       toast.info("A capturar GPS final e a calcular rota...");
@@ -137,6 +182,8 @@ export function FloatingTripButton() {
       toast.success("Trajeto encerrado");
       qc.invalidateQueries({ queryKey: ["fleet_trips"] });
       qc.invalidateQueries({ queryKey: ["fleet_active_trip_global"] });
+      setLocalTrip(null);
+      window.dispatchEvent(new CustomEvent("fleet:session-updated"));
       setConfirmEnd(false);
     } catch (e: any) {
       toast.error(e?.message || "Falha ao encerrar trajeto");
@@ -175,9 +222,18 @@ export function FloatingTripButton() {
           {/* close (X) - sits above drag handle */}
           <button
             onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => { e.stopPropagation(); setConfirmEnd(true); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (activeTrip.draft) {
+                try { localStorage.setItem(ACTIVE_TRIPS_KEY, JSON.stringify([])); } catch { /* noop */ }
+                setLocalTrip(null);
+                window.dispatchEvent(new CustomEvent("fleet:session-updated"));
+                return;
+              }
+              setConfirmEnd(true);
+            }}
             className="absolute top-1.5 right-1.5 z-10 h-6 w-6 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-foreground/10 transition-colors"
-            aria-label="Encerrar trajeto"
+            aria-label={activeTrip.draft ? "Descartar trajeto minimizado" : "Encerrar trajeto"}
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -189,7 +245,7 @@ export function FloatingTripButton() {
                 style={{ boxShadow: "0 0 8px hsl(142 70% 45% / 0.9)", animation: "trip-pulse 1.6s ease-in-out infinite" }}
               />
               <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-foreground/90">
-                Trajeto em andamento
+                {activeTrip.draft ? "Trajeto minimizado" : "Trajeto em andamento"}
               </span>
             </div>
 
@@ -209,7 +265,7 @@ export function FloatingTripButton() {
               <button
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => { e.stopPropagation(); handleCheckpoint(); }}
-                disabled={busy === "checkpoint"}
+                disabled={busy === "checkpoint" || activeTrip.draft}
                 className="
                   group inline-flex items-center justify-center gap-1.5 h-9 rounded-lg
                   border border-primary/40 bg-primary/10 hover:bg-primary/20
@@ -221,7 +277,7 @@ export function FloatingTripButton() {
                   ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   : <MapPin className="h-3.5 w-3.5 text-primary group-hover:scale-110 transition-transform" />
                 }
-                Registar ponto
+                {activeTrip.draft ? "Aguardando início" : "Registar ponto"}
               </button>
             </div>
           </div>
