@@ -1393,82 +1393,109 @@ export function UsersPage() {
           </div>
         </div>
           {isAdmin && (
-           <Dialog open={showCreate} onOpenChange={(v) => { if (!v) closeCreateDialog(); else setShowCreate(true); }}>
-             <DialogTrigger asChild>
-               <Button size="sm" variant="outline" className="h-8 px-3 text-xs font-medium"><Plus className="h-3.5 w-3.5 mr-1" />Novo</Button>
-             </DialogTrigger>
-            <DialogContent className="bg-card border-border">
-              <DialogHeader><DialogTitle>Criar novo usuário</DialogTitle></DialogHeader>
-              {tempPassword ? (
-                <div className="space-y-4 pt-2">
-                  <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3">
-                    <div className="flex items-center gap-2 text-emerald-500">
-                      <Check className="h-5 w-5" />
-                      <span className="font-medium text-sm">Usuário criado com sucesso!</span>
-                    </div>
-                    <div className="space-y-2">
-                      <p className="text-xs text-muted-foreground">Email:</p>
-                      <code className="text-xs bg-muted/50 px-2 py-1 rounded block">{createForm.email}</code>
-                    </div>
-                    <div className="space-y-2">
-                      <p className="text-xs text-muted-foreground">Senha temporária:</p>
-                      <div className="flex items-center gap-2">
-                        <code className="text-sm bg-muted/50 px-3 py-2 rounded block flex-1 font-mono font-bold">{tempPassword}</code>
-                        <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => {
-                          navigator.clipboard.writeText(tempPassword);
-                          toast.success("Senha copiada!");
-                        }}>
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                    <p className="text-[11px] text-amber-500 flex items-center gap-1">
-                      <AlertTriangle className="h-3 w-3" />
-                      Envie esta senha ao usuário. Ele deverá alterá-la no primeiro login.
-                    </p>
-                  </div>
-                  <Button className="w-full" onClick={closeCreateDialog}>Fechar</Button>
-                </div>
-              ) : (
-                <div className="space-y-4 pt-2">
-                  <div className="space-y-2">
-                    <Label className="text-xs">Email *</Label>
-                    <Input
-                      type="email"
-                      value={createForm.email}
-                      onChange={(e) => setCreateForm(p => ({ ...p, email: e.target.value }))}
-                      placeholder="usuario@empresa.com"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs">Nome completo</Label>
-                    <Input
-                      value={createForm.full_name}
-                      onChange={(e) => setCreateForm(p => ({ ...p, full_name: e.target.value }))}
-                      placeholder="João Silva"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs">Função *</Label>
-                    <Select value={createForm.role} onValueChange={(v) => setCreateForm(p => ({ ...p, role: v }))}>
-                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="admin">{t("role.admin")}</SelectItem>
-                        <SelectItem value="partner">{t("role.partner")}</SelectItem>
-                        <SelectItem value="technician">{t("role.technician")}</SelectItem>
-                        <SelectItem value="client">{t("role.client")}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button className="w-full" onClick={handleCreateUser} disabled={creating || !createForm.email}>
-                    {creating ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
-                    Criar usuário
-                  </Button>
-                </div>
-              )}
-            </DialogContent>
-          </Dialog>
-        )}
+           <div className="flex items-center gap-2">
+             {/* Adicionar usuário existente por ID — modal premium glass */}
+             <Dialog>
+               <DialogTrigger asChild>
+                 <Button size="sm" variant="outline" className="h-8 px-3 text-xs font-medium">
+                   <Link className="h-3.5 w-3.5 mr-1" />
+                   Adicionar existente
+                 </Button>
+               </DialogTrigger>
+               <DialogContent className="glass-panel border-border/60 max-w-2xl max-h-[85vh] overflow-y-auto">
+                 <DialogHeader>
+                   <DialogTitle className="flex items-center gap-2 text-base">
+                     <Link className="h-4 w-4 text-primary" />
+                     Adicionar usuário existente
+                   </DialogTitle>
+                   <p className="text-xs text-muted-foreground mt-1">
+                     Convide um usuário já cadastrado para este workspace usando o ID dele.
+                     A identidade global e os outros workspaces dele permanecem intactos.
+                   </p>
+                 </DialogHeader>
+                 <div className="pt-2">
+                   <AddExistingUserPanel />
+                 </div>
+               </DialogContent>
+             </Dialog>
+
+             <Dialog open={showCreate} onOpenChange={(v) => { if (!v) closeCreateDialog(); else setShowCreate(true); }}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="h-8 px-3 text-xs font-medium"><Plus className="h-3.5 w-3.5 mr-1" />Novo usuário</Button>
+              </DialogTrigger>
+             <DialogContent className="bg-card border-border">
+               <DialogHeader><DialogTitle>Criar novo usuário</DialogTitle></DialogHeader>
+               {tempPassword ? (
+                 <div className="space-y-4 pt-2">
+                   <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3">
+                     <div className="flex items-center gap-2 text-emerald-500">
+                       <Check className="h-5 w-5" />
+                       <span className="font-medium text-sm">Usuário criado com sucesso!</span>
+                     </div>
+                     <div className="space-y-2">
+                       <p className="text-xs text-muted-foreground">Email:</p>
+                       <code className="text-xs bg-muted/50 px-2 py-1 rounded block">{createForm.email}</code>
+                     </div>
+                     <div className="space-y-2">
+                       <p className="text-xs text-muted-foreground">Senha temporária:</p>
+                       <div className="flex items-center gap-2">
+                         <code className="text-sm bg-muted/50 px-3 py-2 rounded block flex-1 font-mono font-bold">{tempPassword}</code>
+                         <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => {
+                           navigator.clipboard.writeText(tempPassword);
+                           toast.success("Senha copiada!");
+                         }}>
+                           <Copy className="h-4 w-4" />
+                         </Button>
+                       </div>
+                     </div>
+                     <p className="text-[11px] text-amber-500 flex items-center gap-1">
+                       <AlertTriangle className="h-3 w-3" />
+                       Envie esta senha ao usuário. Ele deverá alterá-la no primeiro login.
+                     </p>
+                   </div>
+                   <Button className="w-full" onClick={closeCreateDialog}>Fechar</Button>
+                 </div>
+               ) : (
+                 <div className="space-y-4 pt-2">
+                   <div className="space-y-2">
+                     <Label className="text-xs">Email *</Label>
+                     <Input
+                       type="email"
+                       value={createForm.email}
+                       onChange={(e) => setCreateForm(p => ({ ...p, email: e.target.value }))}
+                       placeholder="usuario@empresa.com"
+                     />
+                   </div>
+                   <div className="space-y-2">
+                     <Label className="text-xs">Nome completo</Label>
+                     <Input
+                       value={createForm.full_name}
+                       onChange={(e) => setCreateForm(p => ({ ...p, full_name: e.target.value }))}
+                       placeholder="João Silva"
+                     />
+                   </div>
+                   <div className="space-y-2">
+                     <Label className="text-xs">Função *</Label>
+                     <Select value={createForm.role} onValueChange={(v) => setCreateForm(p => ({ ...p, role: v }))}>
+                       <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                       <SelectContent>
+                         <SelectItem value="admin">{t("role.admin")}</SelectItem>
+                         <SelectItem value="partner">{t("role.partner")}</SelectItem>
+                         <SelectItem value="technician">{t("role.technician")}</SelectItem>
+                         <SelectItem value="client">{t("role.client")}</SelectItem>
+                       </SelectContent>
+                     </Select>
+                   </div>
+                   <Button className="w-full" onClick={handleCreateUser} disabled={creating || !createForm.email}>
+                     {creating ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
+                     Criar usuário
+                   </Button>
+                 </div>
+               )}
+             </DialogContent>
+           </Dialog>
+           </div>
+         )}
       </div>
 
       {/* Smart delete dialog with dependency check */}
@@ -1700,12 +1727,7 @@ export function UsersPage() {
         userRole={permsTarget?.role}
       />
 
-      {/* Add existing user by ID (workspace invite by display_code) */}
-      {isAdmin && (
-        <div className="pt-2">
-          <AddExistingUserPanel />
-        </div>
-      )}
+      {/* "Adicionar usuário existente" agora vive no botão do header (modal premium) */}
     </div>
   );
 }
