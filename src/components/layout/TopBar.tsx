@@ -18,6 +18,7 @@ import { useUserProfile } from "@/hooks/useUserProfile";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AIControlCenter } from "./AIControlCenter";
 import { IncomingInvitesButton } from "@/components/users/IncomingInvitesButton";
+import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 
 const typeIcon: Record<string, typeof Info> = {
   service_order: FileText,
@@ -56,26 +57,20 @@ export function TopBar() {
 
   return (
     <header className="relative z-40 flex h-14 shrink-0 items-center justify-between border-b border-border/50 px-3 sm:px-4 glass-panel supports-[backdrop-filter]:bg-card/80">
-      <div className="flex items-center gap-2">
-        <SidebarTrigger className="h-10 w-10 md:h-8 md:w-8 text-muted-foreground hover:text-foreground" />
+      <div className="flex items-center gap-2 min-w-0">
+        <SidebarTrigger className="h-10 w-10 md:h-8 md:w-8 text-muted-foreground hover:text-foreground shrink-0" />
+        {/* Context Switcher — 1 identidade, múltiplos ambientes operacionais */}
+        <WorkspaceSwitcher />
       </div>
 
       {collapsed && (
-        <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2 animate-fade-in">
+        <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 hidden lg:flex items-center gap-2 animate-fade-in">
           <BrandLogo size={24} />
           <span className="text-sm font-semibold text-foreground">{brandConfig.appName}</span>
         </div>
       )}
 
       <div className="flex items-center gap-1.5 sm:gap-1">
-        {role && (
-          <span
-            className="hidden sm:inline text-[10px] uppercase tracking-widest text-muted-foreground/60 mr-2 px-2 py-0.5 rounded bg-muted/30"
-            style={{ textShadow: role === "admin" ? "0 0 8px rgba(255,255,255,0.4)" : undefined }}
-          >
-            {t(`role.${role}`, role)}
-          </span>
-        )}
 
         {/* Notifications */}
         <DropdownMenu>
