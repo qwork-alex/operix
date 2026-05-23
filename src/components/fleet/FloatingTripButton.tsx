@@ -12,11 +12,35 @@ import { useAuth } from "@/hooks/useAuth";
 import { registerCheckpoint, finalizeTripWithCurrentGps } from "@/lib/fleet/tripActions";
 
 const POS_KEY = "fleet_floating_pos_v1";
+const ACTIVE_TRIPS_KEY = "fleet_active_trips";
 const EDGE_PEEK = 14; // pixels still visible when snapped off-screen
 const PANEL_W = 240;
 const PANEL_H = 116;
 
 interface Pos { x: number; y: number; }
+
+interface ActiveTripSummary {
+  id: string;
+  vehicle_id: string | null;
+  driver_id: string | null;
+  date: string | null;
+  km_start: number | null;
+}
+
+function loadLocalActiveTrip(): ActiveTripSummary | null {
+  try {
+    const sessions = JSON.parse(localStorage.getItem(ACTIVE_TRIPS_KEY) || "[]");
+    const latest = Array.isArray(sessions) ? sessions.sort((a: any, b: any) => Number(b?.ts || 0) - Number(a?.ts || 0))[0] : null;
+    if (!latest?.tripId) return null;
+    return {
+      id: latest.tripId,
+      vehicle_id: latest.vehicleId || latest.form?.vehicle_id || null,
+      driver_id: latest.form?.driver_id || null,
+      date: latest.form?.date || null,
+      km_start: latest.form?.km_start ? Number(latest.form.km_start) : null,
+    };
+  } catch { return null; }
+}
 
 function loadPos(): Pos {
   try {
