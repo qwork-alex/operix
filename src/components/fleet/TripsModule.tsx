@@ -873,34 +873,40 @@ export default function TripsModule() {
       </Card>
 
       {/* ─── Trip Dialog ─── */}
-      <Dialog open={open} onOpenChange={() => {}}>
+      <Dialog open={open} onOpenChange={(nextOpen) => {
+        if (nextOpen) return;
+        if (isActiveSession) requestEnd();
+        else resetAndClose();
+      }}>
         <DialogContent
+          hideCloseButton
           className="max-w-2xl max-h-[90vh] overflow-y-auto"
           onPointerDownOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}
           onInteractOutside={(e) => e.preventDefault()}
         >
           <DialogHeader>
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex items-start justify-between gap-3 pr-0">
+              <div className="min-w-0">
                 <DialogTitle>{isActiveSession ? "Trajeto em Curso" : "Iniciar Trajeto"}</DialogTitle>
                 <DialogDescription>
                   {isActiveSession ? "Continue a registar pontos. Distâncias calculadas automaticamente." : "Registe um novo trajeto com cálculo automático de rotas."}
                 </DialogDescription>
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex shrink-0 items-center gap-1.5">
                 {!isActiveSession && <ContextualWorkspacePicker ctx={ctxWs} />}
                 {isActiveSession && (
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={minimizeDialog} title="Minimizar — mantém trajeto ativo">
+                  <Button variant="outline" size="icon" className="h-8 w-8 border-primary/30 bg-primary/10 hover:bg-primary/20" onClick={minimizeDialog} title="Minimizar — mantém trajeto ativo" aria-label="Minimizar trajeto">
                     <Minus className="h-4 w-4" />
                   </Button>
                 )}
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="icon"
-                  className="h-7 w-7"
+                  className="h-8 w-8 border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive"
                   onClick={isActiveSession ? requestEnd : resetAndClose}
                   title={isActiveSession ? "Encerrar trajeto" : "Fechar"}
+                  aria-label={isActiveSession ? "Encerrar trajeto" : "Fechar modal"}
                 >
                   <X className="h-4 w-4" />
                 </Button>
