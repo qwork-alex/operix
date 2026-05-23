@@ -1173,6 +1173,7 @@ export function Documents() {
 // ─── USERS ───
 import { useRole, DISPLAY_TO_DB, type AppRole } from "@/hooks/useRole";
 import { useImpersonation } from "@/hooks/useImpersonation";
+import { AddExistingUserPanel } from "@/components/users/AddExistingUserPanel";
 
 export function UsersPage() {
   const { t, formatDate } = useLanguage();
@@ -1698,6 +1699,13 @@ export function UsersPage() {
         userName={permsTarget?.name}
         userRole={permsTarget?.role}
       />
+
+      {/* Add existing user by ID (workspace invite by display_code) */}
+      {isAdmin && (
+        <div className="pt-2">
+          <AddExistingUserPanel />
+        </div>
+      )}
     </div>
   );
 }

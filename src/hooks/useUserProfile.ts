@@ -10,6 +10,7 @@ export interface UserProfile {
   phone: string | null;
   address: string | null;
   avatar_url: string | null;
+  display_code: string | null;
 }
 
 export function useUserProfile() {
@@ -23,7 +24,7 @@ export function useUserProfile() {
       if (!user?.id) return null;
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, email, phone, address, avatar_url")
+        .select("id, full_name, email, phone, address, avatar_url, display_code")
         .eq("id", user.id)
         .maybeSingle();
       if (error) throw error;

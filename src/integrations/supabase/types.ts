@@ -5800,6 +5800,61 @@ export type Database = {
         }
         Relationships: []
       }
+      workspace_invites: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          responded_at: string | null
+          role: Database["public"]["Enums"]["membership_role"]
+          status: string
+          target_profile_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          responded_at?: string | null
+          role: Database["public"]["Enums"]["membership_role"]
+          status?: string
+          target_profile_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          responded_at?: string | null
+          role?: Database["public"]["Enums"]["membership_role"]
+          status?: string
+          target_profile_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_invites_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workspace_invites_target_profile_id_fkey"
+            columns: ["target_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workspace_invites_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspace_limit_snapshots: {
         Row: {
           created_at: string
@@ -6138,6 +6193,24 @@ export type Database = {
     }
     Functions: {
       _audit_extract_workspace: { Args: { _rec: Json }; Returns: string }
+      accept_workspace_invite: {
+        Args: { _invite_id: string }
+        Returns: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["membership_role"]
+          source: string
+          status: Database["public"]["Enums"]["membership_status"]
+          user_id: string
+          workspace_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "memberships"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       activate_workspace_subscription: {
         Args: { _cycle: string; _plan_code: string; _workspace_id: string }
         Returns: Json
@@ -6211,6 +6284,25 @@ export type Database = {
         Args: { _request_id: string }
         Returns: undefined
       }
+      cancel_workspace_invite: {
+        Args: { _invite_id: string }
+        Returns: {
+          created_at: string
+          created_by: string
+          id: string
+          responded_at: string | null
+          role: Database["public"]["Enums"]["membership_role"]
+          status: string
+          target_profile_id: string
+          workspace_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "workspace_invites"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       check_permission: {
         Args: { _action: string; _module: string; _user_id: string }
         Returns: {
@@ -6228,6 +6320,29 @@ export type Database = {
       compute_platform_smart_metrics: { Args: never; Returns: Json }
       compute_security_metrics: { Args: never; Returns: Json }
       compute_user_risk_score: { Args: { _user_id: string }; Returns: Json }
+      create_workspace_invite_by_code: {
+        Args: {
+          _display_code: string
+          _role: Database["public"]["Enums"]["membership_role"]
+          _workspace_id: string
+        }
+        Returns: {
+          created_at: string
+          created_by: string
+          id: string
+          responded_at: string | null
+          role: Database["public"]["Enums"]["membership_role"]
+          status: string
+          target_profile_id: string
+          workspace_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "workspace_invites"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       current_app_user_id: { Args: never; Returns: string }
       current_user_effective_role: { Args: never; Returns: string }
       current_user_workspace_ids: { Args: never; Returns: string[] }
@@ -6273,6 +6388,7 @@ export type Database = {
         }
         Returns: string
       }
+      find_profile_by_display_code: { Args: { _code: string }; Returns: string }
       generate_platform_invoice: {
         Args: {
           _amount?: number
@@ -6515,6 +6631,25 @@ export type Database = {
       reject_manual_transfer: {
         Args: { _reason?: string; _transfer_id: string }
         Returns: undefined
+      }
+      reject_workspace_invite: {
+        Args: { _invite_id: string }
+        Returns: {
+          created_at: string
+          created_by: string
+          id: string
+          responded_at: string | null
+          role: Database["public"]["Enums"]["membership_role"]
+          status: string
+          target_profile_id: string
+          workspace_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "workspace_invites"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       replay_financial_state: { Args: { _invoice_id: string }; Returns: Json }
       request_data_export: {
