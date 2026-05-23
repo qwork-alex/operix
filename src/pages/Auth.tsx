@@ -422,6 +422,20 @@ export default function Auth() {
           </form>
         )}
       </div>
+
+      <ForgotPasswordDialog
+        open={forgotOpen}
+        onOpenChange={setForgotOpen}
+        defaultEmail={email}
+      />
+      <DuplicateEmailDialog
+        open={!!duplicateEmail}
+        onOpenChange={(v) => { if (!v) setDuplicateEmail(null); }}
+        email={duplicateEmail || ""}
+        onSignIn={() => { setMode("signin"); setDuplicateEmail(null); }}
+        onRecover={() => { setForgotOpen(true); setDuplicateEmail(null); }}
+      />
     </div>
   );
 }
+
