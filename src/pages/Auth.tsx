@@ -10,6 +10,8 @@ import { Loader2, Eye, EyeOff, Building2, LogIn, ShieldCheck, Mail, Users, Wrenc
 import { brandConfig } from "@/brand.config";
 import { BrandLogo } from "@/components/BrandLogo";
 import { supabase } from "@/integrations/supabase/client";
+import { PasswordStrength, isPasswordStrong } from "@/components/auth/PasswordStrength";
+import { ForgotPasswordDialog, DuplicateEmailDialog } from "@/components/auth/AuthDialogs";
 
 type Mode = "signin" | "create-workspace" | "create-technician";
 
@@ -25,6 +27,10 @@ export default function Auth() {
   const [workspaceName, setWorkspaceName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [duplicateEmail, setDuplicateEmail] = useState<string | null>(null);
+
+
 
   if (loading) {
     return (
@@ -46,8 +52,12 @@ export default function Auth() {
 
   const handleCreateWorkspace = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!workspaceName.trim() || !fullName.trim() || !email.trim() || password.length < 8) {
-      toast.error("Preencha todos os campos. Senha mínima de 8 caracteres.");
+    if (!workspaceName.trim() || !fullName.trim() || !email.trim()) {
+      toast.error("Preencha todos os campos.");
+      return;
+    }
+    if (!isPasswordStrong(password)) {
+      toast.error("A senha precisa de no mínimo 8 caracteres, 1 maiúscula e 1 número.");
       return;
     }
 
@@ -75,11 +85,18 @@ export default function Auth() {
 
       if (error) {
         const msg = error.message || "";
-        if (msg.toLowerCase().includes("registered")) {
-          toast.error("Este email já está registrado. Faça login.");
+        if (msg.toLowerCase().includes("registered") || msg.toLowerCase().includes("already")) {
+          setDuplicateEmail(email.trim().toLowerCase());
         } else {
           toast.error(msg);
         }
+        return;
+      }
+
+      // Supabase quirk: when email confirmation is on and the email already
+      // exists, signUp returns success with an empty identities array.
+      if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+        setDuplicateEmail(email.trim().toLowerCase());
         return;
       }
 
@@ -107,8 +124,12 @@ export default function Auth() {
 
   const handleCreateTechnician = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName.trim() || !email.trim() || password.length < 8) {
-      toast.error("Preencha todos os campos. Senha mínima de 8 caracteres.");
+    if (!fullName.trim() || !email.trim()) {
+      toast.error("Preencha todos os campos.");
+      return;
+    }
+    if (!isPasswordStrong(password)) {
+      toast.error("A senha precisa de no mínimo 8 caracteres, 1 maiúscula e 1 número.");
       return;
     }
     try { localStorage.removeItem("invite_token"); sessionStorage.removeItem("invite_token"); } catch {}
@@ -127,11 +148,15 @@ export default function Auth() {
       });
       if (error) {
         const msg = error.message || "";
-        if (msg.toLowerCase().includes("registered")) {
-          toast.error("Este email já está registrado. Faça login.");
+        if (msg.toLowerCase().includes("registered") || msg.toLowerCase().includes("already")) {
+          setDuplicateEmail(email.trim().toLowerCase());
         } else {
           toast.error(msg);
         }
+        return;
+      }
+      if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+        setDuplicateEmail(email.trim().toLowerCase());
         return;
       }
       supabase.from("backend_event_logs").insert({
@@ -222,7 +247,16 @@ export default function Auth() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-foreground">{t("auth.password")}</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password" className="text-foreground">{t("auth.password")}</Label>
+                <button
+                  type="button"
+                  onClick={() => setForgotOpen(true)}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors underline-offset-4 hover:underline"
+                >
+                  Esqueci minha senha
+                </button>
+              </div>
               <div className="relative">
                 <Input
                   id="password" type={showPassword ? "text" : "password"} value={password}
@@ -296,6 +330,7 @@ export default function Auth() {
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+              <PasswordStrength password={password} />
             </div>
 
             <Button type="submit" className="w-full" disabled={submitting}>
@@ -370,6 +405,7 @@ export default function Auth() {
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+              <PasswordStrength password={password} />
             </div>
 
             <Button type="submit" className="w-full" disabled={submitting}>
@@ -386,6 +422,20 @@ export default function Auth() {
           </form>
         )}
       </div>
+
+      <ForgotPasswordDialog
+        open={forgotOpen}
+        onOpenChange={setForgotOpen}
+        defaultEmail={email}
+      />
+      <DuplicateEmailDialog
+        open={!!duplicateEmail}
+        onOpenChange={(v) => { if (!v) setDuplicateEmail(null); }}
+        email={duplicateEmail || ""}
+        onSignIn={() => { setMode("signin"); setDuplicateEmail(null); }}
+        onRecover={() => { setForgotOpen(true); setDuplicateEmail(null); }}
+      />
     </div>
   );
 }
+
