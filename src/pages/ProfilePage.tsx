@@ -43,6 +43,44 @@ function joinAddress(a: AddrParts): string {
   ].filter(Boolean).join(", ");
 }
 
+function MyIdCard({ code }: { code: string | null }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = async () => {
+    if (!code) return;
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      toast.success("ID copiado");
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error("Falha ao copiar");
+    }
+  };
+  return (
+    <Card className="border-border/50">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <Fingerprint className="h-4 w-4 text-primary" /> Meu ID
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-center gap-3 flex-wrap">
+          <code className="text-base font-mono tracking-widest px-3 py-2 rounded-md bg-muted/50 border border-border text-foreground">
+            {code || "—"}
+          </code>
+          <Button size="sm" variant="outline" className="h-9" onClick={handleCopy} disabled={!code}>
+            {copied ? <Check className="h-3.5 w-3.5 mr-1.5" /> : <Copy className="h-3.5 w-3.5 mr-1.5" />}
+            {copied ? "Copiado" : "Copiar ID"}
+          </Button>
+        </div>
+        <p className="text-[11px] text-muted-foreground mt-2">
+          Compartilhe este ID para ser adicionado a workspaces como membro existente.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function ProfilePage() {
   const { profile, isLoading, save } = useUserProfile();
   const { can } = useCan();
