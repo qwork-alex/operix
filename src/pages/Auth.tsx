@@ -247,7 +247,16 @@ export default function Auth() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-foreground">{t("auth.password")}</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password" className="text-foreground">{t("auth.password")}</Label>
+                <button
+                  type="button"
+                  onClick={() => setForgotOpen(true)}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors underline-offset-4 hover:underline"
+                >
+                  Esqueci minha senha
+                </button>
+              </div>
               <div className="relative">
                 <Input
                   id="password" type={showPassword ? "text" : "password"} value={password}
