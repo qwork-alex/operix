@@ -655,7 +655,9 @@ export default function TripsModule() {
   };
 
   const minimizeDialog = () => {
-    if (activeTripId) upsertSession(activeTripId, form.vehicle_id, form, points);
+    if (activeTripId || form.vehicle_id || form.driver_id || points.some((point) => point.street || point.city || point.latitude || point.longitude)) {
+      upsertSession(activeTripId || "draft", form.vehicle_id, form, points);
+    }
     setOpen(false);
     window.dispatchEvent(new CustomEvent("fleet:session-updated"));
   };
@@ -709,6 +711,14 @@ export default function TripsModule() {
 
       setPoints(mergedPoints.length ? mergedPoints : [makePoint("Ponto de Partida")]);
     } else {
+      const draft = loadSessions().find(s => s.tripId === "draft");
+      if (draft) {
+        setForm(draft.form || defaultForm());
+        setPoints(draft.points?.length ? draft.points : [makePoint("Ponto de Partida")]);
+        setActiveTripId(null);
+        setOpen(true);
+        return;
+      }
       const f = defaultForm();
       if (assignments.length === 1) {
         f.vehicle_id = (assignments[0] as any).vehicle_id;
