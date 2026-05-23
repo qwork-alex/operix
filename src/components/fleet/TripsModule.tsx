@@ -88,6 +88,7 @@ function loadSessions(): TripSession[] {
 
 function saveSessionToStorage(sessions: TripSession[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+  window.dispatchEvent(new CustomEvent("fleet:session-updated"));
 }
 
 function upsertSession(tripId: string, vehicleId: string, form: TripForm, points: TripPoint[]) {
@@ -538,6 +539,7 @@ export default function TripsModule() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["fleet_trips"] });
+      qc.invalidateQueries({ queryKey: ["fleet_active_trip_global"] });
       toast.success("Trajeto iniciado com sucesso");
     },
     onError: (e) => toast.error((e as Error).message),
@@ -586,6 +588,7 @@ export default function TripsModule() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["fleet_trips"] });
+      qc.invalidateQueries({ queryKey: ["fleet_active_trip_global"] });
       toast.success("Trajeto finalizado com sucesso");
       resetAndClose();
     },
@@ -629,6 +632,7 @@ export default function TripsModule() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["fleet_trips"] });
+      qc.invalidateQueries({ queryKey: ["fleet_active_trip_global"] });
       setCompleteOpen(false);
       toast.success("Trajeto finalizado");
     },
