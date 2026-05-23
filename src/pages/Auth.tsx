@@ -168,11 +168,11 @@ export default function Auth() {
         </div>
 
         {/* Mode switch */}
-        <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-muted/40 border border-border">
+        <div className="grid grid-cols-3 gap-1 p-1 rounded-lg bg-muted/40 border border-border">
           <button
             type="button"
             onClick={() => setMode("signin")}
-            className={`flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+            className={`flex items-center justify-center gap-1.5 px-2 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors ${
               mode === "signin"
                 ? "bg-background text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
@@ -183,17 +183,31 @@ export default function Auth() {
           </button>
           <button
             type="button"
+            onClick={() => setMode("create-technician")}
+            className={`flex items-center justify-center gap-1.5 px-2 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors ${
+              mode === "create-technician"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Wrench className="h-4 w-4" />
+            Técnico
+          </button>
+          <button
+            type="button"
             onClick={() => setMode("create-workspace")}
-            className={`flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+            className={`flex items-center justify-center gap-1.5 px-2 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors ${
               mode === "create-workspace"
                 ? "bg-background text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
             <Building2 className="h-4 w-4" />
-            Criar Workspace
+            Workspace
           </button>
         </div>
+
+
 
         {mode === "signin" ? (
           <form onSubmit={handleSignIn} className="glass-panel rounded-xl p-6 space-y-4">
