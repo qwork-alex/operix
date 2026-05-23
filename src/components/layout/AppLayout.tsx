@@ -12,6 +12,7 @@ import { useAgentRuntimeBoot } from "@/hooks/useAgentRuntimeBoot";
 import { useVirtualEngineerBoot } from "@/hooks/useVirtualEngineerBoot";
 import { useOperationalCopilotBoot } from "@/hooks/useOperationalCopilotBoot";
 import { useObservabilityBoot } from "@/hooks/useObservabilityBoot";
+import { FloatingTripButton } from "@/components/fleet/FloatingTripButton";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   useOperationalBusBoot();
