@@ -85,11 +85,18 @@ export default function Auth() {
 
       if (error) {
         const msg = error.message || "";
-        if (msg.toLowerCase().includes("registered")) {
-          toast.error("Este email já está registrado. Faça login.");
+        if (msg.toLowerCase().includes("registered") || msg.toLowerCase().includes("already")) {
+          setDuplicateEmail(email.trim().toLowerCase());
         } else {
           toast.error(msg);
         }
+        return;
+      }
+
+      // Supabase quirk: when email confirmation is on and the email already
+      // exists, signUp returns success with an empty identities array.
+      if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+        setDuplicateEmail(email.trim().toLowerCase());
         return;
       }
 
