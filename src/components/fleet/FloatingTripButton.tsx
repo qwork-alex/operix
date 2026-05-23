@@ -234,7 +234,7 @@ export function FloatingTripButton() {
                 style={{ boxShadow: "0 0 8px hsl(142 70% 45% / 0.9)", animation: "trip-pulse 1.6s ease-in-out infinite" }}
               />
               <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-foreground/90">
-                Trajeto em andamento
+                {activeTrip.draft ? "Trajeto minimizado" : "Trajeto em andamento"}
               </span>
             </div>
 
@@ -254,7 +254,7 @@ export function FloatingTripButton() {
               <button
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => { e.stopPropagation(); handleCheckpoint(); }}
-                disabled={busy === "checkpoint"}
+                disabled={busy === "checkpoint" || activeTrip.draft}
                 className="
                   group inline-flex items-center justify-center gap-1.5 h-9 rounded-lg
                   border border-primary/40 bg-primary/10 hover:bg-primary/20
@@ -266,7 +266,7 @@ export function FloatingTripButton() {
                   ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   : <MapPin className="h-3.5 w-3.5 text-primary group-hover:scale-110 transition-transform" />
                 }
-                Registar ponto
+                {activeTrip.draft ? "Aguardando início" : "Registar ponto"}
               </button>
             </div>
           </div>
