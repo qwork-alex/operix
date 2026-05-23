@@ -105,6 +105,53 @@ export default function Auth() {
     }
   };
 
+  const handleCreateTechnician = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fullName.trim() || !email.trim() || password.length < 8) {
+      toast.error("Preencha todos os campos. Senha mínima de 8 caracteres.");
+      return;
+    }
+    try { localStorage.removeItem("invite_token"); sessionStorage.removeItem("invite_token"); } catch {}
+    setSubmitting(true);
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim().toLowerCase(),
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/`,
+          data: {
+            full_name: fullName.trim(),
+            intended_role: "tecnico",
+          },
+        },
+      });
+      if (error) {
+        const msg = error.message || "";
+        if (msg.toLowerCase().includes("registered")) {
+          toast.error("Este email já está registrado. Faça login.");
+        } else {
+          toast.error(msg);
+        }
+        return;
+      }
+      supabase.from("backend_event_logs").insert({
+        table_name: "auth", action: "TECHNICIAN_SIGNUP",
+        payload: { email, full_name: fullName } as any,
+      }).then(() => {}, () => {});
+      if (data.session) {
+        toast.success("Conta de técnico criada. Bem-vindo!");
+        navigate("/", { replace: true });
+      } else {
+        toast.success("Verifique seu email para confirmar a conta.");
+        setMode("signin");
+      }
+    } catch (err) {
+      toast.error((err as Error).message || "Falha ao criar conta de técnico.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4 py-10">
       <div className="w-full max-w-md space-y-6">
@@ -114,7 +161,9 @@ export default function Auth() {
           <p className="text-sm text-muted-foreground">
             {mode === "signin"
               ? t("auth.signInTitle")
-              : "Crie uma nova workspace operacional"}
+              : mode === "create-technician"
+                ? "Crie sua conta de técnico independente"
+                : "Crie uma nova workspace operacional"}
           </p>
         </div>
 
