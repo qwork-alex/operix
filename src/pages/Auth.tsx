@@ -244,6 +244,7 @@ export default function Auth() {
               {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {t("auth.signIn")}
             </Button>
+          </form>
         ) : mode === "create-technician" ? (
           <form onSubmit={handleCreateTechnician} className="glass-panel rounded-xl p-6 space-y-4">
             <div className="rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground flex gap-2">
