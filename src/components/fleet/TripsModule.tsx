@@ -1106,6 +1106,26 @@ export default function TripsModule() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Encerrar Trajeto — confirmação */}
+      <AlertDialog open={endConfirmOpen} onOpenChange={(o) => !endingTrip && setEndConfirmOpen(o)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Deseja encerrar o trajeto?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A posição GPS atual será registada automaticamente como destino final
+              e o trajeto passará a "Concluído".
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={endingTrip}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={(e) => { e.preventDefault(); confirmEndTrip(); }} disabled={endingTrip}>
+              {endingTrip ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CheckCircle className="h-4 w-4 mr-1" />}
+              Encerrar Trajeto
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
