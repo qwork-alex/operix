@@ -17,6 +17,7 @@ import { useWorkspace } from "@/hooks/useWorkspace";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AIControlCenter } from "./AIControlCenter";
+import { IncomingInvitesButton } from "@/components/users/IncomingInvitesButton";
 
 const typeIcon: Record<string, typeof Info> = {
   service_order: FileText,
@@ -180,6 +181,9 @@ export function TopBar() {
             </ScrollArea>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/* Workspace invites (only visible when there are pending) */}
+        <IncomingInvitesButton />
 
         {/* AI Control Center — fixed operational copilot between notifications and profile */}
         <AIControlCenter />
