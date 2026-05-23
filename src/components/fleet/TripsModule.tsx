@@ -891,12 +891,18 @@ export default function TripsModule() {
               <div className="flex items-center gap-1">
                 {!isActiveSession && <ContextualWorkspacePicker ctx={ctxWs} />}
                 {isActiveSession && (
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={minimizeDialog} title="Minimizar">
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={minimizeDialog} title="Minimizar — mantém trajeto ativo">
                     <Minus className="h-4 w-4" />
                   </Button>
                 )}
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={isActiveSession ? minimizeDialog : resetAndClose} title="Fechar">
-                  <span className="text-lg leading-none">×</span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={isActiveSession ? requestEnd : resetAndClose}
+                  title={isActiveSession ? "Encerrar trajeto" : "Fechar"}
+                >
+                  <X className="h-4 w-4" />
                 </Button>
               </div>
             </div>
