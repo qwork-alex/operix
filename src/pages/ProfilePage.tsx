@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
-import { User, Save, Loader2, FolderOpen } from "lucide-react";
+import { User, Save, Loader2, FolderOpen, Fingerprint, Copy, Check } from "lucide-react";
+import { toast } from "sonner";
 import { AvatarCard } from "@/components/settings/AvatarCard";
 import { CompanyDataCard } from "@/components/settings/CompanyDataCard";
 import { useUserProfile } from "@/hooks/useUserProfile";
@@ -78,6 +79,9 @@ export default function ProfilePage() {
   return (
     <div className="module-shell">
       <PageHeader icon={User} title="Perfil" subtitle="Dados da empresa e perfil pessoal" actions={headerActions} />
+
+      {/* SECTION 0 — My ID (display_code) */}
+      <MyIdCard code={profile?.display_code ?? null} />
 
       {/* SECTION 1 — Company data */}
       <CompanyDataCard />
