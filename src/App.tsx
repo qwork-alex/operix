@@ -23,6 +23,7 @@ import Index from "./pages/Index";
 // dramatically. Navigation feels instant because Vite preloads on hover
 // and the Suspense fallback below is a lightweight skeleton.
 const Auth = lazy(() => import("./pages/Auth"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const ChangePasswordPage = lazy(() => import("./pages/ChangePasswordPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const ServiceOrdersPage = lazy(() => import("./pages/ServiceOrdersPage"));
