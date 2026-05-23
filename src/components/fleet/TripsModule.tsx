@@ -654,7 +654,11 @@ export default function TripsModule() {
     setPoints([makePoint("Ponto de Partida")]); setActiveTripId(null);
   };
 
-  const minimizeDialog = () => { setOpen(false); window.dispatchEvent(new CustomEvent("fleet:session-updated")); };
+  const minimizeDialog = () => {
+    if (activeTripId) upsertSession(activeTripId, form.vehicle_id, form, points);
+    setOpen(false);
+    window.dispatchEvent(new CustomEvent("fleet:session-updated"));
+  };
 
   /* ─── Open / Resume trip ─── */
   const openTripDialog = async (tripId?: string) => {
@@ -896,11 +900,9 @@ export default function TripsModule() {
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
                 {!isActiveSession && <ContextualWorkspacePicker ctx={ctxWs} />}
-                {isActiveSession && (
-                  <Button variant="outline" size="icon" className="h-8 w-8 border-primary/30 bg-primary/10 hover:bg-primary/20" onClick={minimizeDialog} title="Minimizar — mantém trajeto ativo" aria-label="Minimizar trajeto">
-                    <Minus className="h-4 w-4" />
-                  </Button>
-                )}
+                <Button variant="outline" size="icon" className="h-8 w-8 border-primary/30 bg-primary/10 hover:bg-primary/20" onClick={minimizeDialog} title={isActiveSession ? "Minimizar — mantém trajeto ativo" : "Minimizar formulário"} aria-label="Minimizar trajeto">
+                  <Minus className="h-4 w-4" />
+                </Button>
                 <Button
                   variant="outline"
                   size="icon"
