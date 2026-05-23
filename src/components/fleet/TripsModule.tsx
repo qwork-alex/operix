@@ -773,20 +773,7 @@ export default function TripsModule() {
         </Button>
       </div>
 
-      {/* Minimized bar */}
-      {minimized && activeTripId && (
-        <div className="sticky top-0 z-40 flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 backdrop-blur-sm px-4 py-2 animate-fade-in shadow-sm cursor-pointer" onClick={restoreDialog}>
-          <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-          <span className="text-xs font-semibold text-primary">Trajeto minimizado</span>
-          <span className="text-xs text-muted-foreground">{getVehicleLabel(form.vehicle_id)}</span>
-          {totalApiDistance > 0 && (
-            <span className="text-xs font-semibold text-foreground">{totalApiDistance.toFixed(1)} km</span>
-          )}
-          <Button size="sm" variant="outline" className="ml-auto h-6 text-xs" onClick={(e) => { e.stopPropagation(); restoreDialog(); }}>
-            Restaurar
-          </Button>
-        </div>
-      )}
+      {/* Inline minimized bar removed — replaced by global FloatingTripButton */}
 
       {/* Trips Table */}
       <Card>
