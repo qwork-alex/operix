@@ -10,8 +10,8 @@ import { Loader2, Eye, EyeOff, Building2, LogIn, ShieldCheck, Mail, Users, Wrenc
 import { brandConfig } from "@/brand.config";
 import { BrandLogo } from "@/components/BrandLogo";
 import { supabase } from "@/integrations/supabase/client";
-
-type Mode = "signin" | "create-workspace" | "create-technician";
+import { PasswordStrength, isPasswordStrong } from "@/components/auth/PasswordStrength";
+import { ForgotPasswordDialog, DuplicateEmailDialog } from "@/components/auth/AuthDialogs";
 
 export default function Auth() {
   const { session, loading, signIn } = useAuth();
