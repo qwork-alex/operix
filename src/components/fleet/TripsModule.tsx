@@ -965,12 +965,19 @@ export default function TripsModule() {
 
             <div>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-sm font-semibold">Pontos de Passagem</p>
+                <div>
+                  <p className="text-sm font-semibold">Pontos de Passagem</p>
+                  {!originReady && (
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      Preencha o <span className="font-semibold text-foreground">Ponto de Partida</span> (GPS ou morada) para libertar os próximos pontos.
+                    </p>
+                  )}
+                </div>
                 <div className="flex gap-1">
-                  <Button size="sm" variant="outline" onClick={addIntermediatePoint} className="h-7 text-xs">
+                  <Button size="sm" variant="outline" onClick={addIntermediatePoint} className="h-7 text-xs" disabled={!originReady} title={!originReady ? "Registe primeiro o Ponto de Partida" : ""}>
                     <Plus className="h-3 w-3 mr-1" /> Ponto
                   </Button>
-                  <Button size="sm" variant="outline" onClick={addFinalPoint} className="h-7 text-xs">
+                  <Button size="sm" variant="outline" onClick={addFinalPoint} className="h-7 text-xs" disabled={!originReady} title={!originReady ? "Registe primeiro o Ponto de Partida" : ""}>
                     <MapPin className="h-3 w-3 mr-1" /> Destino Final
                   </Button>
                 </div>
