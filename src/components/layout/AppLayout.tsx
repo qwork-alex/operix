@@ -38,6 +38,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
               <AppFooter />
             </div>
+            <FloatingTripButton />
             {/* AI is now a fixed control-center in the TopBar — no floating overlays */}
           </div>
         </AIProvider>
