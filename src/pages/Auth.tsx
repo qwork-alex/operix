@@ -27,6 +27,10 @@ export default function Auth() {
   const [workspaceName, setWorkspaceName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [duplicateEmail, setDuplicateEmail] = useState<string | null>(null);
+
+
 
   if (loading) {
     return (
