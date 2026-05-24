@@ -15,19 +15,32 @@ export function useCompanyLogo() {
 
   const { data, isLoading } = useQuery({
     queryKey: ["company-brand"],
+    // Non-blocking branding: never throws, never retries, 4s timeout.
+    // Auth / dashboard MUST work even if company_settings is unreachable.
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("company_settings")
-        .select("brand_config")
-        .limit(1)
-        .maybeSingle();
-      if (error) throw error;
-      return {
-        brandConfig: (data?.brand_config as BrandConfig | null) || {},
-      };
+      const empty = { brandConfig: {} as BrandConfig };
+      try {
+        const timeout = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("brand_timeout")), 4000)
+        );
+        const fetchP = supabase
+          .from("company_settings")
+          .select("brand_config")
+          .limit(1)
+          .maybeSingle();
+        const { data, error } = (await Promise.race([fetchP, timeout])) as any;
+        if (error) return empty;
+        return { brandConfig: (data?.brand_config as BrandConfig | null) || {} };
+      } catch {
+        return empty;
+      }
     },
+    retry: false,
     staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
+
 
   const brandMutation = useMutation({
     mutationFn: async (brandConfig: BrandConfig) => {
