@@ -1,4 +1,5 @@
 import { SYSTEM_METADATA } from "@/config/system";
+import { ASVerifiedSignature } from "@/components/branding/ASVerifiedSignature";
 
 /**
  * AppFooter — discreet, enterprise-grade institutional footer.
@@ -19,6 +20,12 @@ export function AppFooter() {
           {trademark} © {year} · {proprietary_notice}
         </span>
         <span className="tracking-wide opacity-80">{attribution}</span>
+        <span className="hidden sm:inline-flex items-center text-foreground/70" aria-hidden="false">
+          <ASVerifiedSignature variant="subtle" mode="auto" />
+        </span>
+        <span className="inline-flex sm:hidden items-center text-foreground/70">
+          <ASVerifiedSignature variant="subtle" mode="compact" />
+        </span>
       </div>
     </footer>
   );
