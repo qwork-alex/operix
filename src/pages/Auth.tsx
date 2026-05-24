@@ -437,9 +437,9 @@ export default function Auth() {
         onRecover={() => { setForgotOpen(true); setDuplicateEmail(null); }}
       />
 
-      {/* AS Verified — authorship signature, discreet corner mark */}
-      <div className="pointer-events-none fixed bottom-3 right-4 z-[5] text-foreground/60">
-        <ASVerifiedSignature variant="subtle" mode="auto" animated />
+      {/* AS Verified — authorship signature, discreet corner mark (static, passive) */}
+      <div aria-hidden className="pointer-events-none fixed bottom-3 right-4 z-[5] text-foreground/60">
+        <ASVerifiedSignature variant="subtle" mode="auto" />
       </div>
     </div>
   );
