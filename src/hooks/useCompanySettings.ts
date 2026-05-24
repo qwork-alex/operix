@@ -19,16 +19,29 @@ export function useCompanySettings() {
   const query = useQuery({
     queryKey: ["company-settings", user?.id],
     enabled: !!user,
+    // Non-blocking: never throws, returns null on error/timeout.
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("company_settings")
-        .select("*")
-        .eq("user_id", user?.id ?? "")
-        .maybeSingle();
-      if (error) throw error;
-      return data;
+      try {
+        const timeout = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("settings_timeout")), 4000)
+        );
+        const fetchP = supabase
+          .from("company_settings")
+          .select("*")
+          .eq("user_id", user?.id ?? "")
+          .maybeSingle();
+        const { data, error } = (await Promise.race([fetchP, timeout])) as any;
+        if (error) return null;
+        return data;
+      } catch {
+        return null;
+      }
     },
+    retry: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
+
 
   const saveMutation = useMutation({
     mutationFn: async (settings: CompanySettings) => {
