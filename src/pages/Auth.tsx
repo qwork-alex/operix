@@ -436,6 +436,11 @@ export default function Auth() {
         onSignIn={() => { setMode("signin"); setDuplicateEmail(null); }}
         onRecover={() => { setForgotOpen(true); setDuplicateEmail(null); }}
       />
+
+      {/* AS Verified — authorship signature, discreet corner mark */}
+      <div className="pointer-events-none fixed bottom-3 right-4 z-[5] text-foreground/60">
+        <ASVerifiedSignature variant="subtle" mode="auto" animated />
+      </div>
     </div>
   );
 }
