@@ -1182,7 +1182,7 @@ export function UsersPage() {
   const { isAdmin } = useRole();
   const { startImpersonation, isImpersonating, target: impersonationTarget } = useImpersonation();
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string; email: string } | null>(null);
-  const [deleteStep, setDeleteStep] = useState<"checking" | "clean" | "blocked">("checking");
+  const [deleteStep, setDeleteStep] = useState<"checking" | "clean" | "detachable_only" | "blocking">("checking");
   const [deleteDeps, setDeleteDeps] = useState<any>(null);
   const [reassignTo, setReassignTo] = useState<string>("");
   const [deleting, setDeleting] = useState(false);
@@ -1300,7 +1300,15 @@ export function UsersPage() {
       if (error) throw error;
       if (data?.error) throw new Error(data.message || data.error);
       setDeleteDeps(data);
-      setDeleteStep(data.has_dependencies ? "blocked" : "clean");
+      // Classify based on REAL ownership map (audited per-table):
+      // - blocking > 0  → must reassign (NOT NULL ownership in SO/PO)
+      // - detachable>0  → safe detach (nullable refs are nulled on delete)
+      // - both = 0      → clean delete (only identity rows, removed automatically)
+      const blocking = Number(data?.blocking ?? 0);
+      const detachable = Number(data?.detachable ?? 0);
+      if (blocking > 0) setDeleteStep("blocking");
+      else if (detachable > 0) setDeleteStep("detachable_only");
+      else setDeleteStep("clean");
     } catch (err: any) {
       toast.error(err.message || "Erro ao verificar dependências");
       setDeleteTarget(null);
@@ -1528,58 +1536,67 @@ export function UsersPage() {
                 </p>
               )}
 
-              {deleteStep === "blocked" && deleteDeps && (
+              {(deleteStep === "detachable_only" || deleteStep === "blocking") && deleteDeps && (
                 <div className="space-y-3">
-                  <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/5 p-3 space-y-2">
-                    <div className="text-sm font-semibold text-destructive">
-                      Usuário possui dados vinculados e não pode ser removido diretamente.
+                  <div
+                    role="alert"
+                    className={`rounded-md border p-3 space-y-2 ${
+                      deleteStep === "blocking"
+                        ? "border-destructive/40 bg-destructive/5"
+                        : "border-amber-500/40 bg-amber-500/5"
+                    }`}
+                  >
+                    <div
+                      className={`text-sm font-semibold ${
+                        deleteStep === "blocking" ? "text-destructive" : "text-amber-500"
+                      }`}
+                    >
+                      {deleteStep === "blocking"
+                        ? "Vínculos obrigatórios encontrados — reatribuição necessária."
+                        : "Vínculos opcionais encontrados — podem ser desanexados com segurança."}
                     </div>
-                    <ul className="text-xs text-muted-foreground space-y-0.5 pl-1">
-                      {deleteDeps.counts.service_orders_as_technician > 0 && (
-                        <li>• {deleteDeps.counts.service_orders_as_technician} ordem(ns) de serviço como técnico responsável</li>
-                      )}
-                      {deleteDeps.counts.payment_orders_as_technician > 0 && (
-                        <li>• {deleteDeps.counts.payment_orders_as_technician} ordem(ns) de pagamento como técnico</li>
-                      )}
-                      {deleteDeps.counts.service_orders_created > 0 && (
-                        <li>• {deleteDeps.counts.service_orders_created} ordem(ns) de serviço criadas por este usuário</li>
-                      )}
-                      {deleteDeps.counts.payment_orders_created > 0 && (
-                        <li>• {deleteDeps.counts.payment_orders_created} ordem(ns) de pagamento criadas</li>
-                      )}
-                      {deleteDeps.counts.financial_records > 0 && (
-                        <li>• {deleteDeps.counts.financial_records} registo(s) financeiro(s)</li>
-                      )}
-                      {deleteDeps.counts.fleet_trips > 0 && (
-                        <li>• {deleteDeps.counts.fleet_trips} trajeto(s) de frota</li>
-                      )}
-                      {deleteDeps.counts.documents > 0 && (
-                        <li>• {deleteDeps.counts.documents} documento(s)</li>
-                      )}
-                    </ul>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label className="text-xs">Reatribuir dados a outro usuário</Label>
-                    <Select value={reassignTo} onValueChange={setReassignTo}>
-                      <SelectTrigger className="h-9 text-xs">
-                        <SelectValue placeholder="Selecione um usuário…" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {users
-                          .filter((u: any) => u.id !== deleteTarget.id && !u.isOwner)
-                          .map((u: any) => (
-                            <SelectItem key={u.id} value={u.id}>
-                              {u.full_name || u.email} · {roleLabels[u.role] || u.role}
-                            </SelectItem>
+                    {/* Auditable per-table breakdown straight from get_user_ownership_map */}
+                    <ul className="text-xs text-muted-foreground space-y-0.5 pl-1 font-mono">
+                      {deleteStep === "blocking" &&
+                        Object.entries((deleteDeps.map?.blocking ?? {}) as Record<string, number>)
+                          .filter(([, n]) => Number(n) > 0)
+                          .map(([col, n]) => (
+                            <li key={col}>• {col}: <span className="text-destructive">{n}</span></li>
                           ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-[11px] text-muted-foreground">
-                      Os registos serão transferidos para o usuário selecionado e o histórico fica preservado.
-                      Para ordens de serviço, o destino tem de ser um técnico.
+                      {Object.entries((deleteDeps.map?.detachable ?? {}) as Record<string, number>)
+                        .filter(([, n]) => Number(n) > 0)
+                        .map(([col, n]) => (
+                          <li key={col}>• {col}: <span className="text-foreground/80">{n}</span></li>
+                        ))}
+                    </ul>
+                    <p className="text-[11px] text-muted-foreground pt-1">
+                      Totais — bloqueantes: <b>{deleteDeps.blocking ?? 0}</b> · desanexáveis: <b>{deleteDeps.detachable ?? 0}</b> · identidade: <b>{deleteDeps.identity ?? 0}</b>
                     </p>
                   </div>
+
+                  {deleteStep === "blocking" && (
+                    <div className="space-y-2">
+                      <Label className="text-xs">Reatribuir dados a outro usuário</Label>
+                      <Select value={reassignTo} onValueChange={setReassignTo}>
+                        <SelectTrigger className="h-9 text-xs">
+                          <SelectValue placeholder="Selecione um usuário…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {users
+                            .filter((u: any) => u.id !== deleteTarget.id && !u.isOwner)
+                            .map((u: any) => (
+                              <SelectItem key={u.id} value={u.id}>
+                                {u.full_name || u.email} · {roleLabels[u.role] || u.role}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[11px] text-muted-foreground">
+                        Os registos serão transferidos para o usuário selecionado e o histórico fica preservado.
+                        Para ordens de serviço, o destino tem de ser um técnico.
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1593,7 +1610,18 @@ export function UsersPage() {
                     {t("action.delete")}
                   </Button>
                 )}
-                {deleteStep === "blocked" && (
+                {deleteStep === "detachable_only" && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => handleDeleteUser("detach")}
+                    disabled={deleting}
+                  >
+                    {deleting ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Trash2 className="h-3 w-3 mr-1" />}
+                    Desanexar e remover
+                  </Button>
+                )}
+                {deleteStep === "blocking" && (
                   <Button
                     variant="destructive"
                     size="sm"
