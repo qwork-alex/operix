@@ -133,6 +133,21 @@
     transition: background-color 200ms ease, color 200ms ease;
   }
 
+  /* ── Global scroll architecture (SaaS app-shell) ─────────────
+     Body never scrolls. Only the sidebar content and the main
+     panel scroll, each isolated via overscroll-behavior so wheel
+     events never chain into the other container or the body. */
+  html, body, #root {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  [data-sidebar="content"],
+  main {
+    overscroll-behavior: contain;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
     font-family: 'Inter', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
