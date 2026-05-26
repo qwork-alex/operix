@@ -58,6 +58,7 @@ function useMyPermissionsMap() {
     queryKey: [...PERMS_QUERY_KEY, permUserId, dbRole, isImpersonating],
     enabled: !!permUserId && !roleLoading,
     staleTime: 30_000,
+    retry: 0,
     queryFn: async (): Promise<{ admin: boolean; map: Record<string, Entry> }> => {
       if (!permUserId) return { admin: false, map: {} };
       if (isAdmin) return { admin: true, map: {} };
