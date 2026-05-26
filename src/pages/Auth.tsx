@@ -14,7 +14,7 @@ import { PasswordStrength, isPasswordStrong } from "@/components/auth/PasswordSt
 import { ForgotPasswordDialog, DuplicateEmailDialog } from "@/components/auth/AuthDialogs";
 import { ASVerifiedSignature } from "@/components/branding/ASVerifiedSignature";
 
-type Mode = "signin" | "create-workspace" | "create-technician";
+type Mode = "signin" | "create-workspace";
 
 export default function Auth() {
   const { session, loading, signIn } = useAuth();
