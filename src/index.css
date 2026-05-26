@@ -131,12 +131,24 @@
 
   html, body {
     transition: background-color 200ms ease, color 200ms ease;
+    background-color: hsl(var(--background));
+  }
+
+  /* Ensure the React root is its own stacking context, sitting ABOVE
+     the body::before atmospheric backdrop. Prevents any "ghost" or
+     mirrored interface from bleeding through during Suspense/lazy
+     transitions and reload hydration. */
+  #root {
+    position: relative;
+    z-index: 1;
+    isolation: isolate;
+    min-height: 100%;
+    background-color: hsl(var(--background));
   }
 
   /* ── Scroll isolation (non-blocking) ─────────────────────────
      Keep natural document scroll. Only prevent wheel chaining
-     between the sidebar and main panel via overscroll-behavior;
-     do NOT lock html/body/#root overflow. */
+     between the sidebar and main panel via overscroll-behavior. */
   [data-sidebar="content"],
   main {
     overscroll-behavior: contain;
