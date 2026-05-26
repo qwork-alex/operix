@@ -29,11 +29,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <div className="flex-1 flex h-full min-h-0 min-w-0 max-w-full flex-col overflow-hidden">
               <ImpersonationBanner />
               <TopBar />
-              <main className="flex-1 min-h-0 min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:px-4 sm:py-4 md:px-6 md:py-6">
-                <div className="min-w-0 max-w-full w-full space-y-4 md:space-y-6">
-                  <AccessStateBanner />
-                  {children}
-                </div>
+              <main className="flex-1 min-h-0 min-w-0 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:px-4 sm:py-4 md:px-6 md:py-6">
+                <AccessStateBanner />
+                {children}
                 <AppFooter />
               </main>
             </div>
