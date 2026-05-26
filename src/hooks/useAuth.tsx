@@ -159,10 +159,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error("[Auth] signOut error:", err);
     }
+    // Clear local context immediately so guards redirect.
     if (mounted.current) {
       setSession(null);
       setUser(null);
       setProfile(null);
+    }
+    // Wipe all client-side state (query cache, workspace selection, RBAC,
+    // tenant, in-memory contexts) by forcing a full reload to /auth. This is
+    // the only reliable way to fully unmount the AppShell and prevent the
+    // previous session's shell/data from surviving the switch.
+    try {
+      localStorage.removeItem("selected_workspace_id");
+      localStorage.removeItem("invite_token");
+      sessionStorage.removeItem("invite_token");
+    } catch {}
+    if (typeof window !== "undefined") {
+      window.location.replace("/auth");
     }
   };
 
