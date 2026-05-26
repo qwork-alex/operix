@@ -123,60 +123,10 @@ export default function Auth() {
     }
   };
 
-  const handleCreateTechnician = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!fullName.trim() || !email.trim()) {
-      toast.error("Preencha todos os campos.");
-      return;
-    }
-    if (!isPasswordStrong(password)) {
-      toast.error("A senha precisa de no mínimo 8 caracteres, 1 maiúscula e 1 número.");
-      return;
-    }
-    try { localStorage.removeItem("invite_token"); sessionStorage.removeItem("invite_token"); } catch {}
-    setSubmitting(true);
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email: email.trim().toLowerCase(),
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/`,
-          data: {
-            full_name: fullName.trim(),
-            intended_role: "tecnico",
-          },
-        },
-      });
-      if (error) {
-        const msg = error.message || "";
-        if (msg.toLowerCase().includes("registered") || msg.toLowerCase().includes("already")) {
-          setDuplicateEmail(email.trim().toLowerCase());
-        } else {
-          toast.error(msg);
-        }
-        return;
-      }
-      if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
-        setDuplicateEmail(email.trim().toLowerCase());
-        return;
-      }
-      supabase.from("backend_event_logs").insert({
-        table_name: "auth", action: "TECHNICIAN_SIGNUP",
-        payload: { email, full_name: fullName } as any,
-      }).then(() => {}, () => {});
-      if (data.session) {
-        toast.success("Conta de técnico criada. Bem-vindo!");
-        navigate("/", { replace: true });
-      } else {
-        toast.success("Verifique seu email para confirmar a conta.");
-        setMode("signin");
-      }
-    } catch (err) {
-      toast.error((err as Error).message || "Falha ao criar conta de técnico.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  // Technician accounts are NOT created via public signup. They must be
+  // provisioned internally by an admin (admin-create-user edge function)
+  // and the user receives an invite / password setup flow.
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4 py-10">
