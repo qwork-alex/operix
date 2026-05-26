@@ -24,19 +24,18 @@ export function AppLayout({ children }: { children: ReactNode }) {
     <ConsentGate>
       <SidebarProvider>
         <AIProvider>
-          <div className="min-h-svh flex w-full bg-background overflow-hidden">
+          <div className="h-svh flex w-full bg-background overflow-hidden">
             <AppSidebar />
-            <div className="flex-1 flex min-h-svh flex-col min-w-0 max-w-full overflow-hidden">
+            <div className="flex-1 flex h-full min-h-0 min-w-0 max-w-full flex-col overflow-hidden">
               <ImpersonationBanner />
               <TopBar />
-              <main className="flex-1 min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:px-4 sm:py-4 md:px-6 md:py-6 min-w-0 max-w-full">
+              <main className="flex-1 min-h-0 min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:px-4 sm:py-4 md:px-6 md:py-6">
                 <div className="min-w-0 max-w-full w-full space-y-4 md:space-y-6">
                   <AccessStateBanner />
                   {children}
                 </div>
+                <AppFooter />
               </main>
-
-              <AppFooter />
             </div>
             <FloatingTripButton />
             {/* AI is now a fixed control-center in the TopBar — no floating overlays */}
