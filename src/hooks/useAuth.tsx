@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // 2. Listen for auth changes — no awaits inside callback
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, s) => {
+      (event, s) => {
         if (!mounted.current) return;
         setSession(s);
         setUser(s?.user ?? null);
@@ -75,6 +75,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setProfile(null);
         }
         setLoading(false);
+        // Hard reset on sign-out / user-switch to prevent stale shell, query
+        // cache, workspace, RBAC or tenant state from surviving the change.
+        if (event === "SIGNED_OUT") {
+          try {
+            localStorage.removeItem("selected_workspace_id");
+            localStorage.removeItem("invite_token");
+            sessionStorage.removeItem("invite_token");
+          } catch {}
+        }
       }
     );
 
