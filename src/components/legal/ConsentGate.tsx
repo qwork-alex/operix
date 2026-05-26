@@ -31,6 +31,12 @@ export function ConsentGate({ children }: { children: ReactNode }) {
     accepted_sharing_policy: false,
   });
   const [submitting, setSubmitting] = useState(false);
+  const [bootTimedOut, setBootTimedOut] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setBootTimedOut(true), 5000);
+    return () => clearTimeout(t);
+  }, []);
 
   const allChecked = useMemo(
     () => CONSENT_ITEMS.every((c) => accepted[c.key]),
