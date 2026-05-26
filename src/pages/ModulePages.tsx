@@ -1300,7 +1300,15 @@ export function UsersPage() {
       if (error) throw error;
       if (data?.error) throw new Error(data.message || data.error);
       setDeleteDeps(data);
-      setDeleteStep(data.has_dependencies ? "blocked" : "clean");
+      // Classify based on REAL ownership map (audited per-table):
+      // - blocking > 0  → must reassign (NOT NULL ownership in SO/PO)
+      // - detachable>0  → safe detach (nullable refs are nulled on delete)
+      // - both = 0      → clean delete (only identity rows, removed automatically)
+      const blocking = Number(data?.blocking ?? 0);
+      const detachable = Number(data?.detachable ?? 0);
+      if (blocking > 0) setDeleteStep("blocking");
+      else if (detachable > 0) setDeleteStep("detachable_only");
+      else setDeleteStep("clean");
     } catch (err: any) {
       toast.error(err.message || "Erro ao verificar dependências");
       setDeleteTarget(null);
