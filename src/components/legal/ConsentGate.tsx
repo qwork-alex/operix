@@ -1,4 +1,4 @@
-import { ReactNode, useMemo, useState } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { Loader2, ShieldCheck, ExternalLink } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -31,6 +31,12 @@ export function ConsentGate({ children }: { children: ReactNode }) {
     accepted_sharing_policy: false,
   });
   const [submitting, setSubmitting] = useState(false);
+  const [bootTimedOut, setBootTimedOut] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setBootTimedOut(true), 5000);
+    return () => clearTimeout(t);
+  }, []);
 
   const allChecked = useMemo(
     () => CONSENT_ITEMS.every((c) => accepted[c.key]),
@@ -42,7 +48,7 @@ export function ConsentGate({ children }: { children: ReactNode }) {
   // and are still resolving their consent record.
   if (!user || isLegalRoute) return <>{children}</>;
 
-  if (isLoading) {
+  if (isLoading && !bootTimedOut) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-3">
         <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -51,7 +57,7 @@ export function ConsentGate({ children }: { children: ReactNode }) {
     );
   }
 
-  if (hasConsented) return <>{children}</>;
+  if (hasConsented || bootTimedOut) return <>{children}</>;
 
   const handleAccept = async () => {
     if (!allChecked || !user) return;
