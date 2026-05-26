@@ -63,13 +63,24 @@ function useMyPermissionsMap() {
       if (!permUserId) return { admin: false, map: {} };
       if (isAdmin) return { admin: true, map: {} };
 
-      const [permsRes, rolePermsRes, userPermsRes] = await Promise.all([
+      const fetchAll = Promise.all([
         supabase.from("permissions").select("id, module, action"),
         dbRole
           ? supabase.from("role_permissions").select("permission_id, scope").eq("role", dbRole)
           : Promise.resolve({ data: [], error: null } as any),
         supabase.from("user_permissions").select("permission_id, allow, scope").eq("user_id", permUserId),
       ]);
+      const timeout = new Promise<any>((resolve) =>
+        setTimeout(() => {
+          console.warn("[usePermission] timeout — proceeding with empty perms map");
+          resolve([
+            { data: [], error: null },
+            { data: [], error: null },
+            { data: [], error: null },
+          ]);
+        }, 5000),
+      );
+      const [permsRes, rolePermsRes, userPermsRes] = await Promise.race([fetchAll, timeout]);
 
       if (permsRes.error) {
         if (DEBUG) console.error("[usePermission] permissions catalog fetch error", permsRes.error);
