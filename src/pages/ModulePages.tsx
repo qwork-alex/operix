@@ -1182,7 +1182,7 @@ export function UsersPage() {
   const { isAdmin } = useRole();
   const { startImpersonation, isImpersonating, target: impersonationTarget } = useImpersonation();
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string; email: string } | null>(null);
-  const [deleteStep, setDeleteStep] = useState<"checking" | "clean" | "blocked">("checking");
+  const [deleteStep, setDeleteStep] = useState<"checking" | "clean" | "detachable_only" | "blocking">("checking");
   const [deleteDeps, setDeleteDeps] = useState<any>(null);
   const [reassignTo, setReassignTo] = useState<string>("");
   const [deleting, setDeleting] = useState(false);
