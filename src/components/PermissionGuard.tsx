@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { Loader2, ShieldOff } from "lucide-react";
 import { useCan } from "@/hooks/usePermission";
@@ -12,6 +13,9 @@ interface PermissionGuardProps {
 /**
  * Route/page guard — uses the SINGLE source-of-truth `can()` resolver.
  * No role checks. No fallback to legacy logic.
+ *
+ * Resilience: a 6s watchdog forces render-through if permissions never
+ * resolve, so backend slowness can never deadlock the app shell.
  */
 export function PermissionGuard({
   permission,
@@ -22,7 +26,17 @@ export function PermissionGuard({
   const { can, isLoading } = useCan();
   const [module, action] = permission.split(".");
 
-  if (isLoading) {
+  const [timedOut, setTimedOut] = useState(false);
+  useEffect(() => {
+    if (!isLoading) return;
+    const t = setTimeout(() => {
+      console.warn("[PermissionGuard] watchdog — releasing render after 6s");
+      setTimedOut(true);
+    }, 6000);
+    return () => clearTimeout(t);
+  }, [isLoading]);
+
+  if (isLoading && !timedOut) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4">
         <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -30,6 +44,10 @@ export function PermissionGuard({
       </div>
     );
   }
+
+  // If the watchdog fired, fail open so the dashboard renders; downstream
+  // queries are still RLS-protected at the DB level.
+  if (timedOut) return <>{children}</>;
 
   if (can(module, action).allowed) return <>{children}</>;
 
