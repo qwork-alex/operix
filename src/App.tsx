@@ -4,7 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { AuthProvider } from "@/hooks/useAuth";
+import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { LanguageProvider } from "@/hooks/useLanguage";
 import { ThemeProvider } from "@/hooks/useTheme";
 import { RoleProvider } from "@/hooks/useRole";
@@ -107,44 +107,7 @@ const App = () => (
                     path="/*"
                     element={
                       <ProtectedRoute>
-                        <ImpersonationProvider>
-                        <WorkspaceProvider>
-                        <RoleProvider>
-                        <TenantProvider>
-                        <AppLayout>
-                          <ErrorBoundary>
-                            <Suspense fallback={<RouteFallback />}>
-                              <Routes>
-                                <Route path="/" element={<PermissionGuard permission="dashboard.view"><Index /></PermissionGuard>} />
-                                <Route path="/service-orders" element={<PermissionGuard permission="service_orders.view"><ServiceOrdersPage /></PermissionGuard>} />
-                                <Route path="/production" element={<PermissionGuard permission="service_orders.view"><ProductionPage /></PermissionGuard>} />
-                                <Route path="/payment-orders" element={<PermissionGuard permission="payment_orders.view"><PaymentOrdersPage /></PermissionGuard>} />
-                                <Route path="/financial" element={<PermissionGuard permission="financial.view"><FinancialPage /></PermissionGuard>} />
-                                <Route path="/profit" element={<PermissionGuard permission="profit.view"><ProfitDistribution /></PermissionGuard>} />
-                                <Route path="/accounting" element={<Navigate to="/financial?tab=accounting" replace />} />
-                                <Route path="/fleet" element={<PermissionGuard permission="fleet.view"><FleetPage /></PermissionGuard>} />
-                                <Route path="/billing/*" element={<BillingPage />} />
-                                <Route path="/documents" element={<PermissionGuard permission="documents.view"><Documents /></PermissionGuard>} />
-                                <Route path="/users" element={<PermissionGuard permission="users.view"><UsersPage /></PermissionGuard>} />
-                                <Route path="/marketplace" element={<MarketplacePage />} />
-                                <Route path="/settings" element={<SettingsPage />} />
-                                <Route path="/profile" element={<ProfilePage />} />
-                                <Route path="/audit" element={<AuditPage />} />
-                                <Route path="/automations" element={<PermissionGuard permission="settings.edit"><AutomationsPage /></PermissionGuard>} />
-                                <Route path="/ai" element={<AIPage />} />
-                                <Route path="/recovery" element={<RecoveryPage />} />
-                                <Route path="/subscription" element={<SubscriptionPage />} />
-                                <Route path="/checkout" element={<CheckoutPage />} />
-                                <Route path="/platform" element={<PlatformOwnerPage />} />
-                                <Route path="*" element={<NotFound />} />
-                              </Routes>
-                            </Suspense>
-                          </ErrorBoundary>
-                        </AppLayout>
-                        </TenantProvider>
-                        </RoleProvider>
-                        </WorkspaceProvider>
-                        </ImpersonationProvider>
+                        <AuthenticatedShell />
                       </ProtectedRoute>
                     }
                   />
@@ -158,5 +121,55 @@ const App = () => (
     </QueryClientProvider>
   </ErrorBoundary>
 );
+
+/**
+ * AuthenticatedShell — keyed on auth user id so the entire impersonation /
+ * workspace / role / tenant tree (and AppLayout) unmounts and fully remounts
+ * when the session user changes. Prevents "ghost" state from a previous user
+ * surviving a user switch.
+ */
+function AuthenticatedShell() {
+  const { user } = useAuth();
+  return (
+    <ImpersonationProvider key={user?.id ?? "anon"}>
+      <WorkspaceProvider>
+        <RoleProvider>
+          <TenantProvider>
+            <AppLayout>
+              <ErrorBoundary>
+                <Suspense fallback={<RouteFallback />}>
+                  <Routes>
+                    <Route path="/" element={<PermissionGuard permission="dashboard.view"><Index /></PermissionGuard>} />
+                    <Route path="/service-orders" element={<PermissionGuard permission="service_orders.view"><ServiceOrdersPage /></PermissionGuard>} />
+                    <Route path="/production" element={<PermissionGuard permission="service_orders.view"><ProductionPage /></PermissionGuard>} />
+                    <Route path="/payment-orders" element={<PermissionGuard permission="payment_orders.view"><PaymentOrdersPage /></PermissionGuard>} />
+                    <Route path="/financial" element={<PermissionGuard permission="financial.view"><FinancialPage /></PermissionGuard>} />
+                    <Route path="/profit" element={<PermissionGuard permission="profit.view"><ProfitDistribution /></PermissionGuard>} />
+                    <Route path="/accounting" element={<Navigate to="/financial?tab=accounting" replace />} />
+                    <Route path="/fleet" element={<PermissionGuard permission="fleet.view"><FleetPage /></PermissionGuard>} />
+                    <Route path="/billing/*" element={<BillingPage />} />
+                    <Route path="/documents" element={<PermissionGuard permission="documents.view"><Documents /></PermissionGuard>} />
+                    <Route path="/users" element={<PermissionGuard permission="users.view"><UsersPage /></PermissionGuard>} />
+                    <Route path="/marketplace" element={<MarketplacePage />} />
+                    <Route path="/settings" element={<SettingsPage />} />
+                    <Route path="/profile" element={<ProfilePage />} />
+                    <Route path="/audit" element={<AuditPage />} />
+                    <Route path="/automations" element={<PermissionGuard permission="settings.edit"><AutomationsPage /></PermissionGuard>} />
+                    <Route path="/ai" element={<AIPage />} />
+                    <Route path="/recovery" element={<RecoveryPage />} />
+                    <Route path="/subscription" element={<SubscriptionPage />} />
+                    <Route path="/checkout" element={<CheckoutPage />} />
+                    <Route path="/platform" element={<PlatformOwnerPage />} />
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </Suspense>
+              </ErrorBoundary>
+            </AppLayout>
+          </TenantProvider>
+        </RoleProvider>
+      </WorkspaceProvider>
+    </ImpersonationProvider>
+  );
+}
 
 export default App;
