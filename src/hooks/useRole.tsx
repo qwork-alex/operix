@@ -45,17 +45,29 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   const { data: dbRole = null, isLoading } = useQuery({
     queryKey: ["my-role", lookupId, isImpersonating],
     enabled: !!lookupId,
+    retry: 0,
+    staleTime: 60_000,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", lookupId!)
-        .maybeSingle();
-      if (error) {
-        console.error("[useRole] Error fetching role:", error);
-        return null;
-      }
-      return (data?.role as AppRole) ?? null;
+      // Hard timeout — never let the boot deadlock if the DB is slow.
+      const fetchRole = (async () => {
+        const { data, error } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", lookupId!)
+          .maybeSingle();
+        if (error) {
+          console.error("[useRole] Error fetching role:", error);
+          return null;
+        }
+        return (data?.role as AppRole) ?? null;
+      })();
+      const timeout = new Promise<null>((resolve) =>
+        setTimeout(() => {
+          console.warn("[useRole] timeout — proceeding with null role");
+          resolve(null);
+        }, 4000),
+      );
+      return Promise.race([fetchRole, timeout]);
     },
   });
 
