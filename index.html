@@ -42,8 +42,14 @@
           }
           document.documentElement.classList.add(t);
           document.documentElement.style.colorScheme = t;
+          // Paint a solid background BEFORE React mounts to prevent any
+          // ghost/atmospheric layer from being visible during hydration.
+          var bg = t === 'dark' ? '#0d1016' : '#f5f6f8';
+          document.documentElement.style.backgroundColor = bg;
+          document.body && (document.body.style.backgroundColor = bg);
         } catch (e) {
           document.documentElement.classList.add('dark');
+          document.documentElement.style.backgroundColor = '#0d1016';
         }
       })();
     </script>
