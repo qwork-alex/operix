@@ -137,14 +137,12 @@ export default function Auth() {
           <p className="text-sm text-muted-foreground">
             {mode === "signin"
               ? t("auth.signInTitle")
-              : mode === "create-technician"
-                ? "Crie sua conta de técnico independente"
-                : "Crie uma nova workspace operacional"}
+              : "Crie uma nova workspace operacional"}
           </p>
         </div>
 
-        {/* Mode switch */}
-        <div className="grid grid-cols-3 gap-1 p-1 rounded-lg bg-muted/40 border border-border">
+        {/* Mode switch — technicians do NOT self-signup; access is invite-only via admin */}
+        <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-muted/40 border border-border">
           <button
             type="button"
             onClick={() => setMode("signin")}
@@ -159,18 +157,6 @@ export default function Auth() {
           </button>
           <button
             type="button"
-            onClick={() => setMode("create-technician")}
-            className={`flex items-center justify-center gap-1.5 px-2 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors ${
-              mode === "create-technician"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Wrench className="h-4 w-4" />
-            Técnico
-          </button>
-          <button
-            type="button"
             onClick={() => setMode("create-workspace")}
             className={`flex items-center justify-center gap-1.5 px-2 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors ${
               mode === "create-workspace"
@@ -182,6 +168,7 @@ export default function Auth() {
             Workspace
           </button>
         </div>
+
 
 
 
