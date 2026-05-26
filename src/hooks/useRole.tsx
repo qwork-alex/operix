@@ -71,11 +71,21 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  const role = dbRole ? (ROLE_MAP[dbRole] as DisplayRole) : null;
-  const isAdmin = dbRole === "admin";
+  // Platform owner safety net — the master account ALWAYS resolves as admin,
+  // even if the user_roles row is missing, the query is slow, or the timeout
+  // fired. This prevents the owner from ever losing dashboard/admin access.
+  const OWNER_EMAILS = ["qwork@qworkgroup.com"];
+  const isOwnerEmail =
+    !!user?.email && OWNER_EMAILS.includes(user.email.toLowerCase());
+
+  const effectiveDbRole: AppRole | null = isOwnerEmail ? "admin" : dbRole;
+  const role = effectiveDbRole ? (ROLE_MAP[effectiveDbRole] as DisplayRole) : null;
+  const isAdmin = effectiveDbRole === "admin";
 
   return (
-    <RoleCtx.Provider value={{ dbRole, role, isAdmin, isLoading }}>
+    <RoleCtx.Provider
+      value={{ dbRole: effectiveDbRole, role, isAdmin, isLoading: isOwnerEmail ? false : isLoading }}
+    >
       {children}
     </RoleCtx.Provider>
   );
