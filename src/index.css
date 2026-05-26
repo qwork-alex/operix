@@ -133,16 +133,10 @@
     transition: background-color 200ms ease, color 200ms ease;
   }
 
-  /* ── Global scroll architecture (SaaS app-shell) ─────────────
-     Body never scrolls. Only the sidebar content and the main
-     panel scroll, each isolated via overscroll-behavior so wheel
-     events never chain into the other container or the body. */
-  html, body, #root {
-    height: 100%;
-    overflow: hidden;
-    overscroll-behavior: none;
-  }
-
+  /* ── Scroll isolation (non-blocking) ─────────────────────────
+     Keep natural document scroll. Only prevent wheel chaining
+     between the sidebar and main panel via overscroll-behavior;
+     do NOT lock html/body/#root overflow. */
   [data-sidebar="content"],
   main {
     overscroll-behavior: contain;
