@@ -48,7 +48,7 @@ export function ConsentGate({ children }: { children: ReactNode }) {
   // and are still resolving their consent record.
   if (!user || isLegalRoute) return <>{children}</>;
 
-  if (isLoading) {
+  if (isLoading && !bootTimedOut) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-3">
         <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -57,7 +57,7 @@ export function ConsentGate({ children }: { children: ReactNode }) {
     );
   }
 
-  if (hasConsented) return <>{children}</>;
+  if (hasConsented || bootTimedOut) return <>{children}</>;
 
   const handleAccept = async () => {
     if (!allChecked || !user) return;
