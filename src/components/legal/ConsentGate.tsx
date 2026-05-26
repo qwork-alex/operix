@@ -1,4 +1,4 @@
-import { ReactNode, useMemo, useState } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { Loader2, ShieldCheck, ExternalLink } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
