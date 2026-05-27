@@ -658,6 +658,209 @@ const OpenMeteo: WeatherProvider = {
   },
 };
 
+/* ===========================================================================
+ *  HAIL OPERATIONAL ENGINE (Phase 3)
+ *  ---------------------------------------------------------------------------
+ *  Goal: detect hail probability OPERATIONALLY even where no official feed
+ *  exists (China, South America, India, JP, AU, AF). We score atmospheric
+ *  instability + convective signature from free OpenMeteo fields:
+ *
+ *    cape                       — Convective Available Potential Energy (J/kg)
+ *    lifted_index               — atmospheric instability (negative = unstable)
+ *    freezing_level_height (m)  — lower = larger hail survives to ground
+ *    convective_inhibition      — energy barrier to convection
+ *    precipitation              — current/forecast precip (mm/h)
+ *    weathercode (WMO)          — 95/96/99 = thunderstorm family
+ *    cloudcover_high            — anvil / cloud top signature
+ *    wind_gusts_10m             — storm downdraft proxy
+ *
+ *  Output: composite operational score 0..100 → BAIXO/MODERADO/SEVERO/EXTREMO.
+ *  This NEVER overrides an official alert; it lives at lower priority and is
+ *  deduped by (source, external_id) so genuine MeteoAlarm/NOAA wins.
+ * ===========================================================================*/
+
+interface InstabilityInput {
+  cape: number | null;
+  liftedIndex: number | null;
+  freezingLevelM: number | null;
+  cin: number | null;
+  precipMm: number | null;
+  weatherCode: number | null;
+  highCloudPct: number | null;
+  windGustKmh: number | null;
+}
+
+interface OperationalScore {
+  score: number;           // 0..100
+  severity: Severity;
+  level: "BAIXO" | "MODERADO" | "SEVERO" | "EXTREMO";
+  hailProbability: number; // 0..1
+  inferredHailMm: number;  // estimated stone size
+  reasons: string[];
+}
+
+function scoreConvectiveHail(x: InstabilityInput): OperationalScore {
+  const reasons: string[] = [];
+  let score = 0;
+
+  // 1) CAPE — the dominant driver of severe convection
+  if (x.cape != null) {
+    if (x.cape >= 3500) { score += 45; reasons.push(`CAPE ${Math.round(x.cape)} J/kg (extreme)`); }
+    else if (x.cape >= 2500) { score += 35; reasons.push(`CAPE ${Math.round(x.cape)} J/kg (severe)`); }
+    else if (x.cape >= 1500) { score += 22; reasons.push(`CAPE ${Math.round(x.cape)} J/kg (moderate)`); }
+    else if (x.cape >= 800)  { score += 10; reasons.push(`CAPE ${Math.round(x.cape)} J/kg (marginal)`); }
+  }
+  // 2) Lifted Index — strongly negative = strong instability
+  if (x.liftedIndex != null) {
+    if (x.liftedIndex <= -8) { score += 20; reasons.push(`LI ${x.liftedIndex.toFixed(1)} (extreme instability)`); }
+    else if (x.liftedIndex <= -5) { score += 14; reasons.push(`LI ${x.liftedIndex.toFixed(1)} (severe)`); }
+    else if (x.liftedIndex <= -2) { score += 7;  reasons.push(`LI ${x.liftedIndex.toFixed(1)} (moderate)`); }
+  }
+  // 3) Freezing level — lower = larger hailstones reach ground
+  if (x.freezingLevelM != null && x.freezingLevelM < 4200) {
+    if (x.freezingLevelM < 2800) { score += 15; reasons.push(`Freezing level ${Math.round(x.freezingLevelM)}m (low)`); }
+    else if (x.freezingLevelM < 3500) { score += 9; reasons.push(`Freezing level ${Math.round(x.freezingLevelM)}m`); }
+    else { score += 4; }
+  }
+  // 4) Active thunderstorm code is a strong confirmer
+  if (x.weatherCode != null) {
+    if (x.weatherCode === 99) { score += 18; reasons.push("WMO 99: heavy hail thunderstorm"); }
+    else if (x.weatherCode === 96) { score += 12; reasons.push("WMO 96: slight hail thunderstorm"); }
+    else if (x.weatherCode === 95) { score += 6;  reasons.push("WMO 95: thunderstorm active"); }
+  }
+  // 5) High cloud / anvil signature
+  if (x.highCloudPct != null && x.highCloudPct >= 70) {
+    score += 4; reasons.push(`High-cloud cover ${Math.round(x.highCloudPct)}%`);
+  }
+  // 6) Downdraft proxy
+  if (x.windGustKmh != null && x.windGustKmh >= 70) {
+    score += 6; reasons.push(`Gusts ${Math.round(x.windGustKmh)} km/h`);
+  } else if (x.windGustKmh != null && x.windGustKmh >= 50) {
+    score += 3;
+  }
+  // 7) Precipitation cross-check
+  if (x.precipMm != null && x.precipMm >= 8) {
+    score += 4; reasons.push(`Precip ${x.precipMm.toFixed(1)} mm/h`);
+  }
+  // 8) CIN penalty — a cap suppresses convection
+  if (x.cin != null && x.cin <= -150) {
+    score -= 10; reasons.push(`CIN ${Math.round(x.cin)} J/kg (capped)`);
+  }
+
+  score = Math.max(0, Math.min(100, score));
+
+  let level: OperationalScore["level"] = "BAIXO";
+  let severity: Severity = "low";
+  if (score >= 75) { level = "EXTREMO"; severity = "extreme"; }
+  else if (score >= 55) { level = "SEVERO"; severity = "severe"; }
+  else if (score >= 35) { level = "MODERADO"; severity = "moderate"; }
+
+  // Stone size estimate (mm): rough empirical from CAPE + freezing level
+  let inferredHailMm = 0;
+  if (x.cape != null) {
+    inferredHailMm = Math.max(0, Math.sqrt(Math.max(0, x.cape - 500)) * 0.45);
+    if (x.freezingLevelM != null && x.freezingLevelM < 3200) inferredHailMm *= 1.25;
+  }
+  inferredHailMm = Math.min(80, Math.round(inferredHailMm));
+
+  const hailProbability = Math.min(0.95, score / 100);
+  return { score, severity, level, hailProbability, inferredHailMm, reasons };
+}
+
+/* ----- Convective Inference provider (free, global, OpenMeteo-backed) ----
+ *  Uses OpenMeteo's atmospheric instability fields to infer hail in regions
+ *  without an official feed. Threshold: score >= 35 (MODERADO+). Below that
+ *  we don't emit an event — keeps the radar focused on operational signal.
+ * --------------------------------------------------------------------- */
+const ConvectiveInference: WeatherProvider = {
+  key: "convective_inference",
+  capabilities: ["hail", "severe", "storm_cells", "precipitation", "wind"],
+  async fetchHail(ctx) {
+    const cacheKey = `ci:hail:global`;
+    const cached = await ctx.cache.get(cacheKey);
+    if (cached) return cached as HailEvent[];
+
+    const events: HailEvent[] = [];
+    const chunkSize = 8;
+
+    for (let i = 0; i < GLOBAL_GRID.length; i += chunkSize) {
+      const chunk = GLOBAL_GRID.slice(i, i + chunkSize);
+      const lats = chunk.map(p => p.lat).join(",");
+      const lngs = chunk.map(p => p.lng).join(",");
+      const url =
+        `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lngs}` +
+        `&hourly=cape,lifted_index,freezing_level_height,convective_inhibition,` +
+        `precipitation,weathercode,cloudcover_high,wind_gusts_10m` +
+        `&forecast_days=2&timezone=UTC`;
+      try {
+        const res = await fetch(url);
+        if (!res.ok) continue;
+        const json = await res.json();
+        const items = Array.isArray(json) ? json : [json];
+        items.forEach((entry: any, idx: number) => {
+          const p = chunk[idx];
+          if (!p) return;
+          const h = entry?.hourly ?? {};
+          const times: string[] = h.time ?? [];
+          const nowMs = Date.now();
+          // Sample a window: next 24h, every 3h to keep payload bounded.
+          for (let j = 0; j < times.length; j += 3) {
+            const tMs = new Date(times[j] + "Z").getTime();
+            if (tMs < nowMs - 3600_000 || tMs > nowMs + 24 * 3600_000) continue;
+
+            const input: InstabilityInput = {
+              cape: h.cape?.[j] ?? null,
+              liftedIndex: h.lifted_index?.[j] ?? null,
+              freezingLevelM: h.freezing_level_height?.[j] ?? null,
+              cin: h.convective_inhibition?.[j] ?? null,
+              precipMm: h.precipitation?.[j] ?? null,
+              weatherCode: h.weathercode?.[j] ?? null,
+              highCloudPct: h.cloudcover_high?.[j] ?? null,
+              windGustKmh: h.wind_gusts_10m?.[j] ?? null,
+            };
+            const op = scoreConvectiveHail(input);
+            if (op.score < 35) continue; // only emit MODERADO+
+
+            const isLive = Math.abs(tMs - nowMs) < 90 * 60_000;
+            events.push({
+              source: "convective_inference",
+              external_id: `ci-${p.key}-${times[j]}`,
+              city: p.city ?? null, country: p.country,
+              lat: p.lat, lng: p.lng, radius_km: 35,
+              severity: op.severity,
+              status: isLive ? "ongoing" : "forecast",
+              hail_size_mm: op.inferredHailMm || null,
+              probability: op.hailProbability,
+              intensity: op.score,
+              storm_speed_kmh: input.windGustKmh ?? null,
+              forecast_time: isLive ? null : times[j] + "Z",
+              observed_time: isLive ? times[j] + "Z" : null,
+              expires_at: new Date(tMs + 3 * 3600_000).toISOString(),
+              metadata: {
+                engine: "hailOperationalEngine",
+                version: 1,
+                grid: p.key,
+                operational_score: op.score,
+                operational_level: op.level,
+                reasons: op.reasons,
+                inputs: input,
+              },
+            });
+          }
+        });
+      } catch (e) {
+        console.warn(`[convective_inference] chunk ${i} failed:`, (e as Error).message);
+      }
+    }
+
+    await ctx.cache.set({
+      key: cacheKey, provider: "convective_inference", capability: "hail",
+      regionKey: "global", payload: events, ttlSeconds: 900,
+    });
+    return events;
+  },
+};
+
 /* ----- OpenWeather (paid; alerts/precipitation) -------------------------- */
 const OpenWeather: WeatherProvider = {
   key: "openweather",
@@ -678,9 +881,11 @@ const PROVIDERS: Record<string, WeatherProvider> = {
   environment_canada: EnvCanada,
   tomorrowio: TomorrowIo,
   openmeteo: OpenMeteo,
+  convective_inference: ConvectiveInference,
   openweather: OpenWeather,
   weatherapi: WeatherAPI,
 };
+
 
 /* -------- France department centroid lookup (subset, expandable) -------- */
 const FR_DEPARTMENT_COORDS: Record<string, [number, number]> = {
