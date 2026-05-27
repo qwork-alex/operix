@@ -8,10 +8,20 @@ const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-  auth: {
-    storage: localStorage,
-    persistSession: true,
-    autoRefreshToken: true,
-  }
-});
+// Singleton guard — detect accidental double-instantiation across HMR / chunks.
+const g = globalThis as any;
+if (g.__SUPABASE_CLIENT__) {
+  console.warn("[SUPABASE] Duplicate createClient detected — reusing existing instance");
+} else {
+  console.log("[SUPABASE] createClient (singleton init)");
+}
+
+export const supabase =
+  g.__SUPABASE_CLIENT__ ??
+  (g.__SUPABASE_CLIENT__ = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+    auth: {
+      storage: localStorage,
+      persistSession: true,
+      autoRefreshToken: true,
+    },
+  }));
