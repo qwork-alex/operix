@@ -424,52 +424,195 @@ const EnvCanada: WeatherProvider = {
   },
 };
 
-/* ----- Tomorrow.io (paid, global) ---------------------------------------- */
+/* ----- Global sampling grid (shared by Tomorrow.io + OpenMeteo) ---------- */
+/* Storm-prone / populated points. Keep small to respect free-tier quotas. */
+interface GridPoint { key: string; lat: number; lng: number; country: string; city?: string; }
+const GLOBAL_GRID: GridPoint[] = [
+  // Europe (complement MeteoAlarm)
+  {key:"GB-LON",lat:51.5,lng:-0.1,country:"GB",city:"London"},
+  {key:"IE-DUB",lat:53.3,lng:-6.3,country:"IE",city:"Dublin"},
+  {key:"PL-WAW",lat:52.2,lng:21.0,country:"PL",city:"Warsaw"},
+  {key:"CZ-PRG",lat:50.1,lng:14.4,country:"CZ",city:"Prague"},
+  {key:"HU-BUD",lat:47.5,lng:19.0,country:"HU",city:"Budapest"},
+  {key:"RO-BUC",lat:44.4,lng:26.1,country:"RO",city:"Bucharest"},
+  {key:"GR-ATH",lat:38.0,lng:23.7,country:"GR",city:"Athens"},
+  {key:"SE-STO",lat:59.3,lng:18.1,country:"SE",city:"Stockholm"},
+  // Asia
+  {key:"CN-BJS",lat:39.9,lng:116.4,country:"CN",city:"Beijing"},
+  {key:"CN-SHA",lat:31.2,lng:121.5,country:"CN",city:"Shanghai"},
+  {key:"CN-CAN",lat:23.1,lng:113.3,country:"CN",city:"Guangzhou"},
+  {key:"JP-TYO",lat:35.7,lng:139.7,country:"JP",city:"Tokyo"},
+  {key:"KR-SEL",lat:37.6,lng:127.0,country:"KR",city:"Seoul"},
+  {key:"IN-DEL",lat:28.6,lng:77.2,country:"IN",city:"New Delhi"},
+  {key:"IN-BOM",lat:19.1,lng:72.9,country:"IN",city:"Mumbai"},
+  {key:"TH-BKK",lat:13.7,lng:100.5,country:"TH",city:"Bangkok"},
+  {key:"VN-SGN",lat:10.8,lng:106.7,country:"VN",city:"Ho Chi Minh"},
+  {key:"MY-KUL",lat:3.1,lng:101.7,country:"MY",city:"Kuala Lumpur"},
+  {key:"ID-JKT",lat:-6.2,lng:106.8,country:"ID",city:"Jakarta"},
+  {key:"PH-MNL",lat:14.6,lng:120.9,country:"PH",city:"Manila"},
+  // Africa
+  {key:"ZA-JNB",lat:-26.2,lng:28.0,country:"ZA",city:"Johannesburg"},
+  {key:"MA-CMN",lat:33.6,lng:-7.6,country:"MA",city:"Casablanca"},
+  {key:"DZ-ALG",lat:36.7,lng:3.1,country:"DZ",city:"Algiers"},
+  {key:"TN-TUN",lat:36.8,lng:10.2,country:"TN",city:"Tunis"},
+  {key:"EG-CAI",lat:30.0,lng:31.2,country:"EG",city:"Cairo"},
+  {key:"NG-LOS",lat:6.5,lng:3.4,country:"NG",city:"Lagos"},
+  {key:"KE-NBO",lat:-1.3,lng:36.8,country:"KE",city:"Nairobi"},
+  {key:"ET-ADD",lat:9.0,lng:38.7,country:"ET",city:"Addis Ababa"},
+  {key:"GH-ACC",lat:5.6,lng:-0.2,country:"GH",city:"Accra"},
+  // Oceania
+  {key:"AU-SYD",lat:-33.9,lng:151.2,country:"AU",city:"Sydney"},
+  {key:"AU-MEL",lat:-37.8,lng:144.9,country:"AU",city:"Melbourne"},
+  {key:"AU-BNE",lat:-27.5,lng:153.0,country:"AU",city:"Brisbane"},
+  {key:"NZ-AKL",lat:-36.8,lng:174.8,country:"NZ",city:"Auckland"},
+  // Americas (non-US/CA)
+  {key:"MX-MEX",lat:19.4,lng:-99.1,country:"MX",city:"Mexico City"},
+  {key:"BR-SAO",lat:-23.5,lng:-46.6,country:"BR",city:"São Paulo"},
+  {key:"BR-POA",lat:-30.0,lng:-51.2,country:"BR",city:"Porto Alegre"},
+  {key:"AR-BUE",lat:-34.6,lng:-58.4,country:"AR",city:"Buenos Aires"},
+  {key:"CL-SCL",lat:-33.4,lng:-70.6,country:"CL",city:"Santiago"},
+  {key:"CO-BOG",lat:4.7,lng:-74.1,country:"CO",city:"Bogotá"},
+  {key:"PE-LIM",lat:-12.0,lng:-77.0,country:"PE",city:"Lima"},
+];
+
+function severityFromHailMm(mm: number | null): Severity {
+  const v = mm ?? 10;
+  if (v >= 50) return "extreme";
+  if (v >= 25) return "severe";
+  if (v >= 12) return "moderate";
+  return "low";
+}
+
+/* ----- Tomorrow.io (paid, global grid) ----------------------------------- */
 const TomorrowIo: WeatherProvider = {
   key: "tomorrowio",
   capabilities: ["hail", "precipitation", "wind", "lightning", "storm_cells"],
   async fetchHail(ctx) {
     if (!ctx.apiKey) return [];
-    const cacheKey = `tio:hail:${ctx.regionKey}`;
+    const cacheKey = `tio:hail:global`;
     const cached = await ctx.cache.get(cacheKey);
     if (cached) return cached as HailEvent[];
 
-    const bbox = ctx.bbox ?? [-5, 41, 10, 51]; // FR default
-    const center = [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2];
-    const url = `https://api.tomorrow.io/v4/weather/forecast?location=${center[1]},${center[0]}&apikey=${ctx.apiKey}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Tomorrow.io ${res.status}`);
-    const json = await res.json();
-
     const events: HailEvent[] = [];
-    const hourly = json?.timelines?.hourly ?? [];
-    for (const h of hourly.slice(0, 24)) {
-      const v = h.values ?? {};
-      const hail = v.hailBinary ?? 0;
-      if (!hail) continue;
-      const sizeMm = (v.hailSize ?? 10) * 1;
-      const sev: Severity =
-        sizeMm >= 50 ? "extreme" : sizeMm >= 25 ? "severe" :
-        sizeMm >= 12 ? "moderate" : "low";
-      events.push({
-        source: "tomorrowio",
-        external_id: `tio-${center[1]}-${center[0]}-${h.time}`,
-        lat: center[1], lng: center[0], radius_km: 25,
-        severity: sev, status: "forecast",
-        hail_size_mm: sizeMm,
-        probability: (v.precipitationProbability ?? 50) / 100,
-        intensity: Math.min(100, sizeMm * 1.5),
-        storm_speed_kmh: v.windSpeed ? v.windSpeed * 3.6 : null,
-        storm_direction_deg: v.windDirection ?? null,
-        forecast_time: h.time,
-        expires_at: new Date(new Date(h.time).getTime() + 3600_000).toISOString(),
-        metadata: { source_values: v },
-      });
+    // Cap calls to protect free tier (25/hr typical). Rotate through grid.
+    const maxCalls = 18;
+    const stride = Math.max(1, Math.floor(GLOBAL_GRID.length / maxCalls));
+    const targets = GLOBAL_GRID.filter((_, i) => i % stride === 0).slice(0, maxCalls);
+
+    for (const p of targets) {
+      try {
+        const url = `https://api.tomorrow.io/v4/weather/forecast?location=${p.lat},${p.lng}&apikey=${ctx.apiKey}`;
+        const res = await fetch(url);
+        if (!res.ok) continue;
+        const json = await res.json();
+        const hourly = json?.timelines?.hourly ?? [];
+        for (const h of hourly.slice(0, 24)) {
+          const v = h.values ?? {};
+          const hail = v.hailBinary ?? 0;
+          if (!hail) continue;
+          const sizeMm = (v.hailSize ?? 10) * 1;
+          events.push({
+            source: "tomorrowio",
+            external_id: `tio-${p.key}-${h.time}`,
+            city: p.city ?? null, country: p.country,
+            lat: p.lat, lng: p.lng, radius_km: 25,
+            severity: severityFromHailMm(sizeMm),
+            status: "forecast",
+            hail_size_mm: sizeMm,
+            probability: (v.precipitationProbability ?? 50) / 100,
+            intensity: Math.min(100, sizeMm * 1.5),
+            storm_speed_kmh: v.windSpeed ? v.windSpeed * 3.6 : null,
+            storm_direction_deg: v.windDirection ?? null,
+            forecast_time: h.time,
+            expires_at: new Date(new Date(h.time).getTime() + 3600_000).toISOString(),
+            metadata: { grid: p.key, source_values: v },
+          });
+        }
+      } catch (e) {
+        console.warn(`[tomorrowio] ${p.key} failed:`, (e as Error).message);
+      }
     }
 
     await ctx.cache.set({
       key: cacheKey, provider: "tomorrowio", capability: "hail",
-      regionKey: ctx.regionKey, payload: events, ttlSeconds: 600,
+      regionKey: "global", payload: events, ttlSeconds: 900,
+    });
+    return events;
+  },
+};
+
+/* ----- OpenMeteo (free, global fallback) --------------------------------- *
+ *  WMO weather codes 96 = thunderstorm w/ slight hail, 99 = w/ heavy hail. */
+const OpenMeteo: WeatherProvider = {
+  key: "openmeteo",
+  capabilities: ["precipitation", "wind", "hail", "severe"],
+  async fetchHail(ctx) {
+    const cacheKey = `om:hail:global`;
+    const cached = await ctx.cache.get(cacheKey);
+    if (cached) return cached as HailEvent[];
+
+    const events: HailEvent[] = [];
+    // Batch in groups of 8 lat/lng pairs (OpenMeteo supports comma-separated coords).
+    const chunkSize = 8;
+    for (let i = 0; i < GLOBAL_GRID.length; i += chunkSize) {
+      const chunk = GLOBAL_GRID.slice(i, i + chunkSize);
+      const lats = chunk.map(p => p.lat).join(",");
+      const lngs = chunk.map(p => p.lng).join(",");
+      const url =
+        `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lngs}` +
+        `&hourly=weathercode,precipitation,windspeed_10m,winddirection_10m` +
+        `&forecast_days=2&timezone=UTC`;
+      try {
+        const res = await fetch(url);
+        if (!res.ok) continue;
+        const json = await res.json();
+        const items = Array.isArray(json) ? json : [json];
+        items.forEach((entry: any, idx: number) => {
+          const p = chunk[idx];
+          if (!p) return;
+          const times: string[] = entry?.hourly?.time ?? [];
+          const codes: number[] = entry?.hourly?.weathercode ?? [];
+          const precs: number[] = entry?.hourly?.precipitation ?? [];
+          const winds: number[] = entry?.hourly?.windspeed_10m ?? [];
+          const dirs:  number[] = entry?.hourly?.winddirection_10m ?? [];
+          const nowMs = Date.now();
+          for (let j = 0; j < times.length; j++) {
+            const code = codes[j];
+            if (code !== 96 && code !== 99) continue; // hail thunderstorms only
+            const tMs = new Date(times[j] + "Z").getTime();
+            if (tMs < nowMs - 3600_000) continue; // skip stale past hours
+            const isLive = Math.abs(tMs - nowMs) < 3600_000;
+            const sizeMm = code === 99 ? 20 : 10;
+            events.push({
+              source: "openmeteo",
+              external_id: `om-${p.key}-${times[j]}`,
+              city: p.city ?? null, country: p.country,
+              lat: p.lat, lng: p.lng, radius_km: 40,
+              severity: code === 99 ? "severe" : "moderate",
+              status: isLive ? "ongoing" : "forecast",
+              hail_size_mm: sizeMm,
+              probability: code === 99 ? 0.75 : 0.55,
+              intensity: code === 99 ? 70 : 45,
+              storm_speed_kmh: winds[j] ?? null,
+              storm_direction_deg: dirs[j] ?? null,
+              forecast_time: isLive ? null : times[j] + "Z",
+              observed_time: isLive ? times[j] + "Z" : null,
+              expires_at: new Date(tMs + 3600_000).toISOString(),
+              metadata: {
+                grid: p.key, wmo_code: code,
+                precipitation_mm: precs[j] ?? null,
+              },
+            });
+          }
+        });
+      } catch (e) {
+        console.warn(`[openmeteo] chunk ${i} failed:`, (e as Error).message);
+      }
+    }
+
+    await ctx.cache.set({
+      key: cacheKey, provider: "openmeteo", capability: "hail",
+      regionKey: "global", payload: events, ttlSeconds: 600,
     });
     return events;
   },
@@ -494,6 +637,7 @@ const PROVIDERS: Record<string, WeatherProvider> = {
   noaa: NOAA,
   environment_canada: EnvCanada,
   tomorrowio: TomorrowIo,
+  openmeteo: OpenMeteo,
   openweather: OpenWeather,
   weatherapi: WeatherAPI,
 };
