@@ -36,6 +36,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return () => console.log("[UNMOUNT] WorkspaceProvider");
   }, []);
 
+  useEffect(() => {
+    console.log("[MOUNT] WorkspaceProvider");
+    return () => console.log("[UNMOUNT] WorkspaceProvider");
+  }, []);
+
   // 1. Get app_user + workspace for current auth user (supports switching)
   const userId = user?.id ?? null;
 
