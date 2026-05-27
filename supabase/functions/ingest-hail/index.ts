@@ -946,6 +946,104 @@ const FR_DEPARTMENT_COORDS: Record<string, [number, number]> = {
   "76": [1.10, 49.44], "83": [6.13, 43.42], "87": [1.27, 45.83], "06": [7.27, 43.71],
 };
 
+/* ============================================================================
+ *  PHASE 4 — GLOBAL DEDUPLICATION & MERGE PASS
+ *  ----------------------------------------------------------------------------
+ *  After fetching from all providers we run a single clustering pass to merge
+ *  events that describe the same storm cell. Two events merge when ALL hold:
+ *    - distance(latA,lngA, latB,lngB) <= MERGE_RADIUS_KM
+ *    - |timeA - timeB| <= MERGE_WINDOW_MIN  (forecast/observed time)
+ *  When merging:
+ *    - Keep highest severity & largest hail size
+ *    - Prefer status: confirmed > ongoing > forecast
+ *    - Prefer source priority: noaa/meteofrance > tomorrowio > openmeteo > inference
+ *    - Preserve external_id of the winning event (kept) for stable dedupe
+ *    - Stash merged providers in metadata.merged_from[]
+ *  This is what eliminates "5 circles for the same cell" on the map.
+ * ===========================================================================*/
+const MERGE_RADIUS_KM = 80;
+const MERGE_WINDOW_MIN = 90;
+const SOURCE_PRIORITY: Record<string, number> = {
+  noaa: 100, meteofrance: 95, tomorrowio: 70,
+  openmeteo: 50, convective_inference: 35,
+};
+const SEVERITY_RANK: Record<Severity, number> = {
+  low: 1, moderate: 2, severe: 3, extreme: 4,
+};
+const STATUS_RANK: Record<Status, number> = {
+  forecast: 1, ongoing: 2, confirmed: 3, closed: 0,
+};
+
+function haversineKm(a: HailEvent, b: HailEvent): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const la1 = toRad(a.lat), la2 = toRad(b.lat);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLng / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+function eventTimeMs(e: HailEvent): number {
+  const t = e.observed_time ?? e.forecast_time ?? e.expires_at;
+  return t ? new Date(t).getTime() : Date.now();
+}
+
+function mergeTwo(winner: HailEvent, loser: HailEvent): HailEvent {
+  const sev = SEVERITY_RANK[loser.severity] > SEVERITY_RANK[winner.severity]
+    ? loser.severity : winner.severity;
+  const status = STATUS_RANK[loser.status] > STATUS_RANK[winner.status]
+    ? loser.status : winner.status;
+  const hail = Math.max(winner.hail_size_mm ?? 0, loser.hail_size_mm ?? 0) || null;
+  const meta = { ...(winner.metadata ?? {}) } as Record<string, unknown>;
+  const mergedFrom = Array.isArray(meta.merged_from) ? (meta.merged_from as any[]) : [];
+  mergedFrom.push({
+    source: loser.source,
+    external_id: loser.external_id,
+    severity: loser.severity,
+    score: (loser.metadata as any)?.operational_score ?? null,
+  });
+  meta.merged_from = mergedFrom;
+  meta.merge_count = mergedFrom.length;
+  return {
+    ...winner,
+    severity: sev,
+    status,
+    hail_size_mm: hail,
+    probability: Math.max(winner.probability ?? 0, loser.probability ?? 0) || null,
+    intensity: Math.max(winner.intensity ?? 0, loser.intensity ?? 0) || null,
+    radius_km: Math.max(winner.radius_km ?? 25, loser.radius_km ?? 25),
+    metadata: meta,
+  };
+}
+
+function mergeEvents(events: HailEvent[]): { merged: HailEvent[]; removed: number } {
+  // Sort by source priority desc → severity desc, so winners come first.
+  const sorted = [...events].sort((a, b) => {
+    const pa = SOURCE_PRIORITY[a.source] ?? 10;
+    const pb = SOURCE_PRIORITY[b.source] ?? 10;
+    if (pb !== pa) return pb - pa;
+    return SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity];
+  });
+  const kept: HailEvent[] = [];
+  let removed = 0;
+  for (const ev of sorted) {
+    const tEv = eventTimeMs(ev);
+    let mergedInto = -1;
+    for (let i = 0; i < kept.length; i++) {
+      const k = kept[i];
+      if (Math.abs(eventTimeMs(k) - tEv) > MERGE_WINDOW_MIN * 60_000) continue;
+      if (haversineKm(k, ev) > MERGE_RADIUS_KM) continue;
+      kept[i] = mergeTwo(k, ev);
+      mergedInto = i;
+      removed++;
+      break;
+    }
+    if (mergedInto === -1) kept.push(ev);
+  }
+  return { merged: kept, removed };
+}
+
+
 /* =================================================================== HTTP */
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
