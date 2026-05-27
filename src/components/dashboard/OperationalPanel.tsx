@@ -31,6 +31,7 @@ export interface PanelHailEvent {
   observed_time: string | null;
   expires_at: string | null;
   is_demo: boolean;
+  metadata?: Record<string, any> | null;
 }
 
 export interface PanelTeam { lat: number; lng: number; city?: string; when?: string; }
@@ -261,6 +262,9 @@ export function OperationalPanel({
               <Metric icon={<Clock className="h-3 w-3" />} label="Expira" value={fmtTime(event.expires_at)} />
               <Metric icon={<Radar className="h-3 w-3" />} label="Raio" value={`${event.radius_km} km`} />
             </div>
+
+            {/* ---- Section: Premium operational intelligence (Phase 5) ---- */}
+            <IntelligenceBlock metadata={event.metadata} color={color} />
 
             {/* ---- Section: Operational ---- */}
             <SectionTitle icon={<Activity className="h-3.5 w-3.5 text-cyan-400" />}>
@@ -501,3 +505,122 @@ function ListCard({
     </div>
   );
 }
+
+/* ---------- Phase 5: premium intelligence block ---------- */
+type RiskBand = "low" | "moderate" | "high" | "extreme";
+type OpportunityBand = "baixa" | "moderada" | "alta" | "extrema";
+interface IntelligenceData {
+  impactScore?: number;
+  opportunity?: OpportunityBand;
+  opportunityScore?: number;
+  operationalRisk?: RiskBand;
+  financialRisk?: RiskBand;
+  logisticsRisk?: RiskBand;
+  automotiveRisk?: RiskBand;
+  urbanDensity?: number;
+  automotiveExposure?: number;
+  estimatedVehiclesAffected?: number;
+  criticality?: "rotina" | "atenção" | "prioritário" | "crítico";
+  trend?: "rising" | "stable" | "falling";
+  windowHours?: number;
+  narrative?: string;
+  premium?: boolean;
+}
+
+const RISK_TONE: Record<RiskBand, string> = {
+  low: "#22c55e", moderate: "#eab308", high: "#f97316", extreme: "#ef4444",
+};
+const RISK_LABEL: Record<RiskBand, string> = {
+  low: "Baixo", moderate: "Moderado", high: "Alto", extreme: "Extremo",
+};
+const OPP_TONE: Record<OpportunityBand, string> = {
+  baixa: "#64748b", moderada: "#eab308", alta: "#22d3ee", extrema: "#a855f7",
+};
+
+function IntelligenceBlock({
+  metadata, color,
+}: { metadata: Record<string, any> | null | undefined; color: string }) {
+  const intel: IntelligenceData | null = (metadata as any)?.intelligence ?? null;
+  if (!intel || typeof intel.impactScore !== "number") return null;
+
+  const impact = Math.round(intel.impactScore);
+  const opp = intel.opportunity ?? "baixa";
+  const oppScore = Math.round(intel.opportunityScore ?? 0);
+  const trendArrow = intel.trend === "rising" ? "↑" : intel.trend === "falling" ? "↓" : "→";
+  const trendTone = intel.trend === "rising" ? "#f97316" : intel.trend === "falling" ? "#64748b" : "#94a3b8";
+
+  return (
+    <>
+      <SectionTitle icon={<Zap className="h-3.5 w-3.5" style={{ color }} />}>
+        Inteligência premium
+        {intel.premium && (
+          <span className="ml-2 text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wider"
+            style={{ background: `${color}22`, color, border: `1px solid ${color}55` }}>
+            Relevante
+          </span>
+        )}
+      </SectionTitle>
+
+      {intel.narrative && (
+        <p className="text-[11px] text-foreground/90 leading-relaxed mb-3 px-2 py-2 rounded-md border border-white/5 bg-white/[0.02]">
+          {intel.narrative}
+        </p>
+      )}
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+        <ScoreCard label="Impact Score" value={impact} tone={color} suffix="/100" />
+        <ScoreCard label="Oportunidade" value={oppScore} tone={OPP_TONE[opp]} suffix={` · ${opp}`} />
+        <ScoreCard label="Criticidade" value={intel.criticality ?? "—"} tone={color} />
+        <ScoreCard label="Tendência" value={`${trendArrow} ${intel.windowHours ?? "—"}h`} tone={trendTone} />
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+        <RiskChip label="Operacional" band={intel.operationalRisk ?? "low"} />
+        <RiskChip label="Financeiro" band={intel.financialRisk ?? "low"} />
+        <RiskChip label="Logístico" band={intel.logisticsRisk ?? "low"} />
+        <RiskChip label="Automotivo" band={intel.automotiveRisk ?? "low"} />
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 mb-4">
+        <MicroStat label="Densidade urbana" value={`${Math.round((intel.urbanDensity ?? 0) * 100)}%`} />
+        <MicroStat label="Exposição auto" value={`${Math.round((intel.automotiveExposure ?? 0) * 100)}%`} />
+        <MicroStat label="Veíc. estimados" value={(intel.estimatedVehiclesAffected ?? 0).toLocaleString()} />
+      </div>
+    </>
+  );
+}
+
+function ScoreCard({ label, value, tone, suffix }: { label: string; value: number | string; tone: string; suffix?: string }) {
+  return (
+    <div className="rounded-lg border bg-white/[0.02] px-2.5 py-2"
+      style={{ borderColor: `${tone}33`, boxShadow: `inset 0 0 0 1px ${tone}11` }}>
+      <div className="text-[9px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="text-[15px] font-semibold tabular-nums leading-tight" style={{ color: tone }}>
+        {value}{suffix && <span className="text-[10px] text-muted-foreground ml-1">{suffix}</span>}
+      </div>
+    </div>
+  );
+}
+
+function RiskChip({ label, band }: { label: string; band: RiskBand }) {
+  const tone = RISK_TONE[band];
+  return (
+    <div className="flex items-center justify-between px-2.5 py-1.5 rounded-md border bg-white/[0.02]"
+      style={{ borderColor: `${tone}33` }}>
+      <span className="text-[10px] text-muted-foreground">{label}</span>
+      <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: tone }}>
+        {RISK_LABEL[band]}
+      </span>
+    </div>
+  );
+}
+
+function MicroStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="px-2 py-1.5 rounded-md border border-white/5 bg-white/[0.02]">
+      <div className="text-[9px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="text-[12px] font-medium tabular-nums">{value}</div>
+    </div>
+  );
+}
+
