@@ -4,6 +4,25 @@ import { supabase } from "@/integrations/supabase/client";
 import { logSecurityEvent } from "@/lib/securityLog";
 import { registerCurrentDevice } from "@/lib/deviceFingerprint";
 
+const AUTH_BOOT_TIMEOUT_MS = 2500;
+const AUTH_ACTION_TIMEOUT_MS = 12000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(`${label} timeout`)), ms);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 interface AuthContextType {
   session: Session | null;
   user: User | null;
@@ -15,26 +34,6 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-function readStoredSessionFallback(): Session | null {
-  if (typeof window === "undefined") return null;
-  try {
-    for (let i = 0; i < localStorage.length; i += 1) {
-      const key = localStorage.key(i);
-      if (!key?.startsWith("sb-") || !key.endsWith("-auth-token")) continue;
-      const raw = localStorage.getItem(key);
-      if (!raw) continue;
-      const parsed = JSON.parse(raw);
-      const stored = parsed?.currentSession ?? parsed?.session ?? parsed;
-      if (stored?.access_token && stored?.refresh_token && stored?.user?.id) {
-        return stored as Session;
-      }
-    }
-  } catch (err) {
-    console.warn("[Auth] stored session fallback unavailable", err);
-  }
-  return null;
-}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -77,39 +76,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    // 1. Get existing session first
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      if (!mounted.current) return;
+    const finishBoot = (s: Session | null) => {
+      if (!mounted.current || initialSessionResolved.current) return;
       initialSessionResolved.current = true;
       applySession(s);
       setLoading(false);
-    }).catch((err) => {
-      console.error("[Auth] getSession error:", err);
-      const stored = readStoredSessionFallback();
-      if (stored) {
-        console.warn("[Auth] using stored session fallback after hydration failure");
-        initialSessionResolved.current = true;
-        applySession(stored);
-        if (mounted.current) setLoading(false);
-        return;
+
+      if (bootRetryTimer.current) {
+        window.clearTimeout(bootRetryTimer.current);
+        bootRetryTimer.current = null;
       }
-      bootRetryTimer.current = window.setTimeout(() => {
-        if (!mounted.current) return;
-        initialSessionResolved.current = true;
-        setLoading(false);
-      }, 1200);
-    });
+    };
+
+    bootRetryTimer.current = window.setTimeout(() => {
+      if (!mounted.current || initialSessionResolved.current) return;
+      console.warn("[Auth] bootstrap timeout — continuing without session");
+      finishBoot(null);
+    }, AUTH_BOOT_TIMEOUT_MS);
+
+    // 1. Get existing session first. This must never keep /auth in an
+    // infinite spinner if auth storage/refresh is slow or unreachable.
+    withTimeout(supabase.auth.getSession(), AUTH_BOOT_TIMEOUT_MS, "getSession")
+      .then(({ data: { session: s } }) => finishBoot(s))
+      .catch((err) => {
+        console.error("[Auth] getSession unavailable:", err);
+        finishBoot(null);
+      });
 
     // 2. Listen for auth changes — no awaits inside callback
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, s) => {
         if (!mounted.current) return;
         if (event === "INITIAL_SESSION" && !initialSessionResolved.current) {
-          if (s) {
-            initialSessionResolved.current = true;
-            applySession(s);
-            setLoading(false);
-          }
+          // A null INITIAL_SESSION can arrive before storage restoration fully
+          // resolves; let getSession/boot timeout decide the final null state.
+          if (s) finishBoot(s);
           return;
         }
         initialSessionResolved.current = true;
@@ -146,7 +147,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await withTimeout(
+        supabase.auth.signInWithPassword({ email, password }),
+        AUTH_ACTION_TIMEOUT_MS,
+        "signInWithPassword",
+      );
       // Fire-and-forget logging
       supabase.from("backend_event_logs").insert({
         table_name: "auth",
@@ -165,7 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: error as Error | null };
     } catch (err) {
       console.error("[Auth] signIn error:", err);
-      return { error: err as Error };
+      return { error: new Error("Login indisponível no momento. Tente novamente em instantes.") };
     }
   };
 
@@ -181,14 +186,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ? `${window.location.origin}/join?token=${inviteToken}`
         : window.location.origin;
 
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: metadata,
-          emailRedirectTo: redirectUrl,
-        },
-      });
+      const { error } = await withTimeout(
+        supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: metadata,
+            emailRedirectTo: redirectUrl,
+          },
+        }),
+        AUTH_ACTION_TIMEOUT_MS,
+        "signUp",
+      );
 
       if (!error) {
         supabase.from("backend_event_logs").insert({
@@ -206,7 +215,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     try {
       logSecurityEvent({ type: "logout", severity: "info" });
-      await supabase.auth.signOut();
+      await withTimeout(supabase.auth.signOut(), AUTH_ACTION_TIMEOUT_MS, "signOut");
     } catch (err) {
       console.error("[Auth] signOut error:", err);
     }

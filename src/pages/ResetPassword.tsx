@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,31 +9,34 @@ import { supabase } from "@/integrations/supabase/client";
 import { BrandLogo } from "@/components/BrandLogo";
 import { brandConfig } from "@/brand.config";
 import { PasswordStrength, isPasswordStrong } from "@/components/auth/PasswordStrength";
+import { useAuth } from "@/hooks/useAuth";
+
+const RESET_AUTH_TIMEOUT_MS = 12000;
+
+function withResetTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(`${label} timeout`)), RESET_AUTH_TIMEOUT_MS);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
 
 export default function ResetPassword() {
   const navigate = useNavigate();
+  const { session, loading: authLoading } = useAuth();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [show, setShow] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    // Supabase puts the recovery session in the URL hash; the client picks it
-    // up automatically. We only need to verify a session exists.
-    const check = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session) setReady(true);
-      else {
-        // Wait for hash-based session to hydrate
-        const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
-          if (s) setReady(true);
-        });
-        setTimeout(() => sub.subscription.unsubscribe(), 5000);
-      }
-    };
-    check();
-  }, []);
+  const ready = !authLoading && !!session;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,14 +50,16 @@ export default function ResetPassword() {
     }
     setSubmitting(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password });
+      const { error } = await withResetTimeout(supabase.auth.updateUser({ password }), "updateUser");
       if (error) {
         toast.error(error.message);
         return;
       }
       toast.success("Senha alterada com sucesso");
-      await supabase.auth.signOut();
+      await withResetTimeout(supabase.auth.signOut(), "signOut");
       navigate("/auth", { replace: true });
+    } catch (err) {
+      toast.error((err as Error).message || "Falha ao alterar senha.");
     } finally {
       setSubmitting(false);
     }
