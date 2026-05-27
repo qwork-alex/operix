@@ -18,6 +18,7 @@ import {
   type OppTeam,
 } from "./OperationalOpportunities";
 import { HailReportDialog } from "./HailReportDialog";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 /* ------------------------------------------------------------------ */
 /*  Hail severity → premium color palette                              */
@@ -391,30 +392,34 @@ export function OperationalMap() {
   const visibleHailEvents = useMemo(() => {
     const windowStart = Date.now() - hailWindowHours * 3600_000;
     const isLive = replayCursor >= 0.999;
+    // Density cap — never render more than N events on the operational
+    // radar. Prevents heatmap saturation, marker storms and render loops
+    // when ingestion floods the workspace. Severity-ordered before slice.
+    const MAX_VISIBLE = 250;
+    const SEV_RANK: Record<HailSeverity, number> = { extreme: 4, severe: 3, moderate: 2, low: 1 };
 
-    return hailEntities
-      .filter((e) => {
-        // Severity chips
-        if (!hailSeverityFilter[e.severity]) return false;
-        if (hailMinSizeMm > 0 && e.size < hailMinSizeMm) return false;
+    const filtered = hailEntities.filter((e) => {
+      if (!hailSeverityFilter[e.severity]) return false;
+      if (hailMinSizeMm > 0 && e.size < hailMinSizeMm) return false;
+      if (hailStatusFilter !== "all") {
+        if (hailStatusFilter === "forecast" && !e.forecast) return false;
+        if (hailStatusFilter === "ongoing" && !e.active) return false;
+        if (hailStatusFilter === "confirmed" && !e.confirmed) return false;
+      }
+      if (!isLive) {
+        if (e.timestamp < windowStart) return false;
+        if (e.timestamp > replayTimeMs) return false;
+      }
+      return true;
+    });
 
-        // Status chips (Todos / Previsão / Ativo / Confirmado)
-        if (hailStatusFilter !== "all") {
-          if (hailStatusFilter === "forecast" && !e.forecast) return false;
-          if (hailStatusFilter === "ongoing" && !e.active) return false;
-          if (hailStatusFilter === "confirmed" && !e.confirmed) return false;
-        }
-
-        // Time window only applies during replay scrubbing — at AO VIVO,
-        // status/severity chips must reveal every loaded entity.
-        if (!isLive) {
-          if (e.timestamp < windowStart) return false;
-          if (e.timestamp > replayTimeMs) return false;
-        }
-        return true;
-      })
+    if (filtered.length <= MAX_VISIBLE) return filtered.map((e) => e.raw);
+    return filtered
+      .sort((a, b) => (SEV_RANK[b.severity] - SEV_RANK[a.severity]) || (b.timestamp - a.timestamp))
+      .slice(0, MAX_VISIBLE)
       .map((e) => e.raw);
   }, [hailEntities, hailStatusFilter, hailSeverityFilter, hailMinSizeMm, hailWindowHours, replayTimeMs, replayCursor]);
+
 
   const [selectedHailId, setSelectedHailId] = useState<string | null>(null);
   const selectedHail = useMemo(
@@ -424,14 +429,22 @@ export function OperationalMap() {
   /* -------- GeoJSON sources ----------------------------------------- */
   const ordersGeo = useMemo(() => {
     const features: any[] = [];
+    // Deterministic jitter per order id — keeps feature references stable
+    // across re-renders, which avoids cascading recomputes (oppOrders →
+    // opportunities → pdrHeatGeo) and map source thrashing.
+    const hash = (s: string) => {
+      let h = 0;
+      for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+      return h;
+    };
     for (const o of serviceOrders) {
       const text = [o.platform, o.car_name, o.license_plate].filter(Boolean).join(" ");
       const city = guessCityFromText(text);
       if (!city) continue;
       const [lng, lat] = CITY_COORDS[city];
-      // small jitter
-      const jx = (Math.random() - 0.5) * 0.04;
-      const jy = (Math.random() - 0.5) * 0.04;
+      const h = hash(String(o.id ?? text));
+      const jx = (((h & 0xff) / 255) - 0.5) * 0.04;
+      const jy = ((((h >> 8) & 0xff) / 255) - 0.5) * 0.04;
       features.push({
         type: "Feature",
         geometry: { type: "Point", coordinates: [lng + jx, lat + jy] },
@@ -446,6 +459,7 @@ export function OperationalMap() {
     }
     return { type: "FeatureCollection", features };
   }, [serviceOrders]);
+
 
   const teamsGeo = useMemo(() => {
     const features = geoCheckins.map((c: any) => ({
@@ -1370,27 +1384,36 @@ export function OperationalMap() {
 
       {/* -------- Dynamic operational command panel -------- */}
       {selectedHail && (
-        <OperationalPanel
-          event={selectedHail}
-          teams={(teamsGeo.features as any[]).map((f): PanelTeam => ({
-            lng: f.geometry.coordinates[0],
-            lat: f.geometry.coordinates[1],
-            city: f.properties?.city,
-            when: f.properties?.when,
-          }))}
-          orders={(ordersGeo.features as any[]).map((f): PanelOrder => ({
-            id: f.properties?.id,
-            city: f.properties?.city,
-            platform: f.properties?.platform,
-            plate: f.properties?.plate,
-            status: f.properties?.status,
-            lng: f.geometry.coordinates[0],
-            lat: f.geometry.coordinates[1],
-          }))}
-          onClose={() => setSelectedHailId(null)}
-          reports={reportsByEvent.get(selectedHail.id) ?? []}
-        />
+        <ErrorBoundary
+          fallback={
+            <div className="mt-4 p-3 rounded-xl border border-amber-500/30 bg-amber-500/5 text-[11px] text-amber-300">
+              Painel operacional indisponível para este evento. O mapa continua activo.
+            </div>
+          }
+        >
+          <OperationalPanel
+            event={selectedHail}
+            teams={(teamsGeo.features as any[]).map((f): PanelTeam => ({
+              lng: f.geometry.coordinates[0],
+              lat: f.geometry.coordinates[1],
+              city: f.properties?.city,
+              when: f.properties?.when,
+            }))}
+            orders={(ordersGeo.features as any[]).map((f): PanelOrder => ({
+              id: f.properties?.id,
+              city: f.properties?.city,
+              platform: f.properties?.platform,
+              plate: f.properties?.plate,
+              status: f.properties?.status,
+              lng: f.geometry.coordinates[0],
+              lat: f.geometry.coordinates[1],
+            }))}
+            onClose={() => setSelectedHailId(null)}
+            reports={reportsByEvent.get(selectedHail.id) ?? []}
+          />
+        </ErrorBoundary>
       )}
+
 
       {/* -------- PDR Operational Opportunities (intelligence panel) -------- */}
       {layers.pdr && (
