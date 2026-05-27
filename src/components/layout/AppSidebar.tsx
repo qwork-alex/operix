@@ -3,7 +3,7 @@ import {
   LayoutDashboard, FileText, CreditCard, TrendingUp, BarChart3,
   Car, Users, Receipt, Shield, Wrench, Store, Zap, Brain,
 } from "lucide-react";
-import { useIsPlatformOwner } from "@/hooks/useSubscription";
+// useIsPlatformOwner removed — single-workspace architecture.
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
@@ -44,7 +44,7 @@ export function AppSidebar() {
   const { can, isLoading: permsLoading } = useCan();
   const { brandConfig, saveBrandConfig } = useCompanyLogo();
   const { workspaceName } = useWorkspace();
-  const { data: isPlatformOwner } = useIsPlatformOwner();
+  // Platform-owner gating removed — single-workspace architecture.
 
   const handleBrandSave = async (config: BrandConfig) => {
     try {
