@@ -1,36 +1,27 @@
 /**
- * useOperationalCopilotBoot — DEFERRED bootstrap.
+ * useOperationalCopilotBoot — Phase 4 (DEFERRED).
  *
- * The Copilot snapshot includes the Demand Engine (forecastDemand) and pulls
- * 7 tables of historical data. To prevent it from blocking the AppShell /
- * session hydration, we defer enablement until the browser is idle AND the
- * dashboard has had a chance to paint. Failures here NEVER block the app.
+ * The Copilot snapshot pulls 7 tables of historical data. We arm it only
+ * after the dashboard has painted AND the browser is idle. SAFE_BOOT
+ * disables it completely. Failures stay contained in TanStack Query.
  */
 import { useEffect, useState } from "react";
 import { useOperationalCopilot } from "./useOperationalCopilot";
+import { bootStage, scheduleDeferredBoot } from "@/lib/bootStage";
 
 export function useOperationalCopilotBoot() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
-    const arm = () => {
-      if (!cancelled) setReady(true);
-    };
-    const t = setTimeout(() => {
-      const ric = (window as any).requestIdleCallback as
-        | ((cb: () => void, opts?: { timeout: number }) => number)
-        | undefined;
-      if (ric) ric(arm, { timeout: 4000 });
-      else setTimeout(arm, 1500);
-    }, 1200);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
+    if (bootStage.isSafeBoot()) {
+      bootStage.log("OperationalCopilot", "skipped (SAFE_BOOT)");
+      return;
+    }
+    return scheduleDeferredBoot("OperationalCopilot", () => {
+      setReady(true);
+    }, { delayMs: 2600, idleTimeoutMs: 6000 });
   }, []);
 
-  // Hook mounts unconditionally (rules-of-hooks); the query activates
-  // only after `ready` flips. Any error stays contained in TanStack Query.
+  // Query stays disabled until `ready` flips post-paint/idle.
   useOperationalCopilot({ enabled: ready });
 }

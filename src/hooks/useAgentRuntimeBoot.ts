@@ -1,13 +1,15 @@
 /**
- * Boots AgentRuntime once. Mounted alongside the operational bus boot
- * so the agent has the unified stream available from the first paint.
+ * AgentRuntime boot — Phase 4. Deferred to browser idle so the dashboard
+ * paints first. Honors SAFE_BOOT.
  */
 import { useEffect } from "react";
 import { AgentRuntime } from "@/lib/agent";
+import { scheduleDeferredBoot } from "@/lib/bootStage";
 
 export function useAgentRuntimeBoot() {
   useEffect(() => {
-    AgentRuntime.start();
-    // Intentionally do NOT stop on unmount — runtime is process-wide.
+    return scheduleDeferredBoot("AgentRuntime", () => {
+      AgentRuntime.start();
+    }, { delayMs: 1400 });
   }, []);
 }
