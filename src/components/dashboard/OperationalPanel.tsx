@@ -1,9 +1,34 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, lazy, Suspense } from "react";
 import {
   X, AlertTriangle, Wind, Clock, Gauge, Radar, Zap, Users, FileText,
   Activity, Maximize2, Minimize2, Shrink, MapPin, Shield, Radio, CheckCircle2, Eye, CloudRain,
 } from "lucide-react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+
+/**
+ * Demand Engine UI is lazy-loaded so its module + its render path stay
+ * OFF the bootstrap critical path. App shell renders even if this chunk
+ * fails to load.
+ */
+const DemandBlock = lazy(() => import("./DemandBlock"));
+
+/** Defers a mount until the browser is idle, post-paint. */
+function useIdleMount(delayMs = 600): boolean {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    const arm = () => { if (!cancelled) setReady(true); };
+    const t = setTimeout(() => {
+      const ric = (window as any).requestIdleCallback as
+        | ((cb: () => void, opts?: { timeout: number }) => number)
+        | undefined;
+      if (ric) ric(arm, { timeout: 2500 });
+      else setTimeout(arm, 300);
+    }, delayMs);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [delayMs]);
+  return ready;
+}
 
 /* ---------- Shared types (kept in sync with OperationalMap) ---------- */
 const HAIL_COLORS = {
