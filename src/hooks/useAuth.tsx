@@ -77,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const finishBoot = (s: Session | null) => {
-      if (!mounted.current) return;
+      if (!mounted.current || initialSessionResolved.current) return;
       initialSessionResolved.current = true;
       applySession(s);
       setLoading(false);
@@ -168,7 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: error as Error | null };
     } catch (err) {
       console.error("[Auth] signIn error:", err);
-      return { error: err as Error };
+      return { error: new Error("Login indisponível no momento. Tente novamente em instantes.") };
     }
   };
 
