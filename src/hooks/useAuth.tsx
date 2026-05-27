@@ -108,7 +108,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       (event, s) => {
         if (!mounted.current) return;
         if (event === "INITIAL_SESSION" && !initialSessionResolved.current) {
-          finishBoot(s ?? null);
+          // A null INITIAL_SESSION can arrive before storage restoration fully
+          // resolves; let getSession/boot timeout decide the final null state.
+          if (s) finishBoot(s);
           return;
         }
         initialSessionResolved.current = true;
