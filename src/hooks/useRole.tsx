@@ -1,4 +1,4 @@
-import { createContext, useContext, ReactNode } from "react";
+import { createContext, useContext, useEffect, ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
@@ -38,6 +38,10 @@ const RoleCtx = createContext<RoleContext | undefined>(undefined);
 export function RoleProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { effectiveUserId, isImpersonating } = useImpersonation();
+  useEffect(() => {
+    console.log("[MOUNT] RoleProvider");
+    return () => console.log("[UNMOUNT] RoleProvider");
+  }, []);
   // When impersonating, resolve the role of the target user so the whole UI
   // (sidebar, guards, dashboards) reflects what they see.
   const lookupId = isImpersonating ? effectiveUserId : user?.id;

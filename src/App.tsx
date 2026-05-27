@@ -55,6 +55,7 @@ const GdprPage = lazy(() => import("./pages/legal/LegalPages").then((m) => ({ de
 const CookiesPage = lazy(() => import("./pages/legal/LegalPages").then((m) => ({ default: m.CookiesPage })));
 const DataProcessingPage = lazy(() => import("./pages/legal/LegalPages").then((m) => ({ default: m.DataProcessingPage })));
 
+console.log("[MOUNT] QueryClient (module init — should appear ONCE)");
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

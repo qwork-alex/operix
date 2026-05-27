@@ -9,7 +9,7 @@
  * adopt `useTenant()` to get a single, guard-aware view of the current
  * tenant context plus a hardened `assertSameTenant` helper for write paths.
  */
-import { createContext, ReactNode, useCallback, useContext, useMemo } from "react";
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { useRole, type DisplayRole } from "@/hooks/useRole";
@@ -39,6 +39,10 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   const { workspaceId, workspaceName, isAdmin: isWsAdmin, isLoading: wsLoading } = useWorkspace();
   const { role, isLoading: roleLoading } = useRole();
   const { data: isOwner, isLoading: ownerLoading } = useIsPlatformOwner();
+  useEffect(() => {
+    console.log("[MOUNT] TenantProvider");
+    return () => console.log("[UNMOUNT] TenantProvider");
+  }, []);
 
   const isSameTenant = useCallback(
     (id: string | null | undefined) => {

@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect } from "react";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { TopBar } from "./TopBar";
@@ -15,6 +15,10 @@ import { useObservabilityBoot } from "@/hooks/useObservabilityBoot";
 import { FloatingTripButton } from "@/components/fleet/FloatingTripButton";
 
 export function AppLayout({ children }: { children: ReactNode }) {
+  useEffect(() => {
+    console.log("[MOUNT] AppLayout");
+    return () => console.log("[UNMOUNT] AppLayout");
+  }, []);
   useOperationalBusBoot();
   useAgentRuntimeBoot();
   useVirtualEngineerBoot();

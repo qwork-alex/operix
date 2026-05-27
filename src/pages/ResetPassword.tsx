@@ -50,7 +50,7 @@ export default function ResetPassword() {
     }
     setSubmitting(true);
     try {
-      const { error } = await withResetTimeout(supabase.auth.updateUser({ password }), "updateUser");
+      const { error } = await withResetTimeout<Awaited<ReturnType<typeof supabase.auth.updateUser>>>(supabase.auth.updateUser({ password }), "updateUser");
       if (error) {
         toast.error(error.message);
         return;
