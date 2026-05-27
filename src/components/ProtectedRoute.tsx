@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Loader2 } from "lucide-react";
@@ -5,6 +6,11 @@ import { Loader2 } from "lucide-react";
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth();
   const location = useLocation();
+
+  useEffect(() => {
+    console.log("[MOUNT] ProtectedRoute");
+    return () => console.log("[UNMOUNT] ProtectedRoute");
+  }, []);
 
   if (loading) {
     return (
