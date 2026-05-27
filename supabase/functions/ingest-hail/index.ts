@@ -437,14 +437,31 @@ const GLOBAL_GRID: GridPoint[] = [
   {key:"RO-BUC",lat:44.4,lng:26.1,country:"RO",city:"Bucharest"},
   {key:"GR-ATH",lat:38.0,lng:23.7,country:"GR",city:"Athens"},
   {key:"SE-STO",lat:59.3,lng:18.1,country:"SE",city:"Stockholm"},
-  // Asia
+  // Asia — China hail belt + Japan + Korea + India hail-prone plains + SE Asia
   {key:"CN-BJS",lat:39.9,lng:116.4,country:"CN",city:"Beijing"},
   {key:"CN-SHA",lat:31.2,lng:121.5,country:"CN",city:"Shanghai"},
   {key:"CN-CAN",lat:23.1,lng:113.3,country:"CN",city:"Guangzhou"},
+  {key:"CN-CTU",lat:30.7,lng:104.1,country:"CN",city:"Chengdu"},
+  {key:"CN-CKG",lat:29.6,lng:106.5,country:"CN",city:"Chongqing"},
+  {key:"CN-XIY",lat:34.3,lng:108.9,country:"CN",city:"Xi'an"},
+  {key:"CN-WUH",lat:30.6,lng:114.3,country:"CN",city:"Wuhan"},
+  {key:"CN-HRB",lat:45.8,lng:126.5,country:"CN",city:"Harbin"},
+  {key:"CN-SHE",lat:41.8,lng:123.4,country:"CN",city:"Shenyang"},
+  {key:"CN-HOH",lat:40.8,lng:111.7,country:"CN",city:"Hohhot"},
+  {key:"CN-LZH",lat:36.1,lng:103.8,country:"CN",city:"Lanzhou"},
+  {key:"CN-KMG",lat:25.0,lng:102.7,country:"CN",city:"Kunming"},
   {key:"JP-TYO",lat:35.7,lng:139.7,country:"JP",city:"Tokyo"},
+  {key:"JP-OSA",lat:34.7,lng:135.5,country:"JP",city:"Osaka"},
+  {key:"JP-SDJ",lat:38.3,lng:140.9,country:"JP",city:"Sendai"},
   {key:"KR-SEL",lat:37.6,lng:127.0,country:"KR",city:"Seoul"},
   {key:"IN-DEL",lat:28.6,lng:77.2,country:"IN",city:"New Delhi"},
   {key:"IN-BOM",lat:19.1,lng:72.9,country:"IN",city:"Mumbai"},
+  {key:"IN-CCU",lat:22.6,lng:88.4,country:"IN",city:"Kolkata"},
+  {key:"IN-BLR",lat:13.0,lng:77.6,country:"IN",city:"Bangalore"},
+  {key:"IN-HYD",lat:17.4,lng:78.5,country:"IN",city:"Hyderabad"},
+  {key:"IN-NAG",lat:21.1,lng:79.1,country:"IN",city:"Nagpur"},
+  {key:"PK-LHE",lat:31.5,lng:74.4,country:"PK",city:"Lahore"},
+  {key:"BD-DAC",lat:23.8,lng:90.4,country:"BD",city:"Dhaka"},
   {key:"TH-BKK",lat:13.7,lng:100.5,country:"TH",city:"Bangkok"},
   {key:"VN-SGN",lat:10.8,lng:106.7,country:"VN",city:"Ho Chi Minh"},
   {key:"MY-KUL",lat:3.1,lng:101.7,country:"MY",city:"Kuala Lumpur"},
@@ -460,20 +477,43 @@ const GLOBAL_GRID: GridPoint[] = [
   {key:"KE-NBO",lat:-1.3,lng:36.8,country:"KE",city:"Nairobi"},
   {key:"ET-ADD",lat:9.0,lng:38.7,country:"ET",city:"Addis Ababa"},
   {key:"GH-ACC",lat:5.6,lng:-0.2,country:"GH",city:"Accra"},
-  // Oceania
+  // Oceania — Australia hail alley (BoM data unavailable freely; inference covers)
   {key:"AU-SYD",lat:-33.9,lng:151.2,country:"AU",city:"Sydney"},
   {key:"AU-MEL",lat:-37.8,lng:144.9,country:"AU",city:"Melbourne"},
   {key:"AU-BNE",lat:-27.5,lng:153.0,country:"AU",city:"Brisbane"},
+  {key:"AU-CBR",lat:-35.3,lng:149.1,country:"AU",city:"Canberra"},
+  {key:"AU-ADL",lat:-34.9,lng:138.6,country:"AU",city:"Adelaide"},
+  {key:"AU-PER",lat:-31.95,lng:115.86,country:"AU",city:"Perth"},
   {key:"NZ-AKL",lat:-36.8,lng:174.8,country:"NZ",city:"Auckland"},
-  // Americas (non-US/CA)
+  {key:"NZ-CHC",lat:-43.5,lng:172.6,country:"NZ",city:"Christchurch"},
+  // South America — Brazil hail belt (South), Argentina pampas, Andes foothills
   {key:"MX-MEX",lat:19.4,lng:-99.1,country:"MX",city:"Mexico City"},
+  {key:"MX-MTY",lat:25.7,lng:-100.3,country:"MX",city:"Monterrey"},
   {key:"BR-SAO",lat:-23.5,lng:-46.6,country:"BR",city:"São Paulo"},
+  {key:"BR-RIO",lat:-22.9,lng:-43.2,country:"BR",city:"Rio de Janeiro"},
   {key:"BR-POA",lat:-30.0,lng:-51.2,country:"BR",city:"Porto Alegre"},
+  {key:"BR-CWB",lat:-25.4,lng:-49.3,country:"BR",city:"Curitiba"},
+  {key:"BR-FLN",lat:-27.6,lng:-48.5,country:"BR",city:"Florianópolis"},
+  {key:"BR-CGB",lat:-15.6,lng:-56.1,country:"BR",city:"Cuiabá"},
+  {key:"BR-BSB",lat:-15.8,lng:-47.9,country:"BR",city:"Brasília"},
+  {key:"BR-BHZ",lat:-19.9,lng:-43.9,country:"BR",city:"Belo Horizonte"},
+  {key:"BR-REC",lat:-8.0,lng:-34.9,country:"BR",city:"Recife"},
+  {key:"BR-MAO",lat:-3.1,lng:-60.0,country:"BR",city:"Manaus"},
   {key:"AR-BUE",lat:-34.6,lng:-58.4,country:"AR",city:"Buenos Aires"},
+  {key:"AR-COR",lat:-31.4,lng:-64.2,country:"AR",city:"Córdoba"},
+  {key:"AR-MDZ",lat:-32.9,lng:-68.8,country:"AR",city:"Mendoza"},
+  {key:"AR-ROS",lat:-32.9,lng:-60.7,country:"AR",city:"Rosario"},
+  {key:"UY-MVD",lat:-34.9,lng:-56.2,country:"UY",city:"Montevideo"},
+  {key:"PY-ASU",lat:-25.3,lng:-57.6,country:"PY",city:"Asunción"},
   {key:"CL-SCL",lat:-33.4,lng:-70.6,country:"CL",city:"Santiago"},
+  {key:"BO-LPB",lat:-16.5,lng:-68.1,country:"BO",city:"La Paz"},
   {key:"CO-BOG",lat:4.7,lng:-74.1,country:"CO",city:"Bogotá"},
+  {key:"CO-MDE",lat:6.2,lng:-75.6,country:"CO",city:"Medellín"},
   {key:"PE-LIM",lat:-12.0,lng:-77.0,country:"PE",city:"Lima"},
+  {key:"EC-UIO",lat:-0.2,lng:-78.5,country:"EC",city:"Quito"},
+  {key:"VE-CCS",lat:10.5,lng:-66.9,country:"VE",city:"Caracas"},
 ];
+
 
 function severityFromHailMm(mm: number | null): Severity {
   const v = mm ?? 10;
@@ -618,6 +658,209 @@ const OpenMeteo: WeatherProvider = {
   },
 };
 
+/* ===========================================================================
+ *  HAIL OPERATIONAL ENGINE (Phase 3)
+ *  ---------------------------------------------------------------------------
+ *  Goal: detect hail probability OPERATIONALLY even where no official feed
+ *  exists (China, South America, India, JP, AU, AF). We score atmospheric
+ *  instability + convective signature from free OpenMeteo fields:
+ *
+ *    cape                       — Convective Available Potential Energy (J/kg)
+ *    lifted_index               — atmospheric instability (negative = unstable)
+ *    freezing_level_height (m)  — lower = larger hail survives to ground
+ *    convective_inhibition      — energy barrier to convection
+ *    precipitation              — current/forecast precip (mm/h)
+ *    weathercode (WMO)          — 95/96/99 = thunderstorm family
+ *    cloudcover_high            — anvil / cloud top signature
+ *    wind_gusts_10m             — storm downdraft proxy
+ *
+ *  Output: composite operational score 0..100 → BAIXO/MODERADO/SEVERO/EXTREMO.
+ *  This NEVER overrides an official alert; it lives at lower priority and is
+ *  deduped by (source, external_id) so genuine MeteoAlarm/NOAA wins.
+ * ===========================================================================*/
+
+interface InstabilityInput {
+  cape: number | null;
+  liftedIndex: number | null;
+  freezingLevelM: number | null;
+  cin: number | null;
+  precipMm: number | null;
+  weatherCode: number | null;
+  highCloudPct: number | null;
+  windGustKmh: number | null;
+}
+
+interface OperationalScore {
+  score: number;           // 0..100
+  severity: Severity;
+  level: "BAIXO" | "MODERADO" | "SEVERO" | "EXTREMO";
+  hailProbability: number; // 0..1
+  inferredHailMm: number;  // estimated stone size
+  reasons: string[];
+}
+
+function scoreConvectiveHail(x: InstabilityInput): OperationalScore {
+  const reasons: string[] = [];
+  let score = 0;
+
+  // 1) CAPE — the dominant driver of severe convection
+  if (x.cape != null) {
+    if (x.cape >= 3500) { score += 45; reasons.push(`CAPE ${Math.round(x.cape)} J/kg (extreme)`); }
+    else if (x.cape >= 2500) { score += 35; reasons.push(`CAPE ${Math.round(x.cape)} J/kg (severe)`); }
+    else if (x.cape >= 1500) { score += 22; reasons.push(`CAPE ${Math.round(x.cape)} J/kg (moderate)`); }
+    else if (x.cape >= 800)  { score += 10; reasons.push(`CAPE ${Math.round(x.cape)} J/kg (marginal)`); }
+  }
+  // 2) Lifted Index — strongly negative = strong instability
+  if (x.liftedIndex != null) {
+    if (x.liftedIndex <= -8) { score += 20; reasons.push(`LI ${x.liftedIndex.toFixed(1)} (extreme instability)`); }
+    else if (x.liftedIndex <= -5) { score += 14; reasons.push(`LI ${x.liftedIndex.toFixed(1)} (severe)`); }
+    else if (x.liftedIndex <= -2) { score += 7;  reasons.push(`LI ${x.liftedIndex.toFixed(1)} (moderate)`); }
+  }
+  // 3) Freezing level — lower = larger hailstones reach ground
+  if (x.freezingLevelM != null && x.freezingLevelM < 4200) {
+    if (x.freezingLevelM < 2800) { score += 15; reasons.push(`Freezing level ${Math.round(x.freezingLevelM)}m (low)`); }
+    else if (x.freezingLevelM < 3500) { score += 9; reasons.push(`Freezing level ${Math.round(x.freezingLevelM)}m`); }
+    else { score += 4; }
+  }
+  // 4) Active thunderstorm code is a strong confirmer
+  if (x.weatherCode != null) {
+    if (x.weatherCode === 99) { score += 18; reasons.push("WMO 99: heavy hail thunderstorm"); }
+    else if (x.weatherCode === 96) { score += 12; reasons.push("WMO 96: slight hail thunderstorm"); }
+    else if (x.weatherCode === 95) { score += 6;  reasons.push("WMO 95: thunderstorm active"); }
+  }
+  // 5) High cloud / anvil signature
+  if (x.highCloudPct != null && x.highCloudPct >= 70) {
+    score += 4; reasons.push(`High-cloud cover ${Math.round(x.highCloudPct)}%`);
+  }
+  // 6) Downdraft proxy
+  if (x.windGustKmh != null && x.windGustKmh >= 70) {
+    score += 6; reasons.push(`Gusts ${Math.round(x.windGustKmh)} km/h`);
+  } else if (x.windGustKmh != null && x.windGustKmh >= 50) {
+    score += 3;
+  }
+  // 7) Precipitation cross-check
+  if (x.precipMm != null && x.precipMm >= 8) {
+    score += 4; reasons.push(`Precip ${x.precipMm.toFixed(1)} mm/h`);
+  }
+  // 8) CIN penalty — a cap suppresses convection
+  if (x.cin != null && x.cin <= -150) {
+    score -= 10; reasons.push(`CIN ${Math.round(x.cin)} J/kg (capped)`);
+  }
+
+  score = Math.max(0, Math.min(100, score));
+
+  let level: OperationalScore["level"] = "BAIXO";
+  let severity: Severity = "low";
+  if (score >= 75) { level = "EXTREMO"; severity = "extreme"; }
+  else if (score >= 55) { level = "SEVERO"; severity = "severe"; }
+  else if (score >= 35) { level = "MODERADO"; severity = "moderate"; }
+
+  // Stone size estimate (mm): rough empirical from CAPE + freezing level
+  let inferredHailMm = 0;
+  if (x.cape != null) {
+    inferredHailMm = Math.max(0, Math.sqrt(Math.max(0, x.cape - 500)) * 0.45);
+    if (x.freezingLevelM != null && x.freezingLevelM < 3200) inferredHailMm *= 1.25;
+  }
+  inferredHailMm = Math.min(80, Math.round(inferredHailMm));
+
+  const hailProbability = Math.min(0.95, score / 100);
+  return { score, severity, level, hailProbability, inferredHailMm, reasons };
+}
+
+/* ----- Convective Inference provider (free, global, OpenMeteo-backed) ----
+ *  Uses OpenMeteo's atmospheric instability fields to infer hail in regions
+ *  without an official feed. Threshold: score >= 35 (MODERADO+). Below that
+ *  we don't emit an event — keeps the radar focused on operational signal.
+ * --------------------------------------------------------------------- */
+const ConvectiveInference: WeatherProvider = {
+  key: "convective_inference",
+  capabilities: ["hail", "severe", "storm_cells", "precipitation", "wind"],
+  async fetchHail(ctx) {
+    const cacheKey = `ci:hail:global`;
+    const cached = await ctx.cache.get(cacheKey);
+    if (cached) return cached as HailEvent[];
+
+    const events: HailEvent[] = [];
+    const chunkSize = 8;
+
+    for (let i = 0; i < GLOBAL_GRID.length; i += chunkSize) {
+      const chunk = GLOBAL_GRID.slice(i, i + chunkSize);
+      const lats = chunk.map(p => p.lat).join(",");
+      const lngs = chunk.map(p => p.lng).join(",");
+      const url =
+        `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lngs}` +
+        `&hourly=cape,lifted_index,freezing_level_height,convective_inhibition,` +
+        `precipitation,weathercode,cloudcover_high,wind_gusts_10m` +
+        `&forecast_days=2&timezone=UTC`;
+      try {
+        const res = await fetch(url);
+        if (!res.ok) continue;
+        const json = await res.json();
+        const items = Array.isArray(json) ? json : [json];
+        items.forEach((entry: any, idx: number) => {
+          const p = chunk[idx];
+          if (!p) return;
+          const h = entry?.hourly ?? {};
+          const times: string[] = h.time ?? [];
+          const nowMs = Date.now();
+          // Sample a window: next 24h, every 3h to keep payload bounded.
+          for (let j = 0; j < times.length; j += 3) {
+            const tMs = new Date(times[j] + "Z").getTime();
+            if (tMs < nowMs - 3600_000 || tMs > nowMs + 24 * 3600_000) continue;
+
+            const input: InstabilityInput = {
+              cape: h.cape?.[j] ?? null,
+              liftedIndex: h.lifted_index?.[j] ?? null,
+              freezingLevelM: h.freezing_level_height?.[j] ?? null,
+              cin: h.convective_inhibition?.[j] ?? null,
+              precipMm: h.precipitation?.[j] ?? null,
+              weatherCode: h.weathercode?.[j] ?? null,
+              highCloudPct: h.cloudcover_high?.[j] ?? null,
+              windGustKmh: h.wind_gusts_10m?.[j] ?? null,
+            };
+            const op = scoreConvectiveHail(input);
+            if (op.score < 35) continue; // only emit MODERADO+
+
+            const isLive = Math.abs(tMs - nowMs) < 90 * 60_000;
+            events.push({
+              source: "convective_inference",
+              external_id: `ci-${p.key}-${times[j]}`,
+              city: p.city ?? null, country: p.country,
+              lat: p.lat, lng: p.lng, radius_km: 35,
+              severity: op.severity,
+              status: isLive ? "ongoing" : "forecast",
+              hail_size_mm: op.inferredHailMm || null,
+              probability: op.hailProbability,
+              intensity: op.score,
+              storm_speed_kmh: input.windGustKmh ?? null,
+              forecast_time: isLive ? null : times[j] + "Z",
+              observed_time: isLive ? times[j] + "Z" : null,
+              expires_at: new Date(tMs + 3 * 3600_000).toISOString(),
+              metadata: {
+                engine: "hailOperationalEngine",
+                version: 1,
+                grid: p.key,
+                operational_score: op.score,
+                operational_level: op.level,
+                reasons: op.reasons,
+                inputs: input,
+              },
+            });
+          }
+        });
+      } catch (e) {
+        console.warn(`[convective_inference] chunk ${i} failed:`, (e as Error).message);
+      }
+    }
+
+    await ctx.cache.set({
+      key: cacheKey, provider: "convective_inference", capability: "hail",
+      regionKey: "global", payload: events, ttlSeconds: 900,
+    });
+    return events;
+  },
+};
+
 /* ----- OpenWeather (paid; alerts/precipitation) -------------------------- */
 const OpenWeather: WeatherProvider = {
   key: "openweather",
@@ -638,9 +881,11 @@ const PROVIDERS: Record<string, WeatherProvider> = {
   environment_canada: EnvCanada,
   tomorrowio: TomorrowIo,
   openmeteo: OpenMeteo,
+  convective_inference: ConvectiveInference,
   openweather: OpenWeather,
   weatherapi: WeatherAPI,
 };
+
 
 /* -------- France department centroid lookup (subset, expandable) -------- */
 const FR_DEPARTMENT_COORDS: Record<string, [number, number]> = {
