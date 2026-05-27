@@ -16,12 +16,34 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function readStoredSessionFallback(): Session | null {
+  if (typeof window === "undefined") return null;
+  try {
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (!key?.startsWith("sb-") || !key.endsWith("-auth-token")) continue;
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      const stored = parsed?.currentSession ?? parsed?.session ?? parsed;
+      if (stored?.access_token && stored?.refresh_token && stored?.user?.id) {
+        return stored as Session;
+      }
+    }
+  } catch (err) {
+    console.warn("[Auth] stored session fallback unavailable", err);
+  }
+  return null;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<AuthContextType["profile"]>(null);
   const [loading, setLoading] = useState(true);
   const mounted = useRef(true);
+  const initialSessionResolved = useRef(false);
+  const bootRetryTimer = useRef<number | null>(null);
 
   const fetchUserData = async (userId: string) => {
     try {
@@ -43,26 +65,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     mounted.current = true;
 
-    // 1. Get existing session first
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
+    const applySession = (s: Session | null) => {
       if (!mounted.current) return;
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
         fetchUserData(s.user.id);
-        // Phase 5.5 — register device fingerprint (silent, best-effort)
         registerCurrentDevice();
+      } else {
+        setProfile(null);
       }
+    };
+
+    // 1. Get existing session first
+    supabase.auth.getSession().then(({ data: { session: s } }) => {
+      if (!mounted.current) return;
+      initialSessionResolved.current = true;
+      applySession(s);
       setLoading(false);
     }).catch((err) => {
       console.error("[Auth] getSession error:", err);
-      if (mounted.current) setLoading(false);
+      const stored = readStoredSessionFallback();
+      if (stored) {
+        console.warn("[Auth] using stored session fallback after hydration failure");
+        initialSessionResolved.current = true;
+        applySession(stored);
+        if (mounted.current) setLoading(false);
+        return;
+      }
+      bootRetryTimer.current = window.setTimeout(() => {
+        if (!mounted.current) return;
+        initialSessionResolved.current = true;
+        setLoading(false);
+      }, 1200);
     });
 
     // 2. Listen for auth changes — no awaits inside callback
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, s) => {
         if (!mounted.current) return;
+        if (event === "INITIAL_SESSION" && !initialSessionResolved.current) {
+          if (s) {
+            initialSessionResolved.current = true;
+            applySession(s);
+            setLoading(false);
+          }
+          return;
+        }
+        initialSessionResolved.current = true;
         setSession(s);
         setUser(s?.user ?? null);
         if (s?.user) {
@@ -89,6 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       mounted.current = false;
+      if (bootRetryTimer.current) window.clearTimeout(bootRetryTimer.current);
       subscription.unsubscribe();
     };
   }, []);
