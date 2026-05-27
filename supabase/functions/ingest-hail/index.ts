@@ -702,75 +702,110 @@ interface OperationalScore {
   level: "BAIXO" | "MODERADO" | "SEVERO" | "EXTREMO";
   hailProbability: number; // 0..1
   inferredHailMm: number;  // estimated stone size
+  confidence: number;      // 0..1 — how many independent signals corroborate
   reasons: string[];
 }
 
+/**
+ * PHASE 4 — Refined operational hail scoring.
+ *
+ * Rebalance vs Phase 3:
+ *  - Reduced weight on isolated precipitation, marginal CAPE and weak instability
+ *  - Increased weight on multi-signal convective signatures (CAPE × LI × storm code)
+ *  - Heavier penalty for strong CIN (capped atmospheres do not produce hail)
+ *  - New confidence score: # of independent signals confirming the event
+ *  - New bands: 0-25 ignore, 26-40 low, 41-60 moderate, 61-80 severe, 81-100 extreme
+ *  - Synergy bonus only when CAPE ≥ 1500 AND LI ≤ -4 AND active storm code
+ */
 function scoreConvectiveHail(x: InstabilityInput): OperationalScore {
   const reasons: string[] = [];
   let score = 0;
+  let signals = 0; // independent confirmations
 
-  // 1) CAPE — the dominant driver of severe convection
+  // 1) CAPE — dominant driver, but marginal CAPE alone is no longer enough
   if (x.cape != null) {
-    if (x.cape >= 3500) { score += 45; reasons.push(`CAPE ${Math.round(x.cape)} J/kg (extreme)`); }
-    else if (x.cape >= 2500) { score += 35; reasons.push(`CAPE ${Math.round(x.cape)} J/kg (severe)`); }
-    else if (x.cape >= 1500) { score += 22; reasons.push(`CAPE ${Math.round(x.cape)} J/kg (moderate)`); }
-    else if (x.cape >= 800)  { score += 10; reasons.push(`CAPE ${Math.round(x.cape)} J/kg (marginal)`); }
+    if (x.cape >= 3500)      { score += 38; signals++; reasons.push(`CAPE ${Math.round(x.cape)} J/kg (extreme)`); }
+    else if (x.cape >= 2500) { score += 28; signals++; reasons.push(`CAPE ${Math.round(x.cape)} J/kg (severe)`); }
+    else if (x.cape >= 1500) { score += 16; signals++; reasons.push(`CAPE ${Math.round(x.cape)} J/kg (moderate)`); }
+    else if (x.cape >= 1000) { score += 5; reasons.push(`CAPE ${Math.round(x.cape)} J/kg (marginal)`); }
+    // CAPE < 1000 contributes nothing (was 10 pts in phase 3 — noise source)
   }
-  // 2) Lifted Index — strongly negative = strong instability
+  // 2) Lifted Index — instability multiplier
   if (x.liftedIndex != null) {
-    if (x.liftedIndex <= -8) { score += 20; reasons.push(`LI ${x.liftedIndex.toFixed(1)} (extreme instability)`); }
-    else if (x.liftedIndex <= -5) { score += 14; reasons.push(`LI ${x.liftedIndex.toFixed(1)} (severe)`); }
-    else if (x.liftedIndex <= -2) { score += 7;  reasons.push(`LI ${x.liftedIndex.toFixed(1)} (moderate)`); }
+    if (x.liftedIndex <= -8)      { score += 22; signals++; reasons.push(`LI ${x.liftedIndex.toFixed(1)} (extreme)`); }
+    else if (x.liftedIndex <= -5) { score += 15; signals++; reasons.push(`LI ${x.liftedIndex.toFixed(1)} (severe)`); }
+    else if (x.liftedIndex <= -2) { score += 6; reasons.push(`LI ${x.liftedIndex.toFixed(1)} (moderate)`); }
+    // LI > -2 = stable, contributes nothing
   }
   // 3) Freezing level — lower = larger hailstones reach ground
-  if (x.freezingLevelM != null && x.freezingLevelM < 4200) {
-    if (x.freezingLevelM < 2800) { score += 15; reasons.push(`Freezing level ${Math.round(x.freezingLevelM)}m (low)`); }
-    else if (x.freezingLevelM < 3500) { score += 9; reasons.push(`Freezing level ${Math.round(x.freezingLevelM)}m`); }
-    else { score += 4; }
+  if (x.freezingLevelM != null) {
+    if (x.freezingLevelM < 2800)      { score += 14; signals++; reasons.push(`Freezing ${Math.round(x.freezingLevelM)}m (low)`); }
+    else if (x.freezingLevelM < 3500) { score += 8; reasons.push(`Freezing ${Math.round(x.freezingLevelM)}m`); }
+    else if (x.freezingLevelM < 4200) { score += 3; }
+    // >4200m hail melts before reaching surface
   }
-  // 4) Active thunderstorm code is a strong confirmer
+  // 4) Active thunderstorm code — strong confirmer
   if (x.weatherCode != null) {
-    if (x.weatherCode === 99) { score += 18; reasons.push("WMO 99: heavy hail thunderstorm"); }
-    else if (x.weatherCode === 96) { score += 12; reasons.push("WMO 96: slight hail thunderstorm"); }
-    else if (x.weatherCode === 95) { score += 6;  reasons.push("WMO 95: thunderstorm active"); }
+    if (x.weatherCode === 99)      { score += 22; signals++; reasons.push("WMO 99: heavy hail thunderstorm"); }
+    else if (x.weatherCode === 96) { score += 14; signals++; reasons.push("WMO 96: slight hail thunderstorm"); }
+    else if (x.weatherCode === 95) { score += 5; reasons.push("WMO 95: thunderstorm"); }
   }
-  // 5) High cloud / anvil signature
-  if (x.highCloudPct != null && x.highCloudPct >= 70) {
-    score += 4; reasons.push(`High-cloud cover ${Math.round(x.highCloudPct)}%`);
+  // 5) Storm rotation / downdraft proxy via wind gusts
+  if (x.windGustKmh != null) {
+    if (x.windGustKmh >= 90)      { score += 10; signals++; reasons.push(`Gusts ${Math.round(x.windGustKmh)} km/h (severe)`); }
+    else if (x.windGustKmh >= 70) { score += 6; signals++; reasons.push(`Gusts ${Math.round(x.windGustKmh)} km/h`); }
+    else if (x.windGustKmh >= 50) { score += 2; }
   }
-  // 6) Downdraft proxy
-  if (x.windGustKmh != null && x.windGustKmh >= 70) {
-    score += 6; reasons.push(`Gusts ${Math.round(x.windGustKmh)} km/h`);
-  } else if (x.windGustKmh != null && x.windGustKmh >= 50) {
-    score += 3;
+  // 6) High cloud / anvil signature (weak confirmer)
+  if (x.highCloudPct != null && x.highCloudPct >= 80) {
+    score += 3; reasons.push(`High-cloud ${Math.round(x.highCloudPct)}%`);
   }
-  // 7) Precipitation cross-check
-  if (x.precipMm != null && x.precipMm >= 8) {
-    score += 4; reasons.push(`Precip ${x.precipMm.toFixed(1)} mm/h`);
+  // 7) Precipitation cross-check — only meaningful at high intensity
+  if (x.precipMm != null) {
+    if (x.precipMm >= 15) { score += 4; reasons.push(`Precip ${x.precipMm.toFixed(1)} mm/h`); }
+    else if (x.precipMm >= 8) { score += 2; }
+    // light precip ignored — was a major false-positive source
   }
-  // 8) CIN penalty — a cap suppresses convection
-  if (x.cin != null && x.cin <= -150) {
-    score -= 10; reasons.push(`CIN ${Math.round(x.cin)} J/kg (capped)`);
+  // 8) CIN penalty — stronger now: a strong cap effectively kills convection
+  if (x.cin != null) {
+    if (x.cin <= -200)      { score -= 22; reasons.push(`CIN ${Math.round(x.cin)} J/kg (heavily capped)`); }
+    else if (x.cin <= -100) { score -= 10; reasons.push(`CIN ${Math.round(x.cin)} J/kg (capped)`); }
   }
 
-  score = Math.max(0, Math.min(100, score));
+  // SYNERGY BONUS — only when the three pillars all confirm a severe setup.
+  // This rewards true convective signatures and avoids inflating isolated signals.
+  if (
+    x.cape != null && x.cape >= 1500 &&
+    x.liftedIndex != null && x.liftedIndex <= -4 &&
+    x.weatherCode != null && (x.weatherCode === 96 || x.weatherCode === 99)
+  ) {
+    score += 8; signals++; reasons.push("Synergy: CAPE × LI × storm-code confirmed");
+  }
 
+  score = Math.max(0, Math.min(100, Math.round(score)));
+
+  // PHASE 4 bands: 0-25 ignore, 26-40 low, 41-60 moderate, 61-80 severe, 81-100 extreme
   let level: OperationalScore["level"] = "BAIXO";
   let severity: Severity = "low";
-  if (score >= 75) { level = "EXTREMO"; severity = "extreme"; }
-  else if (score >= 55) { level = "SEVERO"; severity = "severe"; }
-  else if (score >= 35) { level = "MODERADO"; severity = "moderate"; }
+  if (score >= 81)      { level = "EXTREMO"; severity = "extreme"; }
+  else if (score >= 61) { level = "SEVERO";  severity = "severe"; }
+  else if (score >= 41) { level = "MODERADO"; severity = "moderate"; }
 
-  // Stone size estimate (mm): rough empirical from CAPE + freezing level
+  // Stone size estimate (mm) — empirical from CAPE × freezing level
   let inferredHailMm = 0;
-  if (x.cape != null) {
-    inferredHailMm = Math.max(0, Math.sqrt(Math.max(0, x.cape - 500)) * 0.45);
+  if (x.cape != null && x.cape >= 800) {
+    inferredHailMm = Math.max(0, Math.sqrt(Math.max(0, x.cape - 500)) * 0.42);
     if (x.freezingLevelM != null && x.freezingLevelM < 3200) inferredHailMm *= 1.25;
   }
   inferredHailMm = Math.min(80, Math.round(inferredHailMm));
 
-  const hailProbability = Math.min(0.95, score / 100);
-  return { score, severity, level, hailProbability, inferredHailMm, reasons };
+  // Confidence: how many independent signals agree (max 6 weighted ~)
+  // 0 signals = 0, 1 = 0.25, 2 = 0.45, 3 = 0.65, 4 = 0.8, 5+ = 0.92
+  const confTable = [0, 0.25, 0.45, 0.65, 0.8, 0.92, 0.96];
+  const confidence = confTable[Math.min(signals, 6)];
+
+  const hailProbability = Math.min(0.95, (score / 100) * (0.5 + confidence * 0.5));
+  return { score, severity, level, hailProbability, inferredHailMm, confidence, reasons };
 }
 
 /* ----- Convective Inference provider (free, global, OpenMeteo-backed) ----
