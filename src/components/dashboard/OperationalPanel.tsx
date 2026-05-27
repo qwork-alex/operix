@@ -31,6 +31,7 @@ export interface PanelHailEvent {
   observed_time: string | null;
   expires_at: string | null;
   is_demo: boolean;
+  metadata?: Record<string, any> | null;
 }
 
 export interface PanelTeam { lat: number; lng: number; city?: string; when?: string; }
