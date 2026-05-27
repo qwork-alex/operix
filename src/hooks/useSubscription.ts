@@ -57,16 +57,16 @@ export function useSubscription() {
   });
 }
 
+/**
+ * Platform-owner layer removed. The app reverted to the simpler
+ * OWNER → SINGLE WORKSPACE architecture. This hook is kept as a stable
+ * shape for legacy consumers but always reports `false` so no UI exposes
+ * a cross-tenant / master-global surface.
+ */
 export function useIsPlatformOwner() {
-  const { user } = useAuth();
   return useQuery({
-    queryKey: ["is-platform-owner", user?.id],
-    enabled: !!user?.id,
-    staleTime: 5 * 60_000,
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc("is_platform_owner", { _uid: user!.id });
-      if (error) return false;
-      return !!data;
-    },
+    queryKey: ["is-platform-owner", "disabled"],
+    staleTime: Infinity,
+    queryFn: async () => false,
   });
 }

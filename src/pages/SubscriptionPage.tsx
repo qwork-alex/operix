@@ -106,11 +106,7 @@ export default function SubscriptionPage() {
               <Link to={`/checkout?plan=${plan.code}&cycle=${subscription.billing_cycle}`}>Checkout</Link>
             </Button>
             <StripePortalButton />
-            {isPlatformOwner ? (
-              <Button asChild variant="outline" size="sm">
-                <Link to="/platform">Painel Plataforma</Link>
-              </Button>
-            ) : null}
+            {/* Platform Master panel link removed — single-workspace architecture. */}
           </div>
         }
       />
