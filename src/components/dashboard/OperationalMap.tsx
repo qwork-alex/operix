@@ -424,14 +424,22 @@ export function OperationalMap() {
   /* -------- GeoJSON sources ----------------------------------------- */
   const ordersGeo = useMemo(() => {
     const features: any[] = [];
+    // Deterministic jitter per order id — keeps feature references stable
+    // across re-renders, which avoids cascading recomputes (oppOrders →
+    // opportunities → pdrHeatGeo) and map source thrashing.
+    const hash = (s: string) => {
+      let h = 0;
+      for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+      return h;
+    };
     for (const o of serviceOrders) {
       const text = [o.platform, o.car_name, o.license_plate].filter(Boolean).join(" ");
       const city = guessCityFromText(text);
       if (!city) continue;
       const [lng, lat] = CITY_COORDS[city];
-      // small jitter
-      const jx = (Math.random() - 0.5) * 0.04;
-      const jy = (Math.random() - 0.5) * 0.04;
+      const h = hash(String(o.id ?? text));
+      const jx = (((h & 0xff) / 255) - 0.5) * 0.04;
+      const jy = ((((h >> 8) & 0xff) / 255) - 0.5) * 0.04;
       features.push({
         type: "Feature",
         geometry: { type: "Point", coordinates: [lng + jx, lat + jy] },
@@ -446,6 +454,7 @@ export function OperationalMap() {
     }
     return { type: "FeatureCollection", features };
   }, [serviceOrders]);
+
 
   const teamsGeo = useMemo(() => {
     const features = geoCheckins.map((c: any) => ({
