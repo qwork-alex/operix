@@ -1482,6 +1482,31 @@ Deno.serve(async (req) => {
     const priorityCount = intels.filter((i) => i.criticality === "prioritário").length;
     const totalVehicles = intels.reduce((s, i) => s + i.estimatedVehiclesAffected, 0);
 
+    // PHASE 6 demand aggregates + top regions ranking
+    const demands = merged
+      .map((e) => ({ e, d: (e.metadata as any)?.demand as DemandForecast | undefined }))
+      .filter((x) => x.d) as Array<{ e: HailEvent; d: DemandForecast }>;
+    const avgDemand = demands.length ? Math.round(demands.reduce((s, x) => s + x.d.demandScore, 0) / demands.length) : 0;
+    const attentionCount = demands.filter((x) => x.d.attention).length;
+    const totalEstOrders = demands.reduce((s, x) => s + x.d.estimatedOrders, 0);
+    const totalEstRevenue = demands.reduce((s, x) => s + x.d.estimatedRevenueEur, 0);
+    const topRegions = [...demands]
+      .sort((a, b) => b.d.demandScore - a.d.demandScore)
+      .slice(0, 10)
+      .map(({ e, d }) => ({
+        city: e.city ?? null,
+        region: e.region ?? null,
+        country: e.country ?? null,
+        severity: e.severity,
+        demand_score: d.demandScore,
+        band: d.band,
+        attention: d.attention,
+        estimated_orders: d.estimatedOrders,
+        estimated_revenue_eur: d.estimatedRevenueEur,
+        window_hours_to_peak: d.windowHoursToPeak,
+        saturation_risk: d.saturationRisk,
+      }));
+
     return new Response(JSON.stringify({
       ok: true,
       region: regionParam,
@@ -1505,6 +1530,13 @@ Deno.serve(async (req) => {
         critical_events: criticalCount,
         priority_events: priorityCount,
         estimated_vehicles_affected: totalVehicles,
+      },
+      demand: {
+        avg_demand_score: avgDemand,
+        attention_events: attentionCount,
+        estimated_total_orders: totalEstOrders,
+        estimated_total_revenue_eur: totalEstRevenue,
+        top_regions: topRegions,
       },
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
