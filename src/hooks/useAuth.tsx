@@ -148,11 +148,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }, BOOT_SAFETY_MS);
 
+    // 4) Circuit breaker — if GoTrue degrades (3+ consecutive 504s),
+    //    drop the session locally so the UI escapes the refresh loop.
+    const unsubBreaker = onAuthBreaker((isDegraded) => {
+      if (!mounted.current) return;
+      if (isDegraded) {
+        console.warn("[AUTH_DEGRADED] entering safe-auth-mode (session cleared)");
+        setDegraded(true);
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        if (!settled) {
+          settled = true;
+          setLoading(false);
+        }
+      } else {
+        setDegraded(false);
+      }
+    });
+
     return () => {
       console.log("[UNMOUNT] AuthProvider");
       mounted.current = false;
       window.clearTimeout(safety);
       subscription.unsubscribe();
+      unsubBreaker();
     };
   }, []);
 
