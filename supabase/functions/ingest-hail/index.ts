@@ -1137,24 +1137,48 @@ Deno.serve(async (req) => {
       }
     }
 
+    /* ---- PHASE 4 — Merge & dedupe across providers ---- */
+    const rawCount = allEvents.length;
+    const { merged, removed } = mergeEvents(allEvents);
+
     /* ---- Upsert into hail_events (incremental sync) ---- */
     let upserted = 0;
-    if (allEvents.length > 0) {
+    if (merged.length > 0) {
       const { data, error } = await supabase
         .from("hail_events")
-        .upsert(allEvents, { onConflict: "source,external_id" })
+        .upsert(merged, { onConflict: "source,external_id" })
         .select("id");
       if (error) throw error;
       upserted = data?.length ?? 0;
     }
+
+    // Quality report
+    const bySeverity = merged.reduce((acc: Record<string, number>, e) => {
+      acc[e.severity] = (acc[e.severity] ?? 0) + 1; return acc;
+    }, {});
+    const avgScore = merged.length
+      ? merged.reduce((s, e) => s + ((e.metadata as any)?.operational_score ?? e.intensity ?? 0), 0) / merged.length
+      : 0;
+    const avgConfidence = merged.length
+      ? merged.reduce((s, e) => s + ((e.metadata as any)?.confidence ?? 0.6), 0) / merged.length
+      : 0;
 
     return new Response(JSON.stringify({
       ok: true,
       region: regionParam,
       duration_ms: Date.now() - t0,
       providers: providerStatus,
-      events_received: allEvents.length,
+      events_received: rawCount,
+      events_merged_out: removed,
+      events_kept: merged.length,
       upserted,
+      quality: {
+        by_severity: bySeverity,
+        avg_score: Math.round(avgScore * 10) / 10,
+        avg_confidence: Math.round(avgConfidence * 100) / 100,
+        merge_radius_km: MERGE_RADIUS_KM,
+        merge_window_min: MERGE_WINDOW_MIN,
+      },
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     return new Response(JSON.stringify({
