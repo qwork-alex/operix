@@ -150,7 +150,7 @@ export default function Auth() {
     try { localStorage.removeItem("invite_token"); sessionStorage.removeItem("invite_token"); } catch {}
     setSubmitting(true);
     try {
-      const { data, error } = await withAuthTimeout(
+      const { data, error } = await withAuthTimeout<Awaited<ReturnType<typeof supabase.auth.signUp>>>(
         supabase.auth.signUp({
           email: email.trim().toLowerCase(),
           password,
