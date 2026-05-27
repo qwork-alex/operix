@@ -51,6 +51,7 @@ interface HailEvent {
   observed_time: string | null;
   expires_at: string | null;
   is_demo: boolean;
+  metadata?: Record<string, any> | null;
 }
 
 /* ------------------------------------------------------------------ */
