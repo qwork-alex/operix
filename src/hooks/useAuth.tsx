@@ -38,14 +38,14 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
-  let timer: number | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = window.setTimeout(() => reject(new Error(`${label} timeout`)), ms);
+function withTimeout<T>(p: PromiseLike<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = window.setTimeout(() => reject(new Error(`${label} timeout`)), ms);
+    Promise.resolve<T>(p as any).then(
+      (v) => { window.clearTimeout(t); resolve(v); },
+      (e) => { window.clearTimeout(t); reject(e); },
+    );
   });
-  return Promise.race([p, timeout]).finally(() => {
-    if (timer !== undefined) window.clearTimeout(timer);
-  }) as Promise<T>;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
