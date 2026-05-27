@@ -1016,6 +1016,180 @@ function mergeTwo(winner: HailEvent, loser: HailEvent): HailEvent {
   };
 }
 
+/* ============================================================== */
+/*  PHASE 5 — Operational Intelligence Engine                       */
+/*  Computes impactScore + business-risk classifiers + opportunity  */
+/*  + automotive exposure + plain-language narrative. Stored under  */
+/*  metadata.intelligence so the UI can surface it without schema   */
+/*  changes.                                                         */
+/* ============================================================== */
+interface Intelligence {
+  impactScore: number;                              // 0..100
+  opportunity: "baixa" | "moderada" | "alta" | "extrema";
+  opportunityScore: number;                          // 0..100
+  operationalRisk: "low" | "moderate" | "high" | "extreme";
+  financialRisk: "low" | "moderate" | "high" | "extreme";
+  logisticsRisk: "low" | "moderate" | "high" | "extreme";
+  automotiveRisk: "low" | "moderate" | "high" | "extreme";
+  urbanDensity: number;                              // 0..1
+  automotiveExposure: number;                        // 0..1 (vehicle density proxy)
+  estimatedVehiclesAffected: number;                 // rough proxy
+  criticality: "rotina" | "atenção" | "prioritário" | "crítico";
+  trend: "rising" | "stable" | "falling";
+  windowHours: number;                               // probable impact window
+  narrative: string;                                 // human, one line
+  premium: boolean;                                  // qualifies for premium highlight
+}
+
+// Curated urban-density anchors (lon, lat, weight 0..1, automotive multiplier)
+// Used to estimate exposure when we don't have a parcel-level density grid.
+const URBAN_ANCHORS: Array<[number, number, number, number]> = [
+  // Europe
+  [2.35, 48.85, 1.0, 1.0],   // Paris
+  [4.85, 45.75, 0.85, 0.95], // Lyon
+  [5.37, 43.30, 0.80, 0.95], // Marseille
+  [-0.58, 44.84, 0.75, 0.90],// Bordeaux
+  [-1.55, 47.22, 0.70, 0.90],// Nantes
+  [1.44, 43.60, 0.75, 0.90], // Toulouse
+  [13.40, 52.52, 1.0, 0.95], // Berlin
+  [11.58, 48.13, 0.95, 1.0], // Munich (auto industry)
+  [9.18, 48.78, 0.90, 1.05], // Stuttgart (Mercedes/Porsche)
+  [6.95, 50.94, 0.88, 0.95], // Köln
+  [12.49, 41.90, 0.95, 0.90],// Rome
+  [9.19, 45.46, 0.95, 0.95], // Milan
+  [-3.70, 40.42, 1.0, 0.95], // Madrid
+  [2.17, 41.39, 0.95, 0.95], // Barcelona
+  [-9.14, 38.72, 0.80, 0.90],// Lisbon
+  [-8.61, 41.15, 0.70, 0.90],// Porto
+  [4.90, 52.37, 0.85, 0.90], // Amsterdam
+  [4.35, 50.85, 0.80, 0.90], // Brussels
+  [-0.13, 51.51, 1.0, 0.95], // London
+  [21.01, 52.23, 0.85, 0.85],// Warsaw
+  [14.43, 50.08, 0.80, 0.85],// Prague
+  [19.04, 47.50, 0.75, 0.85],// Budapest
+  // Americas
+  [-74.00, 40.71, 1.0, 1.0], // NYC
+  [-87.65, 41.85, 0.95, 1.0],// Chicago
+  [-95.37, 29.76, 0.85, 1.05],// Houston (auto + insurance)
+  [-96.80, 32.78, 0.85, 1.05],// Dallas
+  [-104.99, 39.74, 0.75, 1.0],// Denver
+  [-46.63, -23.55, 1.0, 1.0],// São Paulo
+  [-43.20, -22.90, 0.90, 0.95],// Rio
+  [-47.93, -15.78, 0.75, 0.90],// Brasília
+  [-58.38, -34.61, 0.95, 0.95],// Buenos Aires
+  [-79.38, 43.65, 0.90, 0.95],// Toronto
+  // Asia
+  [116.40, 39.90, 1.0, 1.0], // Beijing
+  [121.47, 31.23, 1.0, 1.0], // Shanghai
+  [77.10, 28.70, 1.0, 0.90], // Delhi
+  [139.69, 35.69, 1.0, 1.0], // Tokyo
+];
+
+function urbanDensityAt(lat: number, lng: number): { density: number; autoMult: number } {
+  let density = 0.05; // rural baseline
+  let autoMult = 0.7;
+  for (const [alng, alat, w, am] of URBAN_ANCHORS) {
+    const d = haversineKm({ lat: alat, lng: alng }, { lat, lng });
+    // Influence radius ~ 120km, gaussian-ish falloff
+    if (d < 200) {
+      const contrib = w * Math.exp(-(d * d) / (2 * 70 * 70));
+      if (contrib > density) { density = Math.min(1, contrib); autoMult = am; }
+    }
+  }
+  return { density, autoMult };
+}
+
+const SEVERITY_BASE: Record<Severity, number> = { low: 18, moderate: 42, severe: 68, extreme: 88 };
+const RISK_BAND = (s: number): "low" | "moderate" | "high" | "extreme" =>
+  s >= 78 ? "extreme" : s >= 58 ? "high" : s >= 32 ? "moderate" : "low";
+const OPP_BAND = (s: number): "baixa" | "moderada" | "alta" | "extrema" =>
+  s >= 78 ? "extrema" : s >= 58 ? "alta" : s >= 32 ? "moderada" : "baixa";
+
+function computeIntelligence(e: HailEvent): Intelligence {
+  const sevBase = SEVERITY_BASE[e.severity] ?? 30;
+  const { density, autoMult } = urbanDensityAt(e.lat, e.lng);
+
+  // hail-size kicker (mm)
+  const sizeKick = e.hail_size_mm ? Math.min(20, e.hail_size_mm * 0.6) : 0;
+  // storm speed = persistent damage if slow & severe
+  const speed = e.storm_speed_kmh ?? 25;
+  const speedFactor = speed < 20 ? 1.10 : speed < 40 ? 1.0 : 0.92;
+  // probability weight
+  const prob = e.probability != null ? Math.max(0.3, e.probability) : 0.7;
+  // commercial hours bonus (UTC-aware, naive local hint via lng)
+  const utcH = new Date().getUTCHours();
+  const localH = (utcH + Math.round(e.lng / 15) + 24) % 24;
+  const commercialHours = localH >= 7 && localH <= 21 ? 1.05 : 0.92;
+
+  // composite impact (urban density is the multiplier — empty fields don't hurt people)
+  const raw = (sevBase + sizeKick) * (0.55 + 0.65 * density) * speedFactor * prob * commercialHours;
+  const impactScore = Math.max(0, Math.min(100, Math.round(raw)));
+
+  // domain risks (each tilts toward its own driver)
+  const operationalScore = Math.round(impactScore * (0.7 + 0.4 * density));
+  const financialScore   = Math.round(impactScore * (0.6 + 0.6 * density * autoMult));
+  const logisticsScore   = Math.round(impactScore * (0.55 + 0.45 * Math.min(1, (e.radius_km ?? 20) / 60)));
+  const automotiveScore  = Math.round(impactScore * (0.5  + 0.65 * density * autoMult));
+
+  // opportunity = impact × density × automotive multiplier
+  const opportunityScore = Math.max(0, Math.min(100, Math.round(impactScore * (0.5 + 0.7 * density * autoMult))));
+
+  const criticality: Intelligence["criticality"] =
+    impactScore >= 82 ? "crítico" : impactScore >= 62 ? "prioritário" : impactScore >= 38 ? "atenção" : "rotina";
+
+  // estimated vehicles affected — proxy: density 1.0 ≈ 1500 vehicles/km², covered area πr², 12% outdoor
+  const areaKm2 = Math.PI * Math.pow(e.radius_km ?? 20, 2);
+  const veh = Math.round(density * autoMult * areaKm2 * 1500 * 0.12);
+
+  const trend: Intelligence["trend"] =
+    e.status === "ongoing" ? "rising" : e.status === "closed" ? "falling" : "stable";
+
+  // probable impact window
+  const windowHours = e.status === "ongoing" ? 2 : e.severity === "extreme" ? 6 : e.severity === "severe" ? 4 : 3;
+
+  const place = [e.city, e.region, e.country].filter(Boolean).join(", ") || "área monitorada";
+  const sevWord = e.severity === "extreme" ? "extrema" : e.severity === "severe" ? "severa" : e.severity === "moderate" ? "moderada" : "leve";
+  const densWord = density > 0.6 ? "alta densidade urbana" : density > 0.3 ? "zona urbana" : "região esparsa";
+  const autoWord = (density * autoMult) > 0.5 ? "elevada exposição automotiva" : (density * autoMult) > 0.25 ? "exposição automotiva moderada" : "baixa exposição automotiva";
+  const narrative =
+    impactScore >= 60
+      ? `Tempestade ${sevWord} cruzando ${place} (${densWord}, ${autoWord}). Potencial ${opportunityScore >= 60 ? "elevado" : "moderado"} de ordens PDR nas próximas ${windowHours}h.`
+      : `Evento ${sevWord} sobre ${place} (${densWord}). Baixo impacto operacional previsto.`;
+
+  return {
+    impactScore,
+    opportunity: OPP_BAND(opportunityScore),
+    opportunityScore,
+    operationalRisk: RISK_BAND(operationalScore),
+    financialRisk: RISK_BAND(financialScore),
+    logisticsRisk: RISK_BAND(logisticsScore),
+    automotiveRisk: RISK_BAND(automotiveScore),
+    urbanDensity: Math.round(density * 100) / 100,
+    automotiveExposure: Math.round(density * autoMult * 100) / 100,
+    estimatedVehiclesAffected: veh,
+    criticality,
+    trend,
+    windowHours,
+    narrative,
+    premium: impactScore >= 55 || opportunityScore >= 60,
+  };
+}
+
+function enrichWithIntelligence(events: HailEvent[]): HailEvent[] {
+  return events.map((e) => {
+    const intelligence = computeIntelligence(e);
+    return {
+      ...e,
+      metadata: {
+        ...(e.metadata ?? {}),
+        intelligence,
+        impact_score: intelligence.impactScore,
+        opportunity: intelligence.opportunity,
+      },
+    };
+  });
+}
+
 function mergeEvents(events: HailEvent[]): { merged: HailEvent[]; removed: number } {
   // Sort by source priority desc → severity desc, so winners come first.
   const sorted = [...events].sort((a, b) => {
