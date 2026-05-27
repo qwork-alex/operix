@@ -266,6 +266,9 @@ export function OperationalPanel({
             {/* ---- Section: Premium operational intelligence (Phase 5) ---- */}
             <IntelligenceBlock metadata={event.metadata} color={color} />
 
+            {/* ---- Section: Demand forecast (Phase 6) ---- */}
+            <DemandBlock metadata={event.metadata} color={color} />
+
             {/* ---- Section: Operational ---- */}
             <SectionTitle icon={<Activity className="h-3.5 w-3.5 text-cyan-400" />}>
               Inteligência operacional
