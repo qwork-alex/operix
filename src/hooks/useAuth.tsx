@@ -142,7 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      const { error } = await withTimeout(
+      const { error } = await withTimeout<Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>>(
         supabase.auth.signInWithPassword({ email, password }),
         ACTION_TIMEOUT_MS,
         "signInWithPassword",
@@ -176,7 +176,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ? `${window.location.origin}/join?token=${inviteToken}`
         : window.location.origin;
 
-      const { error } = await withTimeout(
+      const { error } = await withTimeout<Awaited<ReturnType<typeof supabase.auth.signUp>>>(
         supabase.auth.signUp({
           email,
           password,

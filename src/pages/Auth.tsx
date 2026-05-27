@@ -83,7 +83,7 @@ export default function Auth() {
 
     setSubmitting(true);
     try {
-      const { data, error } = await withAuthTimeout(
+      const { data, error } = await withAuthTimeout<Awaited<ReturnType<typeof supabase.auth.signUp>>>(
         supabase.auth.signUp({
           email: email.trim().toLowerCase(),
           password,
