@@ -1,32 +1,35 @@
-import { createContext, useContext, useEffect, useState, ReactNode, useRef } from "react";
-import { Session, User } from "@supabase/supabase-js";
+/**
+ * Auth layer — clean rebuild.
+ *
+ * Rules (intentionally minimal — do NOT re-introduce the patches we removed):
+ *  - ONE Supabase client (src/integrations/supabase/client.ts).
+ *  - ONE AuthProvider, ONE onAuthStateChange listener.
+ *  - getSession() runs once on mount to restore from storage.
+ *  - onAuthStateChange is the single source of truth afterwards.
+ *  - No awaits inside the listener callback (prevents Supabase deadlocks).
+ *  - Hard 2s safety cap: if getSession never settles (offline / 504), we
+ *    unblock the UI with session=null instead of an infinite spinner.
+ *  - Failure of auth NEVER throws — AppShell stays mounted.
+ *
+ * Removed (Phase 6 hacks): readStoredSessionFallback, bootRetryTimer chain,
+ * initialSessionResolved gating, duplicate listeners, lazy/suspense auth,
+ * INITIAL_SESSION special-cases.
+ */
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
+import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { logSecurityEvent } from "@/lib/securityLog";
 import { registerCurrentDevice } from "@/lib/deviceFingerprint";
 
-const AUTH_BOOT_TIMEOUT_MS = 2500;
-const AUTH_ACTION_TIMEOUT_MS = 12000;
+const BOOT_SAFETY_MS = 2000;
+const ACTION_TIMEOUT_MS = 15000;
 
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = window.setTimeout(() => reject(new Error(`${label} timeout`)), ms);
-    promise.then(
-      (value) => {
-        window.clearTimeout(timer);
-        resolve(value);
-      },
-      (error) => {
-        window.clearTimeout(timer);
-        reject(error);
-      },
-    );
-  });
-}
+type Profile = { full_name: string; email: string; avatar_url: string | null } | null;
 
 interface AuthContextType {
   session: Session | null;
   user: User | null;
-  profile: { full_name: string; email: string; avatar_url: string | null } | null;
+  profile: Profile;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
@@ -35,112 +38,95 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = window.setTimeout(() => reject(new Error(`${label} timeout`)), ms);
+    p.then(
+      (v) => { window.clearTimeout(t); resolve(v); },
+      (e) => { window.clearTimeout(t); reject(e); },
+    );
+  });
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<AuthContextType["profile"]>(null);
+  const [profile, setProfile] = useState<Profile>(null);
   const [loading, setLoading] = useState(true);
   const mounted = useRef(true);
-  const initialSessionResolved = useRef(false);
-  const bootRetryTimer = useRef<number | null>(null);
 
-  const fetchUserData = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("full_name, email, avatar_url")
-        .eq("id", userId)
-        .maybeSingle();
-      if (error) {
-        console.error("[Auth] Profile fetch error:", error.message);
-        return;
-      }
-      if (mounted.current && data) setProfile(data);
-    } catch (err) {
-      console.error("[Auth] fetchUserData error:", err);
-    }
+  // Fire-and-forget profile fetch — never blocks auth state.
+  const loadProfile = (userId: string) => {
+    supabase
+      .from("profiles")
+      .select("full_name, email, avatar_url")
+      .eq("id", userId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (error) {
+          console.error("[Auth] profile fetch:", error.message);
+          return;
+        }
+        if (mounted.current && data) setProfile(data);
+      });
   };
 
   useEffect(() => {
     mounted.current = true;
+    let settled = false;
 
-    const applySession = (s: Session | null) => {
+    const apply = (s: Session | null) => {
       if (!mounted.current) return;
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
-        fetchUserData(s.user.id);
-        registerCurrentDevice();
+        loadProfile(s.user.id);
+        try { registerCurrentDevice(); } catch {}
       } else {
         setProfile(null);
       }
-    };
-
-    const finishBoot = (s: Session | null) => {
-      if (!mounted.current || initialSessionResolved.current) return;
-      initialSessionResolved.current = true;
-      applySession(s);
-      setLoading(false);
-
-      if (bootRetryTimer.current) {
-        window.clearTimeout(bootRetryTimer.current);
-        bootRetryTimer.current = null;
+      if (!settled) {
+        settled = true;
+        setLoading(false);
       }
     };
 
-    bootRetryTimer.current = window.setTimeout(() => {
-      if (!mounted.current || initialSessionResolved.current) return;
-      console.warn("[Auth] bootstrap timeout — continuing without session");
-      finishBoot(null);
-    }, AUTH_BOOT_TIMEOUT_MS);
+    // 1) Listener first — single source of truth for changes.
+    //    No awaits inside the callback (prevents Supabase auth deadlock).
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
+      apply(s);
+      if (event === "SIGNED_OUT") {
+        try {
+          localStorage.removeItem("selected_workspace_id");
+          localStorage.removeItem("invite_token");
+          sessionStorage.removeItem("invite_token");
+        } catch {}
+      }
+    });
 
-    // 1. Get existing session first. This must never keep /auth in an
-    // infinite spinner if auth storage/refresh is slow or unreachable.
-    withTimeout(supabase.auth.getSession(), AUTH_BOOT_TIMEOUT_MS, "getSession")
-      .then(({ data: { session: s } }) => finishBoot(s))
+    // 2) Restore existing session from storage. onAuthStateChange will also
+    //    fire INITIAL_SESSION; whichever resolves first calls apply().
+    supabase.auth
+      .getSession()
+      .then(({ data: { session: s } }) => apply(s))
       .catch((err) => {
-        console.error("[Auth] getSession unavailable:", err);
-        finishBoot(null);
+        console.error("[Auth] getSession failed:", err);
+        apply(null);
       });
 
-    // 2. Listen for auth changes — no awaits inside callback
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, s) => {
-        if (!mounted.current) return;
-        if (event === "INITIAL_SESSION" && !initialSessionResolved.current) {
-          // A null INITIAL_SESSION can arrive before storage restoration fully
-          // resolves; let getSession/boot timeout decide the final null state.
-          if (s) finishBoot(s);
-          return;
-        }
-        initialSessionResolved.current = true;
-        setSession(s);
-        setUser(s?.user ?? null);
-        if (s?.user) {
-          // Fire-and-forget profile fetch + device register (no await)
-          setTimeout(() => {
-            fetchUserData(s.user.id);
-            registerCurrentDevice();
-          }, 0);
-        } else {
-          setProfile(null);
-        }
+    // 3) Safety cap — never leave the UI on an infinite spinner. If the
+    //    auth endpoint is unreachable, fall through to logged-out state.
+    const safety = window.setTimeout(() => {
+      if (!settled && mounted.current) {
+        console.warn("[Auth] boot safety cap hit — proceeding without session");
+        settled = true;
         setLoading(false);
-        // Hard reset on sign-out / user-switch to prevent stale shell, query
-        // cache, workspace, RBAC or tenant state from surviving the change.
-        if (event === "SIGNED_OUT") {
-          try {
-            localStorage.removeItem("selected_workspace_id");
-            localStorage.removeItem("invite_token");
-            sessionStorage.removeItem("invite_token");
-          } catch {}
-        }
       }
-    );
+    }, BOOT_SAFETY_MS);
 
     return () => {
       mounted.current = false;
-      if (bootRetryTimer.current) window.clearTimeout(bootRetryTimer.current);
+      window.clearTimeout(safety);
       subscription.unsubscribe();
     };
   }, []);
@@ -149,25 +135,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { error } = await withTimeout(
         supabase.auth.signInWithPassword({ email, password }),
-        AUTH_ACTION_TIMEOUT_MS,
+        ACTION_TIMEOUT_MS,
         "signInWithPassword",
       );
-      // Fire-and-forget logging
+      // Fire-and-forget logging.
       supabase.from("backend_event_logs").insert({
         table_name: "auth",
         action: error ? "LOGIN_FAILED" : "LOGIN",
-        payload: error
-          ? { email, reason: error.message } as any
-          : { email } as any,
-      }).then(() => {}, (err) => console.error("[Auth] Log error:", err));
-      // Phase 5 — security trail
+        payload: error ? ({ email, reason: error.message } as any) : ({ email } as any),
+      }).then(() => {}, () => {});
       logSecurityEvent({
         type: error ? "login_failed" : "login",
         severity: error ? "warn" : "info",
         metadata: { email, reason: error?.message ?? null },
         riskScore: error ? 30 : 0,
       });
-      return { error: error as Error | null };
+      return { error: (error as Error | null) ?? null };
     } catch (err) {
       console.error("[Auth] signIn error:", err);
       return { error: new Error("Login indisponível no momento. Tente novamente em instantes.") };
@@ -176,12 +159,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = async (email: string, password: string, fullName: string) => {
     try {
-      const inviteToken = localStorage.getItem("invite_token") || sessionStorage.getItem("invite_token") || undefined;
+      const inviteToken =
+        localStorage.getItem("invite_token") || sessionStorage.getItem("invite_token") || undefined;
       const metadata: Record<string, string> = { full_name: fullName };
-      if (inviteToken) {
-        metadata.invite_token = inviteToken;
-      }
-
+      if (inviteToken) metadata.invite_token = inviteToken;
       const redirectUrl = inviteToken
         ? `${window.location.origin}/join?token=${inviteToken}`
         : window.location.origin;
@@ -190,22 +171,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         supabase.auth.signUp({
           email,
           password,
-          options: {
-            data: metadata,
-            emailRedirectTo: redirectUrl,
-          },
+          options: { data: metadata, emailRedirectTo: redirectUrl },
         }),
-        AUTH_ACTION_TIMEOUT_MS,
+        ACTION_TIMEOUT_MS,
         "signUp",
       );
 
       if (!error) {
         supabase.from("backend_event_logs").insert({
-          table_name: "auth", action: "SIGNUP",
+          table_name: "auth",
+          action: "SIGNUP",
           payload: { email, full_name: fullName, invite_token: inviteToken || null } as any,
-        }).then(() => {}, (err) => console.error("[Auth] Log error:", err));
+        }).then(() => {}, () => {});
       }
-      return { error: error as Error | null };
+      return { error: (error as Error | null) ?? null };
     } catch (err) {
       console.error("[Auth] signUp error:", err);
       return { error: err as Error };
@@ -215,28 +194,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     try {
       logSecurityEvent({ type: "logout", severity: "info" });
-      await withTimeout(supabase.auth.signOut(), AUTH_ACTION_TIMEOUT_MS, "signOut");
+      await withTimeout(supabase.auth.signOut(), ACTION_TIMEOUT_MS, "signOut");
     } catch (err) {
       console.error("[Auth] signOut error:", err);
     }
-    // Clear local context immediately so guards redirect.
     if (mounted.current) {
       setSession(null);
       setUser(null);
       setProfile(null);
     }
-    // Wipe all client-side state (query cache, workspace selection, RBAC,
-    // tenant, in-memory contexts) by forcing a full reload to /auth. This is
-    // the only reliable way to fully unmount the AppShell and prevent the
-    // previous session's shell/data from surviving the switch.
     try {
       localStorage.removeItem("selected_workspace_id");
       localStorage.removeItem("invite_token");
       sessionStorage.removeItem("invite_token");
     } catch {}
-    if (typeof window !== "undefined") {
-      window.location.replace("/auth");
-    }
+    if (typeof window !== "undefined") window.location.replace("/auth");
   };
 
   return (
