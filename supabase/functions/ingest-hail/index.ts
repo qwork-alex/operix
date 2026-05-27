@@ -146,82 +146,198 @@ const RainViewer: WeatherProvider = {
   // for the radar capability via the cache layer.
 };
 
-/* ----- MeteoAlarm (EU severe alerts incl. FR, no key) ------------------- */
-//  Replaces the discontinued public MeteoFrance vigilance XML feed.
-//  Uses the open MeteoAlarm v1 JSON API. Filters thunderstorm (awareness
-//  type 3 — covers hail) at orange/red level (>= 3), computes centroids
-//  from the GeoJSON polygons.
+/* ----- MeteoAlarm (EU severe alerts, no key) ----------------------------
+ *  Real MeteoAlarm v1 JSON CAP shape:
+ *    warnings[].alert.info[]  // one entry per language
+ *      .parameter[]  -> { valueName:"awareness_type", value:"3; Thunderstorms" }
+ *                       { valueName:"awareness_level", value:"3; orange; Severe" }
+ *      .area[].geocode[] -> { valueName:"NUTS3", value:"FR522" }
+ *      .severity / .certainty / .urgency / .onset / .expires / .event
+ *  Filter: awareness_type=3 (thunderstorm, includes hail) AND level >= 2.
+ *  Centroid: NUTS1 (first 3 chars) lookup table. Falls back to country centroid.
+ *  Iterates ALL configured EU countries (does not depend on regionKey).
+ * --------------------------------------------------------------------- */
+
+// Country centroids (used as fallback when NUTS lookup misses)
+const COUNTRY_CENTROIDS: Record<string, [number, number]> = {
+  FR: [46.5, 2.5], DE: [51.0, 10.5], IT: [42.5, 12.5], ES: [40.0, -3.7],
+  CH: [46.8, 8.2], BE: [50.6, 4.6], NL: [52.2, 5.5], PT: [39.5, -8.0],
+  AT: [47.6, 14.1], LU: [49.8, 6.1],
+};
+
+// NUTS1 (3-char prefix) centroids — covers the 10 supported EU countries.
+// Source: Eurostat NUTS1 region centroids, rounded to 1 decimal.
+const NUTS1_CENTROIDS: Record<string, [number, number]> = {
+  // France
+  FR1:[48.9,2.4], FRB:[47.8,1.7], FRC:[47.5,4.8], FRD:[49.4,0.4],
+  FRE:[50.5,2.8], FRF:[48.6,7.3], FRG:[47.5,-1.0], FRH:[48.1,-3.0],
+  FRI:[45.0,-0.5], FRJ:[43.8,3.5], FRK:[45.5,4.5], FRL:[44.0,6.0],
+  FRM:[42.2,9.1], FRY:[-13.0,45.0],
+  // Germany
+  DE1:[48.5,9.0], DE2:[48.8,11.5], DE3:[52.5,13.4], DE4:[52.5,13.0],
+  DE5:[53.1,8.8], DE6:[53.5,10.0], DE7:[50.7,9.0], DE8:[53.8,12.5],
+  DE9:[52.8,9.7], DEA:[51.5,7.5], DEB:[49.9,7.5], DEC:[49.4,7.0],
+  DED:[51.0,13.7], DEE:[51.9,11.6], DEF:[54.2,9.7], DEG:[51.0,11.0],
+  // Italy
+  ITC:[45.0,8.0], ITF:[40.8,15.5], ITG:[39.0,14.0], ITH:[46.0,11.5],
+  ITI:[43.0,12.5],
+  // Spain
+  ES1:[43.0,-7.0], ES2:[42.5,-1.5], ES3:[40.4,-3.7], ES4:[40.0,-4.5],
+  ES5:[39.0,-0.5], ES6:[37.0,-4.5], ES7:[28.3,-16.5],
+  // Switzerland
+  CH0:[46.8,8.2],
+  // Belgium
+  BE1:[50.85,4.35], BE2:[51.1,4.5], BE3:[50.4,4.9],
+  // Netherlands
+  NL1:[53.1,6.6], NL2:[52.3,6.0], NL3:[52.1,5.0], NL4:[51.5,5.0],
+  // Portugal
+  PT1:[39.5,-8.0], PT2:[38.7,-27.2], PT3:[32.7,-16.9],
+  // Austria
+  AT1:[48.2,16.4], AT2:[46.8,14.0], AT3:[47.8,13.7],
+  // Luxembourg
+  LU0:[49.8,6.1],
+};
+
+const COUNTRY_MAP: Record<string, string> = {
+  FR:"france", DE:"germany", IT:"italy", ES:"spain", CH:"switzerland",
+  BE:"belgium", NL:"netherlands", PT:"portugal", AT:"austria", LU:"luxembourg",
+};
+
+// Parse "3; orange; Severe" -> 3   |   "5; high-temperature" -> 5
+function parseAwareness(raw: unknown): number {
+  if (raw == null) return 0;
+  const s = String(raw).trim();
+  const m = s.match(/^(\d+)/);
+  return m ? Number(m[1]) : 0;
+}
+
+function nutsToCoord(nutsCode: string, country: string): [number, number] {
+  if (nutsCode && nutsCode.length >= 3) {
+    const k3 = nutsCode.slice(0, 3).toUpperCase();
+    if (NUTS1_CENTROIDS[k3]) return NUTS1_CENTROIDS[k3];
+  }
+  return COUNTRY_CENTROIDS[country] ?? [46.5, 2.5];
+}
+
+function severityFromLevel(level: number): Severity {
+  if (level >= 4) return "extreme";
+  if (level >= 3) return "severe";
+  if (level >= 2) return "moderate";
+  return "low";
+}
+
+async function fetchMeteoAlarmCountry(
+  countryCode: string, cache: CacheStore,
+): Promise<HailEvent[]> {
+  const country = COUNTRY_MAP[countryCode] ?? countryCode.toLowerCase();
+  const cacheKey = `mfalarm:${countryCode}`;
+  const cached = await cache.get(cacheKey);
+  if (cached) return cached as HailEvent[];
+
+  const url = `https://feeds.meteoalarm.org/api/v1/warnings/feeds-${country}`;
+  const res = await fetch(url, {
+    headers: { accept: "application/json", "user-agent": "Lovable-OperationalMap (+nexus.qworkgroup.com)" },
+  });
+  if (!res.ok) throw new Error(`MeteoAlarm ${country} ${res.status}`);
+  const json = await res.json().catch(() => ({}));
+
+  const events: HailEvent[] = [];
+  const warnings: any[] = json?.warnings ?? [];
+
+  for (const w of warnings) {
+    const alert = w?.alert ?? w;
+    const identifier = alert?.identifier ?? w?.uuid ?? `ma-${countryCode}-${Date.now()}-${Math.random()}`;
+    const infos: any[] = Array.isArray(alert?.info) ? alert.info : [];
+    // Prefer English info block to keep payload normalised; fallback to first.
+    const info =
+      infos.find((i) => /^en/i.test(String(i?.language ?? ""))) ??
+      infos[0];
+    if (!info) continue;
+
+    const params: any[] = Array.isArray(info.parameter) ? info.parameter : [];
+    const typeParam = params.find((p) => p?.valueName === "awareness_type");
+    const levelParam = params.find((p) => p?.valueName === "awareness_level");
+    const awarenessType = parseAwareness(typeParam?.value);
+    const awarenessLevel = parseAwareness(levelParam?.value);
+
+    // Thunderstorm = 3 (covers hail). Keep level >= 2 (yellow+) for coverage.
+    if (awarenessType !== 3 || awarenessLevel < 2) continue;
+
+    const areas: any[] = Array.isArray(info.area) ? info.area : [];
+    if (!areas.length) continue;
+
+    const onset = info.onset ?? info.effective ?? alert?.sent ?? new Date().toISOString();
+    const expires = info.expires ?? new Date(Date.now() + 6 * 3600_000).toISOString();
+    const nowMs = Date.now();
+    const isLive = new Date(onset).getTime() <= nowMs && new Date(expires).getTime() > nowMs;
+    const status: Status = isLive ? "ongoing" : "forecast";
+    const sev = severityFromLevel(awarenessLevel);
+
+    // One event per area (gives finer geographic resolution).
+    for (let idx = 0; idx < areas.length; idx++) {
+      const area = areas[idx];
+      const geocodes: any[] = Array.isArray(area?.geocode) ? area.geocode : [];
+      const nutsEntry = geocodes.find((g) => /NUTS/i.test(String(g?.valueName ?? "")));
+      const nutsCode = String(nutsEntry?.value ?? "");
+      const [lat, lng] = nutsToCoord(nutsCode, countryCode);
+
+      events.push({
+        source: "meteofrance",
+        external_id: `${identifier}::${nutsCode || idx}`,
+        city: area?.areaDesc ?? null,
+        region: nutsCode || countryCode,
+        country: countryCode,
+        lat, lng,
+        radius_km: nutsCode ? 60 : 120,
+        severity: sev,
+        status,
+        probability: awarenessLevel >= 4 ? 0.9 : awarenessLevel >= 3 ? 0.7 : 0.5,
+        intensity: awarenessLevel * 25,
+        forecast_time: status === "forecast" ? onset : null,
+        observed_time: status === "ongoing" ? onset : null,
+        expires_at: expires,
+        metadata: {
+          source_feed: "meteoalarm",
+          country: countryCode,
+          awareness_level: awarenessLevel,
+          awareness_type: awarenessType,
+          event: info.event,
+          severity: info.severity,
+          certainty: info.certainty,
+          urgency: info.urgency,
+          headline: info.headline,
+          area_desc: area?.areaDesc,
+          nuts: nutsCode || null,
+        },
+      });
+    }
+  }
+
+  await cache.set({
+    key: cacheKey, provider: "meteofrance", capability: "hail",
+    regionKey: countryCode, payload: events, ttlSeconds: 600,
+  });
+  return events;
+}
+
 const MeteoFrance: WeatherProvider = {
   key: "meteofrance",
   capabilities: ["alerts", "hail", "severe"],
   async fetchHail(ctx) {
-    const cacheKey = `mfalarm:${ctx.regionKey}`;
-    const cached = await ctx.cache.get(cacheKey);
-    if (cached) return cached as HailEvent[];
-
-    const countryMap: Record<string, string> = {
-      FR: "france", DE: "germany", ES: "spain", IT: "italy",
-      BE: "belgium", NL: "netherlands", PT: "portugal", CH: "switzerland",
-      AT: "austria", LU: "luxembourg",
-    };
-    const country = countryMap[ctx.regionKey] ?? "france";
-    const url = `https://feeds.meteoalarm.org/api/v1/warnings/feeds-${country}`;
-
-    const res = await fetch(url, {
-      headers: {
-        accept: "application/json",
-        "user-agent": "Lovable-OperationalMap (+nexus.qworkgroup.com)",
-      },
-    });
-    if (!res.ok) throw new Error(`MeteoAlarm ${country} ${res.status}`);
-    const json = await res.json().catch(() => ({}));
-
-    const events: HailEvent[] = [];
-    const warnings: any[] = json?.warnings ?? json?.features ?? [];
-    for (const w of warnings) {
-      const props = w.properties ?? w;
-      const type = Number(props.awareness_type ?? props.awarenessType ?? 0);
-      const level = Number(props.awareness_level ?? props.awarenessLevel ?? 0);
-      if (type !== 3 || level < 3) continue;
-
-      const sev: Severity = level >= 4 ? "extreme" : "severe";
-      const geom = w.geometry ?? props.geometry;
-      let lat = 46.5, lng = 2.5, n = 0;
-      if (geom?.type === "Polygon") {
-        n = 0; lat = 0; lng = 0;
-        for (const ring of geom.coordinates) for (const [x, y] of ring) { lng += x; lat += y; n++; }
-        if (n) { lng /= n; lat /= n; } else { lat = 46.5; lng = 2.5; }
-      } else if (geom?.type === "MultiPolygon") {
-        n = 0; lat = 0; lng = 0;
-        for (const poly of geom.coordinates)
-          for (const ring of poly)
-            for (const [x, y] of ring) { lng += x; lat += y; n++; }
-        if (n) { lng /= n; lat /= n; } else { lat = 46.5; lng = 2.5; }
+    // Iterate ALL supported EU countries on every run (engine passes only one
+    // regionKey but Europe is single-tenant for this provider).
+    const targets = Object.keys(COUNTRY_MAP);
+    const all: HailEvent[] = [];
+    for (const cc of targets) {
+      try {
+        const evs = await fetchMeteoAlarmCountry(cc, ctx.cache);
+        all.push(...evs);
+      } catch (e) {
+        // Per-country failure must not break the whole run.
+        console.warn(`[meteoalarm] ${cc} failed:`, (e as Error).message);
       }
-
-      const id =
-        props.identifier ?? props.id ?? w.id ??
-        `ma-${country}-${props.onset ?? props.effective ?? Date.now()}`;
-      events.push({
-        source: "meteofrance",
-        external_id: String(id),
-        city: null, region: country.toUpperCase(), country: ctx.regionKey,
-        lat, lng, radius_km: 80,
-        severity: sev,
-        status: "forecast",
-        probability: level >= 4 ? 0.85 : 0.65,
-        intensity: level * 25,
-        forecast_time: props.onset ?? props.effective ?? new Date().toISOString(),
-        expires_at: props.expires ?? new Date(Date.now() + 6 * 3600_000).toISOString(),
-        metadata: { source_feed: "meteoalarm", country, level, type },
-      });
     }
-
-    await ctx.cache.set({
-      key: cacheKey, provider: "meteofrance", capability: "hail",
-      regionKey: ctx.regionKey, payload: events, ttlSeconds: 600,
-    });
-    return events;
+    return all;
   },
 };
 
