@@ -618,21 +618,26 @@ const OpenMeteo: WeatherProvider = {
           const nowMs = Date.now();
           for (let j = 0; j < times.length; j++) {
             const code = codes[j];
-            if (code !== 96 && code !== 99) continue; // hail thunderstorms only
+            // PHASE 4: hard noise filter — only WMO 99 (heavy hail thunderstorm).
+            // Code 96 (slight hail) requires meaningful precip corroboration
+            // (>=6mm/h) otherwise we ignore it as low-confidence convection.
+            const precip = precs[j] ?? 0;
+            if (code !== 99 && !(code === 96 && precip >= 6)) continue;
             const tMs = new Date(times[j] + "Z").getTime();
-            if (tMs < nowMs - 3600_000) continue; // skip stale past hours
+            if (tMs < nowMs - 3600_000) continue;
             const isLive = Math.abs(tMs - nowMs) < 3600_000;
-            const sizeMm = code === 99 ? 20 : 10;
+            const sizeMm = code === 99 ? 22 : 12;
+            const confidence = code === 99 ? 0.7 : 0.55;
             events.push({
               source: "openmeteo",
               external_id: `om-${p.key}-${times[j]}`,
               city: p.city ?? null, country: p.country,
-              lat: p.lat, lng: p.lng, radius_km: 40,
+              lat: p.lat, lng: p.lng, radius_km: 35,
               severity: code === 99 ? "severe" : "moderate",
               status: isLive ? "ongoing" : "forecast",
               hail_size_mm: sizeMm,
-              probability: code === 99 ? 0.75 : 0.55,
-              intensity: code === 99 ? 70 : 45,
+              probability: confidence,
+              intensity: code === 99 ? 72 : 48,
               storm_speed_kmh: winds[j] ?? null,
               storm_direction_deg: dirs[j] ?? null,
               forecast_time: isLive ? null : times[j] + "Z",
@@ -640,7 +645,8 @@ const OpenMeteo: WeatherProvider = {
               expires_at: new Date(tMs + 3600_000).toISOString(),
               metadata: {
                 grid: p.key, wmo_code: code,
-                precipitation_mm: precs[j] ?? null,
+                precipitation_mm: precip,
+                confidence,
               },
             });
           }
