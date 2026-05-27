@@ -1175,16 +1175,149 @@ function computeIntelligence(e: HailEvent): Intelligence {
   };
 }
 
+/* ============================================================== */
+/*  PHASE 6 — Demand Forecast Engine                                */
+/*  Predicts operational demand (PDR orders) instead of only         */
+/*  describing weather. Outputs DemandScore (0-100), peak window,    */
+/*  saturation risk, attention flag and an executive narrative.      */
+/*  Purely additive — stored under metadata.demand.                  */
+/* ============================================================== */
+interface DemandForecast {
+  demandScore: number;                                   // 0..100
+  band: "irrelevante" | "baixo" | "moderado" | "alto" | "extremo";
+  attention: boolean;                                    // premium "ATENÇÃO" mode
+  expectedOrderUplift: number;                           // multiplicative (1 = baseline)
+  windowHoursToPeak: number;                             // hours until probable demand peak
+  peakDurationHours: number;                             // hours the opportunity stays open
+  saturationRisk: "baixo" | "moderado" | "alto" | "crítico";
+  regionalPressure: number;                              // 0..1 expected ops pressure
+  estimatedOrders: number;                               // rough integer projection
+  estimatedRevenueEur: number;                           // rough EUR projection
+  confidence: number;                                    // 0..1
+  narrative: string;                                     // exec one-liner
+  reasoning: string[];                                   // explainability
+}
+
+const DEMAND_BAND = (s: number): DemandForecast["band"] =>
+  s >= 81 ? "extremo" : s >= 61 ? "alto" : s >= 41 ? "moderado" : s >= 21 ? "baixo" : "irrelevante";
+
+const SAT_BAND = (s: number): DemandForecast["saturationRisk"] =>
+  s >= 0.85 ? "crítico" : s >= 0.6 ? "alto" : s >= 0.35 ? "moderado" : "baixo";
+
+function computeDemandForecast(e: HailEvent, intel: Intelligence): DemandForecast {
+  const reasons: string[] = [];
+
+  // 1) Severity + hail size — direct demand driver
+  const sevWeight = { low: 8, moderate: 30, severe: 60, extreme: 85 }[e.severity] ?? 20;
+  const sizeBoost = e.hail_size_mm ? Math.min(25, Math.max(0, (e.hail_size_mm - 10) * 1.1)) : 0;
+  reasons.push(`severidade ${e.severity} (+${sevWeight})`);
+  if (sizeBoost > 0) reasons.push(`granizo ${e.hail_size_mm}mm (+${sizeBoost.toFixed(0)})`);
+
+  // 2) Urban + automotive exposure — only people with cars become orders
+  const expoMult = 0.35 + 0.95 * intel.urbanDensity * (0.6 + 0.4 * (intel.automotiveExposure || 0));
+  reasons.push(`exposição urbana×auto ×${expoMult.toFixed(2)}`);
+
+  // 3) Commercial hours / weekday — when do people report?
+  const utcH = new Date().getUTCHours();
+  const localH = (utcH + Math.round(e.lng / 15) + 24) % 24;
+  const businessHours = localH >= 8 && localH <= 19;
+  const weekend = [0, 6].includes(new Date().getUTCDay());
+  const hourMult = businessHours ? 1.1 : 0.85;
+  const dowMult = weekend ? 0.92 : 1.05;
+  reasons.push(`janela ${businessHours ? "comercial" : "fora hora"} ×${hourMult}`);
+
+  // 4) Storm speed — slow severe storms = sustained damage; fast = scatter
+  const speed = e.storm_speed_kmh ?? 25;
+  const speedMult = speed < 15 ? 1.15 : speed < 35 ? 1.0 : speed < 55 ? 0.92 : 0.8;
+
+  // 5) Probability / confidence
+  const probMult = Math.max(0.4, e.probability ?? 0.7);
+
+  // 6) Recurrence / regional history — proxy via merged_from depth (more sources = more credible)
+  const mergedFrom = ((e.metadata as any)?.merged_from?.length ?? 0) as number;
+  const corroboration = Math.min(0.2, mergedFrom * 0.05);
+  if (corroboration > 0) reasons.push(`${mergedFrom} fontes corroboradoras (+${(corroboration * 100).toFixed(0)}%)`);
+
+  // Composite demand score
+  const raw =
+    (sevWeight + sizeBoost) * expoMult * hourMult * dowMult * speedMult * probMult * (1 + corroboration);
+  const demandScore = Math.max(0, Math.min(100, Math.round(raw)));
+
+  // Expected order uplift over baseline (1.0 = normal day)
+  const expectedOrderUplift = 1 + (demandScore / 100) * 4.5; // up to ~5.5x
+
+  // Time to peak — ongoing already peaking; forecast events have a runway
+  const windowHoursToPeak =
+    e.status === "ongoing" ? 1 :
+    e.severity === "extreme" ? 2 :
+    e.severity === "severe" ? 4 : 6;
+
+  // Peak duration — severe storms generate orders for days
+  const peakDurationHours =
+    e.severity === "extreme" ? 72 :
+    e.severity === "severe" ? 48 :
+    e.severity === "moderate" ? 24 : 8;
+
+  // Regional pressure & saturation (rough: orders ÷ assumed capacity)
+  const areaKm2 = Math.PI * Math.pow(e.radius_km ?? 20, 2);
+  const baseOrdersPerKm2 = 0.08 * intel.urbanDensity * (1 + sizeBoost / 25);
+  const estimatedOrders = Math.round(areaKm2 * baseOrdersPerKm2 * expectedOrderUplift);
+  const avgTicketEur = 480; // PDR avg ticket
+  const estimatedRevenueEur = Math.round(estimatedOrders * avgTicketEur);
+  const regionalPressure = Math.min(1, estimatedOrders / 250);
+  const saturationRisk = SAT_BAND(regionalPressure);
+
+  // Attention mode — premium executive highlight
+  const attention =
+    demandScore >= 65 &&
+    intel.urbanDensity >= 0.35 &&
+    (intel.automotiveExposure || 0) >= 0.25 &&
+    (e.severity === "severe" || e.severity === "extreme");
+
+  // Confidence — combine source priority, probability, corroboration
+  const sourcePrio = (SOURCE_PRIORITY[e.source] ?? 10) / 100;
+  const confidence = Math.max(0.3, Math.min(0.95,
+    0.45 + sourcePrio + (probMult - 0.7) * 0.3 + corroboration + (mergedFrom > 0 ? 0.05 : 0),
+  ));
+
+  const place = [e.city, e.region, e.country].filter(Boolean).join(", ") || "área monitorada";
+  const narrative = attention
+    ? `ATENÇÃO: célula ${e.severity} cruzando ${place}. Pico de demanda em ~${windowHoursToPeak}h, ~${estimatedOrders} ordens projetadas (€${(estimatedRevenueEur / 1000).toFixed(0)}k) por ${peakDurationHours}h.`
+    : demandScore >= 41
+      ? `Demanda ${DEMAND_BAND(demandScore)} prevista em ${place}: ~${estimatedOrders} ordens em ${peakDurationHours}h (pico ~${windowHoursToPeak}h).`
+      : `Baixa relevância operacional em ${place}. Monitorização passiva recomendada.`;
+
+  return {
+    demandScore,
+    band: DEMAND_BAND(demandScore),
+    attention,
+    expectedOrderUplift: Math.round(expectedOrderUplift * 100) / 100,
+    windowHoursToPeak,
+    peakDurationHours,
+    saturationRisk,
+    regionalPressure: Math.round(regionalPressure * 100) / 100,
+    estimatedOrders,
+    estimatedRevenueEur,
+    confidence: Math.round(confidence * 100) / 100,
+    narrative,
+    reasoning: reasons,
+  };
+}
+
 function enrichWithIntelligence(events: HailEvent[]): HailEvent[] {
   return events.map((e) => {
     const intelligence = computeIntelligence(e);
+    const demand = computeDemandForecast(e, intelligence);
     return {
       ...e,
       metadata: {
         ...(e.metadata ?? {}),
         intelligence,
+        demand,
         impact_score: intelligence.impactScore,
         opportunity: intelligence.opportunity,
+        demand_score: demand.demandScore,
+        attention: demand.attention,
       },
     };
   });
@@ -1349,6 +1482,31 @@ Deno.serve(async (req) => {
     const priorityCount = intels.filter((i) => i.criticality === "prioritário").length;
     const totalVehicles = intels.reduce((s, i) => s + i.estimatedVehiclesAffected, 0);
 
+    // PHASE 6 demand aggregates + top regions ranking
+    const demands = merged
+      .map((e) => ({ e, d: (e.metadata as any)?.demand as DemandForecast | undefined }))
+      .filter((x) => x.d) as Array<{ e: HailEvent; d: DemandForecast }>;
+    const avgDemand = demands.length ? Math.round(demands.reduce((s, x) => s + x.d.demandScore, 0) / demands.length) : 0;
+    const attentionCount = demands.filter((x) => x.d.attention).length;
+    const totalEstOrders = demands.reduce((s, x) => s + x.d.estimatedOrders, 0);
+    const totalEstRevenue = demands.reduce((s, x) => s + x.d.estimatedRevenueEur, 0);
+    const topRegions = [...demands]
+      .sort((a, b) => b.d.demandScore - a.d.demandScore)
+      .slice(0, 10)
+      .map(({ e, d }) => ({
+        city: e.city ?? null,
+        region: e.region ?? null,
+        country: e.country ?? null,
+        severity: e.severity,
+        demand_score: d.demandScore,
+        band: d.band,
+        attention: d.attention,
+        estimated_orders: d.estimatedOrders,
+        estimated_revenue_eur: d.estimatedRevenueEur,
+        window_hours_to_peak: d.windowHoursToPeak,
+        saturation_risk: d.saturationRisk,
+      }));
+
     return new Response(JSON.stringify({
       ok: true,
       region: regionParam,
@@ -1372,6 +1530,13 @@ Deno.serve(async (req) => {
         critical_events: criticalCount,
         priority_events: priorityCount,
         estimated_vehicles_affected: totalVehicles,
+      },
+      demand: {
+        avg_demand_score: avgDemand,
+        attention_events: attentionCount,
+        estimated_total_orders: totalEstOrders,
+        estimated_total_revenue_eur: totalEstRevenue,
+        top_regions: topRegions,
       },
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
