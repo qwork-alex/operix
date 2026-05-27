@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
@@ -15,6 +15,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { queryClient } from "@/lib/queryClient";
 
 // Eager: routes hit on first paint of an authenticated session.
 import Index from "./pages/Index";
@@ -55,24 +56,6 @@ const GdprPage = lazy(() => import("./pages/legal/LegalPages").then((m) => ({ de
 const CookiesPage = lazy(() => import("./pages/legal/LegalPages").then((m) => ({ default: m.CookiesPage })));
 const DataProcessingPage = lazy(() => import("./pages/legal/LegalPages").then((m) => ({ default: m.DataProcessingPage })));
 
-console.log("[MOUNT] QueryClient (module init — should appear ONCE)");
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 1,
-      refetchOnWindowFocus: false,
-      // Reuse cached data across navigations to avoid spinner flashes.
-      staleTime: 30_000,
-      gcTime: 5 * 60_000,
-    },
-    mutations: {
-      onError: (error) => {
-        console.error("[Mutation Error]", error);
-      },
-    },
-  },
-});
-
 /** Subtle, layout-stable fallback used while a route chunk is loading. */
 function RouteFallback() {
   return (
@@ -82,7 +65,9 @@ function RouteFallback() {
   );
 }
 
-const App = () => (
+const App = () => {
+  console.count("[ROOT_RENDER]");
+  return (
   <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
@@ -121,7 +106,8 @@ const App = () => (
       </AuthProvider>
     </QueryClientProvider>
   </ErrorBoundary>
-);
+  );
+};
 
 /**
  * AuthenticatedShell — keyed on auth user id so the entire impersonation /
