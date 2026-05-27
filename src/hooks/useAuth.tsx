@@ -93,7 +93,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // 1) Listener first — single source of truth for changes.
     //    No awaits inside the callback (prevents Supabase auth deadlock).
+    console.log("[MOUNT] AuthProvider");
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
+      console.log("[AUTH EVENT]", event, "hasSession=", !!s, "uid=", s?.user?.id ?? null);
+      if (event === "TOKEN_REFRESHED") console.log("[AUTH] token refreshed");
+      if (event === "INITIAL_SESSION") console.log("[AUTH] initial session resolved");
       apply(s);
       if (event === "SIGNED_OUT") {
         try {
@@ -106,9 +110,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // 2) Restore existing session from storage. onAuthStateChange will also
     //    fire INITIAL_SESSION; whichever resolves first calls apply().
+    console.log("[AUTH] getSession() boot");
     supabase.auth
       .getSession()
-      .then(({ data: { session: s } }) => apply(s))
+      .then(({ data: { session: s } }) => {
+        console.log("[AUTH] getSession resolved hasSession=", !!s);
+        apply(s);
+      })
       .catch((err) => {
         console.error("[Auth] getSession failed:", err);
         apply(null);
@@ -118,13 +126,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     //    auth endpoint is unreachable, fall through to logged-out state.
     const safety = window.setTimeout(() => {
       if (!settled && mounted.current) {
-        console.warn("[Auth] boot safety cap hit — proceeding without session");
+        console.warn("[AUTH] boot safety cap hit — proceeding without session");
         settled = true;
         setLoading(false);
       }
     }, BOOT_SAFETY_MS);
 
     return () => {
+      console.log("[UNMOUNT] AuthProvider");
       mounted.current = false;
       window.clearTimeout(safety);
       subscription.unsubscribe();
