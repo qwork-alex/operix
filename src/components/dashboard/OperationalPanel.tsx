@@ -543,55 +543,62 @@ const OPP_TONE: Record<OpportunityBand, string> = {
 function IntelligenceBlock({
   metadata, color,
 }: { metadata: Record<string, any> | null | undefined; color: string }) {
-  const intel: IntelligenceData | null = (metadata as any)?.intelligence ?? null;
-  if (!intel || typeof intel.impactScore !== "number") return null;
+  // FAILSAFE: never let a malformed metadata break the whole panel
+  try {
+    const intel: IntelligenceData | null = (metadata as any)?.intelligence ?? null;
+    if (!intel || typeof intel.impactScore !== "number") return null;
 
-  const impact = Math.round(intel.impactScore);
-  const opp = intel.opportunity ?? "baixa";
-  const oppScore = Math.round(intel.opportunityScore ?? 0);
-  const trendArrow = intel.trend === "rising" ? "↑" : intel.trend === "falling" ? "↓" : "→";
-  const trendTone = intel.trend === "rising" ? "#f97316" : intel.trend === "falling" ? "#64748b" : "#94a3b8";
+    const impact = Math.round(intel.impactScore);
+    const opp = intel.opportunity ?? "baixa";
+    const oppScore = Math.round(intel.opportunityScore ?? 0);
+    const trendArrow = intel.trend === "rising" ? "↑" : intel.trend === "falling" ? "↓" : "→";
+    const trendTone = intel.trend === "rising" ? "#f97316" : intel.trend === "falling" ? "#64748b" : "#94a3b8";
 
-  return (
-    <>
-      <SectionTitle icon={<Zap className="h-3.5 w-3.5" style={{ color }} />}>
-        Inteligência premium
-        {intel.premium && (
-          <span className="ml-2 text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wider"
-            style={{ background: `${color}22`, color, border: `1px solid ${color}55` }}>
-            Relevante
-          </span>
+    return (
+      <>
+        <SectionTitle icon={<Zap className="h-3.5 w-3.5" style={{ color }} />}>
+          Inteligência premium
+          {intel.premium && (
+            <span className="ml-2 text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wider"
+              style={{ background: `${color}22`, color, border: `1px solid ${color}55` }}>
+              Relevante
+            </span>
+          )}
+        </SectionTitle>
+
+        {intel.narrative && (
+          <p className="text-[11px] text-foreground/90 leading-relaxed mb-3 px-2 py-2 rounded-md border border-white/5 bg-white/[0.02]">
+            {intel.narrative}
+          </p>
         )}
-      </SectionTitle>
 
-      {intel.narrative && (
-        <p className="text-[11px] text-foreground/90 leading-relaxed mb-3 px-2 py-2 rounded-md border border-white/5 bg-white/[0.02]">
-          {intel.narrative}
-        </p>
-      )}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+          <ScoreCard label="Impact Score" value={impact} tone={color} suffix="/100" />
+          <ScoreCard label="Oportunidade" value={oppScore} tone={OPP_TONE[opp]} suffix={` · ${opp}`} />
+          <ScoreCard label="Criticidade" value={intel.criticality ?? "—"} tone={color} />
+          <ScoreCard label="Tendência" value={`${trendArrow} ${intel.windowHours ?? "—"}h`} tone={trendTone} />
+        </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-        <ScoreCard label="Impact Score" value={impact} tone={color} suffix="/100" />
-        <ScoreCard label="Oportunidade" value={oppScore} tone={OPP_TONE[opp]} suffix={` · ${opp}`} />
-        <ScoreCard label="Criticidade" value={intel.criticality ?? "—"} tone={color} />
-        <ScoreCard label="Tendência" value={`${trendArrow} ${intel.windowHours ?? "—"}h`} tone={trendTone} />
-      </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+          <RiskChip label="Operacional" band={intel.operationalRisk ?? "low"} />
+          <RiskChip label="Financeiro" band={intel.financialRisk ?? "low"} />
+          <RiskChip label="Logístico" band={intel.logisticsRisk ?? "low"} />
+          <RiskChip label="Automotivo" band={intel.automotiveRisk ?? "low"} />
+        </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-        <RiskChip label="Operacional" band={intel.operationalRisk ?? "low"} />
-        <RiskChip label="Financeiro" band={intel.financialRisk ?? "low"} />
-        <RiskChip label="Logístico" band={intel.logisticsRisk ?? "low"} />
-        <RiskChip label="Automotivo" band={intel.automotiveRisk ?? "low"} />
-      </div>
-
-      <div className="grid grid-cols-3 gap-2 mb-4">
-        <MicroStat label="Densidade urbana" value={`${Math.round((intel.urbanDensity ?? 0) * 100)}%`} />
-        <MicroStat label="Exposição auto" value={`${Math.round((intel.automotiveExposure ?? 0) * 100)}%`} />
-        <MicroStat label="Veíc. estimados" value={(intel.estimatedVehiclesAffected ?? 0).toLocaleString()} />
-      </div>
-    </>
-  );
+        <div className="grid grid-cols-3 gap-2 mb-4">
+          <MicroStat label="Densidade urbana" value={`${Math.round((intel.urbanDensity ?? 0) * 100)}%`} />
+          <MicroStat label="Exposição auto" value={`${Math.round((intel.automotiveExposure ?? 0) * 100)}%`} />
+          <MicroStat label="Veíc. estimados" value={(intel.estimatedVehiclesAffected ?? 0).toLocaleString()} />
+        </div>
+      </>
+    );
+  } catch (e) {
+    console.warn("[IntelligenceBlock] failsafe — render skipped:", e);
+    return null;
+  }
 }
+
 
 function ScoreCard({ label, value, tone, suffix }: { label: string; value: number | string; tone: string; suffix?: string }) {
   return (
