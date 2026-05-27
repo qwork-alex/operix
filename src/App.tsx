@@ -106,7 +106,8 @@ const App = () => {
       </AuthProvider>
     </QueryClientProvider>
   </ErrorBoundary>
-);
+  );
+};
 
 /**
  * AuthenticatedShell — keyed on auth user id so the entire impersonation /
