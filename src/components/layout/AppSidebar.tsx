@@ -78,7 +78,7 @@ export function AppSidebar() {
       items: [
         { title: "Faturamento", url: "/billing", icon: Receipt, module: "accounting", action: "view" },
         { title: t("nav.financial"), url: "/financial", icon: TrendingUp, module: "financial", action: "view" },
-        { title: "Plataforma", url: "/platform", icon: BarChart3, module: "dashboard", action: "view", enabled: !!isPlatformOwner },
+        // Platform (cross-tenant master) entry removed — single-workspace architecture.
       ],
     },
     {

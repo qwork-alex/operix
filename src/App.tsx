@@ -43,7 +43,7 @@ const AIPage = lazy(() => import("./pages/AIPage"));
 const RecoveryPage = lazy(() => import("./pages/RecoveryPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const SubscriptionPage = lazy(() => import("./pages/SubscriptionPage"));
-const PlatformOwnerPage = lazy(() => import("./pages/PlatformOwnerPage"));
+// PlatformOwnerPage removed — the cross-tenant master layer has been reverted.
 const CheckoutPage = lazy(() => import("./pages/CheckoutPage"));
 const ProductionPage = lazy(() => import("./pages/ProductionPage"));
 const MarketplacePage = lazy(() => import("./pages/MarketplacePage"));
@@ -159,7 +159,8 @@ function AuthenticatedShell() {
                     <Route path="/recovery" element={<RecoveryPage />} />
                     <Route path="/subscription" element={<SubscriptionPage />} />
                     <Route path="/checkout" element={<CheckoutPage />} />
-                    <Route path="/platform" element={<PlatformOwnerPage />} />
+                    <Route path="/platform" element={<Navigate to="/" replace />} />
+                    <Route path="/platform-owner" element={<Navigate to="/" replace />} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                 </Suspense>
