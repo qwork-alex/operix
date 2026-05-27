@@ -205,6 +205,9 @@ const NUTS1_CENTROIDS: Record<string, [number, number]> = {
 const COUNTRY_MAP: Record<string, string> = {
   FR:"france", DE:"germany", IT:"italy", ES:"spain", CH:"switzerland",
   BE:"belgium", NL:"netherlands", PT:"portugal", AT:"austria", LU:"luxembourg",
+  GB:"united-kingdom", IE:"ireland", PL:"poland", CZ:"czechia", SK:"slovakia",
+  HU:"hungary", RO:"romania", BG:"bulgaria", GR:"greece",
+  NO:"norway", SE:"sweden", FI:"finland", DK:"denmark",
 };
 
 // Parse "3; orange; Severe" -> 3   |   "5; high-temperature" -> 5
