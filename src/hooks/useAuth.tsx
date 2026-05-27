@@ -56,7 +56,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile>(null);
   const [loading, setLoading] = useState(true);
+  const [degraded, setDegraded] = useState(false);
   const mounted = useRef(true);
+
+  const recoverSession = () => {
+    console.warn("[AUTH_RECOVERY] manual recovery requested");
+    clearLocalAuthTokens();
+    resetAuthBreaker();
+    setSession(null);
+    setUser(null);
+    setProfile(null);
+    setDegraded(false);
+    setLoading(false);
+    if (typeof window !== "undefined") window.location.replace("/auth");
+  };
 
   // Fire-and-forget profile fetch — never blocks auth state.
   const loadProfile = (userId: string) => {
