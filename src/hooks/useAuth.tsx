@@ -20,6 +20,7 @@ import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { logSecurityEvent } from "@/lib/securityLog";
 import { registerCurrentDevice } from "@/lib/deviceFingerprint";
+import { onAuthBreaker, clearLocalAuthTokens, resetAuthBreaker } from "@/lib/authBreaker";
 
 const BOOT_SAFETY_MS = 2000;
 const ACTION_TIMEOUT_MS = 15000;
@@ -31,6 +32,8 @@ interface AuthContextType {
   user: User | null;
   profile: Profile;
   loading: boolean;
+  degraded: boolean;
+  recoverSession: () => void;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -53,7 +56,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile>(null);
   const [loading, setLoading] = useState(true);
+  const [degraded, setDegraded] = useState(false);
   const mounted = useRef(true);
+
+  const recoverSession = () => {
+    console.warn("[AUTH_RECOVERY] manual recovery requested");
+    clearLocalAuthTokens();
+    resetAuthBreaker();
+    setSession(null);
+    setUser(null);
+    setProfile(null);
+    setDegraded(false);
+    setLoading(false);
+    if (typeof window !== "undefined") window.location.replace("/auth");
+  };
 
   // Fire-and-forget profile fetch — never blocks auth state.
   const loadProfile = (userId: string) => {
@@ -132,11 +148,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }, BOOT_SAFETY_MS);
 
+    // 4) Circuit breaker — if GoTrue degrades (3+ consecutive 504s),
+    //    drop the session locally so the UI escapes the refresh loop.
+    const unsubBreaker = onAuthBreaker((isDegraded) => {
+      if (!mounted.current) return;
+      if (isDegraded) {
+        console.warn("[AUTH_DEGRADED] entering safe-auth-mode (session cleared)");
+        setDegraded(true);
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        if (!settled) {
+          settled = true;
+          setLoading(false);
+        }
+      } else {
+        setDegraded(false);
+      }
+    });
+
     return () => {
       console.log("[UNMOUNT] AuthProvider");
       mounted.current = false;
       window.clearTimeout(safety);
       subscription.unsubscribe();
+      unsubBreaker();
     };
   }, []);
 
@@ -221,7 +257,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, profile, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ session, user, profile, loading, degraded, recoverSession, signIn, signUp, signOut }}>
       {children}
     </AuthContext.Provider>
   );
