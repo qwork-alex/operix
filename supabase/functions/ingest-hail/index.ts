@@ -1313,7 +1313,10 @@ Deno.serve(async (req) => {
 
     /* ---- PHASE 4 — Merge & dedupe across providers ---- */
     const rawCount = allEvents.length;
-    const { merged, removed } = mergeEvents(allEvents);
+    const { merged: mergedRaw, removed } = mergeEvents(allEvents);
+
+    /* ---- PHASE 5 — Operational intelligence enrichment ---- */
+    const merged = enrichWithIntelligence(mergedRaw);
 
     /* ---- Upsert into hail_events (incremental sync) ---- */
     let upserted = 0;
@@ -1337,6 +1340,15 @@ Deno.serve(async (req) => {
       ? merged.reduce((s, e) => s + ((e.metadata as any)?.confidence ?? 0.6), 0) / merged.length
       : 0;
 
+    // PHASE 5 intelligence aggregates
+    const intels = merged.map((e) => (e.metadata as any)?.intelligence).filter(Boolean) as Intelligence[];
+    const avgImpact = intels.length ? Math.round(intels.reduce((s, i) => s + i.impactScore, 0) / intels.length) : 0;
+    const avgOpportunity = intels.length ? Math.round(intels.reduce((s, i) => s + i.opportunityScore, 0) / intels.length) : 0;
+    const premiumCount = intels.filter((i) => i.premium).length;
+    const criticalCount = intels.filter((i) => i.criticality === "crítico").length;
+    const priorityCount = intels.filter((i) => i.criticality === "prioritário").length;
+    const totalVehicles = intels.reduce((s, i) => s + i.estimatedVehiclesAffected, 0);
+
     return new Response(JSON.stringify({
       ok: true,
       region: regionParam,
@@ -1352,6 +1364,14 @@ Deno.serve(async (req) => {
         avg_confidence: Math.round(avgConfidence * 100) / 100,
         merge_radius_km: MERGE_RADIUS_KM,
         merge_window_min: MERGE_WINDOW_MIN,
+      },
+      intelligence: {
+        avg_impact_score: avgImpact,
+        avg_opportunity_score: avgOpportunity,
+        premium_events: premiumCount,
+        critical_events: criticalCount,
+        priority_events: priorityCount,
+        estimated_vehicles_affected: totalVehicles,
       },
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
