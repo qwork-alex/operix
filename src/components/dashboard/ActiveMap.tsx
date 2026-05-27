@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useLanguage } from "@/hooks/useLanguage";
 import { Skeleton } from "@/components/ui/skeleton";
+import { HailRadarIcon } from "@/components/icons/HailRadarIcon";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster";
@@ -249,7 +250,10 @@ export function ActiveMap() {
   return (
     <div className="glass-panel rounded-xl p-5 animate-fade-in">
       <div className="mb-3">
-        <h3 className="text-sm font-semibold text-foreground">{t("chart.activeRegions")}</h3>
+        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <HailRadarIcon className="text-cyan-400" size={16} />
+          {t("chart.activeRegions")}
+        </h3>
         <p className="text-xs text-muted-foreground">{t("chart.techDistribution")}</p>
       </div>
       <div

@@ -6,7 +6,8 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { Skeleton } from "@/components/ui/skeleton";
 import maplibregl, { Map as MLMap, GeoJSONSource } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { Users, CloudRain, Zap, Radar, Wrench, FileText, Layers, X, AlertTriangle, Wind, Clock, Gauge, Filter, Play, Pause, RotateCcw, Target, Eye } from "lucide-react";
+import { Users, CloudRain, Zap, Radar, Wrench, FileText, X, AlertTriangle, Wind, Clock, Gauge, Filter, Play, Pause, RotateCcw, Target, Eye } from "lucide-react";
+import { HailRadarIcon } from "@/components/icons/HailRadarIcon";
 import { OperationalPanel, PanelTeam, PanelOrder } from "./OperationalPanel";
 import {
   OperationalOpportunities,
@@ -1204,11 +1205,11 @@ export function OperationalMap() {
       <div className="mb-3 flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-            <Layers className="h-4 w-4 text-cyan-400" />
-            {t("chart.activeRegions") || "Centro Operacional"}
+            <HailRadarIcon className="text-cyan-400" size={16} />
+            {t("chart.activeRegions") || "Radar de Granizo"}
           </h3>
           <p className="text-xs text-muted-foreground">
-            {t("chart.techDistribution") || "Equipes, ordens e clima em tempo real"}
+            {t("chart.techDistribution") || "Detecção de granizo e tempestade em tempo real"}
           </p>
           {/* Ingest health badge — exposes silent failures of the weather pipeline */}
           {(() => {
