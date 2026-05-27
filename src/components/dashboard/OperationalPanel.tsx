@@ -3,6 +3,7 @@ import {
   X, AlertTriangle, Wind, Clock, Gauge, Radar, Zap, Users, FileText,
   Activity, Maximize2, Minimize2, Shrink, MapPin, Shield, Radio, CheckCircle2, Eye, CloudRain,
 } from "lucide-react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 /* ---------- Shared types (kept in sync with OperationalMap) ---------- */
 const HAIL_COLORS = {
@@ -264,10 +265,14 @@ export function OperationalPanel({
             </div>
 
             {/* ---- Section: Premium operational intelligence (Phase 5) ---- */}
-            <IntelligenceBlock metadata={event.metadata} color={color} />
+            <ErrorBoundary fallback={null}>
+              <IntelligenceBlock metadata={event.metadata} color={color} />
+            </ErrorBoundary>
 
             {/* ---- Section: Demand forecast (Phase 6) ---- */}
-            <DemandBlock metadata={event.metadata} color={color} />
+            <ErrorBoundary fallback={null}>
+              <DemandBlock metadata={event.metadata} color={color} />
+            </ErrorBoundary>
 
             {/* ---- Section: Operational ---- */}
             <SectionTitle icon={<Activity className="h-3.5 w-3.5 text-cyan-400" />}>
@@ -375,23 +380,25 @@ export function OperationalPanel({
             <SectionTitle icon={<Clock className="h-3.5 w-3.5 text-amber-400" />}>
               Linha do tempo
             </SectionTitle>
-            <ol className="relative border-l border-white/10 ml-2 pl-4 space-y-2">
-              {timeline.map((it, i) => (
-                <li key={i} className="relative">
-                  <span
-                    className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full ring-2 ring-background"
-                    style={{ background: it.done ? it.tone : "transparent", borderColor: it.tone, border: `1.5px solid ${it.tone}` }}
-                  />
-                  <div className="flex items-center justify-between gap-2 text-[11px]">
-                    <span className={`flex items-center gap-1.5 ${it.done ? "text-foreground" : "text-muted-foreground"}`}>
-                      {it.done && <CheckCircle2 className="h-3 w-3" style={{ color: it.tone }} />}
-                      {it.label}
-                    </span>
-                    <span className="text-muted-foreground tabular-nums">{fmtTime(it.time)}</span>
-                  </div>
-                </li>
-              ))}
-            </ol>
+            <ErrorBoundary fallback={null}>
+              <ol className="relative border-l border-white/10 ml-2 pl-4 space-y-2">
+                {timeline.map((it, i) => (
+                  <li key={i} className="relative">
+                    <span
+                      className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full ring-2 ring-background"
+                      style={{ background: it.done ? it.tone : "transparent", borderColor: it.tone, border: `1.5px solid ${it.tone}` }}
+                    />
+                    <div className="flex items-center justify-between gap-2 text-[11px]">
+                      <span className={`flex items-center gap-1.5 ${it.done ? "text-foreground" : "text-muted-foreground"}`}>
+                        {it.done && <CheckCircle2 className="h-3 w-3" style={{ color: it.tone }} />}
+                        {it.label}
+                      </span>
+                      <span className="text-muted-foreground tabular-nums">{fmtTime(it.time)}</span>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </ErrorBoundary>
           </>
         )}
       </div>

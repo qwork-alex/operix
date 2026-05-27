@@ -1417,13 +1417,15 @@ export function OperationalMap() {
 
       {/* -------- PDR Operational Opportunities (intelligence panel) -------- */}
       {layers.pdr && (
-        <OperationalOpportunities
-          opportunities={opportunities}
-          onSelect={(opp) => {
-            setSelectedHailId(opp.id);
-            mapRef.current?.easeTo({ center: [opp.hail.lng, opp.hail.lat], zoom: 7, duration: 700 });
-          }}
-        />
+        <ErrorBoundary fallback={null}>
+          <OperationalOpportunities
+            opportunities={opportunities}
+            onSelect={(opp) => {
+              setSelectedHailId(opp.id);
+              mapRef.current?.easeTo({ center: [opp.hail.lng, opp.hail.lat], zoom: 7, duration: 700 });
+            }}
+          />
+        </ErrorBoundary>
       )}
     </div>
   );
