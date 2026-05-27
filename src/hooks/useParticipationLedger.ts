@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "./useAuth";
 
 export interface ParticipationSummaryRow {
   workspace_id: string | null;
@@ -32,13 +32,8 @@ export interface ParticipationLedgerEntry {
 }
 
 function useSessionUserId() {
-  const [uid, setUid] = useState<string | null>(null);
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUid(data.user?.id ?? null));
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setUid(s?.user?.id ?? null));
-    return () => sub.subscription.unsubscribe();
-  }, []);
-  return uid;
+  const { user, loading } = useAuth();
+  return loading ? null : user?.id ?? null;
 }
 
 export function useParticipationSummary(year?: number) {

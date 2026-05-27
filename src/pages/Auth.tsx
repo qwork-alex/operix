@@ -16,6 +16,24 @@ import { ASVerifiedSignature } from "@/components/branding/ASVerifiedSignature";
 
 type Mode = "signin" | "create-workspace" | "create-technician";
 
+const AUTH_FORM_TIMEOUT_MS = 12000;
+
+function withAuthTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(`${label} timeout`)), AUTH_FORM_TIMEOUT_MS);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 export default function Auth() {
   const { session, loading, signIn } = useAuth();
   const { t } = useLanguage();
@@ -65,18 +83,21 @@ export default function Auth() {
 
     setSubmitting(true);
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email: email.trim().toLowerCase(),
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/onboarding/workspace`,
-          data: {
-            full_name: fullName.trim(),
-            create_workspace: true,
-            intended_workspace_name: workspaceName.trim(),
+      const { data, error } = await withAuthTimeout(
+        supabase.auth.signUp({
+          email: email.trim().toLowerCase(),
+          password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/onboarding/workspace`,
+            data: {
+              full_name: fullName.trim(),
+              create_workspace: true,
+              intended_workspace_name: workspaceName.trim(),
+            },
           },
-        },
-      });
+        }),
+        "signUp workspace",
+      );
 
       if (error) {
         const msg = error.message || "";
@@ -129,17 +150,20 @@ export default function Auth() {
     try { localStorage.removeItem("invite_token"); sessionStorage.removeItem("invite_token"); } catch {}
     setSubmitting(true);
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email: email.trim().toLowerCase(),
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/`,
-          data: {
-            full_name: fullName.trim(),
-            intended_role: "tecnico",
+      const { data, error } = await withAuthTimeout(
+        supabase.auth.signUp({
+          email: email.trim().toLowerCase(),
+          password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/`,
+            data: {
+              full_name: fullName.trim(),
+              intended_role: "tecnico",
+            },
           },
-        },
-      });
+        }),
+        "signUp technician",
+      );
       if (error) {
         const msg = error.message || "";
         if (msg.toLowerCase().includes("registered") || msg.toLowerCase().includes("already")) {
