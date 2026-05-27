@@ -6311,6 +6311,14 @@ export type Database = {
         }[]
       }
       check_trial_eligibility: { Args: { _email: string }; Returns: Json }
+      cleanup_stale_hail_events: {
+        Args: never
+        Returns: {
+          closed_count: number
+          forecast_expired: number
+          live_expired: number
+        }[]
+      }
       clear_my_temp_credential: { Args: never; Returns: undefined }
       compute_billing_intelligence: {
         Args: { _workspace_id: string }

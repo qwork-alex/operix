@@ -258,9 +258,14 @@ export function OperationalMap() {
       // 7-day window: keeps replay meaningful while ensuring operational
       // entities remain visible even when no fresh ingest happened recently.
       const since = new Date(Date.now() - 7 * 24 * 3600_000).toISOString();
+      const nowIso = new Date().toISOString();
+      // Operational radar = only non-closed events whose TTL has not elapsed.
+      // Closed/expired events are kept in the DB for history but never rendered.
       const { data, error } = await supabase
         .from("hail_events")
         .select("*")
+        .neq("status", "closed")
+        .or(`expires_at.is.null,expires_at.gte.${nowIso}`)
         .or(`forecast_time.gte.${since},observed_time.gte.${since},created_at.gte.${since}`)
         .order("forecast_time", { ascending: true });
       if (error) throw error;
@@ -1610,10 +1615,10 @@ function HailLegend() {
 /*  Detail Panel — opens below the map when a hail cell is clicked         */
 /* ====================================================================== */
 const STATUS_LABEL: Record<HailStatus, string> = {
-  forecast: "Previsto",
-  ongoing: "Em andamento",
+  forecast: "Prévision",
+  ongoing: "Ao Vivo",
   confirmed: "Confirmado",
-  closed: "Encerrado",
+  closed: "Expirado",
 };
 const SEVERITY_LABEL: Record<HailSeverity, string> = {
   low: "Baixo risco",
