@@ -391,30 +391,34 @@ export function OperationalMap() {
   const visibleHailEvents = useMemo(() => {
     const windowStart = Date.now() - hailWindowHours * 3600_000;
     const isLive = replayCursor >= 0.999;
+    // Density cap — never render more than N events on the operational
+    // radar. Prevents heatmap saturation, marker storms and render loops
+    // when ingestion floods the workspace. Severity-ordered before slice.
+    const MAX_VISIBLE = 250;
+    const SEV_RANK: Record<HailSeverity, number> = { extreme: 4, severe: 3, moderate: 2, low: 1 };
 
-    return hailEntities
-      .filter((e) => {
-        // Severity chips
-        if (!hailSeverityFilter[e.severity]) return false;
-        if (hailMinSizeMm > 0 && e.size < hailMinSizeMm) return false;
+    const filtered = hailEntities.filter((e) => {
+      if (!hailSeverityFilter[e.severity]) return false;
+      if (hailMinSizeMm > 0 && e.size < hailMinSizeMm) return false;
+      if (hailStatusFilter !== "all") {
+        if (hailStatusFilter === "forecast" && !e.forecast) return false;
+        if (hailStatusFilter === "ongoing" && !e.active) return false;
+        if (hailStatusFilter === "confirmed" && !e.confirmed) return false;
+      }
+      if (!isLive) {
+        if (e.timestamp < windowStart) return false;
+        if (e.timestamp > replayTimeMs) return false;
+      }
+      return true;
+    });
 
-        // Status chips (Todos / Previsão / Ativo / Confirmado)
-        if (hailStatusFilter !== "all") {
-          if (hailStatusFilter === "forecast" && !e.forecast) return false;
-          if (hailStatusFilter === "ongoing" && !e.active) return false;
-          if (hailStatusFilter === "confirmed" && !e.confirmed) return false;
-        }
-
-        // Time window only applies during replay scrubbing — at AO VIVO,
-        // status/severity chips must reveal every loaded entity.
-        if (!isLive) {
-          if (e.timestamp < windowStart) return false;
-          if (e.timestamp > replayTimeMs) return false;
-        }
-        return true;
-      })
+    if (filtered.length <= MAX_VISIBLE) return filtered.map((e) => e.raw);
+    return filtered
+      .sort((a, b) => (SEV_RANK[b.severity] - SEV_RANK[a.severity]) || (b.timestamp - a.timestamp))
+      .slice(0, MAX_VISIBLE)
       .map((e) => e.raw);
   }, [hailEntities, hailStatusFilter, hailSeverityFilter, hailMinSizeMm, hailWindowHours, replayTimeMs, replayCursor]);
+
 
   const [selectedHailId, setSelectedHailId] = useState<string | null>(null);
   const selectedHail = useMemo(
