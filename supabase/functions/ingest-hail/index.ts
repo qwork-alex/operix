@@ -860,14 +860,23 @@ const ConvectiveInference: WeatherProvider = {
               windGustKmh: h.wind_gusts_10m?.[j] ?? null,
             };
             const op = scoreConvectiveHail(input);
-            if (op.score < 35) continue; // only emit MODERADO+
+            // PHASE 4: stricter emit gate.
+            //  - score must be MODERADO+ (>= 41)
+            //  - confidence must be >= 0.45 (at least 2 independent signals)
+            // Below these thresholds we suppress to keep the radar professional.
+            if (op.score < 41) continue;
+            if (op.confidence < 0.45) continue;
 
             const isLive = Math.abs(tMs - nowMs) < 90 * 60_000;
+            // Radius scales with severity for cleaner clustering at zoom
+            const radiusKm =
+              op.severity === "extreme" ? 45 :
+              op.severity === "severe"  ? 35 : 25;
             events.push({
               source: "convective_inference",
               external_id: `ci-${p.key}-${times[j]}`,
               city: p.city ?? null, country: p.country,
-              lat: p.lat, lng: p.lng, radius_km: 35,
+              lat: p.lat, lng: p.lng, radius_km: radiusKm,
               severity: op.severity,
               status: isLive ? "ongoing" : "forecast",
               hail_size_mm: op.inferredHailMm || null,
@@ -879,10 +888,11 @@ const ConvectiveInference: WeatherProvider = {
               expires_at: new Date(tMs + 3 * 3600_000).toISOString(),
               metadata: {
                 engine: "hailOperationalEngine",
-                version: 1,
+                version: 4,
                 grid: p.key,
                 operational_score: op.score,
                 operational_level: op.level,
+                confidence: op.confidence,
                 reasons: op.reasons,
                 inputs: input,
               },
