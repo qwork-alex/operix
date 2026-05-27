@@ -18,6 +18,7 @@ import {
   type OppTeam,
 } from "./OperationalOpportunities";
 import { HailReportDialog } from "./HailReportDialog";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 /* ------------------------------------------------------------------ */
 /*  Hail severity → premium color palette                              */
