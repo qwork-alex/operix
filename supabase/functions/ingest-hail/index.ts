@@ -618,21 +618,26 @@ const OpenMeteo: WeatherProvider = {
           const nowMs = Date.now();
           for (let j = 0; j < times.length; j++) {
             const code = codes[j];
-            if (code !== 96 && code !== 99) continue; // hail thunderstorms only
+            // PHASE 4: hard noise filter — only WMO 99 (heavy hail thunderstorm).
+            // Code 96 (slight hail) requires meaningful precip corroboration
+            // (>=6mm/h) otherwise we ignore it as low-confidence convection.
+            const precip = precs[j] ?? 0;
+            if (code !== 99 && !(code === 96 && precip >= 6)) continue;
             const tMs = new Date(times[j] + "Z").getTime();
-            if (tMs < nowMs - 3600_000) continue; // skip stale past hours
+            if (tMs < nowMs - 3600_000) continue;
             const isLive = Math.abs(tMs - nowMs) < 3600_000;
-            const sizeMm = code === 99 ? 20 : 10;
+            const sizeMm = code === 99 ? 22 : 12;
+            const confidence = code === 99 ? 0.7 : 0.55;
             events.push({
               source: "openmeteo",
               external_id: `om-${p.key}-${times[j]}`,
               city: p.city ?? null, country: p.country,
-              lat: p.lat, lng: p.lng, radius_km: 40,
+              lat: p.lat, lng: p.lng, radius_km: 35,
               severity: code === 99 ? "severe" : "moderate",
               status: isLive ? "ongoing" : "forecast",
               hail_size_mm: sizeMm,
-              probability: code === 99 ? 0.75 : 0.55,
-              intensity: code === 99 ? 70 : 45,
+              probability: confidence,
+              intensity: code === 99 ? 72 : 48,
               storm_speed_kmh: winds[j] ?? null,
               storm_direction_deg: dirs[j] ?? null,
               forecast_time: isLive ? null : times[j] + "Z",
@@ -640,7 +645,8 @@ const OpenMeteo: WeatherProvider = {
               expires_at: new Date(tMs + 3600_000).toISOString(),
               metadata: {
                 grid: p.key, wmo_code: code,
-                precipitation_mm: precs[j] ?? null,
+                precipitation_mm: precip,
+                confidence,
               },
             });
           }
@@ -696,75 +702,110 @@ interface OperationalScore {
   level: "BAIXO" | "MODERADO" | "SEVERO" | "EXTREMO";
   hailProbability: number; // 0..1
   inferredHailMm: number;  // estimated stone size
+  confidence: number;      // 0..1 — how many independent signals corroborate
   reasons: string[];
 }
 
+/**
+ * PHASE 4 — Refined operational hail scoring.
+ *
+ * Rebalance vs Phase 3:
+ *  - Reduced weight on isolated precipitation, marginal CAPE and weak instability
+ *  - Increased weight on multi-signal convective signatures (CAPE × LI × storm code)
+ *  - Heavier penalty for strong CIN (capped atmospheres do not produce hail)
+ *  - New confidence score: # of independent signals confirming the event
+ *  - New bands: 0-25 ignore, 26-40 low, 41-60 moderate, 61-80 severe, 81-100 extreme
+ *  - Synergy bonus only when CAPE ≥ 1500 AND LI ≤ -4 AND active storm code
+ */
 function scoreConvectiveHail(x: InstabilityInput): OperationalScore {
   const reasons: string[] = [];
   let score = 0;
+  let signals = 0; // independent confirmations
 
-  // 1) CAPE — the dominant driver of severe convection
+  // 1) CAPE — dominant driver, but marginal CAPE alone is no longer enough
   if (x.cape != null) {
-    if (x.cape >= 3500) { score += 45; reasons.push(`CAPE ${Math.round(x.cape)} J/kg (extreme)`); }
-    else if (x.cape >= 2500) { score += 35; reasons.push(`CAPE ${Math.round(x.cape)} J/kg (severe)`); }
-    else if (x.cape >= 1500) { score += 22; reasons.push(`CAPE ${Math.round(x.cape)} J/kg (moderate)`); }
-    else if (x.cape >= 800)  { score += 10; reasons.push(`CAPE ${Math.round(x.cape)} J/kg (marginal)`); }
+    if (x.cape >= 3500)      { score += 38; signals++; reasons.push(`CAPE ${Math.round(x.cape)} J/kg (extreme)`); }
+    else if (x.cape >= 2500) { score += 28; signals++; reasons.push(`CAPE ${Math.round(x.cape)} J/kg (severe)`); }
+    else if (x.cape >= 1500) { score += 16; signals++; reasons.push(`CAPE ${Math.round(x.cape)} J/kg (moderate)`); }
+    else if (x.cape >= 1000) { score += 5; reasons.push(`CAPE ${Math.round(x.cape)} J/kg (marginal)`); }
+    // CAPE < 1000 contributes nothing (was 10 pts in phase 3 — noise source)
   }
-  // 2) Lifted Index — strongly negative = strong instability
+  // 2) Lifted Index — instability multiplier
   if (x.liftedIndex != null) {
-    if (x.liftedIndex <= -8) { score += 20; reasons.push(`LI ${x.liftedIndex.toFixed(1)} (extreme instability)`); }
-    else if (x.liftedIndex <= -5) { score += 14; reasons.push(`LI ${x.liftedIndex.toFixed(1)} (severe)`); }
-    else if (x.liftedIndex <= -2) { score += 7;  reasons.push(`LI ${x.liftedIndex.toFixed(1)} (moderate)`); }
+    if (x.liftedIndex <= -8)      { score += 22; signals++; reasons.push(`LI ${x.liftedIndex.toFixed(1)} (extreme)`); }
+    else if (x.liftedIndex <= -5) { score += 15; signals++; reasons.push(`LI ${x.liftedIndex.toFixed(1)} (severe)`); }
+    else if (x.liftedIndex <= -2) { score += 6; reasons.push(`LI ${x.liftedIndex.toFixed(1)} (moderate)`); }
+    // LI > -2 = stable, contributes nothing
   }
   // 3) Freezing level — lower = larger hailstones reach ground
-  if (x.freezingLevelM != null && x.freezingLevelM < 4200) {
-    if (x.freezingLevelM < 2800) { score += 15; reasons.push(`Freezing level ${Math.round(x.freezingLevelM)}m (low)`); }
-    else if (x.freezingLevelM < 3500) { score += 9; reasons.push(`Freezing level ${Math.round(x.freezingLevelM)}m`); }
-    else { score += 4; }
+  if (x.freezingLevelM != null) {
+    if (x.freezingLevelM < 2800)      { score += 14; signals++; reasons.push(`Freezing ${Math.round(x.freezingLevelM)}m (low)`); }
+    else if (x.freezingLevelM < 3500) { score += 8; reasons.push(`Freezing ${Math.round(x.freezingLevelM)}m`); }
+    else if (x.freezingLevelM < 4200) { score += 3; }
+    // >4200m hail melts before reaching surface
   }
-  // 4) Active thunderstorm code is a strong confirmer
+  // 4) Active thunderstorm code — strong confirmer
   if (x.weatherCode != null) {
-    if (x.weatherCode === 99) { score += 18; reasons.push("WMO 99: heavy hail thunderstorm"); }
-    else if (x.weatherCode === 96) { score += 12; reasons.push("WMO 96: slight hail thunderstorm"); }
-    else if (x.weatherCode === 95) { score += 6;  reasons.push("WMO 95: thunderstorm active"); }
+    if (x.weatherCode === 99)      { score += 22; signals++; reasons.push("WMO 99: heavy hail thunderstorm"); }
+    else if (x.weatherCode === 96) { score += 14; signals++; reasons.push("WMO 96: slight hail thunderstorm"); }
+    else if (x.weatherCode === 95) { score += 5; reasons.push("WMO 95: thunderstorm"); }
   }
-  // 5) High cloud / anvil signature
-  if (x.highCloudPct != null && x.highCloudPct >= 70) {
-    score += 4; reasons.push(`High-cloud cover ${Math.round(x.highCloudPct)}%`);
+  // 5) Storm rotation / downdraft proxy via wind gusts
+  if (x.windGustKmh != null) {
+    if (x.windGustKmh >= 90)      { score += 10; signals++; reasons.push(`Gusts ${Math.round(x.windGustKmh)} km/h (severe)`); }
+    else if (x.windGustKmh >= 70) { score += 6; signals++; reasons.push(`Gusts ${Math.round(x.windGustKmh)} km/h`); }
+    else if (x.windGustKmh >= 50) { score += 2; }
   }
-  // 6) Downdraft proxy
-  if (x.windGustKmh != null && x.windGustKmh >= 70) {
-    score += 6; reasons.push(`Gusts ${Math.round(x.windGustKmh)} km/h`);
-  } else if (x.windGustKmh != null && x.windGustKmh >= 50) {
-    score += 3;
+  // 6) High cloud / anvil signature (weak confirmer)
+  if (x.highCloudPct != null && x.highCloudPct >= 80) {
+    score += 3; reasons.push(`High-cloud ${Math.round(x.highCloudPct)}%`);
   }
-  // 7) Precipitation cross-check
-  if (x.precipMm != null && x.precipMm >= 8) {
-    score += 4; reasons.push(`Precip ${x.precipMm.toFixed(1)} mm/h`);
+  // 7) Precipitation cross-check — only meaningful at high intensity
+  if (x.precipMm != null) {
+    if (x.precipMm >= 15) { score += 4; reasons.push(`Precip ${x.precipMm.toFixed(1)} mm/h`); }
+    else if (x.precipMm >= 8) { score += 2; }
+    // light precip ignored — was a major false-positive source
   }
-  // 8) CIN penalty — a cap suppresses convection
-  if (x.cin != null && x.cin <= -150) {
-    score -= 10; reasons.push(`CIN ${Math.round(x.cin)} J/kg (capped)`);
+  // 8) CIN penalty — stronger now: a strong cap effectively kills convection
+  if (x.cin != null) {
+    if (x.cin <= -200)      { score -= 22; reasons.push(`CIN ${Math.round(x.cin)} J/kg (heavily capped)`); }
+    else if (x.cin <= -100) { score -= 10; reasons.push(`CIN ${Math.round(x.cin)} J/kg (capped)`); }
   }
 
-  score = Math.max(0, Math.min(100, score));
+  // SYNERGY BONUS — only when the three pillars all confirm a severe setup.
+  // This rewards true convective signatures and avoids inflating isolated signals.
+  if (
+    x.cape != null && x.cape >= 1500 &&
+    x.liftedIndex != null && x.liftedIndex <= -4 &&
+    x.weatherCode != null && (x.weatherCode === 96 || x.weatherCode === 99)
+  ) {
+    score += 8; signals++; reasons.push("Synergy: CAPE × LI × storm-code confirmed");
+  }
 
+  score = Math.max(0, Math.min(100, Math.round(score)));
+
+  // PHASE 4 bands: 0-25 ignore, 26-40 low, 41-60 moderate, 61-80 severe, 81-100 extreme
   let level: OperationalScore["level"] = "BAIXO";
   let severity: Severity = "low";
-  if (score >= 75) { level = "EXTREMO"; severity = "extreme"; }
-  else if (score >= 55) { level = "SEVERO"; severity = "severe"; }
-  else if (score >= 35) { level = "MODERADO"; severity = "moderate"; }
+  if (score >= 81)      { level = "EXTREMO"; severity = "extreme"; }
+  else if (score >= 61) { level = "SEVERO";  severity = "severe"; }
+  else if (score >= 41) { level = "MODERADO"; severity = "moderate"; }
 
-  // Stone size estimate (mm): rough empirical from CAPE + freezing level
+  // Stone size estimate (mm) — empirical from CAPE × freezing level
   let inferredHailMm = 0;
-  if (x.cape != null) {
-    inferredHailMm = Math.max(0, Math.sqrt(Math.max(0, x.cape - 500)) * 0.45);
+  if (x.cape != null && x.cape >= 800) {
+    inferredHailMm = Math.max(0, Math.sqrt(Math.max(0, x.cape - 500)) * 0.42);
     if (x.freezingLevelM != null && x.freezingLevelM < 3200) inferredHailMm *= 1.25;
   }
   inferredHailMm = Math.min(80, Math.round(inferredHailMm));
 
-  const hailProbability = Math.min(0.95, score / 100);
-  return { score, severity, level, hailProbability, inferredHailMm, reasons };
+  // Confidence: how many independent signals agree (max 6 weighted ~)
+  // 0 signals = 0, 1 = 0.25, 2 = 0.45, 3 = 0.65, 4 = 0.8, 5+ = 0.92
+  const confTable = [0, 0.25, 0.45, 0.65, 0.8, 0.92, 0.96];
+  const confidence = confTable[Math.min(signals, 6)];
+
+  const hailProbability = Math.min(0.95, (score / 100) * (0.5 + confidence * 0.5));
+  return { score, severity, level, hailProbability, inferredHailMm, confidence, reasons };
 }
 
 /* ----- Convective Inference provider (free, global, OpenMeteo-backed) ----
@@ -819,14 +860,23 @@ const ConvectiveInference: WeatherProvider = {
               windGustKmh: h.wind_gusts_10m?.[j] ?? null,
             };
             const op = scoreConvectiveHail(input);
-            if (op.score < 35) continue; // only emit MODERADO+
+            // PHASE 4: stricter emit gate.
+            //  - score must be MODERADO+ (>= 41)
+            //  - confidence must be >= 0.45 (at least 2 independent signals)
+            // Below these thresholds we suppress to keep the radar professional.
+            if (op.score < 41) continue;
+            if (op.confidence < 0.45) continue;
 
             const isLive = Math.abs(tMs - nowMs) < 90 * 60_000;
+            // Radius scales with severity for cleaner clustering at zoom
+            const radiusKm =
+              op.severity === "extreme" ? 45 :
+              op.severity === "severe"  ? 35 : 25;
             events.push({
               source: "convective_inference",
               external_id: `ci-${p.key}-${times[j]}`,
               city: p.city ?? null, country: p.country,
-              lat: p.lat, lng: p.lng, radius_km: 35,
+              lat: p.lat, lng: p.lng, radius_km: radiusKm,
               severity: op.severity,
               status: isLive ? "ongoing" : "forecast",
               hail_size_mm: op.inferredHailMm || null,
@@ -838,10 +888,11 @@ const ConvectiveInference: WeatherProvider = {
               expires_at: new Date(tMs + 3 * 3600_000).toISOString(),
               metadata: {
                 engine: "hailOperationalEngine",
-                version: 1,
+                version: 4,
                 grid: p.key,
                 operational_score: op.score,
                 operational_level: op.level,
+                confidence: op.confidence,
                 reasons: op.reasons,
                 inputs: input,
               },
@@ -894,6 +945,104 @@ const FR_DEPARTMENT_COORDS: Record<string, [number, number]> = {
   "62": [2.78, 50.52], "67": [7.75, 48.57], "69": [4.83, 45.76], "75": [2.35, 48.86],
   "76": [1.10, 49.44], "83": [6.13, 43.42], "87": [1.27, 45.83], "06": [7.27, 43.71],
 };
+
+/* ============================================================================
+ *  PHASE 4 — GLOBAL DEDUPLICATION & MERGE PASS
+ *  ----------------------------------------------------------------------------
+ *  After fetching from all providers we run a single clustering pass to merge
+ *  events that describe the same storm cell. Two events merge when ALL hold:
+ *    - distance(latA,lngA, latB,lngB) <= MERGE_RADIUS_KM
+ *    - |timeA - timeB| <= MERGE_WINDOW_MIN  (forecast/observed time)
+ *  When merging:
+ *    - Keep highest severity & largest hail size
+ *    - Prefer status: confirmed > ongoing > forecast
+ *    - Prefer source priority: noaa/meteofrance > tomorrowio > openmeteo > inference
+ *    - Preserve external_id of the winning event (kept) for stable dedupe
+ *    - Stash merged providers in metadata.merged_from[]
+ *  This is what eliminates "5 circles for the same cell" on the map.
+ * ===========================================================================*/
+const MERGE_RADIUS_KM = 80;
+const MERGE_WINDOW_MIN = 90;
+const SOURCE_PRIORITY: Record<string, number> = {
+  noaa: 100, meteofrance: 95, tomorrowio: 70,
+  openmeteo: 50, convective_inference: 35,
+};
+const SEVERITY_RANK: Record<Severity, number> = {
+  low: 1, moderate: 2, severe: 3, extreme: 4,
+};
+const STATUS_RANK: Record<Status, number> = {
+  forecast: 1, ongoing: 2, confirmed: 3, closed: 0,
+};
+
+function haversineKm(a: HailEvent, b: HailEvent): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const la1 = toRad(a.lat), la2 = toRad(b.lat);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLng / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+function eventTimeMs(e: HailEvent): number {
+  const t = e.observed_time ?? e.forecast_time ?? e.expires_at;
+  return t ? new Date(t).getTime() : Date.now();
+}
+
+function mergeTwo(winner: HailEvent, loser: HailEvent): HailEvent {
+  const sev = SEVERITY_RANK[loser.severity] > SEVERITY_RANK[winner.severity]
+    ? loser.severity : winner.severity;
+  const status = STATUS_RANK[loser.status] > STATUS_RANK[winner.status]
+    ? loser.status : winner.status;
+  const hail = Math.max(winner.hail_size_mm ?? 0, loser.hail_size_mm ?? 0) || null;
+  const meta = { ...(winner.metadata ?? {}) } as Record<string, unknown>;
+  const mergedFrom = Array.isArray(meta.merged_from) ? (meta.merged_from as any[]) : [];
+  mergedFrom.push({
+    source: loser.source,
+    external_id: loser.external_id,
+    severity: loser.severity,
+    score: (loser.metadata as any)?.operational_score ?? null,
+  });
+  meta.merged_from = mergedFrom;
+  meta.merge_count = mergedFrom.length;
+  return {
+    ...winner,
+    severity: sev,
+    status,
+    hail_size_mm: hail,
+    probability: Math.max(winner.probability ?? 0, loser.probability ?? 0) || null,
+    intensity: Math.max(winner.intensity ?? 0, loser.intensity ?? 0) || null,
+    radius_km: Math.max(winner.radius_km ?? 25, loser.radius_km ?? 25),
+    metadata: meta,
+  };
+}
+
+function mergeEvents(events: HailEvent[]): { merged: HailEvent[]; removed: number } {
+  // Sort by source priority desc → severity desc, so winners come first.
+  const sorted = [...events].sort((a, b) => {
+    const pa = SOURCE_PRIORITY[a.source] ?? 10;
+    const pb = SOURCE_PRIORITY[b.source] ?? 10;
+    if (pb !== pa) return pb - pa;
+    return SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity];
+  });
+  const kept: HailEvent[] = [];
+  let removed = 0;
+  for (const ev of sorted) {
+    const tEv = eventTimeMs(ev);
+    let mergedInto = -1;
+    for (let i = 0; i < kept.length; i++) {
+      const k = kept[i];
+      if (Math.abs(eventTimeMs(k) - tEv) > MERGE_WINDOW_MIN * 60_000) continue;
+      if (haversineKm(k, ev) > MERGE_RADIUS_KM) continue;
+      kept[i] = mergeTwo(k, ev);
+      mergedInto = i;
+      removed++;
+      break;
+    }
+    if (mergedInto === -1) kept.push(ev);
+  }
+  return { merged: kept, removed };
+}
+
 
 /* =================================================================== HTTP */
 Deno.serve(async (req) => {
@@ -988,24 +1137,48 @@ Deno.serve(async (req) => {
       }
     }
 
+    /* ---- PHASE 4 — Merge & dedupe across providers ---- */
+    const rawCount = allEvents.length;
+    const { merged, removed } = mergeEvents(allEvents);
+
     /* ---- Upsert into hail_events (incremental sync) ---- */
     let upserted = 0;
-    if (allEvents.length > 0) {
+    if (merged.length > 0) {
       const { data, error } = await supabase
         .from("hail_events")
-        .upsert(allEvents, { onConflict: "source,external_id" })
+        .upsert(merged, { onConflict: "source,external_id" })
         .select("id");
       if (error) throw error;
       upserted = data?.length ?? 0;
     }
+
+    // Quality report
+    const bySeverity = merged.reduce((acc: Record<string, number>, e) => {
+      acc[e.severity] = (acc[e.severity] ?? 0) + 1; return acc;
+    }, {});
+    const avgScore = merged.length
+      ? merged.reduce((s, e) => s + ((e.metadata as any)?.operational_score ?? e.intensity ?? 0), 0) / merged.length
+      : 0;
+    const avgConfidence = merged.length
+      ? merged.reduce((s, e) => s + ((e.metadata as any)?.confidence ?? 0.6), 0) / merged.length
+      : 0;
 
     return new Response(JSON.stringify({
       ok: true,
       region: regionParam,
       duration_ms: Date.now() - t0,
       providers: providerStatus,
-      events_received: allEvents.length,
+      events_received: rawCount,
+      events_merged_out: removed,
+      events_kept: merged.length,
       upserted,
+      quality: {
+        by_severity: bySeverity,
+        avg_score: Math.round(avgScore * 10) / 10,
+        avg_confidence: Math.round(avgConfidence * 100) / 100,
+        merge_radius_km: MERGE_RADIUS_KM,
+        merge_window_min: MERGE_WINDOW_MIN,
+      },
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     return new Response(JSON.stringify({
