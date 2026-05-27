@@ -294,10 +294,9 @@ export function OperationalPanel({
               <IntelligenceBlock metadata={event.metadata} color={color} />
             </ErrorBoundary>
 
-            {/* ---- Section: Demand forecast (Phase 6) ---- */}
-            <ErrorBoundary fallback={null}>
-              <DemandBlock metadata={event.metadata} color={color} />
-            </ErrorBoundary>
+            {/* ---- Section: Demand forecast (Phase 6) — lazy, idle-deferred, isolated ---- */}
+            <DeferredDemandSection metadata={event.metadata} color={color} />
+
 
             {/* ---- Section: Operational ---- */}
             <SectionTitle icon={<Activity className="h-3.5 w-3.5 text-cyan-400" />}>
