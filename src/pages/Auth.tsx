@@ -18,7 +18,7 @@ type Mode = "signin" | "create-workspace" | "create-technician";
 
 const AUTH_FORM_TIMEOUT_MS = 12000;
 
-function withAuthTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+function withAuthTimeout<T>(promise: PromiseLike<T>, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = window.setTimeout(() => reject(new Error(`${label} timeout`)), AUTH_FORM_TIMEOUT_MS);
     promise.then(
