@@ -20,6 +20,7 @@ import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { logSecurityEvent } from "@/lib/securityLog";
 import { registerCurrentDevice } from "@/lib/deviceFingerprint";
+import { onAuthBreaker, clearLocalAuthTokens, resetAuthBreaker } from "@/lib/authBreaker";
 
 const BOOT_SAFETY_MS = 2000;
 const ACTION_TIMEOUT_MS = 15000;
@@ -31,6 +32,8 @@ interface AuthContextType {
   user: User | null;
   profile: Profile;
   loading: boolean;
+  degraded: boolean;
+  recoverSession: () => void;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
