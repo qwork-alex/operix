@@ -1383,27 +1383,36 @@ export function OperationalMap() {
 
       {/* -------- Dynamic operational command panel -------- */}
       {selectedHail && (
-        <OperationalPanel
-          event={selectedHail}
-          teams={(teamsGeo.features as any[]).map((f): PanelTeam => ({
-            lng: f.geometry.coordinates[0],
-            lat: f.geometry.coordinates[1],
-            city: f.properties?.city,
-            when: f.properties?.when,
-          }))}
-          orders={(ordersGeo.features as any[]).map((f): PanelOrder => ({
-            id: f.properties?.id,
-            city: f.properties?.city,
-            platform: f.properties?.platform,
-            plate: f.properties?.plate,
-            status: f.properties?.status,
-            lng: f.geometry.coordinates[0],
-            lat: f.geometry.coordinates[1],
-          }))}
-          onClose={() => setSelectedHailId(null)}
-          reports={reportsByEvent.get(selectedHail.id) ?? []}
-        />
+        <ErrorBoundary
+          fallback={
+            <div className="mt-4 p-3 rounded-xl border border-amber-500/30 bg-amber-500/5 text-[11px] text-amber-300">
+              Painel operacional indisponível para este evento. O mapa continua activo.
+            </div>
+          }
+        >
+          <OperationalPanel
+            event={selectedHail}
+            teams={(teamsGeo.features as any[]).map((f): PanelTeam => ({
+              lng: f.geometry.coordinates[0],
+              lat: f.geometry.coordinates[1],
+              city: f.properties?.city,
+              when: f.properties?.when,
+            }))}
+            orders={(ordersGeo.features as any[]).map((f): PanelOrder => ({
+              id: f.properties?.id,
+              city: f.properties?.city,
+              platform: f.properties?.platform,
+              plate: f.properties?.plate,
+              status: f.properties?.status,
+              lng: f.geometry.coordinates[0],
+              lat: f.geometry.coordinates[1],
+            }))}
+            onClose={() => setSelectedHailId(null)}
+            reports={reportsByEvent.get(selectedHail.id) ?? []}
+          />
+        </ErrorBoundary>
       )}
+
 
       {/* -------- PDR Operational Opportunities (intelligence panel) -------- */}
       {layers.pdr && (
