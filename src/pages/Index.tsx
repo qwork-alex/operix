@@ -37,12 +37,8 @@ const Dashboard = () => {
       {/* Operational KPIs */}
       <OperationalKPIs />
 
-      {/* Platforms lifecycle */}
-      <ErrorBoundary>
-        <div data-agent-focus="platforms-panel">
-          <PlatformsPanel />
-        </div>
-      </ErrorBoundary>
+      {/* Plataformas operacionais panel removido — métricas derivadas das OS reais. */}
+
 
       {/* Radar PDR — full width, streamed in */}
       <ErrorBoundary>
