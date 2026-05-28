@@ -1,4 +1,4 @@
-import { Activity, AlertTriangle, Bell, Radio, Users, Building2 } from "lucide-react";
+import { Activity, PauseCircle, Bell, Radio, Users, Building2 } from "lucide-react";
 import { useOperationalKpis } from "@/hooks/useOperationalKpis";
 
 interface CellProps {
