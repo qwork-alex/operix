@@ -250,7 +250,7 @@ export function ExtractedDataTable({
   const doSave = () => {
     setShowOverrideDialog(false);
     setStage("save");
-    onSave(rows);
+    onSave(rows, { isPrivate });
   };
 
   const hasCorrections = rows.some((r) => r.handwritten_corrections?.length);
