@@ -384,6 +384,7 @@ export default function ServiceOrdersPage() {
                     ? technicians.find((t) => t.user_id === myAssignableUserId)?.name ?? null
                     : null
                 }
+                hidePrivacyToggle={!ctxWs.resolvedWorkspaceId}
               />
             </ActiveDocumentBand>
           ))}
