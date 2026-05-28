@@ -12,7 +12,7 @@ import { BrandLogo } from "@/components/BrandLogo";
 import { supabase } from "@/integrations/supabase/client";
 import { PasswordStrength, isPasswordStrong } from "@/components/auth/PasswordStrength";
 import { ForgotPasswordDialog, DuplicateEmailDialog } from "@/components/auth/AuthDialogs";
-import { ASVerifiedSignature } from "@/components/branding/ASVerifiedSignature";
+import { ASVerifiedSeal } from "@/components/branding/ASVerifiedSeal";
 
 type Mode = "signin" | "create-workspace" | "create-technician";
 
