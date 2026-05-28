@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
 import { OperationalKPIs } from "@/components/dashboard/OperationalKPIs";
+import { AgingAlertsWidget } from "@/components/dashboard/AgingAlertsWidget";
 // PlatformsPanel removed from dashboard — platforms are now derived from Service Orders.
 import { OperationalEventsStream } from "@/components/dashboard/OperationalEventsStream";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
@@ -37,7 +38,12 @@ const Dashboard = () => {
       {/* Operational KPIs */}
       <OperationalKPIs />
 
-      {/* Plataformas operacionais panel removido — métricas derivadas das OS reais. */}
+      {/* Aging alerts — derived from OS / OP / Faturas (sem polling extra) */}
+      <ErrorBoundary>
+        <AgingAlertsWidget />
+      </ErrorBoundary>
+
+
 
 
       {/* Radar PDR — full width, streamed in */}

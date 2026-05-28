@@ -49,25 +49,30 @@ const paymentTextColor = (status: string): string => {
 const poAlertStyle: Record<AlertLevel, string> = {
   none: "",
   level1: "ring-1 ring-amber-500/40",
-  level2: "ring-1 ring-red-500/50 animate-pulse",
+  level2: "ring-1 ring-orange-500/50",
+  level3: "ring-1 ring-red-500/60 animate-pulse",
 };
 
 const PoAlertIcon = ({ level, days }: { level: AlertLevel; days: number }) => {
   if (level === "none") return null;
-  const Icon = level === "level2" ? AlertTriangle : Clock;
-  const color = level === "level2" ? "text-red-500" : "text-amber-500";
+  const Icon = level === "level1" ? Clock : AlertTriangle;
+  const color = level === "level3" ? "text-red-500" : level === "level2" ? "text-orange-500" : "text-amber-500";
+  const label = level === "level3"
+    ? `🚨 ${days} dias — crítico`
+    : level === "level2"
+    ? `⚠️ ${days} dias sem pagamento`
+    : `⏳ ${days} dias pendente`;
   return (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
           <Icon className={cn("h-3.5 w-3.5 shrink-0", color)} />
         </TooltipTrigger>
-        <TooltipContent side="top" className="text-xs">
-          {level === "level2" ? `⚠️ ${days} dias sem pagamento` : `⏳ ${days} dias pendente`}
-        </TooltipContent>
+        <TooltipContent side="top" className="text-xs">{label}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );
+
 };
 
 interface PaymentOrderRow {
