@@ -34,6 +34,24 @@ let signingOut = false;
 
 type Profile = { full_name: string; email: string; avatar_url: string | null } | null;
 
+function cleanupSessionRuntime() {
+  try {
+    localStorage.removeItem("selected_workspace_id");
+    localStorage.removeItem("invite_token");
+    sessionStorage.removeItem("invite_token");
+    sessionStorage.removeItem("impersonation_target");
+    Object.keys(sessionStorage)
+      .filter((k) => k.startsWith("ctx_ws::"))
+      .forEach((k) => sessionStorage.removeItem(k));
+  } catch {}
+  try { RealtimeHub.resetHub(); } catch {}
+  try { OperationalEventBus.reset(); } catch {}
+  try { AgentRuntime.stop(); } catch {}
+  try { VirtualEngineer.stop(); } catch {}
+  try { OperationalCopilot.reset(); } catch {}
+  try { queryClient.clear(); } catch {}
+}
+
 interface AuthContextType {
   session: Session | null;
   user: User | null;
@@ -125,11 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       apply(s);
       if (event === "SIGNED_OUT") {
         signingOut = false;
-        try {
-          localStorage.removeItem("selected_workspace_id");
-          localStorage.removeItem("invite_token");
-          sessionStorage.removeItem("invite_token");
-        } catch {}
+        cleanupSessionRuntime();
       }
     });
 
@@ -253,21 +267,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       setProfile(null);
     }
-    try {
-      localStorage.removeItem("selected_workspace_id");
-      localStorage.removeItem("invite_token");
-      sessionStorage.removeItem("invite_token");
-      sessionStorage.removeItem("impersonation_target");
-      Object.keys(sessionStorage)
-        .filter((k) => k.startsWith("ctx_ws::"))
-        .forEach((k) => sessionStorage.removeItem(k));
-    } catch {}
-    try { RealtimeHub.resetHub(); } catch {}
-    try { OperationalEventBus.reset(); } catch {}
-    try { AgentRuntime.stop(); } catch {}
-    try { VirtualEngineer.stop(); } catch {}
-    try { OperationalCopilot.reset(); } catch {}
-    try { queryClient.clear(); } catch {}
+    cleanupSessionRuntime();
     try {
       logSecurityEvent({ type: "logout", severity: "info" });
       await withTimeout(supabase.auth.signOut(), ACTION_TIMEOUT_MS, "signOut");
