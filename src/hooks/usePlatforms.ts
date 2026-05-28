@@ -74,17 +74,19 @@ export function usePlatforms() {
   });
 
   const create = useMutation({
-    mutationFn: async ({ name, slug }: { name: string; slug?: string }) => {
+    mutationFn: async ({ name, slug, state = "active" as PlatformState }: { name: string; slug?: string; state?: PlatformState }) => {
       if (!workspaceId) throw new Error("Sem workspace activo");
       const finalSlug = (slug ?? name).toLowerCase().trim().replace(/\s+/g, "-");
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("platforms")
-        .insert({ workspace_id: workspaceId, name: name.trim(), slug: finalSlug });
+        .insert({ workspace_id: workspaceId, name: name.trim(), slug: finalSlug, state })
+        .select()
+        .single();
       if (error) throw error;
+      return data as Platform;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [...QK, workspaceId] });
-      toast({ title: "Plataforma criada" });
     },
     onError: (err) =>
       toast({ title: "Erro ao criar", description: String((err as any)?.message ?? err), variant: "destructive" }),
