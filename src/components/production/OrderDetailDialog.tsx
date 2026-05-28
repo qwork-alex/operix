@@ -52,6 +52,27 @@ export function OrderDetailDialog({ order, onClose }: Props) {
   useEffect(() => {
     setForm(order ?? {});
     setActiveTab("info");
+    // Lifecycle: if this existing order had a saved draft (was minimized), log resume
+    if (order && order.id !== "__new__") {
+      try {
+        const had = localStorage.getItem(`production-draft-${order.id}`);
+        if (had) {
+          (async () => {
+            try {
+              const { data: u } = await supabase.auth.getUser();
+              await (supabase as any).from("production_events").insert({
+                production_order_id: order.id,
+                workspace_id: order.workspace_id,
+                event_type: "field_updated",
+                from_value: null,
+                to_value: "resumed",
+                actor_user_id: u?.user?.id ?? null,
+              });
+            } catch (err) { console.warn("[Production] resume log failed", err); }
+          })();
+        }
+      } catch { /* ignore */ }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [order?.id]);
 
