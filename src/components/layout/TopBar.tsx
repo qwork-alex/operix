@@ -109,27 +109,27 @@ export function TopBar() {
                     {t("notif.agingTitle")} ({agingAlerts.length})
                   </div>
                   {agingAlerts.map((alert) => {
-                    const isLevel2 = alert.level === "level2";
-                    const Icon = isLevel2 ? AlertTriangle : Clock;
+                    const isCritical = alert.level === "level3";
+                    const isElevated = alert.level === "level2";
+                    const Icon = isCritical || isElevated ? AlertTriangle : Clock;
+                    const tone = isCritical
+                      ? { bg: "bg-red-500/5", icon: "bg-red-500/10 text-red-500", text: "text-red-500", badge: "bg-red-500/20 text-red-500" }
+                      : isElevated
+                      ? { bg: "bg-orange-500/5", icon: "bg-orange-500/10 text-orange-500", text: "text-orange-500", badge: "bg-orange-500/20 text-orange-500" }
+                      : { bg: "bg-amber-500/5", icon: "bg-amber-500/10 text-amber-500", text: "text-amber-500", badge: "bg-amber-500/20 text-amber-500" };
+                    const tag = alert.type === "payment_order" ? "OP" : alert.type === "invoice" ? "FAT" : "OS";
                     return (
-                      <div
-                        key={alert.id}
-                        className={`flex gap-3 px-3 py-2.5 ${isLevel2 ? "bg-red-500/5" : "bg-amber-500/5"}`}
-                      >
-                        <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
-                          isLevel2 ? "bg-red-500/10 text-red-500" : "bg-amber-500/10 text-amber-500"
-                        }`}>
+                      <div key={alert.id} className={`flex gap-3 px-3 py-2.5 ${tone.bg}`}>
+                        <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${tone.icon}`}>
                           <Icon className="h-3.5 w-3.5" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between">
-                            <p className={`text-xs font-semibold ${isLevel2 ? "text-red-500" : "text-amber-500"}`}>
-                              {isLevel2 ? t("notif.urgent") : t("notif.attention")} — {alert.daysOld}d
+                            <p className={`text-xs font-semibold ${tone.text}`}>
+                              {isCritical ? t("notif.urgent") : isElevated ? t("notif.urgent") : t("notif.attention")} — {alert.daysOld}d
                             </p>
-                            <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${
-                              isLevel2 ? "bg-red-500/20 text-red-500" : "bg-amber-500/20 text-amber-500"
-                            }`}>
-                              {alert.type === "payment_order" ? "OP" : "OS"}
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${tone.badge}`}>
+                              {tag}
                             </span>
                           </div>
                           <p className="text-[11px] text-muted-foreground mt-0.5">{alert.message}</p>
@@ -140,6 +140,7 @@ export function TopBar() {
                   <DropdownMenuSeparator />
                 </>
               )}
+
 
               {notifications.length === 0 && agingAlerts.length === 0 ? (
                 <div className="py-8 text-center text-xs text-muted-foreground">{t("notif.empty")}</div>

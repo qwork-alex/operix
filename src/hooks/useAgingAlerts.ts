@@ -1,20 +1,21 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-export type AlertLevel = "none" | "level1" | "level2";
+export type AlertLevel = "none" | "level1" | "level2" | "level3";
 
 export interface AgingAlert {
   id: string;
-  type: "service_order" | "payment_order";
+  type: "service_order" | "payment_order" | "invoice";
   level: AlertLevel;
   daysOld: number;
-  groupKey: string; // week for SO, list_name for PO
+  groupKey: string; // week for SO, list_name for PO, invoice_number for invoice
   message: string;
   itemDetails?: string; // individual pending items
 }
 
 function getAlertLevel(createdAt: string): AlertLevel {
   const days = Math.floor((Date.now() - new Date(createdAt).getTime()) / 86400000);
+  if (days >= 90) return "level3";
   if (days >= 60) return "level2";
   if (days >= 30) return "level1";
   return "none";
@@ -46,6 +47,12 @@ export function useAgingAlerts() {
             .select("service_order_id, status")
             .in("service_order_id", soIds)
         : { data: [] };
+
+      // Invoices — unpaid faturas de billing
+      const { data: invs } = await supabase
+        .from("billing_invoices")
+        .select("id, invoice_number, customer_name, status, remaining_amount, issue_date, created_at")
+        .neq("status", "paid");
 
       const soPaymentMap: Record<string, string> = {};
       for (const po of linkedPos || []) {
@@ -84,7 +91,7 @@ export function useAgingAlerts() {
             level,
             daysOld: getDaysOld(oldest.created_at),
             groupKey: listKey,
-            message: `Lista "${listKey}" pendente de pagamento`,
+            message: `Lista "${listKey}" sem faturamento`,
           });
         } else if (pendingItems.length > 0) {
           const cars = pendingItems.map(i => i.car_name || i.license_plate || "?").join(", ");
@@ -144,15 +151,35 @@ export function useAgingAlerts() {
         }
       }
 
+      // --- Invoice alerts (faturas com saldo em aberto) ---
+      for (const inv of invs || []) {
+        const remaining = Number((inv as any).remaining_amount ?? 0);
+        if (remaining <= 0) continue;
+        // Aging base: issue_date if present, fallback to created_at
+        const baseDate = (inv as any).issue_date
+          ? new Date((inv as any).issue_date).toISOString()
+          : inv.created_at;
+        const level = getAlertLevel(baseDate);
+        if (level === "none") continue;
+        const label = (inv as any).invoice_number || (inv as any).customer_name || inv.id;
+        alerts.push({
+          id: `inv-${inv.id}`,
+          type: "invoice",
+          level,
+          daysOld: getDaysOld(baseDate),
+          groupKey: String(label),
+          message: `Fatura "${label}" sem pagamento`,
+        });
+      }
+
       // Sort by level desc then days desc
-      alerts.sort((a, b) => {
-        const lvl = (l: AlertLevel) => l === "level2" ? 2 : l === "level1" ? 1 : 0;
-        return lvl(b.level) - lvl(a.level) || b.daysOld - a.daysOld;
-      });
+      const lvl = (l: AlertLevel) => l === "level3" ? 3 : l === "level2" ? 2 : l === "level1" ? 1 : 0;
+      alerts.sort((a, b) => lvl(b.level) - lvl(a.level) || b.daysOld - a.daysOld);
 
       return alerts;
     },
     refetchInterval: 5 * 60 * 1000, // every 5 min
+    staleTime: 60 * 1000,
   });
 }
 
