@@ -132,6 +132,7 @@ export function WorkspaceSwitcher() {
   const handleSwitch = (id: string) => {
     if (id === workspaceId) return;
     localStorage.setItem("selected_workspace_id", id);
+    localStorage.removeItem("owner_global_mode");
     try {
       Object.keys(sessionStorage)
         .filter((k) => k.startsWith("ctx_ws::"))
