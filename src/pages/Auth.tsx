@@ -195,8 +195,25 @@ export default function Auth() {
     }
   };
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4 py-10">
+    <div className="relative min-h-screen flex items-center justify-center bg-background px-4 py-10 overflow-hidden">
+      {/* Ambient premium background — pure CSS, zero animation cost */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-0"
+        style={{
+          background:
+            "radial-gradient(1100px 600px at 18% 12%, hsl(var(--primary) / 0.18), transparent 60%), radial-gradient(900px 520px at 88% 92%, hsl(217 90% 55% / 0.14), transparent 65%), radial-gradient(700px 500px at 50% 110%, hsl(265 85% 60% / 0.10), transparent 70%)",
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-0"
+        style={{
+          background:
+            "radial-gradient(ellipse at center, transparent 55%, hsl(var(--background) / 0.85) 100%)",
+        }}
+      />
+
       <div className="w-full max-w-md space-y-6">
         <div className="flex flex-col items-center text-center space-y-2">
           <BrandLogo size={56} />
