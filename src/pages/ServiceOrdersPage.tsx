@@ -162,7 +162,9 @@ export default function ServiceOrdersPage() {
         total: r.total ?? null,
         status: "draft",
         group_id: r.week ?? ctxDefaults.week ?? null,
-        ...(ctxWs.resolvedWorkspaceId ? { workspace_id: ctxWs.resolvedWorkspaceId } : {}),
+        // Ownership: private OS skip workspace linkage; collective OS bind to workspace.
+        visibility_scope: opts?.isPrivate ? "private" : "workspace",
+        ...(opts?.isPrivate ? { workspace_id: null } : (ctxWs.resolvedWorkspaceId ? { workspace_id: ctxWs.resolvedWorkspaceId } : {})),
       };
       // Contexto operacional SEMPRE prevalece sobre o ano atual.
       if (ctxDefaults.year) {
