@@ -12,7 +12,7 @@ import { BrandLogo } from "@/components/BrandLogo";
 import { supabase } from "@/integrations/supabase/client";
 import { PasswordStrength, isPasswordStrong } from "@/components/auth/PasswordStrength";
 import { ForgotPasswordDialog, DuplicateEmailDialog } from "@/components/auth/AuthDialogs";
-import { ASVerifiedSignature } from "@/components/branding/ASVerifiedSignature";
+import { ASVerifiedSeal } from "@/components/branding/ASVerifiedSeal";
 
 type Mode = "signin" | "create-workspace" | "create-technician";
 
@@ -196,8 +196,27 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4 py-10">
-      <div className="w-full max-w-md space-y-6">
+    <div className="relative min-h-screen flex items-center justify-center bg-background px-4 py-10 overflow-hidden">
+
+      {/* Ambient premium background — pure CSS, zero animation cost */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-0"
+        style={{
+          background:
+            "radial-gradient(1100px 600px at 18% 12%, hsl(var(--primary) / 0.18), transparent 60%), radial-gradient(900px 520px at 88% 92%, hsl(217 90% 55% / 0.14), transparent 65%), radial-gradient(700px 500px at 50% 110%, hsl(265 85% 60% / 0.10), transparent 70%)",
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-0"
+        style={{
+          background:
+            "radial-gradient(ellipse at center, transparent 55%, hsl(var(--background) / 0.85) 100%)",
+        }}
+      />
+
+      <div className="relative z-10 w-full max-w-md space-y-6">
         <div className="flex flex-col items-center text-center space-y-2">
           <BrandLogo size={56} />
           <h1 className="text-2xl font-bold text-foreground tracking-tight">{brandConfig.appName}</h1>
@@ -251,7 +270,7 @@ export default function Auth() {
         </div>
 
         {mode === "signin" ? (
-          <form onSubmit={handleSignIn} className="glass-panel rounded-xl p-6 space-y-4">
+          <form onSubmit={handleSignIn} className="glass-panel rounded-2xl p-6 space-y-4 border border-border/60 shadow-[0_20px_60px_-30px_hsl(var(--primary)/0.45),0_0_0_1px_hsl(var(--border)/0.4)] backdrop-blur-xl">
             <div className="space-y-2">
               <Label htmlFor="email" className="text-foreground">{t("auth.email")}</Label>
               <Input
@@ -296,7 +315,7 @@ export default function Auth() {
             </Button>
           </form>
         ) : mode === "create-technician" ? (
-          <form onSubmit={handleCreateTechnician} className="glass-panel rounded-xl p-6 space-y-4">
+          <form onSubmit={handleCreateTechnician} className="glass-panel rounded-2xl p-6 space-y-4 border border-border/60 shadow-[0_20px_60px_-30px_hsl(var(--primary)/0.45),0_0_0_1px_hsl(var(--border)/0.4)] backdrop-blur-xl">
             <div className="rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground flex gap-2">
               <Wrench className="h-4 w-4 mt-0.5 shrink-0 text-primary" />
               <div>
@@ -359,7 +378,7 @@ export default function Auth() {
             </p>
           </form>
         ) : (
-          <form onSubmit={handleCreateWorkspace} className="glass-panel rounded-xl p-6 space-y-4">
+          <form onSubmit={handleCreateWorkspace} className="glass-panel rounded-2xl p-6 space-y-4 border border-border/60 shadow-[0_20px_60px_-30px_hsl(var(--primary)/0.45),0_0_0_1px_hsl(var(--border)/0.4)] backdrop-blur-xl">
             <div className="rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground flex gap-2">
               <ShieldCheck className="h-4 w-4 mt-0.5 shrink-0 text-primary" />
               <div>
@@ -452,9 +471,13 @@ export default function Auth() {
         onRecover={() => { setForgotOpen(true); setDuplicateEmail(null); }}
       />
 
-      <div aria-hidden className="pointer-events-none fixed bottom-3 right-4 z-[5] text-foreground/60">
-        <ASVerifiedSignature variant="subtle" mode="auto" />
-      </div>
+      {/* AS Verified — official creator seal, globally rendered on all auth screens (signin / technician / workspace) */}
+      <ASVerifiedSeal
+        variant="dark"
+        size={18}
+        opacity={0.55}
+        position="bottom-right"
+      />
     </div>
   );
 }
