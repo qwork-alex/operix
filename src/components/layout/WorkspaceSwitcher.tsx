@@ -132,6 +132,7 @@ export function WorkspaceSwitcher() {
   const handleSwitch = (id: string) => {
     if (id === workspaceId) return;
     localStorage.setItem("selected_workspace_id", id);
+    localStorage.removeItem("owner_global_mode");
     try {
       Object.keys(sessionStorage)
         .filter((k) => k.startsWith("ctx_ws::"))
@@ -218,7 +219,11 @@ export function WorkspaceSwitcher() {
             </DropdownMenuLabel>
             <DropdownMenuItem
               onClick={() => {
-                // Limpar contexto operacional → modo proprietário puro
+                // Modo proprietário puro: marca flag explícita e limpa contexto
+                // operacional. O useWorkspace só retorna null quando essa flag
+                // está ativa — evita auto-pick e mantém runtime operacional
+                // ligado em modo normal.
+                localStorage.setItem("owner_global_mode", "1");
                 localStorage.removeItem("selected_workspace_id");
                 try {
                   Object.keys(sessionStorage)
