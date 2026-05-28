@@ -196,7 +196,15 @@ export default function Auth() {
   };
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center bg-background px-4 py-10 overflow-hidden">
+    <div
+      className="relative min-h-[100svh] flex items-center justify-center bg-background px-4 overflow-hidden"
+      style={{
+        paddingTop: "max(2.5rem, env(safe-area-inset-top))",
+        paddingBottom: "max(2.5rem, env(safe-area-inset-bottom))",
+        paddingLeft: "max(1rem, env(safe-area-inset-left))",
+        paddingRight: "max(1rem, env(safe-area-inset-right))",
+      }}
+    >
 
       {/* Ambient premium background — pure CSS, zero animation cost */}
       <div
@@ -204,7 +212,19 @@ export default function Auth() {
         className="pointer-events-none absolute inset-0 z-0"
         style={{
           background:
-            "radial-gradient(1100px 600px at 18% 12%, hsl(var(--primary) / 0.18), transparent 60%), radial-gradient(900px 520px at 88% 92%, hsl(217 90% 55% / 0.14), transparent 65%), radial-gradient(700px 500px at 50% 110%, hsl(265 85% 60% / 0.10), transparent 70%)",
+            "radial-gradient(1100px 600px at 18% 12%, hsl(var(--primary) / 0.20), transparent 60%), radial-gradient(900px 520px at 88% 92%, hsl(217 90% 55% / 0.16), transparent 65%), radial-gradient(700px 500px at 50% 110%, hsl(265 85% 60% / 0.12), transparent 70%)",
+        }}
+      />
+      {/* Subtle grid texture — adds depth without weight */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-0 opacity-[0.04]"
+        style={{
+          backgroundImage:
+            "linear-gradient(hsl(var(--foreground)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--foreground)) 1px, transparent 1px)",
+          backgroundSize: "44px 44px",
+          maskImage: "radial-gradient(ellipse at center, black 35%, transparent 75%)",
+          WebkitMaskImage: "radial-gradient(ellipse at center, black 35%, transparent 75%)",
         }}
       />
       <div
@@ -212,13 +232,26 @@ export default function Auth() {
         className="pointer-events-none absolute inset-0 z-0"
         style={{
           background:
-            "radial-gradient(ellipse at center, transparent 55%, hsl(var(--background) / 0.85) 100%)",
+            "radial-gradient(ellipse at center, transparent 55%, hsl(var(--background) / 0.88) 100%)",
         }}
       />
 
       <div className="relative z-10 w-full max-w-md space-y-6">
-        <div className="flex flex-col items-center text-center space-y-2">
-          <BrandLogo size={56} />
+        <div className="flex flex-col items-center text-center space-y-3">
+          <div className="relative">
+            <div
+              aria-hidden
+              className="absolute inset-0 -m-4 rounded-full"
+              style={{
+                background:
+                  "radial-gradient(closest-side, hsl(var(--primary) / 0.35), transparent 70%)",
+                filter: "blur(8px)",
+              }}
+            />
+            <div className="relative">
+              <BrandLogo size={60} />
+            </div>
+          </div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">{brandConfig.appName}</h1>
           <p className="text-sm text-muted-foreground">
             {mode === "signin"
