@@ -202,6 +202,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
+      // Fresh handshake: wipe any stale/zombie session locally before
+      // requesting a new token. Prevents Supabase from sending an invalid
+      // refresh cookie alongside the password grant.
+      try {
+        signingOut = false;
+        resetAuthBreaker();
+        clearLocalAuthTokens();
+        await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+      } catch { /* pre-signIn cleanup is best-effort */ }
+
       const { error } = await withTimeout<Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>>(
         supabase.auth.signInWithPassword({ email, password }),
         ACTION_TIMEOUT_MS,
