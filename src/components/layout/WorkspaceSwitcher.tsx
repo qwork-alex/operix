@@ -154,7 +154,7 @@ export function WorkspaceSwitcher() {
 
   const triggerTone =
     triggerKind === "master"
-      ? "border-rose-400/40 bg-rose-500/10 text-rose-100 hover:bg-rose-500/15"
+      ? "border-amber-300/50 bg-gradient-to-r from-violet-500/15 via-fuchsia-500/10 to-amber-400/15 text-amber-100 hover:from-violet-500/25 hover:to-amber-400/25"
       : triggerKind === "own"
       ? "border-amber-400/40 bg-amber-400/10 text-amber-100 hover:bg-amber-400/15"
       : triggerKind === "guest"
@@ -162,7 +162,7 @@ export function WorkspaceSwitcher() {
       : "border-border/40 text-foreground/90 hover:bg-accent/50";
 
   const triggerKindLabel =
-    triggerKind === "master" ? "Master Global"
+    triggerKind === "master" ? "Proprietário"
       : triggerKind === "own" ? "Próprio"
       : triggerKind === "guest" ? "Convidado"
       : "";
@@ -175,7 +175,7 @@ export function WorkspaceSwitcher() {
 
   const currentLabel =
     triggerKind === "master"
-      ? "Plataforma · Master"
+      ? "QWork Nexus Proprietário"
       : (workspaceName || t("ws.picker.select", "Selecionar contexto"));
   const currentRoleLabel = myRole ? ROLE_LABEL[myRole] || myRole : "";
 
