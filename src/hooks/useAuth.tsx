@@ -267,14 +267,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       setProfile(null);
     }
+    const remoteSignOut = supabase.auth.signOut();
     cleanupSessionRuntime();
+    clearLocalAuthTokens();
     try {
       logSecurityEvent({ type: "logout", severity: "info" });
-      await withTimeout(supabase.auth.signOut(), ACTION_TIMEOUT_MS, "signOut");
-    } catch (err) {
-      console.error("[Auth] signOut error:", err);
-      clearLocalAuthTokens();
-    }
+      void withTimeout(remoteSignOut, ACTION_TIMEOUT_MS, "signOut").catch((err) => {
+        console.error("[Auth] signOut error:", err);
+      });
+    } catch {}
     if (typeof window !== "undefined") window.location.replace("/auth");
   };
 
