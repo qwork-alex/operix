@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,11 +7,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Save, Trash2, Lock } from "lucide-react";
+import { Save, Trash2, Lock, Minimize2 } from "lucide-react";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import {
   useProductionOrders, PRODUCTION_STATUSES, PRIORITY_META, isOrderLocked,
   type ProductionOrder, type ProductionStatus, type ProductionPriority,
 } from "@/hooks/useProductionOrders";
+import { useAutosave } from "@/hooks/useAutosave";
 import { PhotoUploader } from "./PhotoUploader";
 import { OrderTimeline } from "./OrderTimeline";
 
@@ -20,6 +23,12 @@ interface Props {
   onClose: () => void;
 }
 
+/**
+ * Lifecycle persistente:
+ * - Rascunhos de "Nova Ordem" sobrevivem a refresh/remount via localStorage (useAutosave).
+ * - Ordens existentes são persistidas no banco e nunca encerradas ao minimizar.
+ * - "Minimizar" apenas fecha o diálogo, mantendo a OS viva até status = finished.
+ */
 export function OrderDetailDialog({ order, onClose }: Props) {
   const { update, remove, create } = useProductionOrders();
   const [form, setForm] = useState<Partial<ProductionOrder>>({});
@@ -27,16 +36,48 @@ export function OrderDetailDialog({ order, onClose }: Props) {
   const isNew = order?.id === "__new__";
   const locked = !isNew && isOrderLocked(order?.status);
 
+  const draftKey = useMemo(
+    () => isNew ? "production-draft-new" : `production-draft-${order?.id ?? "noop"}`,
+    [isNew, order?.id],
+  );
+
+  // Restore + autosave draft (only meaningful for new orders; existing OS already lives in DB)
+  const { clear: clearDraft } = useAutosave<Partial<ProductionOrder>>(
+    draftKey,
+    form,
+    setForm,
+    600,
+  );
+
   useEffect(() => {
     setForm(order ?? {});
     setActiveTab("info");
-  }, [order]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order?.id]);
 
   if (!order) return null;
 
   const set = <K extends keyof ProductionOrder>(k: K, v: ProductionOrder[K]) => {
     if (locked) return;
     setForm(f => ({ ...f, [k]: v }));
+  };
+
+  const logLifecycle = async (type: "minimized" | "resumed") => {
+    if (isNew || !order?.id) return;
+    try {
+      const { data: u } = await supabase.auth.getUser();
+      await (supabase as any).from("production_events").insert({
+        production_order_id: order.id,
+        workspace_id: order.workspace_id,
+        event_type: "field_updated",
+        from_value: null,
+        to_value: type,
+        actor_user_id: u?.user?.id ?? null,
+      });
+    } catch (err) {
+      // non-blocking — lifecycle log is best-effort
+      console.warn("[Production] lifecycle log failed", err);
+    }
   };
 
   const save = async () => {
@@ -46,14 +87,29 @@ export function OrderDetailDialog({ order, onClose }: Props) {
       } else {
         await update.mutateAsync({ id: order.id, ...form });
       }
+      clearDraft();
       onClose();
     } catch (err) {
       console.error("[Production] save failed", err);
     }
   };
 
+  const minimize = async () => {
+    // Draft is already persisted by useAutosave. For existing orders, log the pause-to-bg event.
+    if (!isNew) await logLifecycle("minimized");
+    toast.success(isNew ? "Rascunho guardado · continua disponível" : "Ordem minimizada · continua ativa");
+    onClose();
+  };
+
+  const discardDraft = () => {
+    clearDraft();
+    setForm({});
+    toast.message("Rascunho descartado");
+    onClose();
+  };
+
   return (
-    <Dialog open={!!order} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={!!order} onOpenChange={(o) => { if (!o) minimize(); }}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
@@ -70,7 +126,7 @@ export function OrderDetailDialog({ order, onClose }: Props) {
             )}
           </DialogTitle>
           <DialogDescription className="sr-only">
-            Formulário operacional da ordem de produção com dados, fotos e histórico.
+            Formulário operacional da ordem de produção com dados, fotos e histórico. Pode ser minimizado sem encerrar o workflow.
           </DialogDescription>
         </DialogHeader>
 
@@ -131,18 +187,31 @@ export function OrderDetailDialog({ order, onClose }: Props) {
             </Field>
             </fieldset>
 
-            <div className="flex justify-between pt-2">
-              {!isNew && !locked ? (
-                <Button variant="destructive" size="sm"
-                  onClick={async () => {
-                    if (confirm("Remover esta ordem?")) { await remove.mutateAsync(order.id); onClose(); }
-                  }}>
-                  <Trash2 className="h-4 w-4 mr-2" /> Excluir
-                </Button>
-              ) : <span />}
+            <div className="flex flex-wrap justify-between gap-2 pt-2">
               <div className="flex gap-2">
-                <Button variant="outline" onClick={onClose}>{locked ? "Fechar" : "Cancelar"}</Button>
+                {!isNew && !locked && (
+                  <Button variant="destructive" size="sm"
+                    onClick={async () => {
+                      if (confirm("Remover esta ordem?")) { await remove.mutateAsync(order.id); clearDraft(); onClose(); }
+                    }}>
+                    <Trash2 className="h-4 w-4 mr-2" /> Excluir
+                  </Button>
+                )}
+                {isNew && (
+                  <Button variant="ghost" size="sm" onClick={discardDraft}>
+                    Descartar rascunho
+                  </Button>
+                )}
+              </div>
+              <div className="flex gap-2">
                 {!locked && (
+                  <Button variant="outline" onClick={minimize}>
+                    <Minimize2 className="h-4 w-4 mr-2" /> Minimizar
+                  </Button>
+                )}
+                {locked ? (
+                  <Button variant="outline" onClick={onClose}>Fechar</Button>
+                ) : (
                   <Button onClick={save} disabled={update.isPending || create.isPending}>
                     <Save className="h-4 w-4 mr-2" /> Salvar
                   </Button>
@@ -156,6 +225,12 @@ export function OrderDetailDialog({ order, onClose }: Props) {
               <h4 className="text-sm font-semibold text-foreground">Veículo na entrada</h4>
               <p className="text-xs text-muted-foreground">Fotos obrigatórias do estado inicial.</p>
               <PhotoUploader orderId={order.id} fixedCategory="before" hideOthers readOnly={locked} />
+            </section>
+            <div className="h-px bg-border/60" />
+            <section className="space-y-2">
+              <h4 className="text-sm font-semibold text-foreground">Durante o serviço</h4>
+              <p className="text-xs text-muted-foreground">Registo do andamento e etapas intermediárias.</p>
+              <PhotoUploader orderId={order.id} fixedCategory="during" hideOthers readOnly={locked} />
             </section>
             <div className="h-px bg-border/60" />
             <section className="space-y-2">
