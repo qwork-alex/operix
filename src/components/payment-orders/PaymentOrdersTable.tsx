@@ -146,7 +146,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
     const year = o.created_at ? new Date(o.created_at).getFullYear().toString() : "—";
     const client = (o.client_name || "Sem Cliente").trim();
     const plat = (o.platform || "Sem Plataforma").trim();
-    const unit = (o.operational_unit || "Sem Work").trim();
+    const unit = (o.operational_unit || "").trim();
     const tech = (o.technician_name || "Sem Técnico").trim();
     const list = (o.list_name || "Sem Semana").trim();
     return `${year}||${client}||${plat}||${unit}||${tech}||${list}`;
