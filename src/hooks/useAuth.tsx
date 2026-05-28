@@ -43,13 +43,13 @@ function cleanupSessionRuntime() {
     Object.keys(sessionStorage)
       .filter((k) => k.startsWith("ctx_ws::"))
       .forEach((k) => sessionStorage.removeItem(k));
-  } catch {}
-  try { RealtimeHub.resetHub(); } catch {}
-  try { OperationalEventBus.reset(); } catch {}
-  try { AgentRuntime.stop(); } catch {}
-  try { VirtualEngineer.stop(); } catch {}
-  try { OperationalCopilot.reset(); } catch {}
-  try { queryClient.clear(); } catch {}
+  } catch { /* storage cleanup is best-effort */ }
+  try { RealtimeHub.resetHub(); } catch { /* realtime cleanup is best-effort */ }
+  try { OperationalEventBus.reset(); } catch { /* runtime cleanup is best-effort */ }
+  try { AgentRuntime.stop(); } catch { /* runtime cleanup is best-effort */ }
+  try { VirtualEngineer.stop(); } catch { /* runtime cleanup is best-effort */ }
+  try { OperationalCopilot.reset(); } catch { /* runtime cleanup is best-effort */ }
+  try { queryClient.clear(); } catch { /* cache cleanup is best-effort */ }
 }
 
 interface AuthContextType {
@@ -123,7 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(s?.user ?? null);
       if (s?.user) {
         loadProfile(s.user.id);
-        try { registerCurrentDevice(); } catch {}
+        try { registerCurrentDevice(); } catch { /* device registration must not block auth */ }
       } else {
         setProfile(null);
       }
@@ -275,7 +275,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       void withTimeout(remoteSignOut, ACTION_TIMEOUT_MS, "signOut").catch((err) => {
         console.error("[Auth] signOut error:", err);
       });
-    } catch {}
+    } catch { /* logout logging must not block local session teardown */ }
     if (typeof window !== "undefined") window.location.replace("/auth");
   };
 
