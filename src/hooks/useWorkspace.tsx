@@ -43,9 +43,16 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   // 1. Get app_user + workspace for current auth user (supports switching)
   const userId = user?.id ?? null;
+  // OWNER GLOBAL isolation: the platform owner must NOT be auto-mounted
+  // into any tenant. They only enter a workspace when explicitly chosen
+  // from the switcher (which persists `selected_workspace_id`). This
+  // prevents the late OperationalBus remount and the "owner desaparece"
+  // symptom caused by silent tenant hydration on top of master identity.
+  const PLATFORM_OWNER_EMAILS = ["qwork@qworkgroup.com"];
+  const isOwnerEmail = !!user?.email && PLATFORM_OWNER_EMAILS.includes(user.email.toLowerCase());
 
   const { data: wsData, isLoading: wsLoading } = useQuery({
-    queryKey: ["my-workspace", userId],
+    queryKey: ["my-workspace", userId, isOwnerEmail],
     enabled: !!userId,
     queryFn: async () => {
       if (!userId) return null;
@@ -66,8 +73,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       if (mErr) throw mErr;
       if (!memberships || memberships.length === 0) return null;
 
-      // Check if user has a preferred workspace stored
       const savedWsId = localStorage.getItem("selected_workspace_id");
+      // Owner: only honor an explicit saved selection; never auto-pick.
+      if (isOwnerEmail && !savedWsId) return null;
+
       const selected = savedWsId
         ? memberships.find((m: any) => m.workspace_id === savedWsId)
         : null;

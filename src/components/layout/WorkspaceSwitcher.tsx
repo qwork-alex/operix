@@ -154,7 +154,7 @@ export function WorkspaceSwitcher() {
 
   const triggerTone =
     triggerKind === "master"
-      ? "border-rose-400/40 bg-rose-500/10 text-rose-100 hover:bg-rose-500/15"
+      ? "border-amber-300/50 bg-gradient-to-r from-violet-500/15 via-fuchsia-500/10 to-amber-400/15 text-amber-100 hover:from-violet-500/25 hover:to-amber-400/25"
       : triggerKind === "own"
       ? "border-amber-400/40 bg-amber-400/10 text-amber-100 hover:bg-amber-400/15"
       : triggerKind === "guest"
@@ -162,7 +162,7 @@ export function WorkspaceSwitcher() {
       : "border-border/40 text-foreground/90 hover:bg-accent/50";
 
   const triggerKindLabel =
-    triggerKind === "master" ? "Master Global"
+    triggerKind === "master" ? "Proprietário"
       : triggerKind === "own" ? "Próprio"
       : triggerKind === "guest" ? "Convidado"
       : "";
@@ -175,7 +175,7 @@ export function WorkspaceSwitcher() {
 
   const currentLabel =
     triggerKind === "master"
-      ? "Plataforma · Master"
+      ? "QWork Nexus Proprietário"
       : (workspaceName || t("ws.picker.select", "Selecionar contexto"));
   const currentRoleLabel = myRole ? ROLE_LABEL[myRole] || myRole : "";
 
@@ -213,12 +213,12 @@ export function WorkspaceSwitcher() {
         {/* ── Master Global (only for platform owner) ───────────── */}
         {isPlatformOwner && (
           <>
-            <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-rose-300/80 px-3 pt-2 pb-1 flex items-center gap-1.5">
-              <Crown className="h-3 w-3" /> Ambiente Master
+            <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-amber-300/80 px-3 pt-2 pb-1 flex items-center gap-1.5">
+              <Crown className="h-3 w-3" /> Proprietário global
             </DropdownMenuLabel>
             <DropdownMenuItem
               onClick={() => {
-                // Limpar contexto operacional → modo plataforma puro
+                // Limpar contexto operacional → modo proprietário puro
                 localStorage.removeItem("selected_workspace_id");
                 try {
                   Object.keys(sessionStorage)
@@ -230,29 +230,29 @@ export function WorkspaceSwitcher() {
               }}
               className={cn(
                 "flex items-center gap-2 px-2.5 py-2 rounded-md cursor-pointer text-xs",
-                triggerKind === "master" && "bg-rose-500/10",
+                triggerKind === "master" && "bg-gradient-to-r from-violet-500/10 to-amber-400/10",
               )}
             >
               <div className={cn(
                 "flex h-7 w-7 shrink-0 items-center justify-center rounded-md border",
                 triggerKind === "master"
-                  ? "border-rose-400/50 bg-rose-500/15 text-rose-300"
+                  ? "border-amber-300/60 bg-gradient-to-br from-violet-500/20 to-amber-400/20 text-amber-200"
                   : "border-border/50 bg-muted/30 text-muted-foreground",
               )}>
                 <Crown className="h-3.5 w-3.5" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <span className="truncate font-medium text-foreground">Plataforma · Master Global</span>
-                  <span className="text-[9px] uppercase tracking-wider text-rose-300/90 border border-rose-400/40 rounded px-1 py-px">
+                  <span className="truncate font-medium text-foreground">QWork Nexus Proprietário</span>
+                  <span className="text-[9px] uppercase tracking-wider text-amber-300/90 border border-amber-300/50 rounded px-1 py-px">
                     Global
                   </span>
                 </div>
-                <div className="text-[10px] uppercase tracking-wider mt-0.5 text-rose-300/80">
-                  Visão da plataforma · cross-tenant
+                <div className="text-[10px] uppercase tracking-wider mt-0.5 text-amber-200/70">
+                  Governança · billing · cross-tenant
                 </div>
               </div>
-              {triggerKind === "master" && <Check className="h-3.5 w-3.5 text-rose-300 shrink-0" />}
+              {triggerKind === "master" && <Check className="h-3.5 w-3.5 text-amber-300 shrink-0" />}
             </DropdownMenuItem>
             {(ownItems.length + guestItems.length) > 0 && <DropdownMenuSeparator className="my-1" />}
           </>
