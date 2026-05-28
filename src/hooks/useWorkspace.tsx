@@ -87,18 +87,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     },
   });
 
-      // Check if user has a preferred workspace stored
-      const savedWsId = localStorage.getItem("selected_workspace_id");
-      const selected = savedWsId
-        ? memberships.find((m: any) => m.workspace_id === savedWsId)
-        : null;
-
-      const membership = selected || memberships[0];
-      const ws = (membership as any).workspaces as any;
-      return { workspaceId: ws.id as string, workspaceName: ws.name as string, appUserId: appUser.id, ownerAppUserId: (ws.owner_user_id || null) as string | null };
-    },
-  });
-
   // 2. Get all members of this workspace
   const { data: members = [], isLoading: membersLoading } = useQuery({
     queryKey: ["workspace-members", wsData?.workspaceId],
