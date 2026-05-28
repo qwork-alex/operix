@@ -373,7 +373,7 @@ export default function ServiceOrdersPage() {
                 orders={extraction.orders}
                 confidence={extraction.confidence}
                 notes={extraction.notes}
-                onSave={(rows) => handleSave(extraction._id, rows)}
+                onSave={(rows, opts) => handleSave(extraction._id, rows, opts)}
                 onDiscard={() => handleDiscard(extraction._id)}
                 isSaving={saveMutation.isPending}
                 technicians={technicians}
