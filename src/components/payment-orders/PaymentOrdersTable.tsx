@@ -494,7 +494,7 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
               <span className="hidden md:flex items-center gap-1.5 text-[11px] text-muted-foreground min-w-0 truncate">
                 <span className="text-foreground/80 font-medium">{group.client}</span>
                 <span>·</span><span>{group.platform}</span>
-                <span>·</span><span>{group.unit}</span>
+                {group.unit && (<><span>·</span><span>{group.unit}</span></>)}
                 <span>·</span><span>{group.tech}</span>
                 <span>·</span><span>{group.year}</span>
               </span>
