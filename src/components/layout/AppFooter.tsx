@@ -21,10 +21,11 @@ export function AppFooter() {
         </span>
         <span className="tracking-wide opacity-80">{attribution}</span>
         <span className="hidden sm:inline-flex items-center text-foreground/80">
-          <ASVerifiedSeal variant="compact" size={22} />
+          <ASVerifiedSeal variant="light" size={22} className="dark:hidden" />
+          <ASVerifiedSeal variant="dark" size={22} className="hidden dark:inline-block" />
         </span>
         <span className="inline-flex sm:hidden items-center text-foreground/80">
-          <ASVerifiedSeal variant="compact" size={18} />
+          <ASVerifiedSeal variant="compact" size={16} />
         </span>
       </div>
     </footer>
