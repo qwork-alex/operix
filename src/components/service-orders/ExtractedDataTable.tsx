@@ -34,7 +34,7 @@ interface ExtractedDataTableProps {
   orders: ExtractedOrder[];
   confidence: "high" | "medium" | "low";
   notes?: string;
-  onSave: (orders: ExtractedOrder[]) => void;
+  onSave: (orders: ExtractedOrder[], opts?: { isPrivate?: boolean }) => void;
   onDiscard: () => void;
   isSaving: boolean;
   technicians?: TechnicianOption[];
@@ -49,6 +49,11 @@ interface ExtractedDataTableProps {
    */
   isAdmin?: boolean;
   myTechnicianName?: string | null;
+  /**
+   * When true, hide the privacy toggle (user has no workspace context, so
+   * everything is inherently private already).
+   */
+  hidePrivacyToggle?: boolean;
 }
 
 const confidenceColors = {
