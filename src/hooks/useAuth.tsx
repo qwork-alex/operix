@@ -37,6 +37,7 @@ type Profile = { full_name: string; email: string; avatar_url: string | null } |
 function cleanupSessionRuntime() {
   try {
     localStorage.removeItem("selected_workspace_id");
+    localStorage.removeItem("owner_global_mode");
     localStorage.removeItem("invite_token");
     sessionStorage.removeItem("invite_token");
     sessionStorage.removeItem("impersonation_target");
