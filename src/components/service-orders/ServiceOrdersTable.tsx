@@ -451,7 +451,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
                 <span className="text-foreground/80 font-medium">{group.client}</span>
                 <span>·</span><span>{group.platform}</span>
                 <PlatformOpsToggle platformName={group.platform} />
-                <span>·</span><span>{group.unit}</span>
+                {group.unit && (<><span>·</span><span>{group.unit}</span></>)}
                 <span>·</span><span>{group.tech}</span>
                 <span>·</span><span>{group.year}</span>
               </span>
