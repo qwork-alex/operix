@@ -115,7 +115,7 @@ export default function ServiceOrdersPage() {
     });
   }, [addFiles, extract, user?.id, queryClient, hCtx]);
 
-  const handleSave = async (extractionId: string, rows: ExtractedOrder[]) => {
+  const handleSave = async (extractionId: string, rows: ExtractedOrder[], opts?: { isPrivate?: boolean }) => {
     const extraction = extractions.find((e) => e._id === extractionId);
     const authUser = await getCurrentUser();
     if (!authUser?.id) {
@@ -162,7 +162,9 @@ export default function ServiceOrdersPage() {
         total: r.total ?? null,
         status: "draft",
         group_id: r.week ?? ctxDefaults.week ?? null,
-        ...(ctxWs.resolvedWorkspaceId ? { workspace_id: ctxWs.resolvedWorkspaceId } : {}),
+        // Ownership: private OS skip workspace linkage; collective OS bind to workspace.
+        visibility_scope: opts?.isPrivate ? "private" : "workspace",
+        ...(opts?.isPrivate ? { workspace_id: null } : (ctxWs.resolvedWorkspaceId ? { workspace_id: ctxWs.resolvedWorkspaceId } : {})),
       };
       // Contexto operacional SEMPRE prevalece sobre o ano atual.
       if (ctxDefaults.year) {
@@ -371,7 +373,7 @@ export default function ServiceOrdersPage() {
                 orders={extraction.orders}
                 confidence={extraction.confidence}
                 notes={extraction.notes}
-                onSave={(rows) => handleSave(extraction._id, rows)}
+                onSave={(rows, opts) => handleSave(extraction._id, rows, opts)}
                 onDiscard={() => handleDiscard(extraction._id)}
                 isSaving={saveMutation.isPending}
                 technicians={technicians}
@@ -382,6 +384,7 @@ export default function ServiceOrdersPage() {
                     ? technicians.find((t) => t.user_id === myAssignableUserId)?.name ?? null
                     : null
                 }
+                hidePrivacyToggle={!ctxWs.resolvedWorkspaceId}
               />
             </ActiveDocumentBand>
           ))}

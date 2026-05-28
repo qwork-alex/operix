@@ -34,7 +34,7 @@ interface ExtractedDataTableProps {
   orders: ExtractedOrder[];
   confidence: "high" | "medium" | "low";
   notes?: string;
-  onSave: (orders: ExtractedOrder[]) => void;
+  onSave: (orders: ExtractedOrder[], opts?: { isPrivate?: boolean }) => void;
   onDiscard: () => void;
   isSaving: boolean;
   technicians?: TechnicianOption[];
@@ -49,6 +49,11 @@ interface ExtractedDataTableProps {
    */
   isAdmin?: boolean;
   myTechnicianName?: string | null;
+  /**
+   * When true, hide the privacy toggle (user has no workspace context, so
+   * everything is inherently private already).
+   */
+  hidePrivacyToggle?: boolean;
 }
 
 const confidenceColors = {
@@ -74,7 +79,11 @@ export function ExtractedDataTable({
   isTechnicianRole,
   isAdmin = false,
   myTechnicianName = null,
+  hidePrivacyToggle = false,
 }: ExtractedDataTableProps) {
+  // Operational ownership: workspace (collective) vs private (individual).
+  // Defaults to workspace; user can flip to private before saving.
+  const [isPrivate, setIsPrivate] = useState(false);
   // Only lock the technician field for users with the `technician` role.
   // Admin / partner / client must pick from the dropdown.
   const lockTechnician =
@@ -241,7 +250,7 @@ export function ExtractedDataTable({
   const doSave = () => {
     setShowOverrideDialog(false);
     setStage("save");
-    onSave(rows);
+    onSave(rows, { isPrivate });
   };
 
   const hasCorrections = rows.some((r) => r.handwritten_corrections?.length);
@@ -303,7 +312,30 @@ export function ExtractedDataTable({
             </Badge>
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {!hidePrivacyToggle && (
+            <label
+              className={cn(
+                "flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] cursor-pointer select-none transition-colors",
+                isPrivate
+                  ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
+                  : "border-border/60 bg-muted/30 text-muted-foreground hover:text-foreground"
+              )}
+              title={
+                isPrivate
+                  ? "OS privada — não entra no fluxo coletivo do workspace"
+                  : "OS vinculada ao workspace — visível e contabilizada coletivamente"
+              }
+            >
+              <input
+                type="checkbox"
+                className="h-3 w-3 accent-amber-500"
+                checked={isPrivate}
+                onChange={(e) => setIsPrivate(e.target.checked)}
+              />
+              {isPrivate ? "Privada" : "Workspace"}
+            </label>
+          )}
           <Button variant="ghost" size="sm" onClick={onDiscard} disabled={isSaving}>
             <Trash2 className="h-4 w-4 mr-1" /> {t("action.discard")}
           </Button>

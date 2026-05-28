@@ -167,7 +167,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
     const year = o.created_at ? new Date(o.created_at).getFullYear().toString() : "—";
     const client = (o.client_name || "Sem Cliente").trim();
     const plat = (o.platform || "Sem Plataforma").trim();
-    const unit = (o.operational_unit || "Sem Work").trim();
+    const unit = (o.operational_unit || "").trim();
     const tech = (o.technician_name || "Sem Técnico").trim();
     const week = (o.week || "Sem Semana").trim();
     return `${year}||${client}||${plat}||${unit}||${tech}||${week}`;
@@ -451,7 +451,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
                 <span className="text-foreground/80 font-medium">{group.client}</span>
                 <span>·</span><span>{group.platform}</span>
                 <PlatformOpsToggle platformName={group.platform} />
-                <span>·</span><span>{group.unit}</span>
+                {group.unit && (<><span>·</span><span>{group.unit}</span></>)}
                 <span>·</span><span>{group.tech}</span>
                 <span>·</span><span>{group.year}</span>
               </span>
