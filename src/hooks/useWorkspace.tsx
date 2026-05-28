@@ -1,5 +1,20 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
+/**
+ * useWorkspace — OPERATIONAL CONTEXT layer ONLY.
+ *
+ * Architectural rule (do not break):
+ *  • This hook describes the active OPERATIONAL workspace (tenant scope:
+ *    OS, OP, billing, teams, dashboards).
+ *  • It is NOT the global identity. Owner identity lives in
+ *    `useIsPlatformOwner` and is always present for the platform owner —
+ *    independent of which workspace is active.
+ *  • Owner ≠ Workspace. Both coexist; one never nullifies the other.
+ *
+ * Switching workspace MUST NOT reload the page, recreate providers,
+ * reset auth, or unmount the React tree. It only updates the operational
+ * scope by changing `selectedId` and re-running workspace-keyed queries.
+ */
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, ReactNode } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 
@@ -25,29 +40,35 @@ interface WorkspaceContext {
   myRole: MembershipRole | null;
   isAdmin: boolean;
   isLoading: boolean;
+  /** Switch the active operational workspace WITHOUT reloading the page. */
+  switchWorkspace: (workspaceId: string) => void;
 }
 
 const WorkspaceCtx = createContext<WorkspaceContext | undefined>(undefined);
 
+const SELECTED_KEY = "selected_workspace_id";
+
+function readSelected(): string | null {
+  try { return localStorage.getItem(SELECTED_KEY); } catch { return null; }
+}
+
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const userId = user?.id ?? null;
+
+  // Operational scope state — initialised from storage, mutated by the
+  // switcher. Owner and tenant users share the same flow: the workspace
+  // is the OPERATIONAL context, never the identity.
+  const [selectedId, setSelectedId] = useState<string | null>(() => readSelected());
+
   useEffect(() => {
     console.log("[MOUNT] WorkspaceProvider");
     return () => console.log("[UNMOUNT] WorkspaceProvider");
   }, []);
 
-  // 1. Get app_user + workspace for current auth user (supports switching)
-  const userId = user?.id ?? null;
-  // OWNER GLOBAL isolation: the platform owner must NOT be auto-mounted
-  // into any tenant. They only enter a workspace when explicitly chosen
-  // from the switcher (which persists `selected_workspace_id`). This
-  // prevents the late OperationalBus remount and the "owner desaparece"
-  // symptom caused by silent tenant hydration on top of master identity.
-  const PLATFORM_OWNER_EMAILS = ["qwork@qworkgroup.com"];
-  const isOwnerEmail = !!user?.email && PLATFORM_OWNER_EMAILS.includes(user.email.toLowerCase());
-
   const { data: wsData, isLoading: wsLoading } = useQuery({
-    queryKey: ["my-workspace", userId, isOwnerEmail],
+    queryKey: ["my-workspace", userId, selectedId],
     enabled: !!userId,
     queryFn: async () => {
       if (!userId) return null;
@@ -59,7 +80,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       if (auErr) throw auErr;
       if (!appUser) return null;
 
-      // Get all active memberships
       const { data: memberships, error: mErr } = await supabase
         .from("memberships")
         .select("workspace_id, workspaces(id, name, owner_user_id)")
@@ -68,37 +88,33 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       if (mErr) throw mErr;
       if (!memberships || memberships.length === 0) return null;
 
-      const savedWsId = localStorage.getItem("selected_workspace_id");
-      // Explicit "global owner mode" flag — owner can opt into pure global
-      // context via the switcher; only then we return null and skip the
-      // operational pipeline.
-      const ownerGlobalMode = localStorage.getItem("owner_global_mode") === "1";
-
-      // Validate saved selection
-      const selected = savedWsId
-        ? memberships.find((m: any) => m.workspace_id === savedWsId)
+      // Resolve: explicit selection → first membership. Never null when
+      // memberships exist — operational runtime always has a scope so the
+      // owner identity layer stays alongside a live workspace.
+      const picked = selectedId
+        ? memberships.find((m: any) => m.workspace_id === selectedId)
         : null;
-      if (savedWsId && !selected) localStorage.removeItem("selected_workspace_id");
-
-      // Owner in explicit global mode: no operational workspace (engines idle).
-      if (isOwnerEmail && ownerGlobalMode && !selected) return null;
-
-      // Default: pick saved selection or first membership. This keeps the
-      // operational runtime (radar, realtime, stream, aging) alive for
-      // owner + tenants alike. Single React tree, no remount loop — the
-      // membership set is stable for the session.
-      const membership = selected || memberships[0];
+      const membership = picked || memberships[0];
       const ws = (membership as any).workspaces as any;
-      // Persist the auto-picked id so subsequent mounts are deterministic
-      // and the switcher reflects the current context without a remount.
-      if (!selected) {
-        try { localStorage.setItem("selected_workspace_id", ws.id); } catch { /* best effort */ }
-      }
-      return { workspaceId: ws.id as string, workspaceName: ws.name as string, appUserId: appUser.id, ownerAppUserId: (ws.owner_user_id || null) as string | null };
+      if (!ws) return null;
+      // Persist whichever id we ended up with so subsequent mounts are
+      // deterministic. This does NOT trigger a remount — it just keeps
+      // storage in sync with state.
+      try {
+        if (localStorage.getItem(SELECTED_KEY) !== ws.id) {
+          localStorage.setItem(SELECTED_KEY, ws.id);
+        }
+      } catch { /* best effort */ }
+      return {
+        workspaceId: ws.id as string,
+        workspaceName: ws.name as string,
+        appUserId: appUser.id,
+        ownerAppUserId: (ws.owner_user_id || null) as string | null,
+      };
     },
   });
 
-  // 2. Get all members of this workspace
+  // Members of the active operational workspace.
   const { data: members = [], isLoading: membersLoading } = useQuery({
     queryKey: ["workspace-members", wsData?.workspaceId],
     enabled: !!wsData?.workspaceId,
@@ -108,7 +124,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         .select("id, role, status, user_id, app_users(id, auth_user_id, name, email, phone)")
         .eq("workspace_id", wsData!.workspaceId);
       if (error) throw error;
-
       return (data || []).map((m: any) => ({
         membership_id: m.id,
         app_user_id: m.user_id,
@@ -122,31 +137,42 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  const memberAuthIds = members
-    .filter((m) => m.auth_user_id)
-    .map((m) => m.auth_user_id);
-
-  // Determine current user's role in this workspace
+  const memberAuthIds = useMemo(
+    () => members.filter((m) => m.auth_user_id).map((m) => m.auth_user_id),
+    [members],
+  );
   const myMember = members.find((m) => m.auth_user_id === user?.id);
   const myRole = (myMember?.role as MembershipRole) ?? null;
   const isAdmin = myRole === "admin";
 
-  return (
-    <WorkspaceCtx.Provider
-      value={{
-        workspaceId: wsData?.workspaceId ?? null,
-        workspaceName: wsData?.workspaceName ?? null,
-        ownerAppUserId: wsData?.ownerAppUserId ?? null,
-        members,
-        memberAuthIds,
-        myRole,
-        isAdmin,
-        isLoading: wsLoading || membersLoading,
-      }}
-    >
-      {children}
-    </WorkspaceCtx.Provider>
-  );
+  // Switch operational scope WITHOUT reload. Just update state + storage
+  // and invalidate workspace-keyed queries so derived data refetches.
+  const switchWorkspace = useCallback((id: string) => {
+    if (!id || id === selectedId) return;
+    try { localStorage.setItem(SELECTED_KEY, id); } catch { /* best effort */ }
+    try {
+      Object.keys(sessionStorage)
+        .filter((k) => k.startsWith("ctx_ws::"))
+        .forEach((k) => sessionStorage.removeItem(k));
+    } catch { /* best effort */ }
+    setSelectedId(id);
+    // Re-evaluate everything scoped to a workspace. Providers stay mounted.
+    queryClient.invalidateQueries();
+  }, [selectedId, queryClient]);
+
+  const value = useMemo<WorkspaceContext>(() => ({
+    workspaceId: wsData?.workspaceId ?? null,
+    workspaceName: wsData?.workspaceName ?? null,
+    ownerAppUserId: wsData?.ownerAppUserId ?? null,
+    members,
+    memberAuthIds,
+    myRole,
+    isAdmin,
+    isLoading: wsLoading || membersLoading,
+    switchWorkspace,
+  }), [wsData, members, memberAuthIds, myRole, isAdmin, wsLoading, membersLoading, switchWorkspace]);
+
+  return <WorkspaceCtx.Provider value={value}>{children}</WorkspaceCtx.Provider>;
 }
 
 export function useWorkspace() {
