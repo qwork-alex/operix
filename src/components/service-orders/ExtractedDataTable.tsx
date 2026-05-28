@@ -312,7 +312,30 @@ export function ExtractedDataTable({
             </Badge>
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {!hidePrivacyToggle && (
+            <label
+              className={cn(
+                "flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] cursor-pointer select-none transition-colors",
+                isPrivate
+                  ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
+                  : "border-border/60 bg-muted/30 text-muted-foreground hover:text-foreground"
+              )}
+              title={
+                isPrivate
+                  ? "OS privada — não entra no fluxo coletivo do workspace"
+                  : "OS vinculada ao workspace — visível e contabilizada coletivamente"
+              }
+            >
+              <input
+                type="checkbox"
+                className="h-3 w-3 accent-amber-500"
+                checked={isPrivate}
+                onChange={(e) => setIsPrivate(e.target.checked)}
+              />
+              {isPrivate ? "Privada" : "Workspace"}
+            </label>
+          )}
           <Button variant="ghost" size="sm" onClick={onDiscard} disabled={isSaving}>
             <Trash2 className="h-4 w-4 mr-1" /> {t("action.discard")}
           </Button>
