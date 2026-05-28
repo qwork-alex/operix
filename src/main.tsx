@@ -10,7 +10,11 @@ installAuthBreaker();
 
 // Sentry: minimal error/runtime monitoring — initialized once at bootstrap.
 // Set VITE_SENTRY_DSN in your environment to activate.
-const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
+// Sentry DSNs are designed to be public (client-side). Fallback embedded so
+// observability is always active even when the build-time env var is absent.
+const SENTRY_DSN_FALLBACK =
+  "https://746d269b547c16ec650ebe86b9a6ac37@o4511469175504896.ingest.de.sentry.io/4511469204668496";
+const sentryDsn = import.meta.env.VITE_SENTRY_DSN || SENTRY_DSN_FALLBACK;
 if (sentryDsn && typeof sentryDsn === "string") {
   Sentry.init({
     dsn: sentryDsn,
