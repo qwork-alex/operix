@@ -54,7 +54,10 @@ function labelFor(e: any) {
     case "assigned": return `atribuiu para ${e.to_value ?? "—"}`;
     case "photo_added": return `enviou foto (${photoLabel(e.to_value)})`;
     case "priority_changed": return `alterou prioridade: ${e.from_value} → ${e.to_value}`;
-    case "field_updated": return "editou dados da ordem";
+    case "field_updated":
+      if (e.to_value === "minimized") return "minimizou a ordem (continua ativa)";
+      if (e.to_value === "resumed") return "retomou a ordem";
+      return "editou dados da ordem";
     default: return e.event_type;
   }
 }
