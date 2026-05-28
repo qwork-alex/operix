@@ -79,7 +79,11 @@ export function ExtractedDataTable({
   isTechnicianRole,
   isAdmin = false,
   myTechnicianName = null,
+  hidePrivacyToggle = false,
 }: ExtractedDataTableProps) {
+  // Operational ownership: workspace (collective) vs private (individual).
+  // Defaults to workspace; user can flip to private before saving.
+  const [isPrivate, setIsPrivate] = useState(false);
   // Only lock the technician field for users with the `technician` role.
   // Admin / partner / client must pick from the dropdown.
   const lockTechnician =
