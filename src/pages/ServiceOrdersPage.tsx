@@ -115,7 +115,7 @@ export default function ServiceOrdersPage() {
     });
   }, [addFiles, extract, user?.id, queryClient, hCtx]);
 
-  const handleSave = async (extractionId: string, rows: ExtractedOrder[]) => {
+  const handleSave = async (extractionId: string, rows: ExtractedOrder[], opts?: { isPrivate?: boolean }) => {
     const extraction = extractions.find((e) => e._id === extractionId);
     const authUser = await getCurrentUser();
     if (!authUser?.id) {
