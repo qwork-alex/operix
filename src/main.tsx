@@ -63,6 +63,15 @@ if (sentryDsn && typeof sentryDsn === "string") {
       console.error("[SENTRY] probe error", e);
     }
   }, 1500);
+  // Bootstrap auto-capture to validate tunnel
+  setTimeout(() => {
+    try {
+      Sentry.captureException(new Error("SENTRY_TUNNEL_BOOT_TEST"));
+      console.info("Sentry tunnel active");
+    } catch (e) {
+      console.error("[SENTRY] tunnel boot test error", e);
+    }
+  }, 2500);
   // Expose for manual testing from devtools: window.__qwSentry.test()
   (window as any).__qwSentry = {
     test: () => Sentry.captureException(new Error("TESTE_SENTRY_QWORK")),
