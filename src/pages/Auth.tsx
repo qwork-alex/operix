@@ -474,14 +474,10 @@ export default function Auth() {
       {/* AS Verified — official creator seal, globally rendered on all auth screens (signin / technician / workspace) */}
       <ASVerifiedSeal
         variant="dark"
-        size={20}
+        size={18}
         opacity={0.55}
         position="bottom-right"
-        className="hidden sm:block"
       />
-      <div className="relative z-10 mt-4 flex justify-center sm:hidden">
-        <ASVerifiedSeal variant="dark" size={16} opacity={0.6} />
-      </div>
     </div>
   );
 }
