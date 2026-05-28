@@ -13,9 +13,17 @@ const SENTRY_DSN_FALLBACK =
   "https://746d269b547c16ec650ebe86b9a6ac37@o4511469175504896.ingest.de.sentry.io/4511469204668496";
 const sentryDsn = import.meta.env.VITE_SENTRY_DSN || SENTRY_DSN_FALLBACK;
 if (sentryDsn && typeof sentryDsn === "string") {
+  // Route ALL envelopes (errors, transactions, replays) through our Supabase
+  // edge function tunnel. Bypasses Lovable preview / adblock blocking of
+  // *.ingest.sentry.io.
+  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+  const tunnelUrl = projectId
+    ? `https://${projectId}.supabase.co/functions/v1/sentry-tunnel`
+    : "/api/sentry-tunnel";
   Sentry.init({
     dsn: sentryDsn,
-    debug: true, // verbose console logs from Sentry transport
+    tunnel: tunnelUrl,
+    debug: true,
     environment: import.meta.env.MODE,
     release: `qwork-nexus@${import.meta.env.MODE}`,
     integrations: [
@@ -25,16 +33,13 @@ if (sentryDsn && typeof sentryDsn === "string") {
     tracesSampleRate: 1.0,
     replaysSessionSampleRate: 0.1,
     replaysOnErrorSampleRate: 1.0,
-    beforeSend(event, hint) {
-      // eslint-disable-next-line no-console
+    beforeSend(event) {
       console.info("[SENTRY] beforeSend", { event_id: event.event_id, message: event.message, type: event.type });
       return event;
     },
-    transportOptions: {
-      // Use fetch with keepalive — survives page unload, bypasses some interceptors
-      fetchOptions: { keepalive: true },
-    },
+    transportOptions: { fetchOptions: { keepalive: true } },
   });
+  console.info("[SENTRY] tunnel =", tunnelUrl);
   // Manual probe after bootstrap so we see in console whether transport works.
   // If you don't see "[SENTRY] transport ok", the ingest host is blocked (adblock/CSP).
   Sentry.getClient()
