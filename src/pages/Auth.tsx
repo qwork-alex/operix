@@ -216,7 +216,7 @@ export default function Auth() {
         }}
       />
 
-      <div className="w-full max-w-md space-y-6">
+      <div className="relative z-10 w-full max-w-md space-y-6">
         <div className="flex flex-col items-center text-center space-y-2">
           <BrandLogo size={56} />
           <h1 className="text-2xl font-bold text-foreground tracking-tight">{brandConfig.appName}</h1>
