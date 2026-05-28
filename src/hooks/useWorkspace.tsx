@@ -69,20 +69,31 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       if (!memberships || memberships.length === 0) return null;
 
       const savedWsId = localStorage.getItem("selected_workspace_id");
-      // Owner: only honor an explicit saved selection; never auto-pick.
-      if (isOwnerEmail && !savedWsId) return null;
+      // Explicit "global owner mode" flag — owner can opt into pure global
+      // context via the switcher; only then we return null and skip the
+      // operational pipeline.
+      const ownerGlobalMode = localStorage.getItem("owner_global_mode") === "1";
 
+      // Validate saved selection
       const selected = savedWsId
         ? memberships.find((m: any) => m.workspace_id === savedWsId)
         : null;
+      if (savedWsId && !selected) localStorage.removeItem("selected_workspace_id");
 
-      if (isOwnerEmail && savedWsId && !selected) {
-        localStorage.removeItem("selected_workspace_id");
-        return null;
-      }
+      // Owner in explicit global mode: no operational workspace (engines idle).
+      if (isOwnerEmail && ownerGlobalMode && !selected) return null;
 
+      // Default: pick saved selection or first membership. This keeps the
+      // operational runtime (radar, realtime, stream, aging) alive for
+      // owner + tenants alike. Single React tree, no remount loop — the
+      // membership set is stable for the session.
       const membership = selected || memberships[0];
       const ws = (membership as any).workspaces as any;
+      // Persist the auto-picked id so subsequent mounts are deterministic
+      // and the switcher reflects the current context without a remount.
+      if (!selected) {
+        try { localStorage.setItem("selected_workspace_id", ws.id); } catch { /* best effort */ }
+      }
       return { workspaceId: ws.id as string, workspaceName: ws.name as string, appUserId: appUser.id, ownerAppUserId: (ws.owner_user_id || null) as string | null };
     },
   });
