@@ -195,7 +195,9 @@ export default function Auth() {
     }
   };
 
+  return (
     <div className="relative min-h-screen flex items-center justify-center bg-background px-4 py-10 overflow-hidden">
+
       {/* Ambient premium background — pure CSS, zero animation cost */}
       <div
         aria-hidden
