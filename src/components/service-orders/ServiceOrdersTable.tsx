@@ -22,6 +22,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { BulkDeleteDialog } from "@/components/shared/BulkDeleteDialog";
 import { useTechnicianEarnings, getTechEarnings } from "@/hooks/useTechnicianEarnings";
 import { Can } from "@/components/Can";
+import { PlatformOpsToggle } from "@/components/service-orders/PlatformOpsToggle";
 
 interface ServiceOrderRow {
   id: string;
@@ -449,6 +450,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
               <span className="hidden md:flex items-center gap-1.5 text-[11px] text-muted-foreground min-w-0 truncate">
                 <span className="text-foreground/80 font-medium">{group.client}</span>
                 <span>·</span><span>{group.platform}</span>
+                <PlatformOpsToggle platformName={group.platform} />
                 <span>·</span><span>{group.unit}</span>
                 <span>·</span><span>{group.tech}</span>
                 <span>·</span><span>{group.year}</span>
