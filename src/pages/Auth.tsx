@@ -471,8 +471,16 @@ export default function Auth() {
         onRecover={() => { setForgotOpen(true); setDuplicateEmail(null); }}
       />
 
-      <div aria-hidden className="pointer-events-none fixed bottom-3 right-4 z-[5] text-foreground/60">
-        <ASVerifiedSignature variant="subtle" mode="auto" />
+      {/* AS Verified — official creator seal, globally rendered on all auth screens (signin / technician / workspace) */}
+      <ASVerifiedSeal
+        variant="dark"
+        size={20}
+        opacity={0.55}
+        position="bottom-right"
+        className="hidden sm:block"
+      />
+      <div className="relative z-10 mt-4 flex justify-center sm:hidden">
+        <ASVerifiedSeal variant="dark" size={16} opacity={0.6} />
       </div>
     </div>
   );
