@@ -22,6 +22,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { BulkDeleteDialog } from "@/components/shared/BulkDeleteDialog";
 import { useTechnicianEarnings, getTechEarnings } from "@/hooks/useTechnicianEarnings";
 import { Can } from "@/components/Can";
+import { PlatformOpsToggle } from "@/components/service-orders/PlatformOpsToggle";
 
 interface ServiceOrderRow {
   id: string;
