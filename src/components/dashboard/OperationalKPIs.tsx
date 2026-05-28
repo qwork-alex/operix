@@ -40,7 +40,7 @@ function KpiCell({ label, value, icon: Icon, tone, pulse, sub }: CellProps) {
 export function OperationalKPIs() {
   const { data, isLoading } = useOperationalKpis();
   const v = (n?: number) => (isLoading ? "—" : String(n ?? 0));
-  const degraded = data?.platformsDegraded ?? 0;
+  const inactive = data?.platformsInactive ?? 0;
   const alerts = data?.alerts ?? 0;
   const activePlatforms = data?.platformsActive ?? 0;
 
@@ -48,9 +48,8 @@ export function OperationalKPIs() {
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
       <KpiCell label="Plataformas Ativas" value={v(activePlatforms)}
         icon={Activity} tone="text-emerald-400" />
-      <KpiCell label="Degradadas" value={v(degraded)}
-        icon={AlertTriangle} tone={degraded > 0 ? "text-rose-400" : "text-muted-foreground/70"}
-        pulse={degraded > 0} />
+      <KpiCell label="Plataformas Inativas" value={v(inactive)}
+        icon={PauseCircle} tone={inactive > 0 ? "text-amber-400" : "text-muted-foreground/70"} />
       <KpiCell label="Alertas" value={v(alerts)}
         icon={Bell} tone={alerts > 0 ? "text-amber-400" : "text-muted-foreground/70"}
         pulse={alerts > 0} />
