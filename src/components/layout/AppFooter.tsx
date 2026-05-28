@@ -20,11 +20,11 @@ export function AppFooter() {
           {trademark} © {year} · {proprietary_notice}
         </span>
         <span className="tracking-wide opacity-80">{attribution}</span>
-        <span className="hidden sm:inline-flex items-center text-foreground/70">
-          <ASVerifiedSeal variant="compact" size={20} />
+        <span className="hidden sm:inline-flex items-center text-foreground/80">
+          <ASVerifiedSeal variant="compact" size={22} />
         </span>
-        <span className="inline-flex sm:hidden items-center text-foreground/70">
-          <ASVerifiedSeal variant="compact" size={16} />
+        <span className="inline-flex sm:hidden items-center text-foreground/80">
+          <ASVerifiedSeal variant="compact" size={18} />
         </span>
       </div>
     </footer>
