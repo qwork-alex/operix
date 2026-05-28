@@ -21,9 +21,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { logSecurityEvent } from "@/lib/securityLog";
 import { registerCurrentDevice } from "@/lib/deviceFingerprint";
 import { onAuthBreaker, clearLocalAuthTokens, resetAuthBreaker } from "@/lib/authBreaker";
+import { queryClient } from "@/lib/queryClient";
+import { RealtimeHub } from "@/lib/realtime/RealtimeHub";
+import { OperationalEventBus } from "@/lib/operationalBus";
+import { AgentRuntime } from "@/lib/agent";
+import { VirtualEngineer } from "@/lib/virtualEngineer";
+import { OperationalCopilot } from "@/lib/copilot";
 
 const BOOT_SAFETY_MS = 2000;
 const ACTION_TIMEOUT_MS = 15000;
+let signingOut = false;
 
 type Profile = { full_name: string; email: string; avatar_url: string | null } | null;
 
@@ -93,6 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const apply = (s: Session | null) => {
       if (!mounted.current) return;
+      if (signingOut && s) return;
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
@@ -116,6 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (event === "INITIAL_SESSION") console.log("[AUTH] initial session resolved");
       apply(s);
       if (event === "SIGNED_OUT") {
+        signingOut = false;
         try {
           localStorage.removeItem("selected_workspace_id");
           localStorage.removeItem("invite_token");
@@ -237,13 +246,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    try {
-      logSecurityEvent({ type: "logout", severity: "info" });
-      await withTimeout(supabase.auth.signOut(), ACTION_TIMEOUT_MS, "signOut");
-    } catch (err) {
-      console.error("[Auth] signOut error:", err);
-    }
+    signingOut = true;
     if (mounted.current) {
+      setLoading(false);
       setSession(null);
       setUser(null);
       setProfile(null);
@@ -252,7 +257,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem("selected_workspace_id");
       localStorage.removeItem("invite_token");
       sessionStorage.removeItem("invite_token");
+      sessionStorage.removeItem("impersonation_target");
+      Object.keys(sessionStorage)
+        .filter((k) => k.startsWith("ctx_ws::"))
+        .forEach((k) => sessionStorage.removeItem(k));
     } catch {}
+    try { RealtimeHub.resetHub(); } catch {}
+    try { OperationalEventBus.reset(); } catch {}
+    try { AgentRuntime.stop(); } catch {}
+    try { VirtualEngineer.stop(); } catch {}
+    try { OperationalCopilot.reset(); } catch {}
+    try { queryClient.clear(); } catch {}
+    try {
+      logSecurityEvent({ type: "logout", severity: "info" });
+      await withTimeout(supabase.auth.signOut(), ACTION_TIMEOUT_MS, "signOut");
+    } catch (err) {
+      console.error("[Auth] signOut error:", err);
+      clearLocalAuthTokens();
+    }
     if (typeof window !== "undefined") window.location.replace("/auth");
   };
 
