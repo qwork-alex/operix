@@ -36,11 +36,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return () => console.log("[UNMOUNT] WorkspaceProvider");
   }, []);
 
-  useEffect(() => {
-    console.log("[MOUNT] WorkspaceProvider");
-    return () => console.log("[UNMOUNT] WorkspaceProvider");
-  }, []);
-
   // 1. Get app_user + workspace for current auth user (supports switching)
   const userId = user?.id ?? null;
   // OWNER GLOBAL isolation: the platform owner must NOT be auto-mounted
@@ -80,6 +75,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       const selected = savedWsId
         ? memberships.find((m: any) => m.workspace_id === savedWsId)
         : null;
+
+      if (isOwnerEmail && savedWsId && !selected) {
+        localStorage.removeItem("selected_workspace_id");
+        return null;
+      }
 
       const membership = selected || memberships[0];
       const ws = (membership as any).workspaces as any;
