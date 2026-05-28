@@ -270,7 +270,7 @@ export default function Auth() {
         </div>
 
         {mode === "signin" ? (
-          <form onSubmit={handleSignIn} className="glass-panel rounded-xl p-6 space-y-4">
+          <form onSubmit={handleSignIn} className="glass-panel rounded-2xl p-6 space-y-4 border border-border/60 shadow-[0_20px_60px_-30px_hsl(var(--primary)/0.45),0_0_0_1px_hsl(var(--border)/0.4)] backdrop-blur-xl">
             <div className="space-y-2">
               <Label htmlFor="email" className="text-foreground">{t("auth.email")}</Label>
               <Input
@@ -315,7 +315,7 @@ export default function Auth() {
             </Button>
           </form>
         ) : mode === "create-technician" ? (
-          <form onSubmit={handleCreateTechnician} className="glass-panel rounded-xl p-6 space-y-4">
+          <form onSubmit={handleCreateTechnician} className="glass-panel rounded-2xl p-6 space-y-4 border border-border/60 shadow-[0_20px_60px_-30px_hsl(var(--primary)/0.45),0_0_0_1px_hsl(var(--border)/0.4)] backdrop-blur-xl">
             <div className="rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground flex gap-2">
               <Wrench className="h-4 w-4 mt-0.5 shrink-0 text-primary" />
               <div>
@@ -378,7 +378,7 @@ export default function Auth() {
             </p>
           </form>
         ) : (
-          <form onSubmit={handleCreateWorkspace} className="glass-panel rounded-xl p-6 space-y-4">
+          <form onSubmit={handleCreateWorkspace} className="glass-panel rounded-2xl p-6 space-y-4 border border-border/60 shadow-[0_20px_60px_-30px_hsl(var(--primary)/0.45),0_0_0_1px_hsl(var(--border)/0.4)] backdrop-blur-xl">
             <div className="rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground flex gap-2">
               <ShieldCheck className="h-4 w-4 mt-0.5 shrink-0 text-primary" />
               <div>
