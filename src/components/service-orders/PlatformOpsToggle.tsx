@@ -48,7 +48,7 @@ export function PlatformOpsToggle({ platformName }: Props) {
       <Switch
         checked={checked}
         onCheckedChange={onChange}
-        className="h-4 w-7 data-[state=checked]:bg-emerald-500/70"
+        className="scale-75 origin-left data-[state=checked]:bg-emerald-500/70"
         aria-label={`Toggle plataforma ${match.name}`}
       />
       <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
