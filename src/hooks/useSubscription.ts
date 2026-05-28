@@ -58,15 +58,25 @@ export function useSubscription() {
 }
 
 /**
- * Platform-owner layer removed. The app reverted to the simpler
- * OWNER → SINGLE WORKSPACE architecture. This hook is kept as a stable
- * shape for legacy consumers but always reports `false` so no UI exposes
- * a cross-tenant / master-global surface.
+ * Platform-owner detection — OWNER GLOBAL identity layer.
+ *
+ * The OWNER is the master of the platform itself; it is NOT a workspace
+ * and must never be replaced by tenant hydration. Detection runs
+ * synchronously off the authenticated email — no DB round-trip, no
+ * extra provider, no parallel hydration — so the owner identity stays
+ * stable across reconnects, GoTrue degradation and workspace remounts.
  */
+const PLATFORM_OWNER_EMAILS = ["qwork@qworkgroup.com"];
+
 export function useIsPlatformOwner() {
+  const { user } = useAuth();
+  const email = user?.email?.toLowerCase() ?? null;
+  const isOwner = !!email && PLATFORM_OWNER_EMAILS.includes(email);
   return useQuery({
-    queryKey: ["is-platform-owner", "disabled"],
+    queryKey: ["is-platform-owner", email],
     staleTime: Infinity,
-    queryFn: async () => false,
+    enabled: !!email,
+    initialData: isOwner,
+    queryFn: async () => isOwner,
   });
 }
