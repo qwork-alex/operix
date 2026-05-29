@@ -44,6 +44,7 @@ export function AppSidebar() {
   const { can, isLoading: permsLoading } = useCan();
   const { brandConfig, saveBrandConfig } = useCompanyLogo();
   const { workspaceName } = useWorkspace();
+  const { data: isPlatformOwner = false } = useIsPlatformOwner();
   // Platform-owner gating removed — single-workspace architecture.
 
   const handleBrandSave = async (config: BrandConfig) => {
