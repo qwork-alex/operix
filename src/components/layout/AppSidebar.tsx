@@ -3,7 +3,7 @@ import {
   LayoutDashboard, FileText, CreditCard, TrendingUp, BarChart3,
   Car, Users, Receipt, Shield, Wrench, Store, Zap, Brain,
 } from "lucide-react";
-// useIsPlatformOwner removed — single-workspace architecture.
+import { useIsPlatformOwner } from "@/hooks/useSubscription";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
@@ -44,6 +44,7 @@ export function AppSidebar() {
   const { can, isLoading: permsLoading } = useCan();
   const { brandConfig, saveBrandConfig } = useCompanyLogo();
   const { workspaceName } = useWorkspace();
+  const { data: isPlatformOwner = false } = useIsPlatformOwner();
   // Platform-owner gating removed — single-workspace architecture.
 
   const handleBrandSave = async (config: BrandConfig) => {
@@ -78,7 +79,7 @@ export function AppSidebar() {
       items: [
         { title: "Faturamento", url: "/billing", icon: Receipt, module: "accounting", action: "view" },
         { title: t("nav.financial"), url: "/financial", icon: TrendingUp, module: "financial", action: "view" },
-        // Platform (cross-tenant master) entry removed — single-workspace architecture.
+        { title: "Plataforma", url: "/platform", icon: Shield, module: "dashboard", action: "view", enabled: isPlatformOwner },
       ],
     },
     {
