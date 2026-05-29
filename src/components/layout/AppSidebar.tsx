@@ -3,7 +3,7 @@ import {
   LayoutDashboard, FileText, CreditCard, TrendingUp, BarChart3,
   Car, Users, Receipt, Shield, Wrench, Store, Zap, Brain,
 } from "lucide-react";
-// useIsPlatformOwner removed — single-workspace architecture.
+import { useIsPlatformOwner } from "@/hooks/useSubscription";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
