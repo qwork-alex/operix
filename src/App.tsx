@@ -146,8 +146,8 @@ function AuthenticatedShell() {
                     <Route path="/recovery" element={<RecoveryPage />} />
                     <Route path="/subscription" element={<SubscriptionPage />} />
                     <Route path="/checkout" element={<CheckoutPage />} />
-                    <Route path="/platform" element={<Navigate to="/" replace />} />
-                    <Route path="/platform-owner" element={<Navigate to="/" replace />} />
+                    <Route path="/platform" element={<PlatformOwnerPage />} />
+                    <Route path="/platform-owner" element={<PlatformOwnerPage />} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                 </Suspense>
