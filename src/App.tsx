@@ -44,7 +44,7 @@ const AIPage = lazy(() => import("./pages/AIPage"));
 const RecoveryPage = lazy(() => import("./pages/RecoveryPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const SubscriptionPage = lazy(() => import("./pages/SubscriptionPage"));
-// PlatformOwnerPage removed — the cross-tenant master layer has been reverted.
+const PlatformOwnerPage = lazy(() => import("./pages/PlatformOwnerPage"));
 const CheckoutPage = lazy(() => import("./pages/CheckoutPage"));
 const ProductionPage = lazy(() => import("./pages/ProductionPage"));
 const MarketplacePage = lazy(() => import("./pages/MarketplacePage"));
