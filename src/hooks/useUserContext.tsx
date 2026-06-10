@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 import { useAuth } from "./useAuth";
 import { useImpersonation } from "./useImpersonation";
 
@@ -50,16 +50,21 @@ export function useUserContext() {
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
     queryFn: async (): Promise<UserContext | null> => {
-      const { data, error } = await supabase.rpc("get_user_context", {
-        _workspace_id: undefined as unknown as string,
-      } as never);
-      if (error) {
+      try {
+        const suffix =
+          effectiveUserId && effectiveUserId !== user?.id
+            ? `?userId=${encodeURIComponent(effectiveUserId)}`
+            : "";
+        const data = await apiRequest<{ context: UserContext | null }>(`/account/context${suffix}`);
+        const ctx = data.context;
+        if (ctx && ctx.flags) {
+          ctx.flags.is_impersonating = !!isImpersonating;
+        }
+        return ctx;
+      } catch (error) {
         console.error("[useUserContext] error:", error);
         return null;
       }
-      const ctx = data as unknown as UserContext;
-      if (ctx && ctx.flags) ctx.flags.is_impersonating = !!isImpersonating;
-      return ctx;
     },
   });
 

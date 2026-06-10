@@ -1,7 +1,6 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,14 +8,14 @@ import { toast } from "sonner";
 import { Loader2, Eye, EyeOff, Lock } from "lucide-react";
 
 export default function ChangePasswordPage() {
-  const { user } = useAuth();
+  const { user, changePassword } = useAuth();
   const navigate = useNavigate();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (password.length < 6) {
       toast.error("A senha deve ter pelo menos 6 caracteres");
@@ -29,12 +28,8 @@ export default function ChangePasswordPage() {
 
     setSubmitting(true);
     try {
-      const { error } = await supabase.auth.updateUser({
-        password,
-        data: { must_change_password: false },
-      });
+      const { error } = await changePassword(password);
       if (error) throw error;
-      try { await supabase.rpc("clear_my_temp_credential" as any); } catch { /* noop */ }
       toast.success("Senha atualizada com sucesso!");
       navigate("/", { replace: true });
     } catch (err: any) {

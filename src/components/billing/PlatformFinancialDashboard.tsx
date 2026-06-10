@@ -1,38 +1,21 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { TrendingUp, Users, AlertTriangle, RefreshCcw, Zap, Receipt } from "lucide-react";
 
 export function PlatformFinancialDashboard() {
   const { data } = useQuery({
     queryKey: ["platform-financial-overview"],
-    queryFn: async () => {
-      const [subs, invoices, payments] = await Promise.all([
-        supabase.from("workspace_subscriptions").select("status, billing_cycle, current_price"),
-        supabase.from("platform_invoices").select("status, total, issued_at"),
-        supabase.from("platform_subscription_cycles").select("status, amount"),
-      ]);
-      const subList = subs.data ?? [];
-      const active = subList.filter((s: any) => s.status === "active");
-      const trial = subList.filter((s: any) => s.status === "trial");
-      const cancelled = subList.filter((s: any) => s.status === "cancelled");
-      const mrr = active.reduce((sum: number, s: any) => {
-        const p = Number(s.current_price || 0);
-        return sum + (s.billing_cycle === "yearly" ? p / 12 : p);
-      }, 0);
-      const arr = mrr * 12;
-      const invList = invoices.data ?? [];
-      const failed = (payments.data ?? []).filter((p: any) => p.status === "failed").length;
-      const overdue = invList.filter((i: any) => i.status === "overdue").length;
-      const trialConv = subList.length ? Math.round((active.length / Math.max(1, active.length + trial.length)) * 100) : 0;
-      return {
-        mrr, arr,
-        active: active.length,
-        trial: trial.length,
-        cancelled: cancelled.length,
-        failed, overdue, trialConv,
-      };
-    },
+    queryFn: async () => apiRequest<{
+      mrr: number;
+      arr: number;
+      active: number;
+      trial: number;
+      cancelled: number;
+      failed: number;
+      overdue: number;
+      trialConv: number;
+    }>("/billing/admin/financial-overview"),
   });
 
   const items = [

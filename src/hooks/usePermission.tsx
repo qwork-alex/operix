@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 import { RealtimeHub } from "@/lib/realtime/RealtimeHub";
 import { useAuth } from "./useAuth";
 import { useRole } from "./useRole";
@@ -23,15 +23,13 @@ import { useImpersonation } from "./useImpersonation";
 export type PermissionScope = "own" | "team" | "all";
 export type PermissionResult = { allowed: boolean; scope: PermissionScope | null };
 
-const DEBUG = import.meta.env.DEV;
+const DEBUG = Boolean(
+  (import.meta as ImportMeta & { env?: Record<string, string | boolean | undefined> }).env?.DEV,
+);
 const PERMS_QUERY_KEY = ["my-permissions"] as const;
 
-type Source = "admin" | "override" | "role" | "default-deny";
+type Source = "admin" | "role" | "default-deny";
 type Entry = { allowed: boolean; scope: PermissionScope | null; source: Source };
-
-function normalizeScope(s: unknown): PermissionScope {
-  return s === "own" || s === "team" || s === "all" ? s : "all";
-}
 
 function useMyPermissionsMap() {
   const { user } = useAuth();
@@ -43,14 +41,15 @@ function useMyPermissionsMap() {
   const permUserId = isImpersonating ? effectiveUserId : user?.id;
 
   useEffect(() => {
-    if (!permUserId) return;
+    if (!permUserId) {
+      return;
+    }
+
     const invalidate = () => qc.invalidateQueries({ queryKey: PERMS_QUERY_KEY });
-    const off1 = RealtimeHub.subscribe(
-      { table: "user_permissions", filter: `user_id=eq.${permUserId}` },
-      invalidate,
-    );
-    const off2 = RealtimeHub.subscribe({ table: "role_permissions" }, invalidate);
-    return () => { off1(); off2(); };
+    const off = RealtimeHub.subscribe({ table: "user_roles" }, invalidate);
+    return () => {
+      off();
+    };
   }, [permUserId, qc]);
 
 
@@ -63,58 +62,20 @@ function useMyPermissionsMap() {
       if (!permUserId) return { admin: false, map: {} };
       if (isAdmin) return { admin: true, map: {} };
 
-      const fetchAll = Promise.all([
-        supabase.from("permissions").select("id, module, action"),
-        dbRole
-          ? supabase.from("role_permissions").select("permission_id, scope").eq("role", dbRole)
-          : Promise.resolve({ data: [], error: null } as any),
-        supabase.from("user_permissions").select("permission_id, allow, scope").eq("user_id", permUserId),
-      ]);
-      const timeout = new Promise<any>((resolve) =>
-        setTimeout(() => {
-          console.warn("[usePermission] timeout — proceeding with empty perms map");
-          resolve([
-            { data: [], error: null },
-            { data: [], error: null },
-            { data: [], error: null },
-          ]);
-        }, 5000),
-      );
-      const [permsRes, rolePermsRes, userPermsRes] = await Promise.race([fetchAll, timeout]);
-
-      if (permsRes.error) {
-        if (DEBUG) console.error("[usePermission] permissions catalog fetch error", permsRes.error);
+      try {
+        const suffix = permUserId ? `?userId=${encodeURIComponent(permUserId)}` : "";
+        const data = await apiRequest<{
+          admin: boolean;
+          map: Record<string, Entry>;
+        }>(`/account/permissions${suffix}`);
+        return {
+          admin: data.admin,
+          map: data.map ?? {},
+        };
+      } catch (error) {
+        if (DEBUG) console.error("[usePermission] permissions fetch error", error);
         return { admin: false, map: {} };
       }
-
-      const perms = permsRes.data ?? [];
-
-      // role: permission_id -> scope
-      const rolePerms = new Map<string, PermissionScope>();
-      for (const r of (rolePermsRes.data ?? []) as Array<{ permission_id: string; scope?: PermissionScope | null }>) {
-        rolePerms.set(r.permission_id, normalizeScope(r.scope));
-      }
-
-      // user override: permission_id -> { allow, scope } (last write wins for dups)
-      const overrides = new Map<string, { allow: boolean; scope: PermissionScope }>();
-      for (const u of (userPermsRes.data ?? []) as Array<{ permission_id: string; allow: boolean; scope?: PermissionScope | null }>) {
-        overrides.set(u.permission_id, { allow: u.allow === true, scope: normalizeScope(u.scope) });
-      }
-
-      const map: Record<string, Entry> = {};
-      for (const p of perms) {
-        const key = `${p.module}.${p.action}`;
-        const ov = overrides.get(p.id);
-        if (ov) {
-          map[key] = { allowed: ov.allow, scope: ov.allow ? ov.scope : null, source: "override" };
-        } else if (rolePerms.has(p.id)) {
-          map[key] = { allowed: true, scope: rolePerms.get(p.id)!, source: "role" };
-        } else {
-          map[key] = { allowed: false, scope: null, source: "default-deny" };
-        }
-        if (DEBUG) console.log("[Permission:resolve]", { key, ...map[key] });
-      }
-      return { admin: false, map };
     },
   });
 }

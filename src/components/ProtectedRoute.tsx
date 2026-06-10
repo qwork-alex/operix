@@ -1,10 +1,10 @@
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export function ProtectedRoute({ children }: { children: React.ReactNode }) {
+export function ProtectedRoute({ children }: { children: ReactNode }) {
   const { session, loading, degraded, recoverSession } = useAuth();
   const location = useLocation();
 
@@ -47,11 +47,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (!session) return <Navigate to="/auth" replace />;
 
-  // Force password change on first login
-  const mustChange = session.user?.user_metadata?.must_change_password === true;
-  if (mustChange && location.pathname !== "/change-password") {
-    return <Navigate to="/change-password" replace />;
-  }
+  void location;
 
   return <>{children}</>;
 }

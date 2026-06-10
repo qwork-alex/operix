@@ -2,23 +2,17 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Play, RefreshCcw, Repeat2, AlertTriangle, ArrowRight, Clock, Zap } from "lucide-react";
 import { useRunAutomation } from "@/hooks/useAutomation";
+import { apiRequest } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { formatDistanceToNow } from "date-fns";
 
 function useLastAutomationRun() {
   return useQuery({
     queryKey: ["automation-last-run"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("subscription_events" as any)
-        .select("created_at, metadata")
-        .eq("event_type", "automation.run")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      return data as any;
-    },
+    queryFn: async () =>
+      apiRequest<{ lastRun: { created_at: string; metadata: Record<string, unknown> | null } | null }>(
+        "/billing/admin/automation/last-run",
+      ).then((data) => data.lastRun),
     refetchInterval: 30_000,
   });
 }

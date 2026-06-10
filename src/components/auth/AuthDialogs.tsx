@@ -1,11 +1,10 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, Mail, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 
 interface Props {
   open: boolean;
@@ -18,7 +17,7 @@ export function ForgotPasswordDialog({ open, onOpenChange, defaultEmail = "" }: 
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (submitting) return;
     if (!email.trim()) {
@@ -27,15 +26,8 @@ export function ForgotPasswordDialog({ open, onOpenChange, defaultEmail = "" }: 
     }
     setSubmitting(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
-      if (error) {
-        toast.error(error.message);
-        return;
-      }
       setSent(true);
-      toast.success("Se o e-mail existir, enviaremos um link de recuperação.");
+      toast.info("Recuperação por email ainda não foi migrada para a API própria.");
     } finally {
       setSubmitting(false);
     }

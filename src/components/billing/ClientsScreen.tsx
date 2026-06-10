@@ -34,16 +34,15 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
-import { getCurrentUserId } from "@/lib/authUser";
 import {
   lookupCompany, detectQueryType, mergeCompanyIntoForm, AUTO_APPLY_THRESHOLD,
   TIER_LABEL, LOOKUP_STATUS_LABEL,
   type NormalizedCompany, type CompanyQueryType, type ConfidenceBreakdown,
   type SupportTier, type CountryCapability, type LookupStatus,
 } from "@/lib/companySearch";
-import { CheckCircle2, AlertCircle, ShieldCheck, ShieldAlert } from "lucide-react";
+import { AlertCircle, ShieldCheck, ShieldAlert } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -83,6 +82,51 @@ type Client = {
   updated_at: string;
 };
 
+type ClientListResponse = {
+  clients: Client[];
+  balances: Record<string, number>;
+};
+
+type ClientInvoice = {
+  id: string;
+  invoice_number: string;
+  issue_date: string | null;
+  due_date: string | null;
+  total_amount: number;
+  paid_amount: number;
+  remaining_amount: number;
+  status: string;
+};
+
+type ClientPayment = {
+  id: string;
+  amount: number;
+  payment_date: string | null;
+  reference: string | null;
+};
+
+type ClientAttachment = {
+  id: string;
+  file_name: string;
+  storage_path: string;
+  signed_url?: string | null;
+  mime_type?: string | null;
+  size_bytes?: number | null;
+  created_at: string;
+};
+
+type ClientDetailResponse = {
+  client: Client;
+  invoices: ClientInvoice[];
+  payments: ClientPayment[];
+  attachments: ClientAttachment[];
+  totals: {
+    total: number;
+    paid: number;
+    remaining: number;
+  };
+};
+
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" }).format(v || 0);
 const fmtDate = (d?: string | null) =>
@@ -111,6 +155,22 @@ const emptyForm = {
   is_active: true,
 };
 
+const normalizeClient = (client: Client): Client => ({
+  ...client,
+  contacts: Array.isArray(client.contacts) ? client.contacts : [],
+});
+
+const fileToDataUrl = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") resolve(reader.result);
+      else reject(new Error("Falha ao ler ficheiro"));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Falha ao ler ficheiro"));
+    reader.readAsDataURL(file);
+  });
+
 // ─────────────────────────────────────────────────────────────
 // Main component
 // ─────────────────────────────────────────────────────────────
@@ -126,41 +186,18 @@ export default function ClientsScreen() {
   const [toDelete, setToDelete] = useState<Client | null>(null);
   const [detail, setDetail] = useState<Client | null>(null);
 
-  const { data: clients = [], isLoading } = useQuery({
-    queryKey: ["billing-clients"],
+  const { data: listData, isLoading } = useQuery({
+    queryKey: ["ops-billing-clients"],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("billing_clients")
-        .select("*")
-        .order("name");
-      if (error) throw error;
-      return ((data ?? []) as any[]).map((c) => ({
-        ...c,
-        contacts: Array.isArray(c.contacts) ? c.contacts : [],
-      })) as Client[];
+      const data = await apiRequest<ClientListResponse>("/billing/admin/ops/clients?active_only=false");
+      return {
+        clients: (data.clients ?? []).map(normalizeClient),
+        balances: data.balances ?? {},
+      };
     },
   });
-
-  // Aggregate open balances per client (joins on billing_client_id)
-  const { data: balances = {} } = useQuery({
-    queryKey: ["billing-clients-balances"],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("billing_invoices")
-        .select("billing_client_id,total_amount,paid_amount,remaining_amount,status");
-      if (error) return {};
-      const map: Record<string, number> = {};
-      for (const r of (data ?? []) as any[]) {
-        if (!r.billing_client_id) continue;
-        const open =
-          r.remaining_amount != null
-            ? Number(r.remaining_amount)
-            : Number(r.total_amount ?? 0) - Number(r.paid_amount ?? 0);
-        map[r.billing_client_id] = (map[r.billing_client_id] ?? 0) + open;
-      }
-      return map;
-    },
-  });
+  const clients = listData?.clients ?? [];
+  const balances = listData?.balances ?? {};
 
   const filtered = useMemo(() => {
     return clients.filter((c) => {
@@ -213,7 +250,6 @@ export default function ClientsScreen() {
     }
     setSaving(true);
     try {
-      const uid = await getCurrentUserId();
       const payload: any = {
         kind: form.kind,
         name: form.name.trim(),
@@ -235,16 +271,25 @@ export default function ClientsScreen() {
         is_active: form.is_active,
       };
       if (editing) {
-        const { error } = await (supabase as any).from("billing_clients").update(payload).eq("id", editing.id);
-        if (error) throw error;
+        await apiRequest(`/billing/admin/ops/clients/${editing.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
         toast({ title: "Cliente atualizado" });
       } else {
-        const { error } = await (supabase as any).from("billing_clients").insert({ ...payload, created_by: uid });
-        if (error) throw error;
+        await apiRequest("/billing/admin/ops/clients", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
         toast({ title: "Cliente criado" });
       }
       setCreating(false);
-      qc.invalidateQueries({ queryKey: ["billing-clients"] });
+      qc.invalidateQueries({ queryKey: ["ops-billing-clients"] });
+      if (editing?.id) {
+        qc.invalidateQueries({ queryKey: ["ops-billing-client-detail", editing.id] });
+      }
     } catch (e: any) {
       toast({ title: "Erro ao guardar", description: e.message, variant: "destructive" });
     } finally {
@@ -255,11 +300,16 @@ export default function ClientsScreen() {
   const confirmDelete = async () => {
     if (!toDelete) return;
     try {
-      const { error } = await (supabase as any).from("billing_clients").delete().eq("id", toDelete.id);
-      if (error) throw error;
+      await apiRequest(`/billing/admin/ops/clients/${toDelete.id}`, {
+        method: "DELETE",
+      });
       toast({ title: "Cliente removido" });
       setToDelete(null);
-      qc.invalidateQueries({ queryKey: ["billing-clients"] });
+      qc.invalidateQueries({ queryKey: ["ops-billing-clients"] });
+      qc.removeQueries({ queryKey: ["ops-billing-client-detail", toDelete.id] });
+      if (detail?.id === toDelete.id) {
+        setDetail(null);
+      }
     } catch (e: any) {
       toast({ title: "Erro ao remover", description: e.message, variant: "destructive" });
     }
@@ -963,95 +1013,76 @@ function ClientDetail({
 }: {
   client: Client | null; open: boolean; onClose: () => void; onEdit: (c: Client) => void;
 }) {
+  const qc = useQueryClient();
   const id = client?.id;
 
-  const { data: invoices = [] } = useQuery<any[]>({
-    queryKey: ["client-invoices", id],
-    enabled: !!id,
+  const { data: detailData } = useQuery({
+    queryKey: ["ops-billing-client-detail", id],
+    enabled: !!id && open,
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("billing_invoices")
-        .select("*")
-        .eq("billing_client_id", id!)
-        .order("issue_date", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
+      const data = await apiRequest<ClientDetailResponse>(`/billing/admin/ops/clients/${id}`);
+      return {
+        ...data,
+        client: normalizeClient(data.client),
+        invoices: data.invoices ?? [],
+        payments: data.payments ?? [],
+        attachments: data.attachments ?? [],
+        totals: data.totals ?? { total: 0, paid: 0, remaining: 0 },
+      };
     },
   });
-
-  const invoiceIds = invoices.map((i: any) => i.id);
-
-  const { data: payments = [] } = useQuery<any[]>({
-    queryKey: ["client-payments", id, invoiceIds.length],
-    enabled: !!id && invoiceIds.length > 0,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("billing_payments")
-        .select("*")
-        .in("invoice_id", invoiceIds)
-        .order("payment_date", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-
-  const { data: attachments = [], refetch: refetchAtt } = useQuery<any[]>({
-    queryKey: ["client-attachments", id],
-    enabled: !!id,
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("billing_attachments")
-        .select("*")
-        .eq("billing_client_id", id!)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
+  const activeClient = detailData?.client ?? client;
+  const invoices = detailData?.invoices ?? [];
+  const payments = detailData?.payments ?? [];
+  const attachments = detailData?.attachments ?? [];
 
   const totals = useMemo(() => {
+    if (detailData?.totals) return detailData.totals;
     const total = invoices.reduce((s: number, i: any) => s + Number(i.total_amount ?? 0), 0);
     const paid = invoices.reduce((s: number, i: any) => s + Number(i.paid_amount ?? 0), 0);
     return { total, paid, remaining: total - paid };
-  }, [invoices]);
+  }, [detailData?.totals, invoices]);
 
   const handleUpload = async (file: File) => {
     if (!id) return;
     try {
-      const uid = await getCurrentUserId();
-      const path = `${uid}/clients/${id}/${Date.now()}-${file.name}`;
-      const { error: upErr } = await supabase.storage.from("billing-receipts").upload(path, file);
-      if (upErr) throw upErr;
-      const { error: insErr } = await (supabase as any).from("billing_attachments").insert({
-        billing_client_id: id, file_name: file.name, storage_path: path,
-        mime_type: file.type, size_bytes: file.size, uploaded_by: uid,
+      const dataUrl = await fileToDataUrl(file);
+      await apiRequest(`/billing/admin/ops/clients/${id}/attachments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          file_name: file.name,
+          mime_type: file.type || null,
+          size_bytes: file.size,
+          data_url: dataUrl,
+        }),
       });
-      if (insErr) throw insErr;
       toast({ title: "Anexo adicionado" });
-      refetchAtt();
+      qc.invalidateQueries({ queryKey: ["ops-billing-client-detail", id] });
     } catch (e: any) {
       toast({ title: "Erro ao anexar", description: e.message, variant: "destructive" });
     }
   };
 
-  const removeAttachment = async (a: any) => {
+  const removeAttachment = async (a: ClientAttachment) => {
     try {
-      await supabase.storage.from("billing-receipts").remove([a.storage_path]);
-      await supabase.from("billing_attachments").delete().eq("id", a.id);
+      await apiRequest(`/billing/admin/ops/clients/${id}/attachments/${a.id}`, {
+        method: "DELETE",
+      });
       toast({ title: "Anexo removido" });
-      refetchAtt();
+      qc.invalidateQueries({ queryKey: ["ops-billing-client-detail", id] });
     } catch (e: any) {
       toast({ title: "Erro", description: e.message, variant: "destructive" });
     }
   };
 
-  const openAttachment = async (a: any) => {
-    const { data } = await supabase.storage.from("billing-receipts").createSignedUrl(a.storage_path, 3600);
-    if (data?.signedUrl) window.open(data.signedUrl, "_blank");
+  const openAttachment = async (a: ClientAttachment) => {
+    const target = a.signed_url || a.storage_path;
+    if (target) window.open(target, "_blank", "noopener,noreferrer");
   };
 
-  if (!client) return null;
-  const isPro = client.kind === "professional";
+  if (!activeClient) return null;
+  const isPro = activeClient.kind === "professional";
   const Icon = isPro ? Building2 : UserIcon;
 
   return (
@@ -1060,7 +1091,7 @@ function ClientDetail({
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             <Icon className={cn("h-4 w-4", isPro ? "text-primary" : "text-cyan-400")} />
-            {client.name}
+            {activeClient.name}
             <Badge variant="outline" className="ml-auto text-[10px]">
               {isPro ? "Profissional" : "Particular"}
             </Badge>
@@ -1085,29 +1116,29 @@ function ClientDetail({
 
           <Card className="border-border/50">
             <CardContent className="pt-3 pb-3 text-xs space-y-1.5">
-              {isPro && <Row k="SIREN" v={client.siren} mono />}
-              {isPro && <Row k="SIRET" v={client.siret} mono />}
-              {isPro && <Row k="TVA" v={client.tva_intracom} mono />}
-              <Row k="Email" v={client.email} />
-              <Row k="Telefone" v={client.phone} />
-              <Row k="Endereço" v={[client.address, client.address_complement].filter(Boolean).join(", ") || null} />
-              <Row k="Cidade" v={[client.postal_code, client.city, client.country].filter(Boolean).join(" · ") || null} />
-              <Row k="IBAN" v={client.iban} mono />
-              <Row k="BIC" v={client.bic} mono />
-              {client.notes && (
+              {isPro && <Row k="SIREN" v={activeClient.siren} mono />}
+              {isPro && <Row k="SIRET" v={activeClient.siret} mono />}
+              {isPro && <Row k="TVA" v={activeClient.tva_intracom} mono />}
+              <Row k="Email" v={activeClient.email} />
+              <Row k="Telefone" v={activeClient.phone} />
+              <Row k="Endereço" v={[activeClient.address, activeClient.address_complement].filter(Boolean).join(", ") || null} />
+              <Row k="Cidade" v={[activeClient.postal_code, activeClient.city, activeClient.country].filter(Boolean).join(" · ") || null} />
+              <Row k="IBAN" v={activeClient.iban} mono />
+              <Row k="BIC" v={activeClient.bic} mono />
+              {activeClient.notes && (
                 <div className="pt-2 mt-2 border-t border-border/50">
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Notas</p>
-                  <p className="mt-1 whitespace-pre-wrap">{client.notes}</p>
+                  <p className="mt-1 whitespace-pre-wrap">{activeClient.notes}</p>
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {client.contacts.length > 0 && (
+          {activeClient.contacts.length > 0 && (
             <Card className="border-border/50">
               <CardContent className="pt-3 pb-3 space-y-2">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Contatos ({client.contacts.length})</p>
-                {client.contacts.map((c, i) => (
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Contatos ({activeClient.contacts.length})</p>
+                {activeClient.contacts.map((c, i) => (
                   <div key={i} className="text-xs border-l-2 border-primary/40 pl-2">
                     <div className="font-medium">{c.first_name} {c.last_name} {c.role && <span className="text-muted-foreground font-normal">· {c.role}</span>}</div>
                     <div className="text-[10px] text-muted-foreground">{c.email} {c.phone && `· ${c.phone}`}</div>
@@ -1127,7 +1158,7 @@ function ClientDetail({
             <TabsContent value="invoices" className="mt-3 space-y-1.5">
               {invoices.length === 0 ? (
                 <p className="text-xs text-muted-foreground text-center py-6">Sem faturas registadas.</p>
-              ) : invoices.map((i: any) => (
+              ) : invoices.map((i) => (
                 <div key={i.id} className="flex items-center justify-between p-2 rounded-md border border-border/50 text-xs">
                   <div>
                     <p className="font-mono text-primary">{i.invoice_number}</p>
@@ -1146,7 +1177,7 @@ function ClientDetail({
             <TabsContent value="payments" className="mt-3 space-y-1.5">
               {payments.length === 0 ? (
                 <p className="text-xs text-muted-foreground text-center py-6">Sem pagamentos.</p>
-              ) : payments.map((p: any) => (
+              ) : payments.map((p) => (
                 <div key={p.id} className="flex items-center justify-between p-2 rounded-md border border-border/50 text-xs">
                   <div>
                     <p>{fmtDate(p.payment_date)}</p>
@@ -1166,7 +1197,7 @@ function ClientDetail({
               </label>
               {attachments.length === 0 ? (
                 <p className="text-xs text-muted-foreground text-center py-4">Sem anexos.</p>
-              ) : attachments.map((a: any) => (
+              ) : attachments.map((a) => (
                 <div key={a.id} className="flex items-center justify-between p-2 rounded-md border border-border/50 text-xs">
                   <button onClick={() => openAttachment(a)} className="flex items-center gap-2 min-w-0 flex-1 text-left hover:text-primary">
                     <FileText className="h-3.5 w-3.5 shrink-0" />
@@ -1181,7 +1212,7 @@ function ClientDetail({
           </Tabs>
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button size="sm" variant="outline" onClick={() => onEdit(client)}>
+            <Button size="sm" variant="outline" onClick={() => onEdit(activeClient)}>
               <Pencil className="h-3.5 w-3.5 mr-1.5" />Editar
             </Button>
           </div>

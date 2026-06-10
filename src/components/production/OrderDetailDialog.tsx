@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Save, Trash2, Lock, Minimize2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { getCurrentUserId } from "@/lib/authUser";
 import {
   useProductionOrders, PRODUCTION_STATUSES, PRIORITY_META, isOrderLocked,
   type ProductionOrder, type ProductionStatus, type ProductionPriority,
@@ -59,14 +60,14 @@ export function OrderDetailDialog({ order, onClose }: Props) {
         if (had) {
           (async () => {
             try {
-              const { data: u } = await supabase.auth.getUser();
+              const actorUserId = await getCurrentUserId().catch(() => null);
               await (supabase as any).from("production_events").insert({
                 production_order_id: order.id,
                 workspace_id: order.workspace_id,
                 event_type: "field_updated",
                 from_value: null,
                 to_value: "resumed",
-                actor_user_id: u?.user?.id ?? null,
+                actor_user_id: actorUserId,
               });
             } catch (err) { console.warn("[Production] resume log failed", err); }
           })();
@@ -86,14 +87,14 @@ export function OrderDetailDialog({ order, onClose }: Props) {
   const logLifecycle = async (type: "minimized" | "resumed") => {
     if (isNew || !order?.id) return;
     try {
-      const { data: u } = await supabase.auth.getUser();
+      const actorUserId = await getCurrentUserId().catch(() => null);
       await (supabase as any).from("production_events").insert({
         production_order_id: order.id,
         workspace_id: order.workspace_id,
         event_type: "field_updated",
         from_value: null,
         to_value: type,
-        actor_user_id: u?.user?.id ?? null,
+        actor_user_id: actorUserId,
       });
     } catch (err) {
       // non-blocking — lifecycle log is best-effort

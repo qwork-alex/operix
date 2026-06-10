@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js";
 import { getStripe, getStripeEnvironment } from "@/lib/stripe";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 
 interface Props {
   lookupKey: string;
@@ -26,18 +26,22 @@ export function StripeEmbeddedCheckout({
   const options = useMemo(
     () => ({
       fetchClientSecret: async (): Promise<string> => {
-        const { data, error } = await supabase.functions.invoke("create-checkout", {
-          body: {
-            lookup_key: lookupKey,
-            workspace_id: workspaceId,
-            customer_email: customerEmail,
-            legal_name: legalName,
-            return_url: returnUrl,
-            environment: getStripeEnvironment(),
+        const data = await apiRequest<{ clientSecret?: string; message?: string }>(
+          `/billing/workspaces/${workspaceId}/checkout-session`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              lookup_key: lookupKey,
+              customer_email: customerEmail,
+              legal_name: legalName,
+              return_url: returnUrl,
+              environment: getStripeEnvironment(),
+            }),
           },
-        });
-        if (error || !data?.clientSecret) {
-          throw new Error(error?.message || data?.error || "Falha ao iniciar checkout");
+        );
+        if (!data?.clientSecret) {
+          throw new Error(data?.message || "Falha ao iniciar checkout");
         }
         return data.clientSecret as string;
       },

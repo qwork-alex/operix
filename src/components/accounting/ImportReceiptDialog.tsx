@@ -10,6 +10,7 @@ import { useWorkspace } from "@/hooks/useWorkspace";
 import { useWorkspaceTechnicians } from "@/hooks/useFinancialPeriods";
 import { useQueryClient } from "@tanstack/react-query";
 import { invalidateAccountingDownstream } from "@/lib/financialSync";
+import { getCurrentUserId } from "@/lib/authUser";
 import { toast } from "sonner";
 
 const CATEGORY_OPTIONS = [
@@ -128,12 +129,11 @@ export function ImportReceiptDialog({
 
     setSaving(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Sessão expirada");
+      const userId = await getCurrentUserId();
 
       // 1) Upload to storage
       const ext = file.name.split(".").pop() || "bin";
-      const storagePath = `${user.id}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+      const storagePath = `${userId}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
       const { error: upErr } = await supabase.storage
         .from("accounting-receipts")
         .upload(storagePath, file, { contentType: file.type, upsert: false });
@@ -152,7 +152,7 @@ export function ImportReceiptDialog({
           storage_path: `accounting-receipts/${storagePath}`,
           mime_type: file.type,
           size_bytes: file.size,
-          uploaded_by: user.id,
+          uploaded_by: userId,
         })
         .select("id")
         .single();

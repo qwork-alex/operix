@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { ExternalLink, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
-import { getStripeEnvironment, isStripeConfigured } from "@/lib/stripe";
+import { apiRequest } from "@/lib/api";
+import { isStripeConfigured } from "@/lib/stripe";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { toast } from "sonner";
 
@@ -21,14 +21,16 @@ export function StripePortalButton({ variant = "outline", size = "sm", label = "
   async function open() {
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("create-portal-session", {
-        body: {
-          workspace_id: workspaceId,
-          return_url: `${window.location.origin}/subscription`,
-          environment: getStripeEnvironment(),
+      const data = await apiRequest<{ requires_checkout?: boolean; message?: string | null; url?: string | null }>(
+        `/billing/workspaces/${workspaceId}/portal-session`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            return_url: `${window.location.origin}/subscription`,
+          }),
         },
-      });
-      if (error) throw new Error(error.message || "Sem portal disponível");
+      );
       if (data?.requires_checkout || !data?.url) {
         toast.info(data?.message || "Sem subscrição ativa para gerir.");
         return;

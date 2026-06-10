@@ -18,9 +18,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useWorkspace } from "./useWorkspace";
 import { useWorkspaceModules } from "./useWorkspaceModules";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "./useAuth";
 
 export interface EligibleWorkspace {
   id: string;
@@ -46,34 +43,15 @@ export interface ContextualWorkspaceResult {
 const sessionKey = (module: string) => `ctx_ws::${module}`;
 
 export function useContextualWorkspace(module: string): ContextualWorkspaceResult {
-  const { user } = useAuth();
-  const { workspaceId: currentWs } = useWorkspace();
+  const { workspaceId: currentWs, availableWorkspaces, isLoading: workspaceLoading } = useWorkspace();
   const { canAccessModule, isLoading: modsLoading } = useWorkspaceModules();
-
-  // Fetch all active workspaces for the current user (id + name).
-  const { data: workspaces = [], isLoading: wsLoading } = useQuery({
-    queryKey: ["ctx-user-workspaces", user?.id],
-    enabled: !!user?.id,
-    staleTime: 5 * 60 * 1000,
-    queryFn: async () => {
-      const { data: appUser } = await supabase
-        .from("app_users")
-        .select("id")
-        .eq("auth_user_id", user!.id)
-        .maybeSingle();
-      if (!appUser) return [] as EligibleWorkspace[];
-      const { data, error } = await supabase
-        .from("memberships")
-        .select("workspace_id, status, workspaces(id, name)")
-        .eq("user_id", appUser.id)
-        .eq("status", "active");
-      if (error) throw error;
-      return ((data || []) as any[])
-        .map((m) => m.workspaces)
-        .filter(Boolean)
-        .map((w: any) => ({ id: w.id as string, name: (w.name as string) || "—" }));
-    },
-  });
+  const workspaces = useMemo(
+    () =>
+      availableWorkspaces
+        .filter((workspace) => workspace.membershipStatus === "active")
+        .map((workspace) => ({ id: workspace.id, name: workspace.name })) as EligibleWorkspace[],
+    [availableWorkspaces],
+  );
 
   const eligibleWorkspaces = useMemo(
     () => workspaces.filter((w) => canAccessModule(w.id, module)),
@@ -133,6 +111,6 @@ export function useContextualWorkspace(module: string): ContextualWorkspaceResul
     requireSelection,
     selectWorkspace,
     clearSelection,
-    isLoading: wsLoading || modsLoading,
+    isLoading: workspaceLoading || modsLoading,
   };
 }

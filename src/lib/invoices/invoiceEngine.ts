@@ -1,9 +1,4 @@
-/**
- * Client-side wrapper around platform invoice RPCs.
- * Thin, defensive — never throws into the caller's render path; surfaces errors as resolved tuples.
- */
-
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 
 export interface GenerateInvoiceArgs {
   workspaceId: string;
@@ -15,27 +10,42 @@ export interface GenerateInvoiceArgs {
 }
 
 export async function generatePlatformInvoice(args: GenerateInvoiceArgs) {
-  const { data, error } = await supabase.rpc("generate_platform_invoice", {
-    _workspace_id: args.workspaceId,
-    _plan_code: args.planCode,
-    _cycle: args.cycle,
-    _vat_mode: args.vatMode,
-    _bank_account_id: args.bankAccountId ?? null,
-    _amount: args.amount ?? null,
-  });
-  return { data: data as any, error };
+  try {
+    const data = await apiRequest(`/billing/workspaces/${args.workspaceId}/invoices/preview`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        plan_code: args.planCode,
+        cycle: args.cycle,
+        vat_mode: args.vatMode === "with_vat" || args.vatMode === "business" ? "business" : "personal",
+        bank_account_id: args.bankAccountId ?? null,
+        amount: args.amount ?? 0,
+        vat_rate: 0,
+        vat_exemption: null,
+        legal_name: "Workspace",
+        billing_email: "billing@example.com",
+        country: "PT",
+        vat_number: null,
+      }),
+    });
+    return { data, error: null };
+  } catch (error) {
+    return { data: null, error };
+  }
 }
 
 export async function requestInvoicePdf(invoiceId: string) {
-  const { data, error } = await supabase.functions.invoke("generate-invoice-pdf", {
-    body: { invoiceId },
-  });
-  return { data, error };
+  try {
+    const data = await apiRequest<{ signedUrl: string }>(`/billing/invoices/${invoiceId}/pdf`, {
+      method: "POST",
+    });
+    return { data, error: null };
+  } catch (error) {
+    return { data: null, error };
+  }
 }
 
 export async function getInvoicePdfSignedUrl(pdfPath: string, expiresInSeconds = 3600) {
-  const { data, error } = await supabase.storage
-    .from("invoice-pdfs")
-    .createSignedUrl(pdfPath, expiresInSeconds);
-  return { url: data?.signedUrl ?? null, error };
+  void expiresInSeconds;
+  return { url: pdfPath ?? null, error: null };
 }

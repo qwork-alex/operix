@@ -1,6 +1,4 @@
 import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,25 +8,20 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
 export function SecurityCard() {
-  const { user } = useAuth();
+  const { user, changePassword: updatePassword } = useAuth();
   const [pwd, setPwd] = useState("");
   const [confirm, setConfirm] = useState("");
   const [show, setShow] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sendingReset, setSendingReset] = useState(false);
 
-  const changePassword = async () => {
+  const handleChangePassword = async () => {
     if (pwd.length < 8) { toast.error("Mínimo 8 caracteres"); return; }
     if (pwd !== confirm) { toast.error("As senhas não coincidem"); return; }
     setSaving(true);
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: pwd,
-        data: { must_change_password: false },
-      });
+      const { error } = await updatePassword(pwd);
       if (error) throw error;
-      // Purge any leftover temp credential
-      try { await supabase.rpc("clear_my_temp_credential" as any); } catch { /* noop */ }
       toast.success("Senha alterada com sucesso");
       setPwd(""); setConfirm("");
     } catch (e: any) {
@@ -40,11 +33,7 @@ export function SecurityCard() {
     if (!user?.email) return;
     setSendingReset(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
-        redirectTo: `${window.location.origin}/change-password`,
-      });
-      if (error) throw error;
-      toast.success("Email de recuperação enviado");
+      toast.info("Recuperação por email ainda não foi migrada para a API própria.");
     } catch (e: any) {
       toast.error(e.message || "Erro ao enviar recuperação");
     } finally { setSendingReset(false); }
@@ -80,7 +69,7 @@ export function SecurityCard() {
               <Input className="h-9" type={show ? "text" : "password"} value={confirm} onChange={(e) => setConfirm(e.target.value)} />
             </div>
           </div>
-          <Button size="sm" onClick={changePassword} disabled={saving || !pwd || !confirm}>
+          <Button size="sm" onClick={handleChangePassword} disabled={saving || !pwd || !confirm}>
             {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
             Atualizar senha
           </Button>

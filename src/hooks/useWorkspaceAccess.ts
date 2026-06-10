@@ -1,6 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { useWorkspace } from "./useWorkspace";
+import { useWorkspaceBillingContext } from "./useWorkspaceBillingContext";
 
 export type AccessMode = "full" | "readonly" | "billing_only" | "locked";
 
@@ -43,25 +41,9 @@ const DEFAULT: WorkspaceAccessState = {
  * suspension mode and legal hold.
  */
 export function useWorkspaceAccess() {
-  const { workspaceId } = useWorkspace();
+  const query = useWorkspaceBillingContext();
 
-  const query = useQuery({
-    queryKey: ["workspace-access-state", workspaceId],
-    enabled: !!workspaceId,
-    staleTime: 60_000,
-    queryFn: async (): Promise<WorkspaceAccessState> => {
-      const { data, error } = await supabase.rpc("get_workspace_access_state" as any, {
-        _workspace_id: workspaceId,
-      } as any);
-      if (error) {
-        console.error("[useWorkspaceAccess]", error);
-        return DEFAULT;
-      }
-      return (data as unknown as WorkspaceAccessState) ?? DEFAULT;
-    },
-  });
-
-  const state = query.data ?? DEFAULT;
+  const state = query.data?.access ?? DEFAULT;
   return {
     ...state,
     isLoading: query.isLoading,

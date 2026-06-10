@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useLanguage } from "@/hooks/useLanguage";
@@ -9,33 +9,14 @@ import { toast } from "sonner";
 import { Loader2, Eye, EyeOff, Building2, LogIn, ShieldCheck, Mail, Users, Wrench } from "lucide-react";
 import { brandConfig } from "@/brand.config";
 import { BrandLogo } from "@/components/BrandLogo";
-import { supabase } from "@/integrations/supabase/client";
 import { PasswordStrength, isPasswordStrong } from "@/components/auth/PasswordStrength";
 import { ForgotPasswordDialog, DuplicateEmailDialog } from "@/components/auth/AuthDialogs";
 import { ASVerifiedSeal } from "@/components/branding/ASVerifiedSeal";
 
 type Mode = "signin" | "create-workspace" | "create-technician";
 
-const AUTH_FORM_TIMEOUT_MS = 12000;
-
-function withAuthTimeout<T>(promise: PromiseLike<T>, label: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = window.setTimeout(() => reject(new Error(`${label} timeout`)), AUTH_FORM_TIMEOUT_MS);
-    promise.then(
-      (value) => {
-        window.clearTimeout(timer);
-        resolve(value);
-      },
-      (error) => {
-        window.clearTimeout(timer);
-        reject(error);
-      },
-    );
-  });
-}
-
 export default function Auth() {
-  const { session, loading, signIn } = useAuth();
+  const { session, loading, signIn, signUp } = useAuth();
   const { t } = useLanguage();
   const navigate = useNavigate();
 
@@ -59,7 +40,7 @@ export default function Auth() {
 
   if (session) return <Navigate to="/" replace />;
 
-  const handleSignIn = async (e: React.FormEvent) => {
+  const handleSignIn = async (e: FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     const { error } = await signIn(email, password);
@@ -67,7 +48,7 @@ export default function Auth() {
     setSubmitting(false);
   };
 
-  const handleCreateWorkspace = async (e: React.FormEvent) => {
+  const handleCreateWorkspace = async (e: FormEvent) => {
     e.preventDefault();
     if (!workspaceName.trim() || !fullName.trim() || !email.trim()) {
       toast.error("Preencha todos os campos.");
@@ -83,22 +64,8 @@ export default function Auth() {
 
     setSubmitting(true);
     try {
-      const { data, error } = await withAuthTimeout<Awaited<ReturnType<typeof supabase.auth.signUp>>>(
-        supabase.auth.signUp({
-          email: email.trim().toLowerCase(),
-          password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/onboarding/workspace`,
-            data: {
-              full_name: fullName.trim(),
-              create_workspace: true,
-              intended_workspace_name: workspaceName.trim(),
-            },
-          },
-        }),
-        "signUp workspace",
-      );
-
+      localStorage.setItem("pending_workspace_name", workspaceName.trim());
+      const { error } = await signUp(email, password, fullName, "admin");
       if (error) {
         const msg = error.message || "";
         if (msg.toLowerCase().includes("registered") || msg.toLowerCase().includes("already")) {
@@ -109,24 +76,8 @@ export default function Auth() {
         return;
       }
 
-      if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
-        setDuplicateEmail(email.trim().toLowerCase());
-        return;
-      }
-
-      supabase.from("backend_event_logs").insert({
-        table_name: "auth",
-        action: "WORKSPACE_OWNER_SIGNUP",
-        payload: { email, full_name: fullName, workspace_name: workspaceName } as any,
-      }).then(() => {}, () => {});
-
-      if (data.session) {
-        toast.success("Workspace criada. Vamos configurar a empresa.");
-        navigate("/onboarding/workspace", { replace: true });
-      } else {
-        toast.success("Verifique o seu email para confirmar a conta e continuar a configuração.");
-        setMode("signin");
-      }
+      toast.success("Conta criada. Vamos configurar a empresa.");
+      navigate("/onboarding/workspace", { replace: true });
     } catch (err) {
       toast.error((err as Error).message || "Falha ao criar workspace.");
     } finally {
@@ -136,7 +87,7 @@ export default function Auth() {
 
   // Independent technician account — global identity, can later be invited
   // to one or many workspaces. Does NOT create a workspace.
-  const handleCreateTechnician = async (e: React.FormEvent) => {
+  const handleCreateTechnician = async (e: FormEvent) => {
     e.preventDefault();
     if (!fullName.trim() || !email.trim()) {
       toast.error("Preencha todos os campos.");
@@ -150,20 +101,7 @@ export default function Auth() {
     try { localStorage.removeItem("invite_token"); sessionStorage.removeItem("invite_token"); } catch {}
     setSubmitting(true);
     try {
-      const { data, error } = await withAuthTimeout<Awaited<ReturnType<typeof supabase.auth.signUp>>>(
-        supabase.auth.signUp({
-          email: email.trim().toLowerCase(),
-          password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/`,
-            data: {
-              full_name: fullName.trim(),
-              intended_role: "tecnico",
-            },
-          },
-        }),
-        "signUp technician",
-      );
+      const { error } = await signUp(email, password, fullName, "technician");
       if (error) {
         const msg = error.message || "";
         if (msg.toLowerCase().includes("registered") || msg.toLowerCase().includes("already")) {
@@ -173,21 +111,8 @@ export default function Auth() {
         }
         return;
       }
-      if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
-        setDuplicateEmail(email.trim().toLowerCase());
-        return;
-      }
-      supabase.from("backend_event_logs").insert({
-        table_name: "auth", action: "TECHNICIAN_SIGNUP",
-        payload: { email, full_name: fullName } as any,
-      }).then(() => {}, () => {});
-      if (data.session) {
-        toast.success("Conta de técnico criada. Bem-vindo!");
-        navigate("/", { replace: true });
-      } else {
-        toast.success("Verifique seu email para confirmar a conta.");
-        setMode("signin");
-      }
+      toast.success("Conta criada com sucesso.");
+      navigate("/", { replace: true });
     } catch (err) {
       toast.error((err as Error).message || "Falha ao criar conta de técnico.");
     } finally {

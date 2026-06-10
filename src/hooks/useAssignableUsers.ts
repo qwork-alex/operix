@@ -114,9 +114,6 @@ export function useMyAssignableUserId() {
   return useQuery({
     queryKey: ["my-assignable-user-id", user?.id],
     enabled: !!user?.id,
-    queryFn: async (): Promise<string | null> => {
-      const { data } = await supabase.auth.getUser();
-      return data.user?.id ?? user?.id ?? null;
-    },
+    queryFn: async (): Promise<string | null> => user?.id ?? null,
   });
 }

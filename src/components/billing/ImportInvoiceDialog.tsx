@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useEffect } from "react";
+import { useState, useRef, useMemo, useEffect, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Upload, FileText, Image as ImageIcon, Loader2, Sparkles, X, FileUp,
@@ -6,8 +6,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { supabase } from "@/integrations/supabase/client";
-import { getCurrentUserId } from "@/lib/authUser";
+import { apiRequest } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,7 +22,6 @@ import {
 import {
   renderPdfFirstPageToCanvas,
   pdfFirstPageToImageBase64,
-  fileToBase64,
 } from "@/lib/pdfUtils";
 import { PaymentListsSelector } from "@/components/billing/PaymentListsSelector";
 import type { BillingPaymentList } from "@/hooks/usePaymentListsConsolidated";
@@ -139,55 +137,26 @@ export default function ImportInvoiceDialog({
     try {
       // Stage 1: render preview
       setStage("rendering"); setStageMsg("Preparando pré-visualização…");
-      let base64: string;
-      let mimeType: string;
       if (f.type === "application/pdf") {
-        // PDF: render page 1 to image for OCR
         const r = await pdfFirstPageToImageBase64(f, { maxWidth: 1600 });
-        base64 = r.base64;
-        mimeType = r.mimeType;
         setImageUrl(`data:${r.mimeType};base64,${r.base64}`);
       } else {
-        // Image: load directly + create object URL preview
         if (imageUrl) URL.revokeObjectURL(imageUrl);
         const url = URL.createObjectURL(f);
         setImageUrl(url);
-        base64 = await fileToBase64(f);
-        mimeType = f.type;
       }
 
-      // Stage 2: OCR + extraction
-      setStage("ocr"); setStageMsg("Reconhecendo texto…");
-      const { data, error } = await supabase.functions.invoke("extract-invoice", {
-        body: { fileBase64: base64, mimeType, fileName: f.name },
-      });
-      if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
-
-      // Stage 3: extraction
-      setStage("extracting"); setStageMsg("Estruturando campos…");
-      const ex = (data ?? {}) as any;
+      setStage("validating");
+      setStageMsg("Pré-visualização pronta. Reveja os dados antes de confirmar.");
+      const fileStem = f.name.replace(/\.[^.]+$/, "").slice(0, 120);
       const next: Extracted = {
-        invoice_number: ex.invoice_number ?? "",
-        supplier_name:  ex.supplier_name  ?? "",
-        customer_name:  ex.customer_name  ?? "",
-        issue_date:     ex.issue_date     ?? new Date().toISOString().slice(0, 10),
-        due_date:       ex.due_date       ?? "",
-        total_amount:   ex.total_amount != null ? String(ex.total_amount) : "",
-        tax_amount:     ex.tax_amount   != null ? String(ex.tax_amount)   : "",
-        currency:       ex.currency       ?? "EUR",
-        notes:          ex.notes          ?? "",
+        ...emptyExtracted(),
+        invoice_number: fileStem,
       };
       setExtracted(next);
-      setFieldConf((ex.field_confidence ?? {}) as FieldConfidence);
-
-      // Stage 4: validation
-      setStage("validating"); setStageMsg("Validando consistência…");
-      const issues: string[] = [];
-      if (!next.invoice_number) issues.push("número");
-      if (!next.total_amount) issues.push("total");
+      setFieldConf({});
       setStage("done");
-      setStageMsg(issues.length ? `Reveja: ${issues.join(", ")}` : "Pronto para confirmar.");
+      setStageMsg("Preencha os dados da fatura e confirme a importação.");
     } catch (e: any) {
       console.error("Pipeline error:", e);
       setStage("error");
@@ -201,16 +170,18 @@ export default function ImportInvoiceDialog({
       if (!file) throw new Error("Sem ficheiro");
       if (!extracted.invoice_number.trim()) throw new Error("Número da fatura é obrigatório");
 
-      setStage("uploading"); setStageMsg("Guardando ficheiro…");
-      const uid = await getCurrentUserId();
-      const safeName = file.name.replace(/[^\w.\-]/g, "_");
-      const path = `${uid}/imported/${Date.now()}-${safeName}`;
-
-      const { error: upErr } = await supabase.storage
-        .from("billing-receipts").upload(path, file, { contentType: file.type });
-      if (upErr) throw upErr;
+      setStage("uploading"); setStageMsg("Enviando para o backend…");
 
       const total = Number(extracted.total_amount.replace(",", ".")) || 0;
+      const attachmentDataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (typeof reader.result === "string") resolve(reader.result);
+          else reject(new Error("Falha ao ler ficheiro"));
+        };
+        reader.onerror = () => reject(reader.error ?? new Error("Falha ao ler ficheiro"));
+        reader.readAsDataURL(file);
+      });
       // Canonical billing entity = consolidated LIST (grouped by list_name in payment_orders).
       const linked_list_names = Array.from(new Set(linkedListIds));
       const linked_user_ids = Array.from(
@@ -224,48 +195,44 @@ export default function ImportInvoiceDialog({
       const linked_payment_order_ids = Array.from(
         new Set(linkedLists.flatMap((l) => l.payment_order_ids))
       );
-      const insertPayload: any = {
-        invoice_number: extracted.invoice_number.trim(),
-        type: "incoming",
-        customer_name: extracted.customer_name || extracted.supplier_name || null,
-        issue_date: extracted.issue_date,
-        due_date: extracted.due_date || null,
-        total_amount: total,
-        notes: [
-          extracted.supplier_name ? `Fornecedor: ${extracted.supplier_name}` : null,
-          extracted.notes || null,
-        ].filter(Boolean).join("\n") || null,
-        status: "pending",
-        source: "imported",
-        metadata: {
-          linked_list_names,
-          linked_lists_meta,
-          linked_user_ids,
-          // expanded PO ids — required by status-propagation trigger
-          linked_payment_order_ids,
-          linked_payment_orders: linked_payment_order_ids, // legacy alias
-        },
-        ...(ctxWs.resolvedWorkspaceId ? { workspace_id: ctxWs.resolvedWorkspaceId } : {}),
-      };
-
-      const { data: inv, error: invErr } = await (supabase as any)
-        .from("billing_invoices").insert(insertPayload).select("id").single();
-      if (invErr) throw invErr;
-
-      const { error: attErr } = await supabase.from("billing_attachments").insert({
-        invoice_id: inv.id,
-        file_name: file.name,
-        storage_path: path,
-        mime_type: file.type,
-        size_bytes: file.size,
-        uploaded_by: uid,
-        ...(ctxWs.resolvedWorkspaceId ? { workspace_id: ctxWs.resolvedWorkspaceId } : {}),
+      await apiRequest("/billing/admin/ops/invoices/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspace_id: ctxWs.resolvedWorkspaceId ?? null,
+          invoice_number: extracted.invoice_number.trim(),
+          type: "incoming",
+          customer_name: extracted.customer_name || extracted.supplier_name || null,
+          issue_date: extracted.issue_date,
+          due_date: extracted.due_date || null,
+          total_amount: total,
+          paid_amount: 0,
+          notes: [
+            extracted.supplier_name ? `Fornecedor: ${extracted.supplier_name}` : null,
+            extracted.notes || null,
+          ].filter(Boolean).join("\n") || null,
+          status: "pending",
+          source: "imported",
+          metadata: {
+            linked_list_names,
+            linked_lists_meta,
+            linked_user_ids,
+            // expanded PO ids — required by status-propagation trigger
+            linked_payment_order_ids,
+            linked_payment_orders: linked_payment_order_ids,
+          },
+          attachment: {
+            file_name: file.name,
+            mime_type: file.type || null,
+            size_bytes: file.size,
+            data_url: attachmentDataUrl,
+          },
+        }),
       });
-      if (attErr) throw attErr;
     },
     onSuccess: () => {
       toast.success("Fatura importada");
-      qc.invalidateQueries({ queryKey: ["billing_invoices"] });
+      qc.invalidateQueries({ queryKey: ["ops-billing-invoices"] });
       reset();
       onOpenChange(false);
     },
@@ -570,7 +537,7 @@ function confDot(c?: "high" | "medium" | "low") {
   return <span className={cn("h-1.5 w-1.5 rounded-full inline-block", color)} title={`OCR: ${c}`} />;
 }
 
-function Field({ label, children, conf }: { label: string; children: React.ReactNode; conf?: "high" | "medium" | "low" }) {
+function Field({ label, children, conf }: { label: string; children: ReactNode; conf?: "high" | "medium" | "low" }) {
   return (
     <div>
       <Label className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">

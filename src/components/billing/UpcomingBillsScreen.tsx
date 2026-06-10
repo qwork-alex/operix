@@ -20,13 +20,25 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { getCurrentUserId } from "@/lib/authUser";
-import type { Database } from "@/integrations/supabase/types";
+import { apiRequest } from "@/lib/api";
 
-type Invoice = Database["public"]["Tables"]["billing_invoices"]["Row"];
-type Method = Database["public"]["Tables"]["billing_payment_methods"]["Row"];
+type Invoice = {
+  id: string;
+  invoice_number: string;
+  customer_name: string | null;
+  issue_date: string;
+  due_date: string | null;
+  total_amount: number;
+  paid_amount: number;
+  remaining_amount: number;
+  status: string;
+  notes?: string | null;
+};
+type Method = {
+  id: string;
+  name: string;
+};
 
 type Bucket = "today" | "next7" | "next30" | "overdue" | "paid";
 
@@ -73,25 +85,16 @@ export default function UpcomingBillsScreen() {
   const { data: invoices = [], isLoading } = useQuery({
     queryKey: ["billing-invoices-upcoming"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("billing_invoices")
-        .select("*")
-        .order("due_date", { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as Invoice[];
+      const data = await apiRequest<{ invoices: Invoice[] }>("/billing/admin/invoices");
+      return data.invoices ?? [];
     },
   });
 
   const { data: methods = [] } = useQuery({
     queryKey: ["billing-payment-methods-active"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("billing_payment_methods")
-        .select("*")
-        .eq("is_active", true)
-        .order("name");
-      if (error) throw error;
-      return (data ?? []) as Method[];
+      const data = await apiRequest<{ methods: Method[] }>("/billing/admin/payment-methods");
+      return data.methods ?? [];
     },
   });
 
@@ -139,29 +142,28 @@ export default function UpcomingBillsScreen() {
     }
     setPaying(true);
     try {
-      const uid = await getCurrentUserId();
-      const { error } = await supabase.from("billing_payments").insert({
-        invoice_id: payDialog.id,
-        amount: amt,
-        payment_method_id: payMethod || null,
-        payment_date: new Date().toISOString().slice(0, 10),
-        status: "confirmed",
-        created_by: uid,
+      await apiRequest("/billing/admin/payments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          invoice_id: payDialog.id,
+          amount: amt,
+          payment_method_id: payMethod || null,
+          payment_date: new Date().toISOString().slice(0, 10),
+          status: "confirmed",
+          reference: null,
+          notes: null,
+          account: null,
+          proof_path: null,
+          proof_name: null,
+        }),
       });
-      if (error) throw error;
-
-      await supabase.from("notifications").insert({
-        user_id: uid,
-        type: "success",
-        title: "Pagamento registrado",
-        message: `Fatura ${payDialog.invoice_number} • ${fmt(amt)}`,
-        entity_type: "billing_invoice",
-        entity_id: payDialog.id,
-      });
-
       toast({ title: "Pagamento registrado com sucesso" });
       setPayDialog(null);
       qc.invalidateQueries({ queryKey: ["billing-invoices-upcoming"] });
+      qc.invalidateQueries({ queryKey: ["admin-payments-ledger"] });
+      qc.invalidateQueries({ queryKey: ["platform-payments"] });
+      qc.invalidateQueries({ queryKey: ["platform-invoices"] });
     } catch (e: any) {
       toast({ title: "Erro ao registrar pagamento", description: e.message, variant: "destructive" });
     } finally {
@@ -171,23 +173,19 @@ export default function UpcomingBillsScreen() {
 
   const remindAll = async () => {
     try {
-      const uid = await getCurrentUserId();
       const targets = grouped.overdue.concat(grouped.today);
       if (!targets.length) {
         toast({ title: "Nenhuma fatura crítica", description: "Sem vencimentos urgentes." });
         return;
       }
-      const rows = targets.map((i) => ({
-        user_id: uid,
-        type: "warning",
-        title: i.status === "overdue" || (daysUntil(i.due_date) ?? 0) < 0 ? "Fatura vencida" : "Fatura vence hoje",
-        message: `${i.invoice_number} — ${fmt(Number(i.remaining_amount ?? i.total_amount ?? 0))}`,
-        entity_type: "billing_invoice",
-        entity_id: i.id,
-      }));
-      const { error } = await supabase.from("notifications").insert(rows);
-      if (error) throw error;
-      toast({ title: `${rows.length} alertas enviados` });
+      const data = await apiRequest<{ sent: number }>("/billing/admin/invoices/remind-critical", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          invoice_ids: targets.map((invoice) => invoice.id),
+        }),
+      });
+      toast({ title: `${data.sent ?? targets.length} alertas enviados` });
     } catch (e: any) {
       toast({ title: "Erro ao notificar", description: e.message, variant: "destructive" });
     }

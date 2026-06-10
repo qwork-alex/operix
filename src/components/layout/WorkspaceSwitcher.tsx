@@ -13,11 +13,8 @@
  * UI is intentionally minimal: ICON + NAME only. No "Proprietário",
  * "Global", "Próprio", "Convidado" badges. No descriptive footers.
  */
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo, type ReactNode } from "react";
 import { Check, ChevronDown, Crown, ShieldCheck, Loader2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { useTenant } from "@/contexts/TenantContext";
 import {
@@ -29,45 +26,17 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-interface MembershipRow {
-  workspace_id: string;
-  role: string;
-  workspaces: { id: string; name: string } | null;
-}
-
 export function WorkspaceSwitcher() {
-  const { user } = useAuth();
-  const { workspaceId, workspaceName, switchWorkspace } = useWorkspace();
+  const { workspaceId, workspaceName, switchWorkspace, availableWorkspaces, isLoading } = useWorkspace();
   const { isPlatformOwner } = useTenant();
-
-  const { data: memberships = [], isLoading } = useQuery({
-    queryKey: ["context-memberships", user?.id],
-    enabled: !!user?.id,
-    staleTime: 60_000,
-    queryFn: async (): Promise<MembershipRow[]> => {
-      const { data: appUser } = await supabase
-        .from("app_users")
-        .select("id")
-        .eq("auth_user_id", user!.id)
-        .maybeSingle();
-      if (!appUser) return [];
-      const { data, error } = await supabase
-        .from("memberships")
-        .select("workspace_id, role, workspaces(id, name)")
-        .eq("user_id", appUser.id)
-        .eq("status", "active");
-      if (error) throw error;
-      return (data || []) as any;
-    },
-  });
 
   const items = useMemo(
     () =>
-      memberships
-        .filter((m) => !!m.workspaces)
-        .map((m) => ({ id: m.workspace_id, name: m.workspaces!.name || "—" }))
+      availableWorkspaces
+        .filter((m) => m.membershipStatus === "active")
+        .map((m) => ({ id: m.id, name: m.name || "—" }))
         .sort((a, b) => a.name.localeCompare(b.name)),
-    [memberships],
+    [availableWorkspaces],
   );
 
   // ── 👑 QWork Nexus — GLOBAL IDENTITY pill (always rendered for owner) ──
@@ -82,7 +51,7 @@ export function WorkspaceSwitcher() {
   ) : null;
 
   // ── 🛡️ Operational workspace selector ──
-  let WorkspaceControl: React.ReactNode = null;
+  let WorkspaceControl: ReactNode = null;
 
   if (isLoading) {
     WorkspaceControl = (

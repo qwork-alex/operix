@@ -20,8 +20,7 @@ import { toast } from "sonner";
 import { PaymentListsSelector } from "@/components/billing/PaymentListsSelector";
 import type { BillingPaymentList } from "@/hooks/usePaymentListsConsolidated";
 import { BrandLogo } from "@/components/BrandLogo";
-
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -383,52 +382,39 @@ export default function InvoicesScreen() {
 
   // ── data
   const invoicesQ = useQuery({
-    queryKey: ["billing_invoices"],
+    queryKey: ["ops-billing-invoices"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("billing_invoices")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
+      const data = await apiRequest<{ invoices: Invoice[] }>("/billing/admin/ops/invoices");
       const today = new Date().toISOString().slice(0, 10);
       // Auto-derive overdue: pending/partial invoices whose due_date has passed
-      return (data ?? []).map((r: any) => {
+      return (data.invoices ?? []).map((r: Invoice) => {
         if ((r.status === "pending" || r.status === "partial") && r.due_date && r.due_date < today) {
           return { ...r, status: "overdue" };
         }
         return r;
-      }) as unknown as Invoice[];
+      });
     },
   });
 
   const suppliersQ = useQuery({
-    queryKey: ["billing_suppliers_lite"],
+    queryKey: ["ops-billing-suppliers-lite"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("billing_suppliers")
-        .select("id,name")
-        .order("name");
-      if (error) throw error;
-      return (data ?? []) as Supplier[];
+      const data = await apiRequest<{ suppliers: Supplier[] }>("/billing/admin/ops/suppliers");
+      return data.suppliers ?? [];
     },
   });
 
   const clientsQ = useQuery({
-    queryKey: ["billing_clients_lite_for_invoices"],
+    queryKey: ["ops-billing-clients-lite-for-invoices"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("billing_clients")
-        .select("id,name,kind,tax_id,siren,siret,tva_intracom,email,phone,address,address_complement,postal_code,city,country,iban,bic")
-        .eq("is_active", true)
-        .order("name");
-      if (error) throw error;
-      const list = (data ?? []) as any[];
+      const data = await apiRequest<{ clients: Client[] }>("/billing/admin/ops/clients");
+      const list = data.clients ?? [];
       // Normalize legacy shape
       return list.map((c) => ({
         ...c,
         contact_email: c.email,
         contact_phone: c.phone,
-      })) as Client[];
+      }));
     },
   });
 
@@ -485,16 +471,22 @@ export default function InvoicesScreen() {
     mutationFn: async (payload: Partial<Invoice> & { id?: string }) => {
       const { id, ...rest } = payload;
       if (id) {
-        const { error } = await supabase.from("billing_invoices").update(rest).eq("id", id);
-        if (error) throw error;
+        await apiRequest(`/billing/admin/ops/invoices/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(rest),
+        });
         return id;
       }
-      const { data, error } = await supabase.from("billing_invoices").insert(rest as any).select("id").single();
-      if (error) throw error;
-      return data!.id as string;
+      const data = await apiRequest<{ invoice: Invoice }>("/billing/admin/ops/invoices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(rest),
+      });
+      return data.invoice.id;
     },
     onSuccess: (_id, vars) => {
-      qc.invalidateQueries({ queryKey: ["billing_invoices"] });
+      qc.invalidateQueries({ queryKey: ["ops-billing-invoices"] });
       toast.success(vars.id ? "Fatura atualizada" : "Fatura criada");
       setFormOpen(false);
       setEditing(null);
@@ -507,11 +499,12 @@ export default function InvoicesScreen() {
 
   const deleteMut = useMutation({
     mutationFn: async (ids: string[]) => {
-      const { error } = await supabase.from("billing_invoices").delete().in("id", ids);
-      if (error) throw error;
+      await Promise.all(ids.map((id) => apiRequest(`/billing/admin/ops/invoices/${id}`, {
+        method: "DELETE",
+      })));
     },
     onSuccess: (_, ids) => {
-      qc.invalidateQueries({ queryKey: ["billing_invoices"] });
+      qc.invalidateQueries({ queryKey: ["ops-billing-invoices"] });
       toast.success(`${ids.length} fatura(s) eliminada(s)`);
       setSelected(new Set());
       setConfirmDelete(null);
@@ -1954,17 +1947,12 @@ function DetailContent({
   onSend: () => void;
 }) {
   const auditQ = useQuery({
-    queryKey: ["invoice_audit", invoice.id],
+    queryKey: ["ops-invoice-audit", invoice.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("backend_event_logs")
-        .select("id,action,created_at,payload,actor_user_id")
-        .eq("table_name", "billing_invoices")
-        .eq("row_id", invoice.id)
-        .order("created_at", { ascending: false })
-        .limit(50);
-      if (error) throw error;
-      return data ?? [];
+      const data = await apiRequest<{ logs: Array<{ id: string; action: string; created_at: string; payload: any; actor_user_id: string | null }> }>(
+        `/billing/admin/ops/invoices/${invoice.id}/audit`,
+      );
+      return data.logs ?? [];
     },
   });
 

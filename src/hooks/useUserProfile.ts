@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 import { useAuth } from "./useAuth";
 import { toast } from "sonner";
 
@@ -22,24 +22,21 @@ export function useUserProfile() {
     enabled: !!user?.id,
     queryFn: async (): Promise<UserProfile | null> => {
       if (!user?.id) return null;
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, full_name, email, phone, address, avatar_url, display_code")
-        .eq("id", user.id)
-        .maybeSingle();
-      if (error) throw error;
-      return (data as UserProfile) ?? null;
+      const data = await apiRequest<{ profile: UserProfile | null }>("/account/profile");
+      return data.profile ?? null;
     },
   });
 
   const save = useMutation({
     mutationFn: async (patch: Partial<Omit<UserProfile, "id" | "email">>) => {
       if (!user?.id) throw new Error("Not authenticated");
-      const { error } = await (supabase as any)
-        .from("profiles")
-        .update({ ...patch, updated_at: new Date().toISOString() })
-        .eq("id", user.id);
-      if (error) throw error;
+      await apiRequest("/account/profile", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(patch),
+      });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["user-profile"] });

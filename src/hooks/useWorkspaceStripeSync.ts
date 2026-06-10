@@ -8,9 +8,7 @@
  *   "pending"       — workspace row exists but no Stripe ids yet
  *   "unavailable"   — no workspace row / not loaded
  */
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { useWorkspace } from "./useWorkspace";
+import { useWorkspaceBillingContext } from "./useWorkspaceBillingContext";
 
 export type StripeSyncState = "synced" | "customer_only" | "pending" | "unavailable";
 
@@ -24,47 +22,17 @@ export interface WorkspaceStripeLink {
 }
 
 export function useWorkspaceStripeSync() {
-  const { workspaceId } = useWorkspace();
-  return useQuery({
-    queryKey: ["workspace-stripe-sync", workspaceId],
-    enabled: !!workspaceId,
-    staleTime: 60_000,
-    queryFn: async (): Promise<WorkspaceStripeLink> => {
-      const { data, error } = await supabase
-        .from("workspace_subscriptions")
-        .select(
-          "stripe_subscription_id, stripe_customer_id, stripe_price_lookup_key, stripe_environment, last_recalculated_at",
-        )
-        .eq("workspace_id", workspaceId!)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+  const billingContext = useWorkspaceBillingContext();
 
-      if (error || !data) {
-        return {
-          state: "unavailable",
-          stripe_subscription_id: null,
-          stripe_customer_id: null,
-          stripe_price_lookup_key: null,
-          stripe_environment: null,
-          last_recalculated_at: null,
-        };
-      }
-
-      const state: StripeSyncState = data.stripe_subscription_id
-        ? "synced"
-        : data.stripe_customer_id
-          ? "customer_only"
-          : "pending";
-
-      return {
-        state,
-        stripe_subscription_id: data.stripe_subscription_id,
-        stripe_customer_id: data.stripe_customer_id,
-        stripe_price_lookup_key: data.stripe_price_lookup_key,
-        stripe_environment: data.stripe_environment,
-        last_recalculated_at: data.last_recalculated_at,
-      };
+  return {
+    ...billingContext,
+    data: billingContext.data?.stripe ?? {
+      state: "unavailable" as StripeSyncState,
+      stripe_subscription_id: null,
+      stripe_customer_id: null,
+      stripe_price_lookup_key: null,
+      stripe_environment: null,
+      last_recalculated_at: null,
     },
-  });
+  };
 }

@@ -1,3 +1,4 @@
+import { getCurrentUserId } from "@/lib/authUser";
 import { supabase } from "@/integrations/supabase/client";
 
 /**
@@ -10,8 +11,12 @@ import { supabase } from "@/integrations/supabase/client";
  * auth user id (assigned_user_id), no longer a technicians.id.
  */
 export async function resolveTechnicianIdForFinancialRecord(): Promise<string> {
-  const { data: auth } = await supabase.auth.getUser();
-  if (auth?.user?.id) return auth.user.id;
+  try {
+    return await getCurrentUserId();
+  } catch {
+    // Fall back to the legacy Supabase-backed lookup while the finance module
+    // is still being migrated.
+  }
 
   const { data: first, error } = await supabase
     .from("user_roles")

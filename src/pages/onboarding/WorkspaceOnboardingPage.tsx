@@ -12,7 +12,7 @@ import {
   Loader2, ShieldCheck, RefreshCcw, Rocket,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 import { toast } from "sonner";
 import { StripeEmbeddedCheckout } from "@/components/billing/StripeEmbeddedCheckout";
 import {
@@ -77,6 +77,17 @@ export default function WorkspaceOnboardingPage() {
     if (user?.email && !billingEmail) setBillingEmail(user.email);
   }, [user?.email, billingEmail]);
 
+  useEffect(() => {
+    try {
+      const pendingWorkspaceName = localStorage.getItem("pending_workspace_name");
+      if (pendingWorkspaceName && !workspaceName) {
+        setWorkspaceName(pendingWorkspaceName);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [workspaceName]);
+
   // ── Hydrate from localStorage (recovery)
   useEffect(() => {
     if (!user || hydrated.current) return;
@@ -119,7 +130,7 @@ export default function WorkspaceOnboardingPage() {
   const stageIdx = STAGES.findIndex((s) => s.id === stage);
   const progressPct = Math.round(((stageIdx + 1) / STAGES.length) * 100);
 
-  // ── Handle Stripe return → advance to initialization & poll
+  // ── Handle Stripe return → legacy flow kept for compatibility
   useEffect(() => {
     const sid = params.get("session_id");
     if (sid && stage === "payment") {
@@ -131,38 +142,17 @@ export default function WorkspaceOnboardingPage() {
     }
   }, [params, stage, setParams]);
 
-  // ── Poll workspace_subscriptions while initializing
   useEffect(() => {
-    if (stage !== "initializing" || !workspaceId) return;
-    let cancelled = false;
-    let attempts = 0;
-    const tick = async () => {
-      attempts += 1;
-      const { data } = await supabase
-        .from("workspace_subscriptions")
-        .select("status")
-        .eq("workspace_id", workspaceId)
-        .maybeSingle();
-      const ok = data?.status && ["active", "trialing", "past_due"].includes(data.status);
-      if (cancelled) return;
-      if (ok) {
-        setStage("ready");
-        return;
-      }
-      if (attempts >= 15) {
-        setStage("ready"); // allow user to proceed; webhook may still be flushing
-        return;
-      }
-      setTimeout(tick, 2000);
-    };
-    void tick();
-    return () => { cancelled = true; };
-  }, [stage, workspaceId]);
+    if (stage !== "initializing") return;
+    const timer = window.setTimeout(() => setStage("ready"), 1200);
+    return () => window.clearTimeout(timer);
+  }, [stage]);
 
   // ── Clear persisted state once truly done
   useEffect(() => {
     if (stage === "ready" && user) {
       try { localStorage.removeItem(STORAGE_KEY(user.id)); } catch { /* ignore */ }
+      try { localStorage.removeItem("pending_workspace_name"); } catch { /* ignore */ }
     }
   }, [stage, user]);
 
@@ -173,43 +163,32 @@ export default function WorkspaceOnboardingPage() {
     if (!user) return;
     setBusy(true);
     try {
-      // Re-use the existing workspace if recovering
-      let wsId = workspaceId;
-      if (!wsId) {
-        const { data: app } = await supabase
-          .from("app_users")
-          .select("id")
-          .eq("auth_user_id", user.id)
-          .maybeSingle();
-        if (!app?.id) throw new Error("Conta de utilizador não encontrada");
-
-        const { data: ws, error: wErr } = await supabase
-          .from("workspaces")
-          .insert({ name: workspaceName.trim(), owner_user_id: app.id })
-          .select("id")
-          .single();
-        if (wErr) throw wErr;
-        wsId = ws.id as string;
-        setWorkspaceId(wsId);
-      }
-
-      // Upsert billing profile (legal data)
-      const { error: bErr } = await supabase
-        .from("billing_profiles")
-        .upsert({
-          workspace_id: wsId,
-          legal_name: legalName.trim(),
-          billing_email: billingEmail.trim(),
-          vat_number: vatNumber.trim() || null,
+      const data = await apiRequest<{
+        workspace: {
+          id: string;
+          name: string;
+        };
+      }>("/workspaces", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: workspaceName.trim(),
+          legalName: legalName.trim(),
+          billingEmail: billingEmail.trim(),
+          vatNumber: vatNumber.trim() || null,
           country,
-          is_business: true,
-        }, { onConflict: "workspace_id" });
-      if (bErr) throw bErr;
+        }),
+      });
 
-      setStage("payment");
+      setWorkspaceId(data.workspace.id);
+      try { localStorage.setItem("selected_workspace_id", data.workspace.id); } catch { /* ignore */ }
+      toast.success("Workspace created successfully.");
+      setStage("ready");
     } catch (e: any) {
       console.error("[onboarding] create workspace", e);
-      toast.error(e?.message || "Não foi possível criar a workspace");
+      toast.error(e?.message || "Could not create the workspace");
     } finally {
       setBusy(false);
     }
@@ -452,7 +431,7 @@ export default function WorkspaceOnboardingPage() {
             <div className="flex justify-between">
               <Button variant="ghost" onClick={() => goTo("company")}>Voltar</Button>
               <Button disabled={!selectedTier || busy} onClick={createWorkspaceAndPersistCompany}>
-                {busy ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> A preparar…</> : <>Avançar para pagamento <ArrowRight className="ml-2 h-4 w-4" /></>}
+                {busy ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating…</> : <>Create workspace <ArrowRight className="ml-2 h-4 w-4" /></>}
               </Button>
             </div>
           </Card>

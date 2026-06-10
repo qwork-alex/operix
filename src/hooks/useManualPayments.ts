@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 import { useWorkspace } from "./useWorkspace";
 
 export interface ManualTransfer {
@@ -14,6 +14,7 @@ export interface ManualTransfer {
   payment_method: string | null;
   transfer_date: string | null;
   proof_path: string | null;
+  proof_name?: string | null;
   notes: string | null;
   reviewer_notes: string | null;
   declared_at: string;
@@ -30,7 +31,7 @@ export interface PlatformBankAccount {
   country: string;
   account_type: string;
   is_primary: boolean;
-  supported_methods: string[];
+  supported_methods?: string[];
   active: boolean;
 }
 
@@ -58,13 +59,9 @@ export function useBankAccounts(vatMode?: string | null) {
     queryKey: ["platform-bank-accounts-public", vatMode ?? null],
     staleTime: 60_000,
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("platform_bank_accounts")
-        .select("*")
-        .eq("active", true)
-        .order("is_primary", { ascending: false });
-      if (error) throw error;
-      const rows = (data ?? []) as PlatformBankAccount[];
+      const qs = vatMode ? `?vatMode=${encodeURIComponent(vatMode)}` : "";
+      const data = await apiRequest<{ accounts: PlatformBankAccount[] }>(`/billing/platform-bank-accounts${qs}`);
+      const rows = data.accounts ?? [];
       // Routing: no_vat → wise personal; with_vat / reverse_charge → business
       if (vatMode === "no_vat") {
         const personal = rows.filter((r) => r.account_type === "personal");
@@ -87,15 +84,11 @@ export function useWorkspaceManualTransfers(invoiceId?: string) {
     enabled: !!workspaceId,
     staleTime: 15_000,
     queryFn: async () => {
-      let q = (supabase as any)
-        .from("manual_bank_transfers")
-        .select("*")
-        .eq("workspace_id", workspaceId!)
-        .order("declared_at", { ascending: false });
-      if (invoiceId) q = q.eq("invoice_id", invoiceId);
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data ?? []) as ManualTransfer[];
+      const qs = invoiceId ? `?invoiceId=${encodeURIComponent(invoiceId)}` : "";
+      const data = await apiRequest<{ transfers: ManualTransfer[] }>(
+        `/billing/workspaces/${workspaceId}/manual-transfers${qs}`,
+      );
+      return data.transfers ?? [];
     },
   });
 }
@@ -106,13 +99,8 @@ export function useAdminPendingTransfers() {
     queryKey: ["manual-transfers-admin-pending"],
     staleTime: 10_000,
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("manual_bank_transfers")
-        .select("*, workspaces(name), platform_invoices(invoice_number, total)")
-        .in("status", ["awaiting_transfer", "pending_manual_review"])
-        .order("declared_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as any[];
+      const data = await apiRequest<{ transfers: any[] }>("/billing/admin/manual-transfers/pending");
+      return data.transfers ?? [];
     },
   });
 }
@@ -129,22 +117,19 @@ export function useSubmitManualTransfer() {
       bank_account_id: string | null;
       transfer_date: string | null;
       proof_path: string | null;
+      proof_name?: string | null;
       notes: string | null;
     }) => {
       if (!workspaceId) throw new Error("workspace not loaded");
-      const { data, error } = await (supabase as any).rpc("submit_manual_transfer", {
-        _workspace_id: workspaceId,
-        _invoice_id: input.invoice_id,
-        _amount: input.amount,
-        _currency: input.currency,
-        _payment_method: input.payment_method,
-        _bank_account_id: input.bank_account_id,
-        _transfer_date: input.transfer_date,
-        _proof_path: input.proof_path,
-        _notes: input.notes,
-      });
-      if (error) throw error;
-      return data as string;
+      const data = await apiRequest<{ transfer: ManualTransfer }>(
+        `/billing/workspaces/${workspaceId}/manual-transfers`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(input),
+        },
+      );
+      return data.transfer.id;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["manual-transfers"] });
@@ -157,11 +142,11 @@ export function useApproveManualTransfer() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, notes }: { id: string; notes?: string }) => {
-      const { error } = await (supabase as any).rpc("approve_manual_transfer", {
-        _transfer_id: id,
-        _notes: notes ?? null,
+      await apiRequest(`/billing/admin/manual-transfers/${id}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes: notes ?? null }),
       });
-      if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["manual-transfers-admin-pending"] });
@@ -176,11 +161,11 @@ export function useRejectManualTransfer() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, reason }: { id: string; reason?: string }) => {
-      const { error } = await (supabase as any).rpc("reject_manual_transfer", {
-        _transfer_id: id,
-        _reason: reason ?? null,
+      await apiRequest(`/billing/admin/manual-transfers/${id}/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes: reason ?? null }),
       });
-      if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["manual-transfers-admin-pending"] });
@@ -189,22 +174,26 @@ export function useRejectManualTransfer() {
   });
 }
 
-/** Upload a proof file under {workspace_id}/{invoice_id|misc}/timestamp-name. Returns the storage path. */
-export async function uploadPaymentProof(workspaceId: string, invoiceId: string | null, file: File): Promise<string> {
-  const ts = Date.now();
-  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const path = `${workspaceId}/${invoiceId ?? "misc"}/${ts}-${safeName}`;
-  const { error } = await supabase.storage.from("payment-proofs").upload(path, file, {
-    cacheControl: "3600",
-    upsert: false,
-    contentType: file.type || "application/octet-stream",
+/**
+ * Transitional proof handling without Supabase Storage.
+ * Files are serialized client-side into data URLs and stored with the transfer.
+ */
+export async function uploadPaymentProof(_workspaceId: string, _invoiceId: string | null, file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+      } else {
+        reject(new Error("Falha ao ler o ficheiro"));
+      }
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Falha ao ler o ficheiro"));
+    reader.readAsDataURL(file);
   });
-  if (error) throw error;
-  return path;
 }
 
 export async function signedProofUrl(path: string, expiresIn = 3600): Promise<string | null> {
-  const { data, error } = await supabase.storage.from("payment-proofs").createSignedUrl(path, expiresIn);
-  if (error) return null;
-  return data?.signedUrl ?? null;
+  void expiresIn;
+  return path || null;
 }

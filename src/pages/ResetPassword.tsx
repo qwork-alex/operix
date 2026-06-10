@@ -1,11 +1,10 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, Eye, EyeOff, ShieldCheck, KeyRound } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import { BrandLogo } from "@/components/BrandLogo";
 import { brandConfig } from "@/brand.config";
 import { PasswordStrength, isPasswordStrong } from "@/components/auth/PasswordStrength";
@@ -31,14 +30,14 @@ function withResetTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
 
 export default function ResetPassword() {
   const navigate = useNavigate();
-  const { session, loading: authLoading } = useAuth();
+  const { session, loading: authLoading, changePassword } = useAuth();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [show, setShow] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const ready = !authLoading && !!session;
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!isPasswordStrong(password)) {
       toast.error("A senha não cumpre os requisitos mínimos.");
@@ -50,13 +49,12 @@ export default function ResetPassword() {
     }
     setSubmitting(true);
     try {
-      const { error } = await withResetTimeout<Awaited<ReturnType<typeof supabase.auth.updateUser>>>(supabase.auth.updateUser({ password }), "updateUser");
+      const { error } = await withResetTimeout<{ error: Error | null }>(changePassword(password), "changePassword");
       if (error) {
         toast.error(error.message);
         return;
       }
       toast.success("Senha alterada com sucesso");
-      await withResetTimeout(supabase.auth.signOut(), "signOut");
       navigate("/auth", { replace: true });
     } catch (err) {
       toast.error((err as Error).message || "Falha ao alterar senha.");
@@ -82,7 +80,7 @@ export default function ResetPassword() {
 
           {!ready && (
             <div className="text-xs text-muted-foreground flex items-center gap-2">
-              <Loader2 className="h-3 w-3 animate-spin" /> A validar link de recuperação…
+              <Loader2 className="h-3 w-3 animate-spin" /> Faça login para alterar sua senha na nova API.
             </div>
           )}
 

@@ -9,7 +9,7 @@
  * or `*_subscriptions` directly. This keeps Stripe/RPC details out of components
  * and gives us one place to swap providers later.
  */
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 
 export type PlanKind = "workspace" | "technician";
 export type BillingCycle = "monthly" | "yearly";
@@ -52,10 +52,11 @@ export function buildLookupKey(planCode: string, cycle: BillingCycle): string {
 
 /** List the active workspace tiers (server-validated). */
 export async function fetchWorkspaceTiers(): Promise<WorkspaceTier[]> {
-  const { data, error } = await supabase.rpc("list_workspace_tiers" as any);
-  if (error) {
+  try {
+    const data = await apiRequest<{ tiers: WorkspaceTier[] }>("/billing/workspace-tiers");
+    return data.tiers ?? [];
+  } catch (error) {
     console.error("[billing] fetchWorkspaceTiers", error);
     return [];
   }
-  return (data as WorkspaceTier[]) ?? [];
 }

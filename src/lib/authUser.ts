@@ -1,18 +1,9 @@
-import { supabase } from "@/integrations/supabase/client";
-import type { User } from "@supabase/supabase-js";
+import { readStoredAuthSession, type AuthUser } from "@/lib/authSession";
 
-export async function getCurrentUser(): Promise<User | null> {
-  const { data, error } = await supabase.auth.getUser();
-  if (error) console.error("[Auth] getUser error:", error);
-  if (data.user?.id) {
-    console.log("CURRENT AUTH USER:", data.user.id);
-    return data.user;
-  }
-
-  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-  if (sessionError) console.error("[Auth] getSession fallback error:", sessionError);
-  console.log("CURRENT AUTH USER:", sessionData.session?.user?.id ?? null);
-  return sessionData.session?.user ?? null;
+export async function getCurrentUser(): Promise<AuthUser | null> {
+  const session = readStoredAuthSession();
+  console.log("CURRENT AUTH USER:", session?.user?.id ?? null);
+  return session?.user ?? null;
 }
 
 export async function getCurrentUserId(): Promise<string> {

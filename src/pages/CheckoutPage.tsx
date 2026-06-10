@@ -18,13 +18,40 @@ import {
   useDeclareManualTransfer,
 } from "@/hooks/useBilling";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { StripeEmbeddedCheckout } from "@/components/billing/StripeEmbeddedCheckout";
 import { isStripeConfigured } from "@/lib/stripe";
+import { apiRequest } from "@/lib/api";
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+
+type BankAccount = {
+  id: string;
+  bank_name: string;
+  account_name: string;
+  iban: string | null;
+  bic: string | null;
+  country: string;
+  currency: string;
+  account_type: string;
+  is_primary: boolean;
+  active: boolean;
+};
+
+type InvoicePreview = {
+  id?: string;
+  invoice_id?: string;
+  invoice_number?: string;
+  issued_at?: string;
+  due_date?: string;
+  subtotal?: number;
+  vat_amount?: number;
+  total?: number;
+  currency?: string;
+  vat_exemption?: string | null;
+  items?: Array<{ description: string; quantity: number; unit_price: number; total: number }>;
+};
 
 const STEP_LABELS: Record<Step, string> = {
   1: "Plano",
@@ -87,9 +114,9 @@ export default function CheckoutPage() {
   const [pmDetails, setPmDetails] = useState({ holder_name: "", last4: "", iban_masked: "", brand: "Visa" });
 
   const [vatInfo, setVatInfo] = useState<{ rate: number; reverse: boolean; exemption: string | null } | null>(null);
-  const [bankAccounts, setBankAccounts] = useState<any[]>([]);
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [selectedBankId, setSelectedBankId] = useState<string | null>(null);
-  const [invoice, setInvoice] = useState<any>(null);
+  const [invoice, setInvoice] = useState<InvoicePreview | null>(null);
 
   // Guard against double-submission across the whole activation chain
   const [activating, setActivating] = useState(false);
@@ -101,10 +128,25 @@ export default function CheckoutPage() {
 
   // Load bank accounts and route by VAT mode
   useEffect(() => {
-    supabase.from("platform_bank_accounts").select("*").eq("active", true).then(({ data }) => {
-      setBankAccounts(data ?? []);
-    });
-  }, []);
+    let mounted = true;
+    void apiRequest<{ accounts: BankAccount[] }>(
+      `/billing/platform-bank-accounts?vatMode=${encodeURIComponent(vatMode)}`,
+    )
+      .then((data) => {
+        if (mounted) {
+          setBankAccounts(data.accounts ?? []);
+        }
+      })
+      .catch((error) => {
+        console.error("[checkout] bank accounts", error);
+        if (mounted) {
+          setBankAccounts([]);
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [vatMode]);
 
   const routedBanks = useMemo(() => {
     const filtered = bankAccounts.filter((b) =>
@@ -136,54 +178,75 @@ export default function CheckoutPage() {
   const total = Math.round((subtotal + vatAmount) * 100) / 100;
 
   async function calcVat() {
-    const { data, error } = await supabase.rpc("calculate_vat", {
-      _country: form.country,
-      _is_business: vatMode === "business",
-      _vat_number: form.vat_number || null,
-    });
-    if (error) {
+    try {
+      const data = await apiRequest<{ rate: number; reverse_charge: boolean; exemption: string | null }>(
+        "/billing/vat/calculate",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            country: form.country,
+            is_business: vatMode === "business",
+            vat_number: form.vat_number || null,
+          }),
+        },
+      );
+      setVatInfo({
+        rate: Number(data.rate ?? 0),
+        reverse: !!data.reverse_charge,
+        exemption: data.exemption ?? null,
+      });
+    } catch {
       toast.error("Erro ao calcular IVA");
-      return;
     }
-    const v = (data ?? {}) as any;
-    setVatInfo({
-      rate: Number(v.rate ?? 0),
-      reverse: !!v.reverse_charge,
-      exemption: v.exemption ?? null,
-    });
   }
 
   async function generateInvoice() {
-    const { data, error } = await supabase.rpc("generate_platform_invoice", {
-      _workspace_id: workspaceId!,
-      _plan_code: plan,
-      _cycle: cycle,
-      _vat_mode: vatMode,
-      _bank_account_id: selectedBankId,
-      _amount: computePrice(techCount, "monthly"),
-    });
-    if (error) {
-      toast.error(error.message || "Falha ao gerar fatura");
+    try {
+      const data = await apiRequest<{ invoice: InvoicePreview }>(
+        `/billing/workspaces/${workspaceId}/invoices/preview`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            invoice_id: invoice?.id ?? invoice?.invoice_id ?? null,
+            plan_code: plan,
+            cycle,
+            vat_mode: vatMode,
+            bank_account_id: selectedBankId,
+            amount: computePrice(techCount, "monthly"),
+            vat_rate: vatInfo?.rate ?? 0,
+            vat_exemption: vatInfo?.exemption ?? null,
+            legal_name: form.legal_name,
+            billing_email: form.billing_email,
+            country: form.country,
+            vat_number: form.vat_number || null,
+          }),
+        },
+      );
+      setInvoice(data.invoice);
+      return data.invoice;
+    } catch (error: any) {
+      toast.error(error?.message || "Falha ao gerar fatura");
       return null;
     }
-    setInvoice(data);
-    return data;
   }
 
   async function activate() {
     if (activating || activated) return;
     setActivating(true);
     try {
-      const { error } = await supabase.rpc("activate_workspace_subscription", {
-        _workspace_id: workspaceId!,
-        _plan_code: plan,
-        _cycle: cycle,
+      await apiRequest(`/billing/workspaces/${workspaceId}/activate-subscription`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan_code: plan,
+          cycle,
+        }),
       });
-      if (error) throw error;
       setActivated(true);
-      qc.invalidateQueries({ queryKey: ["workspace-subscription"] });
+      qc.invalidateQueries({ queryKey: ["workspace-billing-context"] });
       qc.invalidateQueries({ queryKey: ["subscription-events"] });
-      qc.invalidateQueries({ queryKey: ["workspace-access"] });
     } catch (e: any) {
       toast.error(e.message || "Falha ao ativar");
       throw e;
@@ -239,7 +302,7 @@ export default function CheckoutPage() {
         if (payKind === "manual_transfer") {
           await declareManual.mutateAsync({
             amount: total,
-            invoice_id: invoice?.invoice_id,
+            invoice_id: invoice?.id ?? invoice?.invoice_id,
             bank_account_id: selectedBankId ?? undefined,
           });
         }

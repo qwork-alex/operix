@@ -32,19 +32,50 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { getCurrentUserId } from "@/lib/authUser";
-import type { Database } from "@/integrations/supabase/types";
+import { apiRequest } from "@/lib/api";
 
-type PaymentStatus = Database["public"]["Enums"]["billing_payment_status"];
-type Payment = Database["public"]["Tables"]["billing_payments"]["Row"];
-type Method = Database["public"]["Tables"]["billing_payment_methods"]["Row"];
-type Invoice = Pick<
-  Database["public"]["Tables"]["billing_invoices"]["Row"],
-  "id" | "invoice_number" | "customer_name" | "total_amount" | "paid_amount" | "remaining_amount" | "status"
->;
-type Attachment = Database["public"]["Tables"]["billing_attachments"]["Row"];
+type PaymentStatus = "pending" | "confirmed" | "failed" | "refunded";
+type Attachment = {
+  id: string;
+  file_name: string;
+  mime_type: string | null;
+  size_bytes: number | null;
+  signed_url: string | null;
+};
+type Payment = {
+  id: string;
+  workspace_id: string;
+  workspace_name: string | null;
+  payment_method_id: string | null;
+  amount: number;
+  currency: string;
+  status: PaymentStatus;
+  reference: string | null;
+  invoice_id: string | null;
+  invoice_number: string | null;
+  customer_name: string | null;
+  payment_date: string;
+  notes: string | null;
+  account: string | null;
+  proof_path: string | null;
+  proof_name: string | null;
+  attachments: Attachment[];
+  created_at: string;
+};
+type Method = {
+  id: string;
+  name: string;
+};
+type Invoice = {
+  id: string;
+  invoice_number: string;
+  customer_name: string | null;
+  total_amount: number;
+  paid_amount: number;
+  remaining_amount: number;
+  status: string;
+};
 
 const STATUS_STYLES: Record<PaymentStatus, string> = {
   pending: "bg-amber-500/10 text-amber-400 border-amber-500/30",
@@ -119,52 +150,26 @@ export default function PaymentsScreen() {
 
   // Queries
   const { data: payments = [], isLoading } = useQuery({
-    queryKey: ["billing_payments"],
+    queryKey: ["admin-payments-ledger"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("billing_payments")
-        .select("*")
-        .order("payment_date", { ascending: false })
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
+      const data = await apiRequest<{ payments: Payment[] }>("/billing/admin/payments");
+      return data.payments ?? [];
     },
   });
 
   const { data: methods = [] } = useQuery({
-    queryKey: ["billing_payment_methods"],
+    queryKey: ["admin-payment-methods"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("billing_payment_methods")
-        .select("*")
-        .eq("is_active", true)
-        .order("name");
-      if (error) throw error;
-      return data ?? [];
+      const data = await apiRequest<{ methods: Method[] }>("/billing/admin/payment-methods");
+      return data.methods ?? [];
     },
   });
 
   const { data: invoices = [] } = useQuery({
-    queryKey: ["billing_invoices_for_payments"],
+    queryKey: ["admin-invoices-for-payments"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("billing_invoices")
-        .select("id, invoice_number, customer_name, total_amount, paid_amount, remaining_amount, status")
-        .order("issue_date", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as Invoice[];
-    },
-  });
-
-  const { data: attachments = [] } = useQuery({
-    queryKey: ["billing_attachments_for_payments"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("billing_attachments")
-        .select("*")
-        .not("payment_id", "is", null);
-      if (error) throw error;
-      return (data ?? []) as Attachment[];
+      const data = await apiRequest<{ invoices: Invoice[] }>("/billing/admin/invoices");
+      return data.invoices ?? [];
     },
   });
 
@@ -172,12 +177,13 @@ export default function PaymentsScreen() {
   const invoiceMap = useMemo(() => Object.fromEntries(invoices.map((i) => [i.id, i])), [invoices]);
   const attachmentsByPayment = useMemo(() => {
     const m: Record<string, Attachment[]> = {};
-    for (const a of attachments) {
-      if (!a.payment_id) continue;
-      (m[a.payment_id] ||= []).push(a);
+    for (const payment of payments) {
+      for (const attachment of payment.attachments ?? []) {
+        (m[payment.id] ||= []).push(attachment);
+      }
     }
     return m;
-  }, [attachments]);
+  }, [payments]);
 
   const filtered = useMemo(() => {
     return payments.filter((p) => {
@@ -245,57 +251,54 @@ export default function PaymentsScreen() {
 
     setSaving(true);
     try {
-      const userId = await getCurrentUserId();
+      let proofPath: string | null = null;
+      let proofName: string | null = null;
+      if (receiptFile) {
+        proofName = receiptFile.name;
+        proofPath = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            if (typeof reader.result === "string") resolve(reader.result);
+            else reject(new Error("Falha ao ler comprovante"));
+          };
+          reader.onerror = () => reject(reader.error ?? new Error("Falha ao ler comprovante"));
+          reader.readAsDataURL(receiptFile);
+        });
+      }
       const payload = {
         invoice_id: form.invoice_id,
         payment_method_id: form.payment_method_id || null,
         amount: amt,
         payment_date: form.payment_date,
         reference: form.reference || null,
-        notes: [form.notes, form.account ? `Conta: ${form.account}` : ""].filter(Boolean).join(" · ") || null,
+        notes: form.notes || null,
         status: form.status,
+        account: form.account || null,
+        proof_path: proofPath,
+        proof_name: proofName,
       };
 
-      let paymentId = editing?.id;
       if (editing) {
-        const { error } = await supabase.from("billing_payments").update(payload).eq("id", editing.id);
-        if (error) throw error;
-      } else {
-        const { data, error } = await supabase
-          .from("billing_payments")
-          .insert({ ...payload, created_by: userId })
-          .select("id")
-          .single();
-        if (error) throw error;
-        paymentId = data.id;
-      }
-
-      // Upload receipt
-      if (receiptFile && paymentId) {
-        const ext = receiptFile.name.split(".").pop() || "bin";
-        const path = `${userId}/${paymentId}/${Date.now()}.${ext}`;
-        const { error: upErr } = await supabase.storage
-          .from("billing-receipts")
-          .upload(path, receiptFile, { upsert: false });
-        if (upErr) throw upErr;
-        const { error: attErr } = await supabase.from("billing_attachments").insert({
-          payment_id: paymentId,
-          invoice_id: form.invoice_id,
-          file_name: receiptFile.name,
-          mime_type: receiptFile.type || null,
-          size_bytes: receiptFile.size,
-          storage_path: path,
-          uploaded_by: userId,
+        await apiRequest(`/billing/admin/payments/${editing.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
         });
-        if (attErr) throw attErr;
+      } else {
+        await apiRequest("/billing/admin/payments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
       }
 
       toast({ title: editing ? "Pagamento atualizado" : "Pagamento registado" });
       setFormOpen(false);
-      qc.invalidateQueries({ queryKey: ["billing_payments"] });
-      qc.invalidateQueries({ queryKey: ["billing_invoices_for_payments"] });
-      qc.invalidateQueries({ queryKey: ["billing_invoices"] });
-      qc.invalidateQueries({ queryKey: ["billing_attachments_for_payments"] });
+      qc.invalidateQueries({ queryKey: ["admin-payments-ledger"] });
+      qc.invalidateQueries({ queryKey: ["admin-invoices-for-payments"] });
+      qc.invalidateQueries({ queryKey: ["platform-payments"] });
+      qc.invalidateQueries({ queryKey: ["platform-invoices"] });
+      qc.invalidateQueries({ queryKey: ["billing-invoices-upcoming"] });
     } catch (e: any) {
       toast({ title: "Erro ao guardar", description: e.message, variant: "destructive" });
     } finally {
@@ -306,12 +309,15 @@ export default function PaymentsScreen() {
   const handleDelete = async () => {
     if (!toDelete) return;
     try {
-      const { error } = await supabase.from("billing_payments").delete().eq("id", toDelete.id);
-      if (error) throw error;
+      await apiRequest(`/billing/admin/payments/${toDelete.id}`, {
+        method: "DELETE",
+      });
       toast({ title: "Pagamento eliminado" });
-      qc.invalidateQueries({ queryKey: ["billing_payments"] });
-      qc.invalidateQueries({ queryKey: ["billing_invoices_for_payments"] });
-      qc.invalidateQueries({ queryKey: ["billing_invoices"] });
+      qc.invalidateQueries({ queryKey: ["admin-payments-ledger"] });
+      qc.invalidateQueries({ queryKey: ["admin-invoices-for-payments"] });
+      qc.invalidateQueries({ queryKey: ["platform-payments"] });
+      qc.invalidateQueries({ queryKey: ["platform-invoices"] });
+      qc.invalidateQueries({ queryKey: ["billing-invoices-upcoming"] });
     } catch (e: any) {
       toast({ title: "Erro ao eliminar", description: e.message, variant: "destructive" });
     } finally {
@@ -320,14 +326,11 @@ export default function PaymentsScreen() {
   };
 
   const openReceipt = async (att: Attachment) => {
-    const { data, error } = await supabase.storage
-      .from("billing-receipts")
-      .createSignedUrl(att.storage_path, 3600);
-    if (error || !data) {
+    if (!att.signed_url) {
       toast({ title: "Não foi possível abrir comprovante", variant: "destructive" });
       return;
     }
-    window.open(data.signedUrl, "_blank");
+    window.open(att.signed_url, "_blank");
   };
 
   // Export CSV

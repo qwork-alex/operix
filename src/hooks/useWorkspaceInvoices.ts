@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 import { useWorkspace } from "./useWorkspace";
 
 export interface WorkspaceInvoice {
@@ -33,36 +33,10 @@ export function useWorkspaceInvoices() {
     enabled: !!workspaceId,
     staleTime: 30_000,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("platform_invoices")
-        .select(
-          "id, invoice_number, issue_date, due_date, total, subtotal, vat_amount, status, metadata, paid_at, pdf_path, vat_mode, bank_snapshot, pdf_url"
-        )
-        .eq("workspace_id", workspaceId!)
-        .order("issue_date", { ascending: false })
-        .limit(200);
-      if (error) throw error;
-      return ((data ?? []) as any[]).map((r): WorkspaceInvoice => {
-        const total = Number(r.total ?? 0);
-        const paid = r.paid_at ? total : 0;
-        return {
-          id: r.id,
-          invoice_number: r.invoice_number,
-          issue_date: r.issue_date,
-          due_date: r.due_date,
-          total_amount: total,
-          paid_amount: paid,
-          remaining_amount: total - paid,
-          status: r.status,
-          stripe_invoice_id: r.metadata?.stripe_invoice_id ?? null,
-          metadata: { ...(r.metadata ?? {}), hosted_invoice_url: r.metadata?.hosted_invoice_url, invoice_pdf: r.pdf_url ?? undefined },
-          pdf_path: r.pdf_path,
-          vat_mode: r.vat_mode,
-          vat_amount: r.vat_amount != null ? Number(r.vat_amount) : null,
-          subtotal: r.subtotal != null ? Number(r.subtotal) : null,
-          bank_snapshot: r.bank_snapshot ?? null,
-        };
-      });
+      const data = await apiRequest<{ invoices: WorkspaceInvoice[] }>(
+        `/billing/workspaces/${workspaceId}/invoices`,
+      );
+      return data.invoices ?? [];
     },
   });
 }

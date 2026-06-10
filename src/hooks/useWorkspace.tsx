@@ -13,9 +13,9 @@
  * reset auth, or unmount the React tree. It only updates the operational
  * scope by changing `selectedId` and re-running workspace-keyed queries.
  */
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 import { useAuth } from "./useAuth";
 
 interface WorkspaceMember {
@@ -31,10 +31,19 @@ interface WorkspaceMember {
 
 export type MembershipRole = "admin" | "tecnico" | "cliente" | "socio";
 
+interface AvailableWorkspace {
+  id: string;
+  name: string;
+  ownerAppUserId: string | null;
+  membershipRole: MembershipRole | null;
+  membershipStatus: string;
+}
+
 interface WorkspaceContext {
   workspaceId: string | null;
   workspaceName: string | null;
   ownerAppUserId: string | null;
+  availableWorkspaces: AvailableWorkspace[];
   members: WorkspaceMember[];
   memberAuthIds: string[];
   myRole: MembershipRole | null;
@@ -72,44 +81,54 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     enabled: !!userId,
     queryFn: async () => {
       if (!userId) return null;
-      const { data: appUser, error: auErr } = await supabase
-        .from("app_users")
-        .select("id")
-        .eq("auth_user_id", userId)
-        .maybeSingle();
-      if (auErr) throw auErr;
-      if (!appUser) return null;
-
-      const { data: memberships, error: mErr } = await supabase
-        .from("memberships")
-        .select("workspace_id, workspaces(id, name, owner_user_id)")
-        .eq("user_id", appUser.id)
-        .eq("status", "active");
-      if (mErr) throw mErr;
-      if (!memberships || memberships.length === 0) return null;
+      const data = await apiRequest<{
+        appUserId: string | null;
+        workspaces: Array<{
+          workspaceId: string;
+          workspaceName: string;
+          ownerAppUserId: string | null;
+          membershipRole: MembershipRole | null;
+          membershipStatus: string;
+        }>;
+      }>("/account/workspaces");
+      const memberships = data.workspaces;
+      if (!memberships || memberships.length === 0) {
+        return {
+          appUserId: data.appUserId,
+          availableWorkspaces: [],
+          workspaceId: null,
+          workspaceName: null,
+          ownerAppUserId: null,
+          myRole: null,
+        };
+      }
 
       // Resolve: explicit selection → first membership. Never null when
       // memberships exist — operational runtime always has a scope so the
       // owner identity layer stays alongside a live workspace.
-      const picked = selectedId
-        ? memberships.find((m: any) => m.workspace_id === selectedId)
-        : null;
+      const picked = selectedId ? memberships.find((m) => m.workspaceId === selectedId) : null;
       const membership = picked || memberships[0];
-      const ws = (membership as any).workspaces as any;
-      if (!ws) return null;
       // Persist whichever id we ended up with so subsequent mounts are
       // deterministic. This does NOT trigger a remount — it just keeps
       // storage in sync with state.
       try {
-        if (localStorage.getItem(SELECTED_KEY) !== ws.id) {
-          localStorage.setItem(SELECTED_KEY, ws.id);
+        if (localStorage.getItem(SELECTED_KEY) !== membership.workspaceId) {
+          localStorage.setItem(SELECTED_KEY, membership.workspaceId);
         }
       } catch { /* best effort */ }
       return {
-        workspaceId: ws.id as string,
-        workspaceName: ws.name as string,
-        appUserId: appUser.id,
-        ownerAppUserId: (ws.owner_user_id || null) as string | null,
+        workspaceId: membership.workspaceId,
+        workspaceName: membership.workspaceName,
+        appUserId: data.appUserId,
+        ownerAppUserId: membership.ownerAppUserId,
+        myRole: membership.membershipRole,
+        availableWorkspaces: memberships.map((item) => ({
+          id: item.workspaceId,
+          name: item.workspaceName,
+          ownerAppUserId: item.ownerAppUserId,
+          membershipRole: item.membershipRole,
+          membershipStatus: item.membershipStatus,
+        })),
       };
     },
   });
@@ -119,30 +138,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     queryKey: ["workspace-members", wsData?.workspaceId],
     enabled: !!wsData?.workspaceId,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("memberships")
-        .select("id, role, status, user_id, app_users(id, auth_user_id, name, email, phone)")
-        .eq("workspace_id", wsData!.workspaceId);
-      if (error) throw error;
-      return (data || []).map((m: any) => ({
-        membership_id: m.id,
-        app_user_id: m.user_id,
-        auth_user_id: m.app_users?.auth_user_id || "",
-        name: m.app_users?.name || null,
-        email: m.app_users?.email || "",
-        phone: m.app_users?.phone || null,
-        role: m.role,
-        status: m.status,
-      })) as WorkspaceMember[];
+      const data = await apiRequest<{ members: WorkspaceMember[] }>(`/workspaces/${wsData!.workspaceId}/members`);
+      return data.members;
     },
   });
 
   const memberAuthIds = useMemo(
-    () => members.filter((m) => m.auth_user_id).map((m) => m.auth_user_id),
+    () => members.filter((m: WorkspaceMember) => m.auth_user_id).map((m: WorkspaceMember) => m.auth_user_id),
     [members],
   );
-  const myMember = members.find((m) => m.auth_user_id === user?.id);
-  const myRole = (myMember?.role as MembershipRole) ?? null;
+  const myRole =
+    wsData?.myRole ?? ((members.find((m: WorkspaceMember) => m.auth_user_id === user?.id)?.role as MembershipRole) ?? null);
   const isAdmin = myRole === "admin";
 
   // Switch operational scope WITHOUT reload. Just update state + storage
@@ -164,6 +170,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     workspaceId: wsData?.workspaceId ?? null,
     workspaceName: wsData?.workspaceName ?? null,
     ownerAppUserId: wsData?.ownerAppUserId ?? null,
+    availableWorkspaces: wsData?.availableWorkspaces ?? [],
     members,
     memberAuthIds,
     myRole,

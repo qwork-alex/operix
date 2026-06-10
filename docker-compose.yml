@@ -1,0 +1,61 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: qw_nexus_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-qwnexus}
+      POSTGRES_USER: ${POSTGRES_USER:-qwnexus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-qwnexus} -d ${POSTGRES_DB:-qwnexus}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: /home/deploy/apps/nexus/QW-Nexus-/backend
+      dockerfile: Dockerfile
+    container_name: qw_nexus_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-qwnexus}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-qwnexus}?schema=public
+      JWT_SECRET: ${JWT_SECRET:-troque-esta-chave-jwt-por-uma-string-com-mais-de-32-caracteres}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}
+      STRIPE_SANDBOX_API_KEY: ${STRIPE_SANDBOX_API_KEY:-}
+      STRIPE_LIVE_API_KEY: ${STRIPE_LIVE_API_KEY:-}
+      STRIPE_PORTAL_SANDBOX_URL: ${STRIPE_PORTAL_SANDBOX_URL:-}
+      STRIPE_PORTAL_LIVE_URL: ${STRIPE_PORTAL_LIVE_URL:-}
+      PAYMENTS_SANDBOX_WEBHOOK_SECRET: ${PAYMENTS_SANDBOX_WEBHOOK_SECRET:-}
+      PAYMENTS_LIVE_WEBHOOK_SECRET: ${PAYMENTS_LIVE_WEBHOOK_SECRET:-}
+    ports:
+      - "${API_PORT:-4000}:4000"
+
+  frontend:
+    build:
+      context: /home/deploy/apps/nexus/QW-Nexus-
+      dockerfile: Dockerfile.frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:4000/api}
+        VITE_PAYMENTS_CLIENT_TOKEN: ${VITE_PAYMENTS_CLIENT_TOKEN:-}
+    container_name: qw_nexus_frontend
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+
+volumes:
+  postgres_data:

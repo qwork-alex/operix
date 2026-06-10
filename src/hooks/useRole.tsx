@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 import { useAuth } from "./useAuth";
 import { useImpersonation } from "./useImpersonation";
 
@@ -52,26 +52,9 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     retry: 0,
     staleTime: 60_000,
     queryFn: async () => {
-      // Hard timeout — never let the boot deadlock if the DB is slow.
-      const fetchRole = (async () => {
-        const { data, error } = await supabase
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", lookupId!)
-          .maybeSingle();
-        if (error) {
-          console.error("[useRole] Error fetching role:", error);
-          return null;
-        }
-        return (data?.role as AppRole) ?? null;
-      })();
-      const timeout = new Promise<null>((resolve) =>
-        setTimeout(() => {
-          console.warn("[useRole] timeout — proceeding with null role");
-          resolve(null);
-        }, 4000),
-      );
-      return Promise.race([fetchRole, timeout]);
+      const suffix = lookupId ? `?userId=${encodeURIComponent(lookupId)}` : "";
+      const data = await apiRequest<{ role: AppRole | null }>(`/account/role${suffix}`);
+      return data.role ?? null;
     },
   });
 

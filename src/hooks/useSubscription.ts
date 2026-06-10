@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { useWorkspace } from "./useWorkspace";
 import { useAuth } from "./useAuth";
+import { useWorkspaceBillingContext } from "./useWorkspaceBillingContext";
 
 export type SubscriptionStatus =
   | "trial" | "active" | "grace_period" | "overdue" | "suspended" | "cancelled";
@@ -38,23 +37,12 @@ export interface SubscriptionSnapshot {
 }
 
 export function useSubscription() {
-  const { workspaceId } = useWorkspace();
+  const billingContext = useWorkspaceBillingContext();
 
-  return useQuery({
-    queryKey: ["workspace-subscription", workspaceId],
-    enabled: !!workspaceId,
-    staleTime: 60_000,
-    queryFn: async (): Promise<SubscriptionSnapshot | null> => {
-      const { data, error } = await supabase.rpc("get_workspace_subscription", {
-        _workspace_id: workspaceId!,
-      });
-      if (error) {
-        console.error("[useSubscription]", error);
-        return null;
-      }
-      return data as unknown as SubscriptionSnapshot;
-    },
-  });
+  return {
+    ...billingContext,
+    data: billingContext.data?.snapshot ?? null,
+  };
 }
 
 /**

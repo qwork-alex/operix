@@ -5,7 +5,7 @@ import { format, parseISO, differenceInDays } from "date-fns";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
 
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -187,17 +187,11 @@ export function SendInvoiceDialog({
   }, [invoice, companyName, lang, mode, overdueDays]);
 
   const logsQ = useQuery({
-    queryKey: ["invoice_send_log", invoice?.id],
+    queryKey: ["ops-invoice-send-log", invoice?.id],
     enabled: !!invoice?.id && open,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("invoice_send_log" as any)
-        .select("*")
-        .eq("invoice_id", invoice.id)
-        .order("created_at", { ascending: false })
-        .limit(20);
-      if (error) throw error;
-      return data ?? [];
+      const data = await apiRequest<{ logs: any[] }>(`/billing/admin/ops/invoices/${invoice.id}/send-log`);
+      return data.logs ?? [];
     },
   });
 
@@ -223,23 +217,26 @@ export function SendInvoiceDialog({
     try {
       const pdfBase64 = generateInvoicePdfBase64(invoice, companyName, mode === "reminder");
       const idempotencyKey = `inv-${invoice.id}-${mode}-${Date.now()}`;
-      const { data, error } = await supabase.functions.invoke("send-invoice-email", {
-        body: {
-          invoiceId: invoice.id,
+      const data = await apiRequest<{ ok?: boolean; error?: string; provider?: string }>(
+        `/billing/admin/ops/invoices/${invoice.id}/send`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
           recipient, cc: cc || undefined,
           subject, message,
-          pdfBase64,
-          pdfFileName: `${invoice.invoice_number}${mode === "reminder" ? "-lembrete" : ""}.pdf`,
-          idempotencyKey,
+          pdf_base64: pdfBase64,
+          pdf_file_name: `${invoice.invoice_number}${mode === "reminder" ? "-lembrete" : ""}.pdf`,
+          idempotency_key: idempotencyKey,
           kind: mode,
+          }),
         },
-      });
-      if (error) throw error;
+      );
       if ((data as any)?.ok) {
         toast.success(mode === "reminder"
           ? `Cobrança enviada (${(data as any).provider})`
           : `Fatura enviada (${(data as any).provider})`);
-        qc.invalidateQueries({ queryKey: ["invoice_send_log", invoice.id] });
+        qc.invalidateQueries({ queryKey: ["ops-invoice-send-log", invoice.id] });
         onOpenChange(false);
       } else {
         toast.error(`Falha: ${(data as any)?.error ?? "erro desconhecido"}`);

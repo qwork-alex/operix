@@ -6,7 +6,7 @@ import {
   Landmark, CreditCard, Receipt, Percent, Webhook, Activity,
   ScrollText, Power, Brain, ShieldCheck,
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,109 @@ import { SecurityDashboard } from "@/components/platform/SecurityDashboard";
 import { ComplianceDashboard } from "@/components/platform/ComplianceDashboard";
 import { useIsPlatformOwner } from "@/hooks/useSubscription";
 import { toast } from "sonner";
+
+type PlatformSubscriptionRow = {
+  id: string;
+  workspace_id: string;
+  status: string;
+  billing_cycle: string;
+  plan_code: string;
+  trial_ends_at: string | null;
+  current_period_end: string | null;
+  created_at: string;
+  technician_count: number;
+  current_price: number;
+  suspension_mode: string | null;
+  legal_hold: boolean;
+  workspaces: { name: string } | null;
+};
+
+type PlatformBankAccount = {
+  id: string;
+  bank_name: string;
+  account_name: string;
+  iban: string | null;
+  bic: string | null;
+  country: string;
+  currency: string;
+  account_type: string;
+  is_primary: boolean;
+  active: boolean;
+  supported_methods?: string[];
+};
+
+type PlatformPaymentRow = {
+  id: string;
+  workspace_id: string;
+  workspace_name: string | null;
+  method: string;
+  amount: number;
+  currency: string;
+  status: string;
+  external_ref: string | null;
+  invoice_number: string | null;
+  created_at: string;
+};
+
+type PlatformVatRule = {
+  id: string;
+  country: string;
+  standard_rate: number;
+  eu_member: boolean;
+  reverse_charge_when_business: boolean;
+};
+
+type VatCalcResult = {
+  rate: number;
+  reverse_charge: boolean;
+  exemption?: string | null;
+  exemption_reason?: string | null;
+};
+
+type PlatformInvoiceRow = {
+  id: string;
+  invoice_number: string;
+  issue_date: string;
+  due_date: string | null;
+  customer_name: string | null;
+  subtotal: number;
+  vat_amount: number;
+  total: number;
+  currency: string;
+  status: string;
+  workspaces?: { name: string } | null;
+};
+
+type PlatformWebhookRow = {
+  id: string;
+  created_at: string;
+  event_type: string;
+  status: string;
+  attempts: number;
+  last_error: string | null;
+};
+
+type PlatformAuditLog = {
+  id: string;
+  created_at: string;
+  workspace_id: string | null;
+  category: string;
+  action: string;
+  severity: string;
+  message: string | null;
+  workspaces: { name: string } | null;
+};
+
+function formatDate(value: string | null | undefined, withTime = false) {
+  if (!value) return "—";
+  const date = new Date(value);
+  return withTime ? date.toLocaleString("pt-PT") : date.toLocaleDateString("pt-PT");
+}
+
+function shortenId(value: string | null | undefined) {
+  if (!value) return "—";
+  return `${value.slice(0, 8)}…`;
+}
 
 export default function PlatformOwnerPage() {
   const { data: isOwner, isLoading: ownerLoading } = useIsPlatformOwner();
@@ -73,25 +176,18 @@ export default function PlatformOwnerPage() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Overview — KPIs + tenants table (preserved from previous version)
-// ---------------------------------------------------------------------------
 function OverviewTab() {
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["platform-subscriptions-overview"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("workspace_subscriptions")
-        .select("id, workspace_id, status, billing_cycle, trial_ends_at, current_period_end, technician_count, current_price, created_at, workspaces(name)")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
+    queryFn: async (): Promise<PlatformSubscriptionRow[]> => {
+      const data = await apiRequest<{ subscriptions: PlatformSubscriptionRow[] }>("/billing/admin/overview");
+      return data.subscriptions ?? [];
     },
   });
 
-  const counts = rows.reduce((acc, r: any) => {
-    acc.total++;
-    acc[r.status] = (acc[r.status] ?? 0) + 1;
+  const counts = rows.reduce((acc: Record<string, number>, row: PlatformSubscriptionRow) => {
+    acc.total += 1;
+    acc[row.status] = (acc[row.status] ?? 0) + 1;
     return acc;
   }, { total: 0 } as Record<string, number>);
 
@@ -133,17 +229,15 @@ function OverviewTab() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r: any) => (
-                  <tr key={r.id} className="border-t border-border/40 hover:bg-muted/20">
-                    <td className="px-4 py-2 font-medium">{r.workspaces?.name ?? "—"}</td>
-                    <td className="px-4 py-2"><Badge variant="outline" className="text-[10px]">{r.status}</Badge></td>
-                    <td className="px-4 py-2 text-xs">{r.billing_cycle}</td>
-                    <td className="px-4 py-2 text-right">{r.technician_count}</td>
-                    <td className="px-4 py-2 text-right">{Number(r.current_price).toFixed(2)} €</td>
+                {rows.map((row: PlatformSubscriptionRow) => (
+                  <tr key={row.id} className="border-t border-border/40 hover:bg-muted/20">
+                    <td className="px-4 py-2 font-medium">{row.workspaces?.name ?? "—"}</td>
+                    <td className="px-4 py-2"><Badge variant="outline" className="text-[10px]">{row.status}</Badge></td>
+                    <td className="px-4 py-2 text-xs">{row.billing_cycle}</td>
+                    <td className="px-4 py-2 text-right">{row.technician_count}</td>
+                    <td className="px-4 py-2 text-right">{Number(row.current_price).toFixed(2)} €</td>
                     <td className="px-4 py-2 text-xs text-muted-foreground">
-                      {r.current_period_end
-                        ? new Date(r.current_period_end).toLocaleDateString("pt-PT")
-                        : r.trial_ends_at ? `Trial → ${new Date(r.trial_ends_at).toLocaleDateString("pt-PT")}` : "—"}
+                      {row.current_period_end ? formatDate(row.current_period_end) : row.trial_ends_at ? `Trial → ${formatDate(row.trial_ends_at)}` : "—"}
                     </td>
                   </tr>
                 ))}
@@ -159,68 +253,86 @@ function OverviewTab() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Bank accounts
-// ---------------------------------------------------------------------------
 function BankAccountsTab() {
   const qc = useQueryClient();
   const { data: accounts = [], isLoading } = useQuery({
-    queryKey: ["platform-bank-accounts"],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any).from("platform_bank_accounts")
-        .select("*").order("is_primary", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
+    queryKey: ["platform-bank-accounts-admin"],
+    queryFn: async (): Promise<PlatformBankAccount[]> => {
+      const data = await apiRequest<{ accounts: PlatformBankAccount[] }>("/billing/admin/bank-accounts");
+      return data.accounts ?? [];
     },
   });
 
   const update = useMutation({
-    mutationFn: async ({ id, patch }: { id: string; patch: any }) => {
-      const { error } = await (supabase as any).from("platform_bank_accounts").update(patch).eq("id", id);
-      if (error) throw error;
+    mutationFn: async ({ id, patch }: { id: string; patch: Partial<PlatformBankAccount> }) => {
+      await apiRequest(`/billing/admin/bank-accounts/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
     },
-    onSuccess: () => { toast.success("Conta atualizada"); qc.invalidateQueries({ queryKey: ["platform-bank-accounts"] }); },
-    onError: (e: any) => toast.error(e.message),
+    onSuccess: () => {
+      toast.success("Conta atualizada");
+      qc.invalidateQueries({ queryKey: ["platform-bank-accounts-admin"] });
+    },
+    onError: (error: any) => toast.error(error.message || "Erro ao atualizar a conta"),
   });
 
   if (isLoading) return <LoadingState variant="cards" />;
 
   return (
     <div className="space-y-4">
-      {accounts.map((a: any) => (
-        <Card key={a.id} className="surface-card p-5 space-y-3">
+      {accounts.map((account: PlatformBankAccount) => (
+        <Card key={account.id} className="surface-card p-5 space-y-3">
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-2">
                 <Landmark className="h-4 w-4 text-primary" />
-                <h3 className="font-semibold">{a.account_name}</h3>
-                {a.is_primary && <Badge className="text-[10px]">Primary</Badge>}
-                <Badge variant="outline" className="text-[10px]">{a.currency}</Badge>
+                <h3 className="font-semibold">{account.account_name}</h3>
+                {account.is_primary && <Badge className="text-[10px]">Primary</Badge>}
+                <Badge variant="outline" className="text-[10px]">{account.currency}</Badge>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">{a.bank_name} · {a.country} · {a.account_type}</p>
+              <p className="text-xs text-muted-foreground mt-1">{account.bank_name} · {account.country} · {account.account_type}</p>
             </div>
             <div className="flex items-center gap-2 text-xs">
               <span className="text-muted-foreground">Ativa</span>
-              <Switch checked={a.active} onCheckedChange={(v) => update.mutate({ id: a.id, patch: { active: v } })} />
+              <Switch
+                checked={account.active}
+                onCheckedChange={(value: boolean) => update.mutate({ id: account.id, patch: { active: value } })}
+              />
             </div>
           </div>
 
           <div className="grid md:grid-cols-2 gap-3">
             <div>
               <label className="text-[11px] text-muted-foreground">IBAN</label>
-              <Input defaultValue={a.iban ?? ""} placeholder="FR76 ..."
-                onBlur={(e) => e.target.value !== (a.iban ?? "") && update.mutate({ id: a.id, patch: { iban: e.target.value || null } })} />
+              <Input
+                defaultValue={account.iban ?? ""}
+                placeholder="PT50..."
+                onBlur={(event: any) => {
+                  if (event.target.value !== (account.iban ?? "")) {
+                    update.mutate({ id: account.id, patch: { iban: event.target.value || null } });
+                  }
+                }}
+              />
             </div>
             <div>
               <label className="text-[11px] text-muted-foreground">BIC / SWIFT</label>
-              <Input defaultValue={a.bic ?? ""} placeholder="CMCIFRPP"
-                onBlur={(e) => e.target.value !== (a.bic ?? "") && update.mutate({ id: a.id, patch: { bic: e.target.value || null } })} />
+              <Input
+                defaultValue={account.bic ?? ""}
+                placeholder="QWRKPTPL"
+                onBlur={(event: any) => {
+                  if (event.target.value !== (account.bic ?? "")) {
+                    update.mutate({ id: account.id, patch: { bic: event.target.value || null } });
+                  }
+                }}
+              />
             </div>
           </div>
 
           <div className="flex flex-wrap gap-1.5 pt-1">
-            {(a.supported_methods ?? []).map((m: string) => (
-              <Badge key={m} variant="secondary" className="text-[10px]">{m}</Badge>
+            {(account.supported_methods ?? []).map((method: string) => (
+              <Badge key={method} variant="secondary" className="text-[10px]">{method}</Badge>
             ))}
           </div>
         </Card>
@@ -229,22 +341,17 @@ function BankAccountsTab() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Subscriptions (workspace_subscriptions, read-only here)
-// ---------------------------------------------------------------------------
 function SubscriptionsTab() {
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["platform-subs-full"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("workspace_subscriptions")
-        .select("*, workspaces(name)")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
+    queryFn: async (): Promise<PlatformSubscriptionRow[]> => {
+      const data = await apiRequest<{ subscriptions: PlatformSubscriptionRow[] }>("/billing/admin/subscriptions");
+      return data.subscriptions ?? [];
     },
   });
+
   if (isLoading) return <LoadingState variant="table" />;
+
   return (
     <Card className="surface-card overflow-hidden">
       <div className="overflow-x-auto">
@@ -261,15 +368,15 @@ function SubscriptionsTab() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r: any) => (
-              <tr key={r.id} className="border-t border-border/40">
-                <td className="px-4 py-2 font-medium">{r.workspaces?.name ?? r.workspace_id}</td>
-                <td className="px-4 py-2"><Badge variant="outline" className="text-[10px]">{r.status}</Badge></td>
-                <td className="px-4 py-2 text-xs">{r.billing_cycle}</td>
-                <td className="px-4 py-2 text-right">{r.technician_count}</td>
-                <td className="px-4 py-2 text-right">{Number(r.current_price).toFixed(2)} €</td>
-                <td className="px-4 py-2 text-xs">{r.trial_ends_at ? new Date(r.trial_ends_at).toLocaleDateString("pt-PT") : "—"}</td>
-                <td className="px-4 py-2 text-xs">{r.current_period_end ? new Date(r.current_period_end).toLocaleDateString("pt-PT") : "—"}</td>
+            {rows.map((row: PlatformSubscriptionRow) => (
+              <tr key={row.id} className="border-t border-border/40">
+                <td className="px-4 py-2 font-medium">{row.workspaces?.name ?? shortenId(row.workspace_id)}</td>
+                <td className="px-4 py-2"><Badge variant="outline" className="text-[10px]">{row.status}</Badge></td>
+                <td className="px-4 py-2 text-xs">{row.billing_cycle}</td>
+                <td className="px-4 py-2 text-right">{row.technician_count}</td>
+                <td className="px-4 py-2 text-right">{Number(row.current_price).toFixed(2)} €</td>
+                <td className="px-4 py-2 text-xs">{formatDate(row.trial_ends_at)}</td>
+                <td className="px-4 py-2 text-xs">{formatDate(row.current_period_end)}</td>
               </tr>
             ))}
           </tbody>
@@ -279,88 +386,89 @@ function SubscriptionsTab() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Payments (manual entry placeholder until Stripe phase)
-// ---------------------------------------------------------------------------
 function PaymentsTab() {
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["platform-payments"],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any).from("platform_subscription_payments")
-        .select("*").order("created_at", { ascending: false }).limit(200);
-      if (error) throw error;
-      return data ?? [];
+    queryFn: async (): Promise<PlatformPaymentRow[]> => {
+      const data = await apiRequest<{ payments: PlatformPaymentRow[] }>("/billing/admin/payments");
+      return data.payments ?? [];
     },
   });
+
   if (isLoading) return <LoadingState variant="table" />;
+
   return (
     <div className="space-y-6">
       <ManualPaymentsReview />
-    <Card className="surface-card overflow-hidden">
-      <div className="px-4 py-3 border-b border-border/40 flex items-center justify-between">
-        <h3 className="text-sm font-semibold">Pagamentos registados</h3>
-        <span className="text-[11px] text-muted-foreground">Histórico consolidado (Stripe + manual)</span>
-      </div>
-      {rows.length === 0 ? (
-        <div className="p-8 text-center text-xs text-muted-foreground">Sem pagamentos ainda.</div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-xs text-muted-foreground bg-muted/30">
-              <tr>
-                <th className="text-left px-4 py-2">Data</th>
-                <th className="text-left px-4 py-2">Workspace</th>
-                <th className="text-left px-4 py-2">Método</th>
-                <th className="text-right px-4 py-2">Valor</th>
-                <th className="text-left px-4 py-2">Estado</th>
-                <th className="text-left px-4 py-2">Ref. externa</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((p: any) => (
-                <tr key={p.id} className="border-t border-border/40">
-                  <td className="px-4 py-2 text-xs">{new Date(p.created_at).toLocaleString("pt-PT")}</td>
-                  <td className="px-4 py-2 text-xs font-mono">{p.workspace_id.slice(0, 8)}…</td>
-                  <td className="px-4 py-2 text-xs">{p.method}</td>
-                  <td className="px-4 py-2 text-right">{Number(p.amount).toFixed(2)} {p.currency}</td>
-                  <td className="px-4 py-2"><Badge variant="outline" className="text-[10px]">{p.status}</Badge></td>
-                  <td className="px-4 py-2 text-xs text-muted-foreground">{p.external_ref ?? "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <Card className="surface-card overflow-hidden">
+        <div className="px-4 py-3 border-b border-border/40 flex items-center justify-between">
+          <h3 className="text-sm font-semibold">Pagamentos registados</h3>
+          <span className="text-[11px] text-muted-foreground">Histórico consolidado da plataforma</span>
         </div>
-      )}
-    </Card>
+        {rows.length === 0 ? (
+          <div className="p-8 text-center text-xs text-muted-foreground">Sem pagamentos ainda.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-xs text-muted-foreground bg-muted/30">
+                <tr>
+                  <th className="text-left px-4 py-2">Data</th>
+                  <th className="text-left px-4 py-2">Workspace</th>
+                  <th className="text-left px-4 py-2">Método</th>
+                  <th className="text-right px-4 py-2">Valor</th>
+                  <th className="text-left px-4 py-2">Estado</th>
+                  <th className="text-left px-4 py-2">Ref. externa</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((payment: PlatformPaymentRow) => (
+                  <tr key={payment.id} className="border-t border-border/40">
+                    <td className="px-4 py-2 text-xs">{formatDate(payment.created_at, true)}</td>
+                    <td className="px-4 py-2 text-xs">{payment.workspace_name ?? shortenId(payment.workspace_id)}</td>
+                    <td className="px-4 py-2 text-xs">{payment.method}</td>
+                    <td className="px-4 py-2 text-right">{Number(payment.amount).toFixed(2)} {payment.currency}</td>
+                    <td className="px-4 py-2"><Badge variant="outline" className="text-[10px]">{payment.status}</Badge></td>
+                    <td className="px-4 py-2 text-xs text-muted-foreground">{payment.external_ref ?? payment.invoice_number ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// VAT tab — rules + live calculator
-// ---------------------------------------------------------------------------
 function VatTab() {
   const { data: rules = [], isLoading } = useQuery({
     queryKey: ["platform-vat-rules"],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any).from("platform_vat_rules")
-        .select("*").order("country");
-      if (error) throw error;
-      return data ?? [];
+    queryFn: async (): Promise<PlatformVatRule[]> => {
+      const data = await apiRequest<{ rules: PlatformVatRule[] }>("/billing/admin/vat-rules");
+      return data.rules ?? [];
     },
   });
 
   const [country, setCountry] = useState("FR");
   const [isBusiness, setIsBusiness] = useState(false);
   const [vatNumber, setVatNumber] = useState("");
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<VatCalcResult | null>(null);
 
   const calc = async () => {
-    const { data, error } = await (supabase as any).rpc("calculate_vat", {
-      _country: country, _is_business: isBusiness, _vat_number: vatNumber || null,
-    });
-    if (error) return toast.error(error.message);
-    setResult(data);
+    try {
+      const data = await apiRequest<VatCalcResult>("/billing/vat/calculate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          country,
+          is_business: isBusiness,
+          vat_number: vatNumber || null,
+        }),
+      });
+      setResult(data);
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao calcular IVA");
+    }
   };
 
   return (
@@ -370,7 +478,7 @@ function VatTab() {
         <div className="space-y-3">
           <div>
             <label className="text-[11px] text-muted-foreground">País (ISO-2)</label>
-            <Input value={country} onChange={(e) => setCountry(e.target.value.toUpperCase())} maxLength={2} />
+            <Input value={country} onChange={(event: any) => setCountry(event.target.value.toUpperCase())} maxLength={2} />
           </div>
           <div className="flex items-center justify-between">
             <span className="text-xs">Empresa (B2B)</span>
@@ -378,14 +486,14 @@ function VatTab() {
           </div>
           <div>
             <label className="text-[11px] text-muted-foreground">Nº IVA (opcional)</label>
-            <Input value={vatNumber} onChange={(e) => setVatNumber(e.target.value)} placeholder="FR12345678901" />
+            <Input value={vatNumber} onChange={(event: any) => setVatNumber(event.target.value)} placeholder="FR12345678901" />
           </div>
           <Button onClick={calc} className="w-full">Calcular</Button>
           {result && (
             <div className="rounded border border-border/40 p-3 text-xs space-y-1 bg-muted/20">
-              <div>Taxa: <span className="font-semibold">{result.rate}%</span></div>
+              <div>Taxa: <span className="font-semibold">{Number(result.rate ?? 0) * 100}%</span></div>
               <div>Reverse charge: <span className="font-semibold">{result.reverse_charge ? "Sim" : "Não"}</span></div>
-              <div>Isenção: <span className="font-semibold">{result.exemption_reason ?? "—"}</span></div>
+              <div>Isenção: <span className="font-semibold">{result.exemption ?? result.exemption_reason ?? "—"}</span></div>
             </div>
           )}
         </div>
@@ -406,12 +514,12 @@ function VatTab() {
               </tr>
             </thead>
             <tbody>
-              {rules.map((r: any) => (
-                <tr key={r.id} className="border-t border-border/40">
-                  <td className="px-4 py-2 font-mono text-xs">{r.country}</td>
-                  <td className="px-4 py-2 text-right">{Number(r.standard_rate).toFixed(2)}%</td>
-                  <td className="px-4 py-2 text-center">{r.eu_member ? "✓" : "—"}</td>
-                  <td className="px-4 py-2 text-center">{r.reverse_charge_when_business ? "✓" : "—"}</td>
+              {rules.map((rule: PlatformVatRule) => (
+                <tr key={rule.id} className="border-t border-border/40">
+                  <td className="px-4 py-2 font-mono text-xs">{rule.country}</td>
+                  <td className="px-4 py-2 text-right">{Number(rule.standard_rate).toFixed(2)}%</td>
+                  <td className="px-4 py-2 text-center">{rule.eu_member ? "✓" : "—"}</td>
+                  <td className="px-4 py-2 text-center">{rule.reverse_charge_when_business ? "✓" : "—"}</td>
                 </tr>
               ))}
             </tbody>
@@ -422,20 +530,17 @@ function VatTab() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Invoices
-// ---------------------------------------------------------------------------
 function InvoicesTab() {
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["platform-invoices"],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any).from("platform_invoices")
-        .select("*").order("issue_date", { ascending: false }).limit(200);
-      if (error) throw error;
-      return data ?? [];
+    queryFn: async (): Promise<PlatformInvoiceRow[]> => {
+      const data = await apiRequest<{ invoices: PlatformInvoiceRow[] }>("/billing/admin/invoices");
+      return data.invoices ?? [];
     },
   });
+
   if (isLoading) return <LoadingState variant="table" />;
+
   return (
     <Card className="surface-card overflow-hidden">
       <div className="px-4 py-3 border-b border-border/40">
@@ -459,16 +564,16 @@ function InvoicesTab() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((i: any) => (
-                <tr key={i.id} className="border-t border-border/40">
-                  <td className="px-4 py-2 font-mono text-xs">{i.invoice_number}</td>
-                  <td className="px-4 py-2 text-xs">{i.issue_date}</td>
-                  <td className="px-4 py-2 text-xs">{i.due_date}</td>
-                  <td className="px-4 py-2 text-xs">{i.customer_name ?? "—"}</td>
-                  <td className="px-4 py-2 text-right">{Number(i.subtotal).toFixed(2)} {i.currency}</td>
-                  <td className="px-4 py-2 text-right">{Number(i.vat_amount).toFixed(2)}</td>
-                  <td className="px-4 py-2 text-right font-semibold">{Number(i.total).toFixed(2)}</td>
-                  <td className="px-4 py-2"><Badge variant="outline" className="text-[10px]">{i.status}</Badge></td>
+              {rows.map((invoice: PlatformInvoiceRow) => (
+                <tr key={invoice.id} className="border-t border-border/40">
+                  <td className="px-4 py-2 font-mono text-xs">{invoice.invoice_number}</td>
+                  <td className="px-4 py-2 text-xs">{formatDate(invoice.issue_date)}</td>
+                  <td className="px-4 py-2 text-xs">{formatDate(invoice.due_date)}</td>
+                  <td className="px-4 py-2 text-xs">{invoice.customer_name ?? "—"}</td>
+                  <td className="px-4 py-2 text-right">{Number(invoice.subtotal).toFixed(2)} {invoice.currency}</td>
+                  <td className="px-4 py-2 text-right">{Number(invoice.vat_amount).toFixed(2)}</td>
+                  <td className="px-4 py-2 text-right font-semibold">{Number(invoice.total).toFixed(2)}</td>
+                  <td className="px-4 py-2"><Badge variant="outline" className="text-[10px]">{invoice.status}</Badge></td>
                 </tr>
               ))}
             </tbody>
@@ -479,21 +584,18 @@ function InvoicesTab() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Webhooks
-// ---------------------------------------------------------------------------
 function WebhooksTab() {
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["platform-webhooks"],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any).from("platform_webhook_events")
-        .select("*").order("created_at", { ascending: false }).limit(200);
-      if (error) throw error;
-      return data ?? [];
+    queryFn: async (): Promise<PlatformWebhookRow[]> => {
+      const data = await apiRequest<{ events: PlatformWebhookRow[] }>("/billing/admin/webhooks");
+      return data.events ?? [];
     },
     refetchInterval: 15_000,
   });
+
   if (isLoading) return <LoadingState variant="table" />;
+
   return (
     <Card className="surface-card overflow-hidden">
       <div className="px-4 py-3 border-b border-border/40 flex items-center justify-between">
@@ -515,13 +617,13 @@ function WebhooksTab() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((e: any) => (
-                <tr key={e.id} className="border-t border-border/40">
-                  <td className="px-4 py-2 text-xs">{new Date(e.created_at).toLocaleString("pt-PT")}</td>
-                  <td className="px-4 py-2 text-xs font-mono">{e.event_type}</td>
-                  <td className="px-4 py-2"><Badge variant="outline" className="text-[10px]">{e.status}</Badge></td>
-                  <td className="px-4 py-2 text-right text-xs">{e.attempts}</td>
-                  <td className="px-4 py-2 text-xs text-muted-foreground truncate max-w-[200px]">{e.last_error ?? "—"}</td>
+              {rows.map((event: PlatformWebhookRow) => (
+                <tr key={event.id} className="border-t border-border/40">
+                  <td className="px-4 py-2 text-xs">{formatDate(event.created_at, true)}</td>
+                  <td className="px-4 py-2 text-xs font-mono">{event.event_type}</td>
+                  <td className="px-4 py-2"><Badge variant="outline" className="text-[10px]">{event.status}</Badge></td>
+                  <td className="px-4 py-2 text-right text-xs">{event.attempts}</td>
+                  <td className="px-4 py-2 text-xs text-muted-foreground truncate max-w-[200px]">{event.last_error ?? "—"}</td>
                 </tr>
               ))}
             </tbody>
@@ -532,20 +634,13 @@ function WebhooksTab() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Lifecycle — owner manually transitions subscription status
-// ---------------------------------------------------------------------------
 function LifecycleTab() {
   const qc = useQueryClient();
   const { data: subs = [], isLoading } = useQuery({
     queryKey: ["platform-lifecycle-subs"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("workspace_subscriptions")
-        .select("id, workspace_id, status, suspension_mode, legal_hold, current_price, technician_count, workspaces(name)")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
+    queryFn: async (): Promise<PlatformSubscriptionRow[]> => {
+      const data = await apiRequest<{ subscriptions: PlatformSubscriptionRow[] }>("/billing/admin/lifecycle/subscriptions");
+      return data.subscriptions ?? [];
     },
   });
 
@@ -555,25 +650,30 @@ function LifecycleTab() {
 
   const transition = useMutation({
     mutationFn: async ({ ws, status }: { ws: string; status: string }) => {
-      const { error } = await (supabase as any).rpc("transition_subscription_status", {
-        _workspace_id: ws,
-        _new_status: status,
-        _reason: reason || null,
-        _suspension_mode: status === "suspended" ? mode : null,
+      await apiRequest(`/billing/admin/lifecycle/workspaces/${ws}/transition`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status,
+          reason: reason || null,
+          suspension_mode: status === "suspended" || status === "legal_hold" ? mode : null,
+        }),
       });
-      if (error) throw error;
     },
     onSuccess: () => {
       toast.success("Estado atualizado");
       setReason("");
       qc.invalidateQueries({ queryKey: ["platform-lifecycle-subs"] });
       qc.invalidateQueries({ queryKey: ["platform-subscriptions-overview"] });
+      qc.invalidateQueries({ queryKey: ["platform-subs-full"] });
       qc.invalidateQueries({ queryKey: ["platform-audit-logs"] });
+      qc.invalidateQueries({ queryKey: ["platform-financial-overview"] });
+      qc.invalidateQueries({ queryKey: ["platform-smart-metrics"] });
     },
-    onError: (e: any) => toast.error(e.message || "Transição inválida"),
+    onError: (error: any) => toast.error(error.message || "Transição inválida"),
   });
 
-  const selected = subs.find((s: any) => s.workspace_id === picked) as any;
+  const selected = subs.find((sub: PlatformSubscriptionRow) => sub.workspace_id === picked) ?? null;
 
   if (isLoading) return <LoadingState variant="cards" />;
 
@@ -584,20 +684,20 @@ function LifecycleTab() {
           <h3 className="text-sm font-semibold">Workspaces</h3>
         </div>
         <div className="max-h-[480px] overflow-y-auto divide-y divide-border/40">
-          {subs.map((s: any) => (
+          {subs.map((sub: PlatformSubscriptionRow) => (
             <button
-              key={s.id}
-              onClick={() => setPicked(s.workspace_id)}
-              className={`w-full text-left px-4 py-3 hover:bg-muted/30 ${picked === s.workspace_id ? "bg-muted/40" : ""}`}
+              key={sub.id}
+              onClick={() => setPicked(sub.workspace_id)}
+              className={`w-full text-left px-4 py-3 hover:bg-muted/30 ${picked === sub.workspace_id ? "bg-muted/40" : ""}`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">{s.workspaces?.name ?? s.workspace_id.slice(0, 8)}</span>
-                <Badge variant="outline" className="text-[10px]">{s.status}</Badge>
+                <span className="text-sm font-medium">{sub.workspaces?.name ?? shortenId(sub.workspace_id)}</span>
+                <Badge variant="outline" className="text-[10px]">{sub.status}</Badge>
               </div>
               <p className="text-[11px] text-muted-foreground mt-0.5">
-                {s.technician_count} técnicos · {Number(s.current_price).toFixed(2)} €
-                {s.legal_hold ? " · ⚠ legal hold" : ""}
-                {s.suspension_mode ? ` · ${s.suspension_mode}` : ""}
+                {sub.technician_count} técnicos · {Number(sub.current_price).toFixed(2)} €
+                {sub.legal_hold ? " · legal hold" : ""}
+                {sub.suspension_mode ? ` · ${sub.suspension_mode}` : ""}
               </p>
             </button>
           ))}
@@ -619,7 +719,7 @@ function LifecycleTab() {
 
             <div>
               <label className="text-[11px] text-muted-foreground">Motivo (auditoria)</label>
-              <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="ex: pagamento não recebido" />
+              <Input value={reason} onChange={(event: any) => setReason(event.target.value)} placeholder="ex: pagamento não recebido" />
             </div>
 
             <div>
@@ -661,23 +761,16 @@ function LifecycleTab() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Audit — append-only billing audit log
-// ---------------------------------------------------------------------------
 function AuditTab() {
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["platform-audit-logs"],
     refetchInterval: 30_000,
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("billing_audit_logs")
-        .select("*, workspaces(name)")
-        .order("created_at", { ascending: false })
-        .limit(300);
-      if (error) throw error;
-      return data ?? [];
+    queryFn: async (): Promise<PlatformAuditLog[]> => {
+      const data = await apiRequest<{ logs: PlatformAuditLog[] }>("/billing/admin/audit-logs");
+      return data.logs ?? [];
     },
   });
+
   if (isLoading) return <LoadingState variant="table" />;
 
   return (
@@ -702,22 +795,22 @@ function AuditTab() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((e: any) => (
-                <tr key={e.id} className="border-t border-border/40">
-                  <td className="px-4 py-2 text-xs whitespace-nowrap">{new Date(e.created_at).toLocaleString("pt-PT")}</td>
-                  <td className="px-4 py-2 text-xs">{e.workspaces?.name ?? (e.workspace_id ? e.workspace_id.slice(0, 8) : "—")}</td>
-                  <td className="px-4 py-2 text-xs font-mono">{e.category}</td>
-                  <td className="px-4 py-2 text-xs">{e.action}</td>
+              {rows.map((event: PlatformAuditLog) => (
+                <tr key={event.id} className="border-t border-border/40">
+                  <td className="px-4 py-2 text-xs whitespace-nowrap">{formatDate(event.created_at, true)}</td>
+                  <td className="px-4 py-2 text-xs">{event.workspaces?.name ?? shortenId(event.workspace_id)}</td>
+                  <td className="px-4 py-2 text-xs font-mono">{event.category}</td>
+                  <td className="px-4 py-2 text-xs">{event.action}</td>
                   <td className="px-4 py-2">
                     <Badge
                       variant="outline"
                       className={`text-[10px] ${
-                        e.severity === "critical" ? "border-red-500/40 text-red-500" :
-                        e.severity === "warning"  ? "border-amber-500/40 text-amber-500" : ""
+                        event.severity === "critical" ? "border-red-500/40 text-red-500" :
+                        event.severity === "warning" ? "border-amber-500/40 text-amber-500" : ""
                       }`}
-                    >{e.severity}</Badge>
+                    >{event.severity}</Badge>
                   </td>
-                  <td className="px-4 py-2 text-xs text-muted-foreground">{e.message ?? "—"}</td>
+                  <td className="px-4 py-2 text-xs text-muted-foreground">{event.message ?? "—"}</td>
                 </tr>
               ))}
             </tbody>

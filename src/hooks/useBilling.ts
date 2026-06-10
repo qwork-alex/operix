@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 import { useWorkspace } from "./useWorkspace";
 import { toast } from "sonner";
 
@@ -37,13 +37,10 @@ export function useBillingProfile() {
     queryKey: ["billing-profile", workspaceId],
     enabled: !!workspaceId,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("billing_profiles")
-        .select("*")
-        .eq("workspace_id", workspaceId!)
-        .maybeSingle();
-      if (error) throw error;
-      return data as BillingProfile | null;
+      const data = await apiRequest<{ profile: BillingProfile | null }>(
+        `/billing/workspaces/${workspaceId}/profile`,
+      );
+      return data.profile;
     },
   });
 }
@@ -54,13 +51,12 @@ export function useSaveBillingProfile() {
   return useMutation({
     mutationFn: async (payload: Partial<BillingProfile>) => {
       if (!workspaceId) throw new Error("no workspace");
-      const { data, error } = await supabase
-        .from("billing_profiles")
-        .upsert({ ...payload, workspace_id: workspaceId } as any, { onConflict: "workspace_id" })
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      const data = await apiRequest<{ profile: BillingProfile }>(`/billing/workspaces/${workspaceId}/profile`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      return data.profile;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["billing-profile", workspaceId] });
@@ -76,13 +72,10 @@ export function usePaymentMethods() {
     queryKey: ["payment-methods", workspaceId],
     enabled: !!workspaceId,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("payment_methods")
-        .select("*")
-        .eq("workspace_id", workspaceId!)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as PaymentMethod[];
+      const data = await apiRequest<{ methods: PaymentMethod[] }>(
+        `/billing/workspaces/${workspaceId}/payment-methods`,
+      );
+      return data.methods ?? [];
     },
   });
 }
@@ -93,13 +86,15 @@ export function useAddPaymentMethod() {
   return useMutation({
     mutationFn: async (pm: Partial<PaymentMethod>) => {
       if (!workspaceId) throw new Error("no workspace");
-      const { data, error } = await supabase
-        .from("payment_methods")
-        .insert({ ...pm, workspace_id: workspaceId, provider: "mock" } as any)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      const data = await apiRequest<{ method: PaymentMethod }>(
+        `/billing/workspaces/${workspaceId}/payment-methods`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(pm),
+        },
+      );
+      return data.method;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["payment-methods", workspaceId] });
@@ -115,14 +110,10 @@ export function useSubscriptionEvents(limit = 50) {
     queryKey: ["subscription-events", workspaceId, limit],
     enabled: !!workspaceId,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("subscription_events")
-        .select("*")
-        .eq("workspace_id", workspaceId!)
-        .order("created_at", { ascending: false })
-        .limit(limit);
-      if (error) throw error;
-      return data ?? [];
+      const data = await apiRequest<{ events: any[] }>(
+        `/billing/workspaces/${workspaceId}/subscription-events?limit=${limit}`,
+      );
+      return data.events ?? [];
     },
   });
 }
@@ -132,13 +123,10 @@ export function useStartCheckout() {
   return useMutation({
     mutationFn: async (args: { plan_code: string; cycle: "monthly" | "yearly" }) => {
       if (!workspaceId) throw new Error("no workspace");
-      const { data, error } = await supabase.rpc("start_workspace_checkout", {
-        _workspace_id: workspaceId,
-        _plan_code: args.plan_code,
-        _cycle: args.cycle,
-      });
-      if (error) throw error;
-      return data;
+      return {
+        workspace_id: workspaceId,
+        lookup_key: `${args.plan_code}_${args.cycle}`,
+      };
     },
   });
 }
@@ -149,28 +137,12 @@ export function useDeclareManualTransfer() {
   return useMutation({
     mutationFn: async (args: { amount: number; currency?: string; invoice_id?: string; bank_account_id?: string }) => {
       if (!workspaceId) throw new Error("no workspace");
-      const ref = `MBT-${Date.now().toString(36).toUpperCase()}`;
-      const { data, error } = await supabase
-        .from("manual_bank_transfers")
-        .insert({
-          workspace_id: workspaceId,
-          reference_code: ref,
-          amount: args.amount,
-          currency: args.currency ?? "EUR",
-          invoice_id: args.invoice_id ?? null,
-          bank_account_id: args.bank_account_id ?? null,
-        } as any)
-        .select()
-        .single();
-      if (error) throw error;
-      await supabase.rpc("log_subscription_event", {
-        _workspace_id: workspaceId,
-        _event_type: "manual_transfer_declared",
-        _severity: "info",
-        _message: "Transferência bancária declarada (aguardando revisão)",
-        _metadata: { reference: ref, amount: args.amount } as any,
+      const data = await apiRequest<{ transfer: any }>(`/billing/workspaces/${workspaceId}/manual-transfers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(args),
       });
-      return data;
+      return data.transfer;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["manual-transfers"] });

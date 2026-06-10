@@ -1,0 +1,419 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  fullName     String   @map("full_name")
+  role         String   @default("admin")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  appUser   AppUser?
+  profile   Profile?
+  userRole  UserRole?
+
+  @@map("users")
+}
+
+model AppUser {
+  id         String   @id @default(uuid())
+  authUserId String   @unique @map("auth_user_id")
+  email      String
+  name       String?
+  phone      String?
+  workspaceId String? @map("workspace_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user             User        @relation(fields: [authUserId], references: [id], onDelete: Cascade)
+  memberships      Membership[]
+  ownedWorkspaces  Workspace[] @relation("WorkspaceOwner")
+
+  @@map("app_users")
+}
+
+model Profile {
+  id            String   @id
+  fullName      String   @map("full_name")
+  email         String?
+  phone         String?
+  address       String?
+  avatarUrl     String?  @map("avatar_url")
+  displayCode   String?  @unique @map("display_code")
+  isSystemOwner Boolean  @default(false) @map("is_system_owner")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [id], references: [id], onDelete: Cascade)
+
+  @@map("profiles")
+}
+
+model UserRole {
+  id     String @id @default(uuid())
+  userId String @unique @map("user_id")
+  role   String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_roles")
+}
+
+model Workspace {
+  id          String   @id @default(uuid())
+  name        String
+  ownerUserId String   @map("owner_user_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  owner             AppUser              @relation("WorkspaceOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  memberships       Membership[]
+  billingProfile    BillingProfile?
+  subscription      WorkspaceSubscription?
+  paymentMethods    PaymentMethod[]
+  subscriptionEvents SubscriptionEvent[]
+  manualTransfers   ManualBankTransfer[]
+  invoices          PlatformInvoice[]
+  billingClients    BillingClient[]
+  billingSuppliers  BillingSupplier[]
+  billingInvoices   BillingInvoice[]
+  billingAttachments BillingAttachment[]
+  backendEventLogs  BackendEventLog[]
+
+  @@map("workspaces")
+}
+
+model Membership {
+  id          String   @id @default(uuid())
+  workspaceId String   @map("workspace_id")
+  userId      String   @map("user_id")
+  role        String   @default("admin")
+  source      String   @default("system")
+  status      String   @default("active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      AppUser   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@map("memberships")
+}
+
+model BillingProfile {
+  id                String   @id @default(uuid())
+  workspaceId       String   @unique @map("workspace_id")
+  legalName         String   @map("legal_name")
+  billingEmail      String   @map("billing_email")
+  vatNumber         String?  @map("vat_number")
+  country           String   @default("PT")
+  isBusiness        Boolean  @default(true) @map("is_business")
+  companyName       String?  @map("company_name")
+  billingAddress    String?  @map("billing_address")
+  city              String?
+  postalCode        String?  @map("postal_code")
+  preferredCurrency String   @default("EUR") @map("preferred_currency")
+  vatMode           String   @default("manual") @map("vat_mode")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("billing_profiles")
+}
+
+model WorkspaceSubscription {
+  id                   String    @id @default(uuid())
+  workspaceId          String    @unique @map("workspace_id")
+  planCode             String    @default("starter") @map("plan_code")
+  status               String    @default("trial")
+  billingCycle         String    @default("monthly") @map("billing_cycle")
+  trialStartedAt       DateTime  @default(now()) @map("trial_started_at")
+  trialEndsAt          DateTime? @map("trial_ends_at")
+  currentPeriodStart   DateTime? @map("current_period_start")
+  currentPeriodEnd     DateTime? @map("current_period_end")
+  graceUntil           DateTime? @map("grace_until")
+  cancelledAt          DateTime? @map("cancelled_at")
+  stripeSubscriptionId String?   @map("stripe_subscription_id")
+  stripeCustomerId     String?   @map("stripe_customer_id")
+  stripePriceLookupKey String?   @map("stripe_price_lookup_key")
+  stripeEnvironment    String?   @map("stripe_environment")
+  lastRecalculatedAt   DateTime? @map("last_recalculated_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("workspace_subscriptions")
+}
+
+model PaymentMethod {
+  id          String   @id @default(uuid())
+  workspaceId String   @map("workspace_id")
+  kind        String
+  brand       String?
+  last4       String?
+  holderName  String?  @map("holder_name")
+  ibanMasked  String?  @map("iban_masked")
+  isDefault   Boolean  @default(false) @map("is_default")
+  provider    String   @default("mock")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("payment_methods")
+}
+
+model SubscriptionEvent {
+  id         String   @id @default(uuid())
+  workspaceId String  @map("workspace_id")
+  eventType  String   @map("event_type")
+  severity   String   @default("info")
+  message    String?
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("subscription_events")
+}
+
+model ManualBankTransfer {
+  id            String   @id @default(uuid())
+  workspaceId    String  @map("workspace_id")
+  referenceCode  String  @unique @map("reference_code")
+  amount         Float
+  currency       String  @default("EUR")
+  invoiceId      String? @map("invoice_id")
+  bankAccountId  String? @map("bank_account_id")
+  paymentMethod  String? @map("payment_method")
+  transferDate   DateTime? @map("transfer_date")
+  proofPath      String? @map("proof_path")
+  proofName      String? @map("proof_name")
+  notes          String?
+  reviewerNotes  String? @map("reviewer_notes")
+  reviewedAt     DateTime? @map("reviewed_at")
+  status         String  @default("awaiting_transfer")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("manual_bank_transfers")
+}
+
+model PlatformInvoice {
+  id           String   @id @default(uuid())
+  workspaceId   String  @map("workspace_id")
+  invoiceNumber String  @unique @map("invoice_number")
+  issueDate     DateTime @map("issue_date")
+  dueDate       DateTime? @map("due_date")
+  total         Float
+  subtotal      Float?
+  vatAmount     Float?  @map("vat_amount")
+  status        String  @default("pending")
+  paidAt        DateTime? @map("paid_at")
+  vatMode       String? @map("vat_mode")
+  pdfPath       String? @map("pdf_path")
+  pdfUrl        String? @map("pdf_url")
+  bankSnapshot  Json?   @map("bank_snapshot")
+  metadata      Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("platform_invoices")
+}
+
+model PlatformBankAccount {
+  id          String   @id @default(uuid())
+  bankName    String   @map("bank_name")
+  accountName String   @map("account_name")
+  iban        String?
+  bic         String?
+  country     String
+  currency    String   @default("EUR")
+  accountType String   @default("business") @map("account_type")
+  isPrimary   Boolean  @default(false) @map("is_primary")
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("platform_bank_accounts")
+}
+
+model BillingClient {
+  id                String    @id @default(uuid())
+  workspaceId       String?   @map("workspace_id")
+  visibilityScope   String    @default("workspace") @map("visibility_scope")
+  kind              String    @default("professional")
+  name              String
+  siren             String?
+  siret             String?
+  tvaIntracom       String?   @map("tva_intracom")
+  taxId             String?   @map("tax_id")
+  email             String?
+  phone             String?
+  address           String?
+  addressComplement String?   @map("address_complement")
+  postalCode        String?   @map("postal_code")
+  city              String?
+  country           String?
+  iban              String?
+  bic               String?
+  contacts          Json?
+  notes             String?
+  isActive          Boolean   @default(true) @map("is_active")
+  createdBy         String?   @map("created_by")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  workspace    Workspace?          @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  invoices     BillingInvoice[]
+  attachments  BillingAttachment[]
+
+  @@map("billing_clients")
+}
+
+model BillingSupplier {
+  id             String    @id @default(uuid())
+  workspaceId     String?   @map("workspace_id")
+  name           String
+  email          String?
+  phone          String?
+  address        String?
+  documentNumber String?   @map("document_number")
+  taxId          String?   @map("tax_id")
+  iban           String?
+  bank           String?
+  category       String?
+  notes          String?
+  isActive       Boolean   @default(true) @map("is_active")
+  createdBy      String?   @map("created_by")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  workspace    Workspace?          @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  invoices     BillingInvoice[]
+  attachments  BillingAttachment[]
+
+  @@map("billing_suppliers")
+}
+
+model BillingInvoice {
+  id                     String    @id @default(uuid())
+  workspaceId            String?   @map("workspace_id")
+  visibilityScope        String    @default("workspace") @map("visibility_scope")
+  invoiceNumber          String    @map("invoice_number")
+  type                   String    @default("outgoing")
+  supplierId             String?   @map("supplier_id")
+  billingClientId        String?   @map("billing_client_id")
+  customerName           String?   @map("customer_name")
+  customerSnapshot       Json?     @map("customer_snapshot")
+  vehicleId              String?   @map("vehicle_id")
+  fleetId                String?   @map("fleet_id")
+  serviceOrderId         String?   @map("service_order_id")
+  issueDate              DateTime  @default(now()) @map("issue_date")
+  dueDate                DateTime? @map("due_date")
+  totalAmount            Float     @default(0) @map("total_amount")
+  paidAmount             Float     @default(0) @map("paid_amount")
+  remainingAmount        Float?    @default(0) @map("remaining_amount")
+  status                 String    @default("pending")
+  notes                  String?
+  metadata               Json?
+  source                 String    @default("manual")
+  createdBy              String?   @map("created_by")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+  deletedAt              DateTime? @map("deleted_at")
+  deletedBy              String?   @map("deleted_by")
+  deletedReason          String?   @map("deleted_reason")
+  financialSyncLock      Boolean   @default(false) @map("financial_sync_lock")
+  lastFinancialEventHash String?   @map("last_financial_event_hash")
+  lastFinancialSyncAt    DateTime? @map("last_financial_sync_at")
+  stripeInvoiceId        String?   @map("stripe_invoice_id")
+  stripePaymentIntentId  String?   @map("stripe_payment_intent_id")
+  syncRevision           Int       @default(1) @map("sync_revision")
+  yearReference          Int?      @map("year_reference")
+
+  workspace    Workspace?          @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  client       BillingClient?      @relation(fields: [billingClientId], references: [id], onDelete: SetNull)
+  supplier     BillingSupplier?    @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  attachments  BillingAttachment[]
+  sendLogs     InvoiceSendLog[]
+
+  @@index([workspaceId, issueDate])
+  @@index([billingClientId])
+  @@map("billing_invoices")
+}
+
+model BillingAttachment {
+  id              String    @id @default(uuid())
+  workspaceId      String?   @map("workspace_id")
+  invoiceId       String?   @map("invoice_id")
+  paymentId       String?   @map("payment_id")
+  supplierId      String?   @map("supplier_id")
+  billingClientId String?   @map("billing_client_id")
+  fileName        String    @map("file_name")
+  storagePath     String    @map("storage_path")
+  mimeType        String?   @map("mime_type")
+  sizeBytes       Int?      @map("size_bytes")
+  uploadedBy      String?   @map("uploaded_by")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  workspace Workspace?       @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  invoice   BillingInvoice?  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  supplier  BillingSupplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  client    BillingClient?   @relation(fields: [billingClientId], references: [id], onDelete: SetNull)
+
+  @@index([invoiceId])
+  @@index([billingClientId])
+  @@map("billing_attachments")
+}
+
+model InvoiceSendLog {
+  id             String    @id @default(uuid())
+  invoiceId      String    @map("invoice_id")
+  recipient      String
+  cc             String?
+  subject        String
+  body           String?
+  provider       String    @default("self_hosted")
+  status         String    @default("sent")
+  error          String?
+  idempotencyKey String?   @map("idempotency_key")
+  pdfPath        String?   @map("pdf_path")
+  kind           String    @default("initial")
+  sentBy         String?   @map("sent_by")
+  sentAt         DateTime? @map("sent_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  invoice BillingInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId, createdAt])
+  @@map("invoice_send_log")
+}
+
+model BackendEventLog {
+  id          String   @id @default(uuid())
+  tableName   String   @map("table_name")
+  rowId       String?  @map("row_id")
+  action      String
+  payload     Json?
+  actorUserId String?  @map("actor_user_id")
+  workspaceId String?  @map("workspace_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+  @@index([tableName, rowId, createdAt])
+  @@map("backend_event_logs")
+}

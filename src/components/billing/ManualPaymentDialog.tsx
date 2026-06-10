@@ -81,8 +81,9 @@ export function ManualPaymentDialog({ invoice, open, onOpenChange }: Props) {
         currency: invoice?.metadata?.currency ?? "EUR",
         payment_method: method,
         bank_account_id: activeAccount.id,
-        transfer_date: transferDate,
+        transfer_date: transferDate ? new Date(`${transferDate}T12:00:00.000Z`).toISOString() : null,
         proof_path: proofPath,
+        proof_name: file?.name ?? null,
         notes: notes || null,
       });
       toast.success(proofPath ? "Comprovante enviado — em análise" : "Registado · aguardando transferência");
