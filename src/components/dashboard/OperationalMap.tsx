@@ -1218,7 +1218,7 @@ export function OperationalMap() {
     setLayers((prev) => ({ ...prev, [k]: !prev[k] }));
   }, []);
 
-  const isLoading = loadingSO || loadingGeo;
+  const isLoadingOperationalData = loadingSO || loadingGeo;
 
   return (
     <div className="glass-panel rounded-xl p-5 animate-fade-in">
@@ -1312,11 +1312,16 @@ export function OperationalMap() {
           style={{ background: "#0a1628" }}
         />
         {/* Loading overlay (mapa base permanece sempre montado) */}
-        {(isLoading || !mapReady) && !mapError && (
+        {!mapReady && !mapError && (
           <div className="absolute inset-0 rounded-lg bg-[#0a1628]/60 backdrop-blur-sm flex items-center justify-center pointer-events-none">
             <div className="text-[11px] text-cyan-300/80 animate-pulse">
-              {!mapReady ? "Inicializando mapa…" : "Carregando dados operacionais…"}
+              Inicializando mapa…
             </div>
+          </div>
+        )}
+        {mapReady && isLoadingOperationalData && !mapError && (
+          <div className="absolute top-2 right-2 z-10 text-[10px] text-cyan-300/85 bg-[#0a1628]/70 border border-cyan-500/20 rounded px-2 py-1 pointer-events-none backdrop-blur-sm">
+            Carregando dados operacionais…
           </div>
         )}
         {/* Map init/WebGL error fallback with retry + non-WebGL list */}
