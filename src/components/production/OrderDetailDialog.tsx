@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Save, Trash2, Lock, Minimize2 } from "lucide-react";
+import { Save, Trash2, Lock, Minimize2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { getCurrentUserId } from "@/lib/authUser";
@@ -24,6 +24,8 @@ import { useExtractProductionOrder } from "@/hooks/useExtractProductionOrder";
 interface Props {
   order: ProductionOrder | null;
   onClose: () => void;
+  /** ID do rascunho a retomar. Se omitido, gera um novo UUID por sessão. */
+  draftId?: string;
 }
 
 /**
@@ -32,17 +34,23 @@ interface Props {
  * - Ordens existentes são persistidas no banco e nunca encerradas ao minimizar.
  * - "Minimizar" apenas fecha o diálogo, mantendo a OS viva até status = finished.
  */
-export function OrderDetailDialog({ order, onClose }: Props) {
+export function OrderDetailDialog({ order, onClose, draftId }: Props) {
   const { update, remove, create } = useProductionOrders();
   const [form, setForm] = useState<Partial<ProductionOrder>>({});
   const [activeTab, setActiveTab] = useState("info");
   const isNew = order?.id === "__new__";
   const locked = !isNew && isOrderLocked(order?.status);
   const { extract, isExtracting } = useExtractProductionOrder();
+  const [ocrStatus, setOcrStatus] = useState<{ type: "error" | "success"; message: string } | null>(null);
+
+  // Unique ID per creation session — stable across re-renders, fresh on re-mount.
+  const sessionDraftId = useRef(crypto.randomUUID());
+  const resolvedDraftId = draftId ?? sessionDraftId.current;
 
   const draftKey = useMemo(
-    () => isNew ? "production-draft-new" : `production-draft-${order?.id ?? "noop"}`,
-    [isNew, order?.id],
+    () => isNew ? `production-draft-new-${resolvedDraftId}` : `production-draft-${order?.id ?? "noop"}`,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isNew, order?.id, resolvedDraftId],
   );
 
   // Restore + autosave draft (only meaningful for new orders; existing OS already lives in DB)
@@ -119,6 +127,7 @@ export function OrderDetailDialog({ order, onClose }: Props) {
 
   const applyOcr = async (files: File[]) => {
     if (!files.length) return;
+    setOcrStatus(null);
     try {
       const res = await extract(files[0]);
       const next: Partial<ProductionOrder> = {};
@@ -133,10 +142,13 @@ export function OrderDetailDialog({ order, onClose }: Props) {
       if (o.insurer && !form.insurer) next.insurer = o.insurer;
       if (o.vehicle_notes && !form.notes) next.notes = o.vehicle_notes;
       setForm((f) => ({ ...f, ...next }));
-      if (res.confidence === "low") toast.warning("OCR com baixa confiança. Revise os campos.");
-      else toast.success("Dados extraídos. Revise antes de salvar.");
+      const msg = res.confidence === "low"
+        ? "Dados extraídos com baixa confiança — revise os campos antes de salvar."
+        : "Dados extraídos com sucesso. Revise antes de salvar.";
+      setOcrStatus({ type: "success", message: msg });
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Falha no OCR.");
+      const msg = e instanceof Error ? e.message : "Falha no OCR.";
+      setOcrStatus({ type: "error", message: msg });
     }
   };
 
@@ -197,6 +209,18 @@ export function OrderDetailDialog({ order, onClose }: Props) {
                 <div className="mt-3">
                   <FileUploadZone onFilesSelected={applyOcr} isProcessing={isExtracting} compact />
                 </div>
+                {ocrStatus && (
+                  <div className={`mt-2 flex items-start gap-2 rounded-md px-3 py-2 text-xs ${
+                    ocrStatus.type === "error"
+                      ? "bg-destructive/10 text-destructive"
+                      : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                  }`}>
+                    {ocrStatus.type === "error"
+                      ? <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      : <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />}
+                    <span>{ocrStatus.message}</span>
+                  </div>
+                )}
               </div>
             )}
             <fieldset disabled={locked} className="space-y-4 disabled:opacity-80">
