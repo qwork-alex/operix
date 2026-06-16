@@ -1352,7 +1352,7 @@ function mergeEvents(events: HailEvent[]): { merged: HailEvent[]; removed: numbe
 
 
 /* =================================================================== HTTP */
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const t0 = Date.now();
@@ -1391,6 +1391,9 @@ Deno.serve(async (req) => {
       let apiKey: string | undefined;
       if (row.requires_api_key) {
         apiKey = row.api_key_secret_name ? Deno.env.get(row.api_key_secret_name) ?? undefined : undefined;
+        if (!apiKey && row.api_key_secret_name === "TOMORROWIO_API_KEY") {
+          apiKey = Deno.env.get("TOMORROW_API_KEY") ?? undefined;
+        }
         if (!apiKey) {
           providerStatus[row.key] = "no_api_key";
           await recordCall(supabase, row.key, "skipped", { error: "no_api_key" });

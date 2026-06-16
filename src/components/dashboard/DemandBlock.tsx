@@ -150,7 +150,7 @@ export default function DemandBlock({
       </>
     );
   } catch (e) {
-    console.warn("[DemandBlock] failsafe — render skipped:", e);
+    void e;
     return null;
   }
 }

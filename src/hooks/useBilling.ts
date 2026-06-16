@@ -36,9 +36,13 @@ export function useBillingProfile() {
   return useQuery({
     queryKey: ["billing-profile", workspaceId],
     enabled: !!workspaceId,
+    retry: 0,
+    staleTime: 60_000,
+    placeholderData: (previousData) => previousData ?? null,
     queryFn: async () => {
       const data = await apiRequest<{ profile: BillingProfile | null }>(
         `/billing/workspaces/${workspaceId}/profile`,
+        { timeoutMs: 8000 },
       );
       return data.profile;
     },
@@ -71,9 +75,13 @@ export function usePaymentMethods() {
   return useQuery({
     queryKey: ["payment-methods", workspaceId],
     enabled: !!workspaceId,
+    retry: 0,
+    staleTime: 60_000,
+    placeholderData: (previousData) => previousData ?? [],
     queryFn: async () => {
       const data = await apiRequest<{ methods: PaymentMethod[] }>(
         `/billing/workspaces/${workspaceId}/payment-methods`,
+        { timeoutMs: 8000 },
       );
       return data.methods ?? [];
     },
@@ -109,9 +117,13 @@ export function useSubscriptionEvents(limit = 50) {
   return useQuery({
     queryKey: ["subscription-events", workspaceId, limit],
     enabled: !!workspaceId,
+    retry: 0,
+    staleTime: 60_000,
+    placeholderData: (previousData) => previousData ?? [],
     queryFn: async () => {
       const data = await apiRequest<{ events: any[] }>(
         `/billing/workspaces/${workspaceId}/subscription-events?limit=${limit}`,
+        { timeoutMs: 8000 },
       );
       return data.events ?? [];
     },

@@ -37,7 +37,7 @@ export const InternalChannel: NotificationChannel = {
     } catch {
       /* swallow — bus may not be ready in tests */
     }
-    return { channel: "internal", status: "simulated", at: Date.now() };
+    return { channel: "internal", status: "sent", at: Date.now() };
   },
 };
 

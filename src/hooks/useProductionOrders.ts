@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useWorkspace } from "./useWorkspace";
 import { useAuth } from "./useAuth";
 import { toast } from "sonner";
+import { withAbortableTimeout, withPromiseTimeout } from "@/lib/asyncGuard";
 
 export type ProductionStatus =
   | "new_vehicle" | "triage" | "awaiting_validation" | "in_production"
@@ -105,21 +106,28 @@ export function useProductionOrders(filters?: { technicianOnly?: boolean; status
         .order("created_at", { ascending: false });
       if (filters?.status) q = q.eq("status", filters.status);
       if (filters?.technicianOnly && user?.id) q = q.eq("technician_user_id", user.id);
-      const { data, error } = await q;
+      const { data, error } = await withPromiseTimeout<any>(q, 10000, "production_orders");
       if (error) throw error;
       return (data ?? []) as ProductionOrder[];
     },
+    retry: 0,
+    placeholderData: (previousData) => previousData ?? [],
   });
 
   const create = useMutation({
     mutationFn: async (payload: Partial<ProductionOrder>) => {
       if (!workspaceId) throw new Error("Workspace ausente");
       const clean = normalizeProductionOrderPayload(payload);
-      const { data, error } = await (supabase as any)
-        .from("production_orders")
-        .insert({ priority: "normal", status: "new_vehicle", ...clean, workspace_id: workspaceId })
-        .select()
-        .single();
+      const { data, error } = await withAbortableTimeout<{ data: any; error: any }>(
+        async (signal) =>
+          ((supabase as any)
+            .from("production_orders")
+            .insert({ priority: "normal", status: "new_vehicle", ...clean, workspace_id: workspaceId })
+            .select()
+            .single() as any).abortSignal(signal),
+        12000,
+        "production_orders_create",
+      );
       if (error) throw error;
       return data as ProductionOrder;
     },
@@ -138,12 +146,17 @@ export function useProductionOrders(filters?: { technicianOnly?: boolean; status
       if (clean.status === "in_production" && !clean.started_at) stamp.started_at = new Date().toISOString();
       if (clean.status === "finished" && !clean.finished_at) stamp.finished_at = new Date().toISOString();
       if (clean.status === "delivered" && !clean.delivered_at) stamp.delivered_at = new Date().toISOString();
-      const { data, error } = await (supabase as any)
-        .from("production_orders")
-        .update({ ...clean, ...stamp })
-        .eq("id", id)
-        .select()
-        .single();
+      const { data, error } = await withAbortableTimeout<{ data: any; error: any }>(
+        async (signal) =>
+          ((supabase as any)
+            .from("production_orders")
+            .update({ ...clean, ...stamp })
+            .eq("id", id)
+            .select()
+            .single() as any).abortSignal(signal),
+        12000,
+        "production_orders_update",
+      );
       if (error) throw error;
       return data as ProductionOrder;
     },
@@ -153,7 +166,12 @@ export function useProductionOrders(filters?: { technicianOnly?: boolean; status
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await (supabase as any).from("production_orders").delete().eq("id", id);
+      const { error } = await withAbortableTimeout<{ data: any; error: any }>(
+        async (signal) =>
+          ((supabase as any).from("production_orders").delete().eq("id", id) as any).abortSignal(signal),
+        12000,
+        "production_orders_delete",
+      );
       if (error) throw error;
     },
     onSuccess: () => {
@@ -172,7 +190,7 @@ export function useProductionKpis() {
     queryKey: ["production_kpis", workspaceId],
     enabled: !!workspaceId,
     queryFn: async () => {
-      const { data, error } = await (supabase as any).rpc("production_kpis", { _workspace_id: workspaceId });
+      const { data, error } = await withPromiseTimeout<any>((supabase as any).rpc("production_kpis", { _workspace_id: workspaceId }), 10000, "production_kpis");
       if (error) throw error;
       return data as {
         in_progress: number; paused: number; finished_today: number; delivered_today: number;
@@ -188,14 +206,16 @@ export function useProductionTimeline(orderId: string | null) {
     queryKey: ["production_events", orderId],
     enabled: !!orderId,
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await withPromiseTimeout<any>((supabase as any)
         .from("production_events")
         .select("*")
         .eq("production_order_id", orderId)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false }), 10000, "production_events");
       if (error) throw error;
       return data ?? [];
     },
+    retry: 0,
+    placeholderData: (previousData) => previousData ?? [],
   });
 
   return query;

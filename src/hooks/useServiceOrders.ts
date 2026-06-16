@@ -10,6 +10,8 @@ import { useWorkspace } from "./useWorkspace";
 import { scopeQuery } from "@/lib/workspaceScope";
 import { getCurrentUserId, logSaveError, logSavePayload } from "@/lib/authUser";
 import { toast } from "sonner";
+import { withAbortableTimeout, withPromiseTimeout } from "@/lib/asyncGuard";
+import { pdfFirstPageToImageBase64 } from "@/lib/pdfUtils";
 
 export type ServiceOrder = Tables<"service_orders">;
 export type ServiceOrderInsert = TablesInsert<"service_orders">;
@@ -65,6 +67,11 @@ export function useServiceOrders(filters?: {
   const query = useQuery({
     queryKey: ["service_orders", workspaceId, filters, allowed, scope, user?.id],
     enabled: !permsLoading && allowed && !!user?.id,
+    retry: 0,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    placeholderData: (previousData) => previousData ?? [],
     queryFn: async () => {
       logScope("service_orders", "view", scope, allowed);
       if (!allowed) return [];
@@ -82,7 +89,11 @@ export function useServiceOrders(filters?: {
       if (filters?.assigned_user_id) q = q.eq("assigned_user_id", filters.assigned_user_id);
       if (filters?.week) q = q.eq("week", filters.week);
 
-      const { data, error } = await q;
+      const { data, error } = await withAbortableTimeout<{ data: any; error: any }>(
+        async (signal) => (q as any).abortSignal(signal),
+        10000,
+        "service_orders",
+      );
       if (error) throw error;
       return data;
     },
@@ -121,10 +132,15 @@ export function useServiceOrders(filters?: {
 
       logSavePayload("ServiceOrders:insert", currentUserId, payload);
 
-      const { data, error } = await (supabase as any)
-        .from("service_orders")
-        .insert(payload)
-        .select();
+      const { data, error } = await withAbortableTimeout<{ data: any; error: any }>(
+        async (signal) =>
+          ((supabase as any)
+            .from("service_orders")
+            .insert(payload)
+            .select() as any).abortSignal(signal),
+        12000,
+        "service_orders_insert",
+      );
       if (error) {
         logSaveError("ServiceOrders:insert", error);
         throw error;
@@ -135,10 +151,15 @@ export function useServiceOrders(filters?: {
         try {
           const groupIds = [...new Set(data.map(so => so.group_id).filter(Boolean))];
           if (groupIds.length > 0) {
-            const { data: profitRules } = await supabase
-              .from("profit_rules")
-              .select("group_ids, profit_rule_items(participant_name, percentage, participant_type)")
-              .eq("is_active", true);
+            const { data: profitRules } = await withAbortableTimeout<{ data: any; error: any }>(
+              async (signal) =>
+                (supabase
+                  .from("profit_rules")
+                  .select("group_ids, profit_rule_items(participant_name, percentage, participant_type)")
+                  .eq("is_active", true) as any).abortSignal(signal),
+              12000,
+              "service_orders_profit_rules",
+            );
 
             if (profitRules && profitRules.length > 0) {
               // Build map: group_id -> rule items (using group_ids array)
@@ -167,12 +188,17 @@ export function useServiceOrders(filters?: {
                 }
               }
               if (distributions.length > 0) {
-                await supabase.from("service_order_distributions").insert(distributions);
+                await withAbortableTimeout<{ data: any; error: any }>(
+                  async (signal) =>
+                    (supabase.from("service_order_distributions").insert(distributions) as any).abortSignal(signal),
+                  12000,
+                  "service_order_distributions_insert",
+                );
               }
             }
           }
         } catch (distErr) {
-          console.warn("[ServiceOrders] Distribution auto-create warning:", distErr);
+          void distErr;
         }
       }
 
@@ -193,11 +219,16 @@ export function useServiceOrders(filters?: {
       const currentUserId = await getCurrentUserId();
 
       // Fetch FULL existing record to merge — prevents data loss
-      const { data: existing, error: existingError } = await supabase
-        .from("service_orders")
-        .select("*")
-        .eq("id", id)
-        .single();
+      const { data: existing, error: existingError } = await withAbortableTimeout<{ data: any; error: any }>(
+        async (signal) =>
+          (supabase
+            .from("service_orders")
+            .select("*")
+            .eq("id", id)
+            .single() as any).abortSignal(signal),
+        12000,
+        "service_orders_fetch_existing",
+      );
 
       if (existingError) throw existingError;
 
@@ -228,12 +259,17 @@ export function useServiceOrders(filters?: {
 
       logSavePayload("ServiceOrders:update", currentUserId, payload);
 
-      const { data, error } = await (supabase as any)
-        .from("service_orders")
-        .update(payload)
-        .eq("id", id)
-        .select()
-        .single();
+      const { data, error } = await withAbortableTimeout<{ data: any; error: any }>(
+        async (signal) =>
+          ((supabase as any)
+            .from("service_orders")
+            .update(payload)
+            .eq("id", id)
+            .select()
+            .single() as any).abortSignal(signal),
+        12000,
+        "service_orders_update",
+      );
       if (error) {
         logSaveError("ServiceOrders:update", error);
         throw error;
@@ -245,7 +281,6 @@ export function useServiceOrders(filters?: {
       queryClient.invalidateQueries({ queryKey: ["financial-summary"] });
     },
     onError: (err) => {
-      console.error("[ServiceOrders] Update error:", err);
       toast.error("Failed to update: " + (err as Error).message);
     },
   });
@@ -267,43 +302,35 @@ export function useServiceOrders(filters?: {
   return { ...query, saveMutation, updateMutation, deleteMutation };
 }
 
+const EXTRACT_API_URL = (import.meta.env.VITE_API_URL ?? "/api") + "/extract/service-order";
+
 export function useExtractServiceOrder() {
   const [isExtracting, setIsExtracting] = useState(false);
 
   const extract = async (file: File): Promise<ExtractionResult> => {
     setIsExtracting(true);
     try {
-      const filePath = `service-orders/${Date.now()}_${file.name}`;
-      const { error: uploadError } = await supabase.storage
-        .from("uploads")
-        .upload(filePath, file);
-      if (uploadError) {
-        console.error("[Extract] Upload failed:", uploadError);
-        throw new Error(`File upload failed: ${uploadError.message}. Please check the file and try again.`);
+      const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+      const input = isPdf
+        ? await pdfFirstPageToImageBase64(file, { maxWidth: 1600, quality: 0.9 })
+        : { base64: await fileToBase64(file), mimeType: (file.type || "application/octet-stream") as string };
+
+      const res = await withPromiseTimeout<Response>(
+        fetch(EXTRACT_API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageBase64: input.base64, mimeType: input.mimeType, fileName: file.name }),
+        }),
+        30000,
+        "extract_service_order",
+      );
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(err.error ?? `Erro ${res.status}`);
       }
 
-      const base64 = await fileToBase64(file);
-
-      const { data, error } = await supabase.functions.invoke("extract-service-order", {
-        body: {
-          imageBase64: base64,
-          mimeType: file.type,
-          fileName: file.name,
-        },
-      });
-
-      if (error) {
-        console.error("[Extract] Edge function error:", error);
-        throw new Error(`OCR extraction failed: ${error.message}. Try re-uploading the document.`);
-      }
-      if (data?.error) {
-        console.error("[Extract] AI processing error:", data.error);
-        throw new Error(`AI could not process this document: ${data.error}`);
-      }
-      return data as ExtractionResult;
-    } catch (err) {
-      console.error("[Extract] Service order extraction error:", err);
-      throw err;
+      return res.json() as Promise<ExtractionResult>;
     } finally {
       setIsExtracting(false);
     }
@@ -327,8 +354,10 @@ function fileToBase64(file: File): Promise<string> {
 export function useClients() {
   return useQuery({
     queryKey: ["clients"],
+    retry: 0,
+    placeholderData: (previousData) => previousData ?? [],
     queryFn: async () => {
-      const { data, error } = await supabase.from("clients").select("id, name").order("name");
+      const { data, error } = await withPromiseTimeout<any>(supabase.from("clients").select("id, name").order("name"), 8000, "clients");
       if (error) throw error;
       return data;
     },
@@ -339,4 +368,3 @@ export function useClients() {
 // The system now uses `assigned_user_id` (auth.users.id) as the single source
 // of truth. Use `useAssignableUsers` and `useMyAssignableUserId` from
 // `@/hooks/useAssignableUsers` instead.
-

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Trash2, Pencil, Save, X, Loader2, ChevronDown, ChevronRight } from "lucide-react";
+import { Trash2, Pencil, Save, X, Loader2, ChevronDown, ChevronRight, Camera } from "lucide-react";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useAuth } from "@/hooks/useAuth";
 import { useClients } from "@/hooks/useServiceOrders";
@@ -23,6 +23,7 @@ import { BulkDeleteDialog } from "@/components/shared/BulkDeleteDialog";
 import { useTechnicianEarnings, getTechEarnings } from "@/hooks/useTechnicianEarnings";
 import { Can } from "@/components/Can";
 import { PlatformOpsToggle } from "@/components/service-orders/PlatformOpsToggle";
+import { ServiceOrderPhotosDialog } from "@/components/service-orders/ServiceOrderPhotosDialog";
 
 interface ServiceOrderRow {
   id: string;
@@ -117,6 +118,8 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
   const [editForm, setEditForm] = useState<EditState | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [photosOpen, setPhotosOpen] = useState(false);
+  const [photosOrderId, setPhotosOrderId] = useState<string | null>(null);
 
   // Use DB-stored status as single source of truth (synced by DB trigger)
   const getPaymentStatus = (o: ServiceOrderRow): PaymentStatus => {
@@ -209,7 +212,10 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
 
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const toggleCollapse = (k: string) => setCollapsedGroups(prev => {
-    const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n;
+    const n = new Set(prev);
+    if (n.has(k)) n.delete(k);
+    else n.add(k);
+    return n;
   });
 
   // --- Delete mutation ---
@@ -347,6 +353,11 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
   const cancelEdit = () => {
     setEditingId(null);
     setEditForm(null);
+  };
+
+  const openPhotos = (id: string) => {
+    setPhotosOrderId(id);
+    setPhotosOpen(true);
   };
 
   const updateField = (field: keyof EditState, value: string | number) => {
@@ -547,6 +558,9 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
                       <p className="text-xs text-muted-foreground">{services.length ? services.join(", ") : "Sem serviços"}</p>
                       {techEarn && <p className="text-[11px] text-muted-foreground">Tec. {techEarn.percentage}% · <span className="text-foreground">{formatCurrency(techEarn.earnings)}</span></p>}
                       <div className="flex justify-end gap-2 border-t border-border/50 pt-2">
+                        <Button variant="outline" size="sm" className="h-10" onClick={() => openPhotos(o.id)}>
+                          <Camera className="h-4 w-4 mr-1" /> Fotos
+                        </Button>
                         <Can permission="service_orders.edit"><Button variant="outline" size="sm" className="h-10" onClick={() => startEdit(o)}><Pencil className="h-4 w-4 mr-1" />Editar</Button></Can>
                         <Can permission="service_orders.delete"><Button variant="ghost" size="sm" className="h-10 text-destructive" onClick={() => deleteMutation.mutate(o.id)}><Trash2 className="h-4 w-4" /></Button></Can>
                       </div>
@@ -737,6 +751,9 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1">
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openPhotos(o.id)} aria-label="Fotos">
+                            <Camera className="h-3 w-3" />
+                          </Button>
                           <Can permission="service_orders.edit">
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(o)}>
                               <Pencil className="h-3 w-3" />
@@ -766,6 +783,15 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
         onConfirm={() => bulkDeleteMutation.mutate([...selected])}
         onCancel={() => setShowDeleteDialog(false)}
         isPending={bulkDeleteMutation.isPending}
+      />
+
+      <ServiceOrderPhotosDialog
+        open={photosOpen}
+        serviceOrderId={photosOrderId}
+        onOpenChange={(o) => {
+          setPhotosOpen(o);
+          if (!o) setPhotosOrderId(null);
+        }}
       />
     </div>
   );

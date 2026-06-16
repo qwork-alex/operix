@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { RealtimeHub } from "@/lib/realtime/RealtimeHub";
+import { withPromiseTimeout } from "@/lib/asyncGuard";
 
 export function useNotifications() {
   const { user } = useAuth();
@@ -11,13 +12,20 @@ export function useNotifications() {
   const { data: notifications = [], isLoading } = useQuery({
     queryKey: ["notifications", user?.id],
     enabled: !!user,
+    retry: 0,
+    staleTime: 30_000,
+    placeholderData: (previousData) => previousData ?? [],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await withPromiseTimeout<any>(
+        supabase
         .from("notifications")
         .select("*")
         .eq("user_id", user?.id ?? "")
         .order("created_at", { ascending: false })
-        .limit(50);
+        .limit(50),
+        8000,
+        "notifications",
+      );
       if (error) throw error;
       return data;
     },
@@ -69,7 +77,7 @@ export function useNotifications() {
       () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
     );
     return off;
-  }, [user?.id, queryClient]);
+  }, [user, queryClient]);
 
   return {
     notifications,

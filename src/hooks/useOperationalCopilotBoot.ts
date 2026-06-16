@@ -19,7 +19,7 @@ export function useOperationalCopilotBoot() {
     }
     return scheduleDeferredBoot("OperationalCopilot", () => {
       setReady(true);
-    }, { delayMs: 2600, idleTimeoutMs: 6000 });
+    }, { delayMs: 10000, idleTimeoutMs: 12000 });
   }, []);
 
   // Query stays disabled until `ready` flips post-paint/idle.

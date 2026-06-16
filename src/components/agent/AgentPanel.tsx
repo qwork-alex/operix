@@ -21,6 +21,7 @@ import { AgentConversationPanel } from "./AgentConversationPanel";
 import { MultimodalPanel } from "@/agents/multimodal";
 import { useAI } from "@/agents/ai";
 import { AGENT_OVERLAY_SIZE } from "@/agents/presence/MovementOrchestrator";
+import { useWorkspace } from "@/hooks/useWorkspace";
 
 
 interface Msg {
@@ -42,7 +43,7 @@ function loadHistory(): Msg[] {
   } catch { return []; }
 }
 function saveHistory(msgs: Msg[]) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(msgs.filter(m => !m.typing).slice(-60))); } catch {}
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(msgs.filter(m => !m.typing).slice(-60))); } catch { /* best effort */ }
 }
 
 function formatTime(at: number) {
@@ -57,6 +58,7 @@ export default function AgentPanel({ onClose }: Props) {
   const navigate = useNavigate();
   const { signals, worst, recent } = useOperationalSignals();
   const { snapshot: aiSnap } = useAI();
+  const { workspaceId } = useWorkspace();
   const [messages, setMessages] = useState<Msg[]>(() => loadHistory());
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -151,6 +153,10 @@ export default function AgentPanel({ onClose }: Props) {
   async function handleSend() {
     const text = input.trim();
     if (!text || busy) return;
+    if (!workspaceId) {
+      toast.error("Workspace ativo não encontrado.");
+      return;
+    }
 
     const userMsg: Msg = { id: `u-${Date.now()}`, from: "user", text, at: Date.now() };
     setMessages((m) => [...m, userMsg]);
@@ -179,6 +185,7 @@ export default function AgentPanel({ onClose }: Props) {
           route: ctx.pathname,
           module: ctx.label,
           online: ctx.online,
+          workspaceId,
           signals,
           recentEvents: recent,
         },
@@ -191,10 +198,14 @@ export default function AgentPanel({ onClose }: Props) {
         },
         onDone: () => {
           if (!accumulated) {
-            const fallback = localReply(text, signals);
             setMessages((m) =>
-              m.map((x) => (x.id === streamId ? { ...x, text: fallback, typing: false } : x)),
+              m.map((x) =>
+                x.id === streamId
+                  ? { ...x, text: "⚠ Sem resposta do agente. Tenta novamente.", typing: false }
+                  : x
+              ),
             );
+            toast.error("Sem resposta do agente.");
           }
         },
       });
@@ -204,7 +215,11 @@ export default function AgentPanel({ onClose }: Props) {
         : err instanceof Error
           ? `⚠ ${err.message}`
           : "⚠ Falha ao contactar o agente.";
-      const fallback = accumulated || `${msg}\n\n_Resposta local:_ ${localReply(text, signals)}`;
+      const fallback =
+        accumulated ||
+        (err instanceof RateLimitedError
+          ? msg
+          : `${msg}\n\n_Resposta local:_ ${localReply(text, signals)}`);
       setMessages((m) =>
         m.map((x) => (x.id === streamId ? { ...x, text: fallback, typing: false } : x)),
       );

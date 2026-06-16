@@ -14,6 +14,7 @@ import {
   useAIInference, useAIRecommendations, useAIInsights, useAIAlerts,
   useAIScores, useAIActionLog, useAIAction, type AITask,
 } from "@/hooks/useAIOrchestrator";
+import { useLanguage } from "@/hooks/useLanguage";
 
 const TASKS: { key: AITask; label: string; icon: any; group: "ops" | "score" | "risk" | "finance" }[] = [
   { key: "interpret_os",          label: "Interpretar OS",          icon: Brain,        group: "ops" },
@@ -68,6 +69,7 @@ function ReasoningTip({ reasoning }: { reasoning?: any }) {
 }
 
 export default function AIPage() {
+  const { t } = useLanguage();
   const inference = useAIInference();
   const action = useAIAction();
   const reco = useAIRecommendations();
@@ -106,10 +108,10 @@ export default function AIPage() {
         <div>
           <h1 className="font-display text-3xl tracking-tight flex items-center gap-2">
             <Brain className="h-7 w-7 text-primary" />
-            QWork AI
+            {t("nav.ai", "QWork AI")}
           </h1>
           <p className="text-sm text-muted-foreground">
-            Camada de inferência operacional. Toda recomendação é explicável (porquê, origem, contexto, confiança) e isolada por workspace.
+            {t("ai.subtitle", "Camada de inferência operacional. Toda recomendação é explicável e isolada por workspace.")}
           </p>
         </div>
         {inference.isPending && (
@@ -148,11 +150,11 @@ export default function AIPage() {
 
       <Tabs defaultValue="recommendations">
         <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="recommendations">Recomendações</TabsTrigger>
-          <TabsTrigger value="insights">Insights</TabsTrigger>
-          <TabsTrigger value="alerts">Alertas</TabsTrigger>
-          <TabsTrigger value="scores">Scoring</TabsTrigger>
-          <TabsTrigger value="timeline">Timeline</TabsTrigger>
+          <TabsTrigger value="recommendations">{t("ai.recommendations", "Recomendações")}</TabsTrigger>
+          <TabsTrigger value="insights">{t("ai.insights", "Insights")}</TabsTrigger>
+          <TabsTrigger value="alerts">{t("ai.alerts", "Alertas")}</TabsTrigger>
+          <TabsTrigger value="scores">{t("ai.scoring", "Scoring")}</TabsTrigger>
+          <TabsTrigger value="timeline">{t("ai.timeline", "Timeline")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="recommendations">

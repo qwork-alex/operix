@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { uploadFile, deleteFiles, getFileUrl } from "@/lib/storage";
 import { useAuth } from "@/hooks/useAuth";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { useLanguage } from "@/hooks/useLanguage";
@@ -20,6 +21,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { blobForCurrentVisualState, getDocumentDisplayName, getDocumentRotation, getDocumentZoom } from "@/lib/documentVisualState";
 import type { DocumentVisualState } from "@/lib/documentVisualState";
+import { withAbortableTimeout, withPromiseTimeout } from "@/lib/asyncGuard";
 
 interface Props {
   entityType: "service_order" | "payment_order";
@@ -43,21 +45,31 @@ interface PreviewState {
   [key: string]: any;
 }
 
-/** Get a fresh signed URL, never reuse stale ones */
-async function getFreshSignedUrl(storagePath: string, expiresIn = 600): Promise<string | null> {
-  try {
-    const { data, error } = await supabase.storage
-      .from("uploads")
-      .createSignedUrl(storagePath, expiresIn);
-    if (error) {
-      console.error("[FileManager] Signed URL error:", error.message);
-      return null;
-    }
-    return data?.signedUrl ?? null;
-  } catch (err) {
-    console.error("[FileManager] getFreshSignedUrl error:", err);
-    return null;
-  }
+function reportUploadDebug(payload: {
+  hypothesisId: string;
+  location: string;
+  msg: string;
+  data?: Record<string, unknown>;
+}) {
+  // #region debug-point U:upload-db-timeout
+  void fetch("http://127.0.0.1:7777/event", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      sessionId: "upload-db-timeout",
+      runId: "pre-fix",
+      hypothesisId: payload.hypothesisId,
+      location: payload.location,
+      msg: payload.msg,
+      data: payload.data ?? {},
+      ts: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+}
+
+function getFreshSignedUrl(storagePath: string): string {
+  return getFileUrl("uploads", storagePath);
 }
 
 /** Detect correct Content-Type from filename */
@@ -97,32 +109,17 @@ function revokeBlobUrl(url?: string | null) {
 
 async function fetchDocumentBlobUrl(
   doc: { name: string; storage_path?: string | null; mime_type?: string | null; [key: string]: any },
-  expiresIn = 120,
+  _expiresIn = 120,
 ) {
   if (!doc.storage_path) {
     throw new Error("File not available — storage path missing.");
   }
 
-  const signedUrl = await getFreshSignedUrl(doc.storage_path, expiresIn);
-  console.log("[FileManager] Signed URL generated:", {
-    file: doc.name,
-    expiresIn,
-    url: signedUrl ? signedUrl.substring(0, 120) : null,
-  });
+  const signedUrl = getFreshSignedUrl(doc.storage_path);
 
-  if (!signedUrl) {
-    throw new Error("Could not generate a fresh file URL.");
-  }
 
   const mimeType = getMimeType(doc.name, doc.mime_type);
   const response = await fetch(signedUrl);
-
-  console.log("[FileManager] Fetch status:", {
-    file: doc.name,
-    status: response.status,
-    ok: response.ok,
-    expiresIn,
-  });
 
   if (!response.ok) {
     throw new Error(`Failed to fetch file (${response.status}).`);
@@ -136,12 +133,6 @@ async function fetchDocumentBlobUrl(
     zoom: getDocumentZoom(doc),
   });
   const blobUrl = URL.createObjectURL(typedBlob);
-
-  console.log("[FileManager] Blob created:", {
-    file: doc.name,
-    type: typedBlob.type || mimeType,
-    size: typedBlob.size,
-  });
 
   return { blobUrl, mimeType, signedUrl, blob: typedBlob };
 }
@@ -270,7 +261,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
   const deleteMutation = useMutation({
     mutationFn: async (doc: any) => {
       if (doc.storage_path) {
-        await supabase.storage.from("uploads").remove([doc.storage_path]);
+        await deleteFiles("uploads", [doc.storage_path]);
       }
       const { error } = await supabase.from("documents").delete().eq("id", doc.id);
       if (error) throw error;
@@ -289,7 +280,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
         .filter((d: any) => d.storage_path)
         .map((d: any) => d.storage_path);
       if (storagePaths.length > 0) {
-        await supabase.storage.from("uploads").remove(storagePaths);
+        await deleteFiles("uploads", storagePaths);
       }
       const { error } = await supabase.from("documents").delete().in("id", ids);
       if (error) throw error;
@@ -376,14 +367,12 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
   const clearPreviewDoc = useCallback(() => {
     if (previewDoc?._blobUrl && previewDoc.url) {
       revokeBlobUrl(previewDoc.url);
-      console.log("[FileManager] Preview blob URL revoked");
     }
     setPreviewDoc(null);
   }, [previewDoc]);
 
   const ensureStoragePath = (doc: any, action: string): boolean => {
     if (!doc?.storage_path) {
-      console.warn(`[FileManager] ${action} skipped: no storage_path for`, doc?.name);
       toast.error("File not available — storage path missing.");
       return false;
     }
@@ -401,9 +390,13 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
       a.click();
       document.body.removeChild(a);
       setTimeout(() => revokeBlobUrl(blobUrl), 1000);
-      console.log("[FileManager] Download complete:", getDocumentDisplayName(doc));
     } catch (err) {
-      console.error("[FileManager] Download error:", err);
+      reportUploadDebug({
+        hypothesisId: "U",
+        location: "src/components/file-manager/EmbeddedFileManager.tsx:handleDownload",
+        msg: "[DEBUG] DATA_ERROR",
+        data: { error: err instanceof Error ? err.message : String(err) },
+      });
       toast.error(err instanceof Error ? err.message : "Download failed.");
     }
   };
@@ -420,11 +413,14 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
 
     try {
       const { blobUrl, mimeType } = await fetchDocumentBlobUrl(doc, 3600);
-      console.log("[FileManager] Preview: blob URL created", blobUrl.substring(0, 60));
-
       setPreviewDoc({ ...doc, name: getDocumentDisplayName(doc), url: blobUrl, mime_type: mimeType, status: "ready", _blobUrl: true });
     } catch (err) {
-      console.error("[FileManager] Preview error:", err);
+      reportUploadDebug({
+        hypothesisId: "U",
+        location: "src/components/file-manager/EmbeddedFileManager.tsx:handlePreview",
+        msg: "[DEBUG] DATA_ERROR",
+        data: { error: err instanceof Error ? err.message : String(err) },
+      });
       const message = err instanceof Error ? err.message : "Preview failed.";
       setPreviewDoc({ ...doc, name: getDocumentDisplayName(doc), mime_type: resolvedMime, status: "error", error: message });
       toast.error(message);
@@ -455,20 +451,29 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
       if (isPdfMime(mimeType)) {
         iframe.src = blobUrl;
         iframe.onload = () => {
-          console.log("[FileManager] Print iframe loaded:", doc.name);
           window.setTimeout(() => {
             try {
               iframe.contentWindow?.focus();
               iframe.contentWindow?.print();
             } catch (error) {
-              console.error("[FileManager] Print trigger failed:", error);
+              reportUploadDebug({
+                hypothesisId: "U",
+                location: "src/components/file-manager/EmbeddedFileManager.tsx:handlePrint:iframe:onload",
+                msg: "[DEBUG] DATA_ERROR",
+                data: { error: error instanceof Error ? error.message : String(error) },
+              });
               toast.error("Print failed. Try opening the file instead.");
             }
           }, 300);
           window.setTimeout(cleanup, 10000);
         };
         iframe.onerror = () => {
-          console.error("[FileManager] Print iframe failed:", doc.name);
+          reportUploadDebug({
+            hypothesisId: "U",
+            location: "src/components/file-manager/EmbeddedFileManager.tsx:handlePrint:iframe:onerror",
+            msg: "[DEBUG] DATA_ERROR",
+            data: { file: doc?.name ?? null },
+          });
           cleanup();
           toast.error("Print failed. Try opening the file instead.");
         };
@@ -492,7 +497,12 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
         }
       }
     } catch (err) {
-      console.error("[FileManager] Print error:", err);
+      reportUploadDebug({
+        hypothesisId: "U",
+        location: "src/components/file-manager/EmbeddedFileManager.tsx:handlePrint",
+        msg: "[DEBUG] DATA_ERROR",
+        data: { error: err instanceof Error ? err.message : String(err) },
+      });
       toast.error(err instanceof Error ? err.message : "Print failed.");
     }
   };
@@ -502,7 +512,6 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
     try {
       const { blobUrl } = await fetchDocumentBlobUrl(doc, 3600);
       const opened = window.open(blobUrl, "_blank", "noopener,noreferrer");
-      console.log("[FileManager] Opened blob in new tab:", { file: doc.name, opened: Boolean(opened) });
 
       if (!opened) {
         revokeBlobUrl(blobUrl);
@@ -512,7 +521,12 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
 
       window.setTimeout(() => revokeBlobUrl(blobUrl), 300000);
     } catch (err) {
-      console.error("[FileManager] Open in new tab error:", err);
+      reportUploadDebug({
+        hypothesisId: "U",
+        location: "src/components/file-manager/EmbeddedFileManager.tsx:handleOpenInNewTab",
+        msg: "[DEBUG] DATA_ERROR",
+        data: { error: err instanceof Error ? err.message : String(err) },
+      });
       toast.error("Could not open file.");
     }
   };
@@ -538,7 +552,12 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
       }
       revokeBlobUrl(blobUrl);
     } catch (err) {
-      console.error("[FileManager] Share error:", err);
+      reportUploadDebug({
+        hypothesisId: "U",
+        location: "src/components/file-manager/EmbeddedFileManager.tsx:handleShare",
+        msg: "[DEBUG] DATA_ERROR",
+        data: { error: err instanceof Error ? err.message : String(err) },
+      });
       toast.error(err instanceof Error ? err.message : "Share failed.");
     }
   };
@@ -894,9 +913,13 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
                   src={previewDoc.url}
                   className="w-full h-[60vh] rounded border-0"
                   title={previewDoc.name}
-                  onLoad={() => console.log("[FileManager] PDF iframe loaded:", previewDoc.name)}
                   onError={() => {
-                    console.error("[FileManager] PDF iframe error:", previewDoc.name);
+                    reportUploadDebug({
+                      hypothesisId: "U",
+                      location: "src/components/file-manager/EmbeddedFileManager.tsx:preview:pdf:onError",
+                      msg: "[DEBUG] DATA_ERROR",
+                      data: { name: previewDoc.name },
+                    });
                     setPreviewDoc(prev => prev ? { ...prev, status: "error", error: "PDF rendering failed." } : null);
                   }}
                 />
@@ -1007,40 +1030,50 @@ export async function storeFileInDocuments(
   targetYear?: string | null,
 ) {
   try {
-    // Validate file
     if (!file || file.size === 0) {
-      console.error("[FileManager] Upload rejected: empty file", file?.name);
-      return;
+      reportUploadDebug({
+        hypothesisId: "U",
+        location: "src/components/file-manager/EmbeddedFileManager.tsx:storeFileInDocuments:reject-empty",
+        msg: "[DEBUG] DATA_ERROR",
+        data: { entityType, module, fileName: file?.name ?? null },
+      });
+      throw new Error("Ficheiro inválido (vazio).");
     }
     const resolvedMime = getMimeType(file.name, file.type);
     if (!ALLOWED_MIME_TYPES.includes(resolvedMime)) {
-      console.warn("[FileManager] Upload rejected: unsupported type", resolvedMime, file.name);
-      return;
+      reportUploadDebug({
+        hypothesisId: "U",
+        location: "src/components/file-manager/EmbeddedFileManager.tsx:storeFileInDocuments:reject-type",
+        msg: "[DEBUG] DATA_ERROR",
+        data: { entityType, module, fileName: file.name, resolvedMime },
+      });
+      throw new Error("Tipo de ficheiro não suportado.");
     }
 
     const storagePath = `${entityType}/${Date.now()}_${file.name}`;
-    console.log("[FileManager] Uploading:", { storagePath, size: file.size, mime: resolvedMime });
+    reportUploadDebug({
+      hypothesisId: "U",
+      location: "src/components/file-manager/EmbeddedFileManager.tsx:storeFileInDocuments:start",
+      msg: "[DEBUG] DATA_START",
+      data: { entityType, module, storagePath, size: file.size, mime: resolvedMime, targetYear: targetYear ?? null },
+    });
 
-    const { error: uploadErr } = await supabase.storage
-      .from("uploads")
-      .upload(storagePath, file, {
-        contentType: resolvedMime,
-        upsert: false,
-      });
+    const { error: uploadErr } = await withPromiseTimeout<{ error: null }>(
+      uploadFile("uploads", storagePath, file, resolvedMime).then(() => ({ error: null })),
+      10000,
+      "documents_storage_upload",
+    );
     if (uploadErr) {
-      console.error("[FileManager] Storage upload failed:", uploadErr.message);
-      return;
+      reportUploadDebug({
+        hypothesisId: "U",
+        location: "src/components/file-manager/EmbeddedFileManager.tsx:storeFileInDocuments:storage:error",
+        msg: "[DEBUG] DATA_ERROR",
+        data: { entityType, module, storagePath, error: uploadErr.message },
+      });
+      throw new Error(uploadErr.message);
     }
 
-    // Verify upload succeeded by requesting a signed URL
-    const { data: verifyData, error: verifyErr } = await supabase.storage
-      .from("uploads")
-      .createSignedUrl(storagePath, 60);
-    if (verifyErr || !verifyData?.signedUrl) {
-      console.error("[FileManager] Upload verification failed:", verifyErr?.message);
-    } else {
-      console.log("[FileManager] Upload verified, signed URL OK:", storagePath);
-    }
+    // Upload confirmed by backend response — no separate verify step needed
 
     // Honor active operational year context — uploads must attach to the
     // year currently active in the operational tree, NOT "today".
@@ -1073,28 +1106,57 @@ export async function storeFileInDocuments(
     };
     if (createdAtOverride) insertPayload.created_at = createdAtOverride;
 
-    const { data, error } = await (supabase as any).from("documents").insert(insertPayload).select("*").single();
-    if (error) console.error("[FileManager] Document record insert failed:", error.message);
-    else console.log("[FileManager] Document record saved:", file.name);
+    const { data, error } = await withAbortableTimeout<{ data: any; error: any }>(
+      async (signal) => ((supabase as any).from("documents").insert(insertPayload).select("*").single() as any).abortSignal(signal),
+      10000,
+      "documents_insert",
+    );
+    if (error) {
+      reportUploadDebug({
+        hypothesisId: "U",
+        location: "src/components/file-manager/EmbeddedFileManager.tsx:storeFileInDocuments:documents:insert:error",
+        msg: "[DEBUG] DATA_ERROR",
+        data: { entityType, module, storagePath, error: error.message },
+      });
+      throw new Error(error.message);
+    } else {
+      reportUploadDebug({
+        hypothesisId: "U",
+        location: "src/components/file-manager/EmbeddedFileManager.tsx:storeFileInDocuments:success",
+        msg: "[DEBUG] DATA_SUCCESS",
+        data: { entityType, module, storagePath, documentId: (data as any)?.id ?? null },
+      });
+    }
     return data;
   } catch (err) {
-    console.error("[FileManager] storeFileInDocuments error:", err);
+    reportUploadDebug({
+      hypothesisId: "U",
+      location: "src/components/file-manager/EmbeddedFileManager.tsx:storeFileInDocuments:catch",
+      msg: "[DEBUG] DATA_ERROR",
+      data: { error: err instanceof Error ? err.message : String(err) },
+    });
+    throw err;
   }
 }
 
 export async function persistDocumentVisualState(documentId: string | undefined, state: DocumentVisualState, validated = false) {
   if (!documentId) return;
   const visualState = { ...state, validated, updatedAt: new Date().toISOString() };
-  const { error } = await (supabase as any)
-    .from("documents")
-    .update({
-      name: state.displayName,
-      display_name: state.displayName,
-      rotation: state.rotation,
-      zoom: state.zoom,
-      validated,
-      visual_state: visualState,
-    })
-    .eq("id", documentId);
+  const { error } = await withAbortableTimeout<{ data: any; error: any }>(
+    async (signal) =>
+      ((supabase as any)
+        .from("documents")
+        .update({
+          name: state.displayName,
+          display_name: state.displayName,
+          rotation: state.rotation,
+          zoom: state.zoom,
+          validated,
+          visual_state: visualState,
+        })
+        .eq("id", documentId) as any).abortSignal(signal),
+    8000,
+    "documents_visual_state_update",
+  );
   if (error) throw error;
 }

@@ -13,9 +13,9 @@ import { AgentRuntime } from "./agent";
 import { RuntimeHealthMonitor } from "./observability";
 import type { OperationalSignal } from "@/hooks/useOperationalSignals";
 import type { AgentEvent } from "./agentEventBus";
+import { getAccessToken } from "./authSession";
 
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/agent-chat`;
-const PUBLIC_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
+const CHAT_URL = `${(import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_SUPABASE_URL}/functions/v1/agent-chat`;
 
 const MIN_INTERVAL_MS = 1500;
 let lastCallAt = 0;
@@ -34,6 +34,7 @@ export interface ConvContext {
   route: string;
   module: string;
   online: boolean;
+  workspaceId: string;
   signals: OperationalSignal[];
   recentEvents: AgentEvent[];
   /** Append the runtime snapshot (agent signals + health) as JSON context. */
@@ -80,6 +81,8 @@ export async function streamMultimodalReply(opts: ConvStreamOptions): Promise<vo
   const now = Date.now();
   if (now - lastCallAt < MIN_INTERVAL_MS) throw new RateLimitedError();
   lastCallAt = now;
+  const token = getAccessToken();
+  if (!token) throw new Error("Sessão inválida. Faça login novamente.");
 
   const diag = getDiagnosticsSnapshot();
   const ctx = opts.context;
@@ -90,6 +93,7 @@ export async function streamMultimodalReply(opts: ConvStreamOptions): Promise<vo
 
   const payload = {
     model: opts.model,
+    workspace_id: ctx.workspaceId,
     messages: opts.history,
     context: {
       route: ctx.route,
@@ -113,7 +117,7 @@ export async function streamMultimodalReply(opts: ConvStreamOptions): Promise<vo
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${PUBLIC_KEY}`,
+      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(payload),
     signal: opts.signal,

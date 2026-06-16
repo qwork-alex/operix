@@ -1,11 +1,11 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, type ReactNode } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
-import { LanguageProvider } from "@/hooks/useLanguage";
+import { LanguageProvider, useLanguage } from "@/hooks/useLanguage";
 import { ThemeProvider } from "@/hooks/useTheme";
 import { RoleProvider } from "@/hooks/useRole";
 import { ImpersonationProvider } from "@/hooks/useImpersonation";
@@ -58,15 +58,84 @@ const DataProcessingPage = lazy(() => import("./pages/legal/LegalPages").then((m
 
 /** Subtle, layout-stable fallback used while a route chunk is loading. */
 function RouteFallback() {
+  const { t } = useLanguage();
   return (
     <div className="flex items-center justify-center p-12 text-xs text-muted-foreground/60">
       <span className="inline-block h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
+      <span className="ml-2">{t("common.loading", "A carregar…")}</span>
     </div>
   );
 }
 
+function RouteContentBoundary({ children }: { children: ReactNode }) {
+  const location = useLocation();
+  const { t } = useLanguage();
+
+  useEffect(() => {
+    // #region debug-point D:route-start
+    void fetch("http://127.0.0.1:7777/event", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "route-loading-stall",
+        runId: "pre-fix",
+        hypothesisId: "D",
+        location: "src/App.tsx:RouteContentBoundary",
+        msg: "[DEBUG] ROUTE_START",
+        data: {
+          pathname: location.pathname,
+          search: location.search,
+        },
+        ts: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+  }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      // #region debug-point D:route-settle
+      void fetch("http://127.0.0.1:7777/event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: "route-loading-stall",
+          runId: "pre-fix",
+          hypothesisId: "D",
+          location: "src/App.tsx:RouteContentBoundary:settle",
+          msg: "[DEBUG] ROUTE_SETTLE_WINDOW",
+          data: {
+            pathname: location.pathname,
+            search: location.search,
+          },
+          ts: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+    }, 2500);
+    return () => window.clearTimeout(timer);
+  }, [location.pathname, location.search]);
+
+  return (
+    <ErrorBoundary
+      resetKey={`${location.pathname}${location.search}`}
+      fallback={(
+        <div className="min-h-[40vh] flex flex-col items-center justify-center gap-3 px-6 text-center">
+          <h2 className="text-lg font-semibold text-foreground">
+            {t("error.pageTitle", "Esta página encontrou um erro")}
+          </h2>
+          <p className="text-sm text-muted-foreground max-w-md">
+            {t("error.pageBody", "O menu e a navegação continuam disponíveis. Pode mudar de página ou tentar novamente.")}
+          </p>
+        </div>
+      )}
+    >
+      {children}
+    </ErrorBoundary>
+  );
+}
+
 const App = () => {
-  console.count("[ROOT_RENDER]");
   return (
   <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
@@ -123,10 +192,11 @@ function AuthenticatedShell() {
         <RoleProvider>
           <TenantProvider>
             <AppLayout>
-              <ErrorBoundary>
+              <RouteContentBoundary>
                 <Suspense fallback={<RouteFallback />}>
                   <Routes>
                     <Route path="/" element={<PermissionGuard permission="dashboard.view"><Index /></PermissionGuard>} />
+                    <Route path="/dashboard" element={<Navigate to="/" replace />} />
                     <Route path="/service-orders" element={<PermissionGuard permission="service_orders.view"><ServiceOrdersPage /></PermissionGuard>} />
                     <Route path="/production" element={<PermissionGuard permission="service_orders.view"><ProductionPage /></PermissionGuard>} />
                     <Route path="/payment-orders" element={<PermissionGuard permission="payment_orders.view"><PaymentOrdersPage /></PermissionGuard>} />
@@ -134,7 +204,7 @@ function AuthenticatedShell() {
                     <Route path="/profit" element={<PermissionGuard permission="profit.view"><ProfitDistribution /></PermissionGuard>} />
                     <Route path="/accounting" element={<Navigate to="/financial?tab=accounting" replace />} />
                     <Route path="/fleet" element={<PermissionGuard permission="fleet.view"><FleetPage /></PermissionGuard>} />
-                    <Route path="/billing/*" element={<BillingPage />} />
+                    <Route path="/billing/*" element={<PermissionGuard permission="accounting.view"><BillingPage /></PermissionGuard>} />
                     <Route path="/documents" element={<PermissionGuard permission="documents.view"><Documents /></PermissionGuard>} />
                     <Route path="/users" element={<PermissionGuard permission="users.view"><UsersPage /></PermissionGuard>} />
                     <Route path="/marketplace" element={<MarketplacePage />} />
@@ -142,16 +212,18 @@ function AuthenticatedShell() {
                     <Route path="/profile" element={<ProfilePage />} />
                     <Route path="/audit" element={<AuditPage />} />
                     <Route path="/automations" element={<PermissionGuard permission="settings.edit"><AutomationsPage /></PermissionGuard>} />
-                    <Route path="/ai" element={<AIPage />} />
+                    <Route path="/automation" element={<Navigate to="/automations" replace />} />
+                    <Route path="/ai" element={<PermissionGuard permission="dashboard.view"><AIPage /></PermissionGuard>} />
                     <Route path="/recovery" element={<RecoveryPage />} />
                     <Route path="/subscription" element={<SubscriptionPage />} />
+                    <Route path="/subscriptions" element={<Navigate to="/subscription" replace />} />
                     <Route path="/checkout" element={<CheckoutPage />} />
                     <Route path="/platform" element={<PlatformOwnerPage />} />
                     <Route path="/platform-owner" element={<PlatformOwnerPage />} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                 </Suspense>
-              </ErrorBoundary>
+              </RouteContentBoundary>
             </AppLayout>
           </TenantProvider>
         </RoleProvider>

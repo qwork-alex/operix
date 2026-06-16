@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { BrandLogo } from "@/components/BrandLogo";
 import { brandConfig } from "@/brand.config";
 import { PasswordStrength, isPasswordStrong } from "@/components/auth/PasswordStrength";
-import { useAuth } from "@/hooks/useAuth";
+import { apiRequest } from "@/lib/api";
 
 const RESET_AUTH_TIMEOUT_MS = 12000;
 
@@ -30,15 +30,20 @@ function withResetTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
 
 export default function ResetPassword() {
   const navigate = useNavigate();
-  const { session, loading: authLoading, changePassword } = useAuth();
+  const [params] = useSearchParams();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [show, setShow] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const ready = !authLoading && !!session;
+  const token = params.get("token") || "";
+  const ready = Boolean(token);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (!token) {
+      toast.error("Link inválido ou ausente.");
+      return;
+    }
     if (!isPasswordStrong(password)) {
       toast.error("A senha não cumpre os requisitos mínimos.");
       return;
@@ -49,11 +54,14 @@ export default function ResetPassword() {
     }
     setSubmitting(true);
     try {
-      const { error } = await withResetTimeout<{ error: Error | null }>(changePassword(password), "changePassword");
-      if (error) {
-        toast.error(error.message);
-        return;
-      }
+      await withResetTimeout(
+        apiRequest("/auth/reset-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token, password }),
+        }),
+        "resetPassword",
+      );
       toast.success("Senha alterada com sucesso");
       navigate("/auth", { replace: true });
     } catch (err) {
@@ -80,7 +88,7 @@ export default function ResetPassword() {
 
           {!ready && (
             <div className="text-xs text-muted-foreground flex items-center gap-2">
-              <Loader2 className="h-3 w-3 animate-spin" /> Faça login para alterar sua senha na nova API.
+              Link de redefinição inválido ou expirado.
             </div>
           )}
 

@@ -1,5 +1,6 @@
 export type PermissionScope = "own" | "team" | "all";
 export type PermissionSource = "admin" | "role" | "default-deny";
+export type PermissionRole = "owner" | "admin" | "partner" | "technician" | "client";
 
 export interface PermissionEntry {
   allowed: boolean;
@@ -85,8 +86,25 @@ type Rule = {
   scope?: PermissionScope;
 };
 
-const ROLE_RULES: Record<string, Rule[]> = {
-  partner: [
+const OWNER_RULES: Rule[] = [
+  { module: "dashboard", actions: "*", scope: "all" },
+  { module: "service_orders", actions: "*", scope: "all" },
+  { module: "payment_orders", actions: "*", scope: "all" },
+  { module: "accounting", actions: "*", scope: "all" },
+  { module: "financial", actions: "*", scope: "all" },
+  { module: "profit", actions: "*", scope: "all" },
+  { module: "fleet", actions: "*", scope: "all" },
+  { module: "documents", actions: "*", scope: "all" },
+  { module: "users", actions: "*", scope: "all" },
+  { module: "marketplace", actions: "*", scope: "all" },
+  { module: "subscriptions", actions: "*", scope: "all" },
+  { module: "settings", actions: "*", scope: "all" },
+  { module: "profile", actions: "*", scope: "all" },
+  { module: "notifications", actions: "*", scope: "all" },
+];
+
+const ROLE_RULES: Record<Exclude<PermissionRole, "owner">, Rule[]> = {
+  admin: [
     { module: "dashboard", actions: "*", scope: "all" },
     { module: "service_orders", actions: "*", scope: "all" },
     { module: "payment_orders", actions: "*", scope: "all" },
@@ -95,16 +113,32 @@ const ROLE_RULES: Record<string, Rule[]> = {
     { module: "profit", actions: "*", scope: "all" },
     { module: "fleet", actions: "*", scope: "all" },
     { module: "documents", actions: "*", scope: "all" },
-    { module: "users", actions: "*", scope: "all" },
+    { module: "users", actions: ["view", "create", "edit", "delete", "view_permissions"], scope: "all" },
     { module: "marketplace", actions: "*", scope: "all" },
-    { module: "subscriptions", actions: "*", scope: "all" },
+    { module: "subscriptions", actions: ["view", "view_history", "view_payments", "export_invoices"], scope: "all" },
     { module: "settings", actions: "*", scope: "all" },
     { module: "profile", actions: "*", scope: "all" },
     { module: "notifications", actions: "*", scope: "all" },
   ],
+  partner: [
+    { module: "dashboard", actions: ["view", "view_dashboard", "report_hail"], scope: "team" },
+    { module: "service_orders", actions: ["view", "create", "edit", "export_pdf", "scan_document", "upload_document", "validate_data"], scope: "team" },
+    { module: "payment_orders", actions: ["view", "create", "edit", "export_pdf", "scan_document", "upload_document", "validate_data"], scope: "team" },
+    { module: "accounting", actions: ["view", "create", "edit"], scope: "team" },
+    { module: "financial", actions: ["view", "view_reports", "export_reports"], scope: "team" },
+    { module: "profit", actions: ["view"], scope: "team" },
+    { module: "fleet", actions: ["view"], scope: "team" },
+    { module: "documents", actions: ["view", "create", "upload", "edit"], scope: "team" },
+    { module: "users", actions: ["view"], scope: "team" },
+    { module: "marketplace", actions: ["view"], scope: "team" },
+    { module: "subscriptions", actions: ["view", "view_history", "view_payments"], scope: "team" },
+    { module: "settings", actions: ["view"], scope: "own" },
+    { module: "profile", actions: "*", scope: "own" },
+    { module: "notifications", actions: ["view", "mark_read"], scope: "own" },
+  ],
   technician: [
     { module: "dashboard", actions: ["view", "view_dashboard"], scope: "own" },
-    { module: "service_orders", actions: ["view", "create", "edit", "scan_document", "upload_document"], scope: "own" },
+    { module: "service_orders", actions: ["view", "edit", "scan_document", "upload_document"], scope: "own" },
     { module: "payment_orders", actions: ["view"], scope: "own" },
     { module: "fleet", actions: ["view"], scope: "own" },
     { module: "documents", actions: ["view", "upload"], scope: "own" },
@@ -133,15 +167,32 @@ function ruleAllows(rule: Rule, module: string, action: string) {
   return rule.actions === "*" || rule.actions.includes(action);
 }
 
-export function buildPermissionsForRole(role: string | null | undefined) {
-  if (role === "admin") {
-    return {
-      admin: true,
-      map: {} as Record<string, PermissionEntry>,
-    };
+export function normalizePermissionRole(role: string | null | undefined): PermissionRole | null {
+  switch ((role ?? "").trim().toLowerCase()) {
+    case "owner":
+      return "owner";
+    case "admin":
+      return "admin";
+    case "partner":
+    case "associe":
+    case "associé":
+    case "socio":
+      return "partner";
+    case "technician":
+    case "technicien":
+    case "tecnico":
+      return "technician";
+    case "client":
+    case "cliente":
+      return "client";
+    default:
+      return null;
   }
+}
 
-  const rules = (role ? ROLE_RULES[role] : undefined) ?? [];
+export function buildPermissionsForRole(role: string | null | undefined) {
+  const normalizedRole = normalizePermissionRole(role);
+  const rules = normalizedRole === "owner" ? OWNER_RULES : (normalizedRole ? ROLE_RULES[normalizedRole] : undefined) ?? [];
   const map: Record<string, PermissionEntry> = {};
 
   for (const key of KNOWN_PERMISSION_KEYS) {
@@ -162,7 +213,7 @@ export function buildPermissionsForRole(role: string | null | undefined) {
   }
 
   return {
-    admin: false,
+    admin: normalizedRole === "owner",
     map,
   };
 }

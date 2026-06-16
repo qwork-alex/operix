@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { withPromiseTimeout } from "@/lib/asyncGuard";
 
 export interface ReconciliationDetail {
   id: string;
@@ -84,11 +85,13 @@ function removeGhostData(rows: ReconciliationDetail[]): ReconciliationDetail[] {
 export function useReconciliations() {
   return useQuery({
     queryKey: ["reconciliations"],
+    retry: 0,
+    placeholderData: (previousData) => previousData ?? [],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await withPromiseTimeout<any>((supabase as any)
         .from("reconciliations")
         .select("*, service_orders(id, license_plate, car_name, total, platform, week, client_name, technician_name, created_at), payment_orders(id, license_plate, car_name, total, platform, client_name, technician_name, created_at)")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false }), 12000, "reconciliations");
       if (error) throw error;
 
       const parsed = (data as any[]).map((r) => ({
@@ -126,16 +129,20 @@ export function useRunReconciliation() {
   return useMutation({
     mutationFn: async () => {
       // Clean orphaned financial_records before reconciling
-      const [soIds, poIds] = await Promise.all([
+      const [soIds, poIds] = await withPromiseTimeout<any>(Promise.all([
         supabase.from("service_orders").select("id"),
         supabase.from("payment_orders").select("id"),
-      ]);
+      ]), 10000, "recon_ids");
       const validSOIds = new Set((soIds.data ?? []).map((r: any) => r.id));
       const validPOIds = new Set((poIds.data ?? []).map((r: any) => r.id));
 
-      const { data: frData } = await supabase.from("financial_records")
-        .select("id, source, service_order_id, payment_order_id")
-        .in("source", ["service_orders", "payment_orders"]);
+      const { data: frData } = await withPromiseTimeout<any>(
+        supabase.from("financial_records")
+          .select("id, source, service_order_id, payment_order_id")
+          .in("source", ["service_orders", "payment_orders"]),
+        10000,
+        "recon_financial_records",
+      );
 
       const orphanIds = (frData ?? [])
         .filter((r: any) => {
@@ -146,28 +153,29 @@ export function useRunReconciliation() {
         .map((r: any) => r.id);
 
       if (orphanIds.length > 0) {
-        for (const oid of orphanIds) {
-          await supabase.from("financial_records").delete().eq("id", oid);
-        }
-        console.log(`Cleaned ${orphanIds.length} orphaned financial records`);
+        const { error } = await withPromiseTimeout<any>(
+          supabase.from("financial_records").delete().in("id", orphanIds),
+          12000,
+          "recon_delete_orphans",
+        );
+        if (error) throw error;
       }
 
       // Hard reset: clear previous auto reconciliation results before running
-      await (supabase as any).from("reconciliations").delete().eq("matched_by", "auto");
-      console.log("Pre-run: cleared all auto reconciliation results");
+      const { error: clearErr } = await withPromiseTimeout<any>(
+        (supabase as any).from("reconciliations").delete().eq("matched_by", "auto"),
+        12000,
+        "recon_clear_auto",
+      );
+      if (clearErr) throw clearErr;
 
-      const { data, error } = await supabase.functions.invoke("run-reconciliation");
+      const { data, error } = await withPromiseTimeout<any>(
+        supabase.functions.invoke("run-reconciliation"),
+        15000,
+        "recon_invoke",
+      );
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-
-      console.log("Reconciliation result:", JSON.stringify({
-        so_count: data.debug?.so_count,
-        po_count: data.debug?.po_count,
-        matched: data.matched,
-        mismatched: data.mismatched,
-        missing: data.missing,
-        status: data.status,
-      }));
 
       return data;
     },
@@ -343,13 +351,26 @@ export function useClearReconciliation() {
 export function useReconciliationSummary() {
   return useQuery({
     queryKey: ["reconciliation-summary"],
+    retry: 0,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    placeholderData: (previousData) => previousData,
     queryFn: async () => {
-      const [soRes, poRes, recRes, frRes] = await Promise.all([
-        supabase.from("service_orders").select("total, status, client_id, client_name, assigned_user_id, technician_name, platform, created_at"),
-        supabase.from("payment_orders").select("total, status, client_id, client_name, assigned_user_id, technician_name, platform, created_at"),
-        (supabase as any).from("reconciliations").select("status, difference_amount, confidence_score, matched_by, notes"),
-        supabase.from("financial_records").select("amount, type, category, created_at, source, service_order_id, payment_order_id"),
-      ]);
+      const [soRes, poRes, recRes, frRes] = await withPromiseTimeout(Promise.all([
+        supabase
+          .from("service_orders")
+          .select("total, status, client_name, technician_name, platform, created_at"),
+        supabase
+          .from("payment_orders")
+          .select("total, status, client_name, technician_name, platform, created_at"),
+        (supabase as any)
+          .from("reconciliations")
+          .select("status, notes"),
+        supabase
+          .from("financial_records")
+          .select("amount, type, created_at"),
+      ]), 12000, "reconciliation_summary");
 
       const serviceOrders = soRes.data ?? [];
       const paymentOrders = poRes.data ?? [];

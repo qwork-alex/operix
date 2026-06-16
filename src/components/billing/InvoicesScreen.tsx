@@ -985,7 +985,8 @@ export default function InvoicesScreen() {
                         checked={isSel}
                         onCheckedChange={(c) => {
                           const next = new Set(selected);
-                          c ? next.add(r.id) : next.delete(r.id);
+                          if (c) next.add(r.id);
+                          else next.delete(r.id);
                           setSelected(next);
                         }}
                       />

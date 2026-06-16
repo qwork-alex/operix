@@ -6,6 +6,7 @@ import { KeyRound, Copy, Check } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
+import { withPromiseTimeout } from "@/lib/asyncGuard";
 
 interface TempCred {
   user_id: string;
@@ -20,15 +21,21 @@ export function TempCredentialsCard() {
 
   const { data = [], isLoading } = useQuery({
     queryKey: ["temp-credentials"],
+    retry: 0,
+    staleTime: 60_000,
+    placeholderData: (previousData) => previousData ?? [],
     queryFn: async (): Promise<TempCred[]> => {
-      const { data, error } = await supabase
-        .from("temp_credentials" as any)
-        .select("user_id, email, full_name, temp_password, created_at")
-        .order("created_at", { ascending: false });
+      const { data, error } = await withPromiseTimeout<any>(
+        supabase
+          .from("temp_credentials" as any)
+          .select("user_id, email, full_name, temp_password, created_at")
+          .order("created_at", { ascending: false }),
+        10000,
+        "temp_credentials",
+      );
       if (error) throw error;
       return (data as unknown as TempCred[]) ?? [];
     },
-    staleTime: 30_000,
   });
 
   const copy = async (val: string, id: string) => {

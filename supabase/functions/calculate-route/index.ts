@@ -48,16 +48,13 @@ function normalizeCoordinates(body: any): [number, number][] {
   return [];
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    const OPENROUTE_API_KEY = Deno.env.get("OPENROUTE_API_KEY");
-    if (!OPENROUTE_API_KEY) {
-      return jsonResponse({ error: "OPENROUTE_API_KEY not configured" }, 500);
-    }
+    const OPENROUTE_API_KEY = Deno.env.get("OPENROUTE_API_KEY")?.trim() || "";
 
     const body = await req.json().catch(() => ({}));
     const geocodeText = typeof body?.geocode_text === "string" ? body.geocode_text.trim() : "";
@@ -109,64 +106,68 @@ Deno.serve(async (req) => {
 
     console.log("Coordenadas:", normalizedCoordinates);
 
-    const orsRes = await fetch(
-      "https://api.openrouteservice.org/v2/directions/driving-car",
-      {
-        method: "POST",
-        headers: {
-          Authorization: OPENROUTE_API_KEY,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          coordinates: normalizedCoordinates,
-        }),
-      }
-    );
+    if (!OPENROUTE_API_KEY) {
+      console.log("OPENROUTE_API_KEY ausente; usando fallback Haversine");
+    } else {
+      const orsRes = await fetch(
+        "https://api.openrouteservice.org/v2/directions/driving-car",
+        {
+          method: "POST",
+          headers: {
+            Authorization: OPENROUTE_API_KEY,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            coordinates: normalizedCoordinates,
+          }),
+        }
+      );
 
-    if (!orsRes.ok) {
+      if (orsRes.ok) {
+        const orsData = await orsRes.json();
+        console.log("Resposta API:", orsData);
+        const route = orsData.routes?.[0];
+        const summary = route?.summary;
+
+        if (!summary) {
+          return jsonResponse({ error: "No route found between points" }, 404);
+        }
+
+        const distance_km = Number(summary.distance ?? 0) / 1000;
+        const duration_min = Number(summary.duration ?? 0) / 60;
+        const segments = Array.isArray(route?.segments) && route.segments.length > 0
+          ? route.segments.map((segment: any) => ({
+              distance_km: Number(segment?.distance ?? segment?.summary?.distance ?? 0) / 1000,
+              duration_min: Number(segment?.duration ?? segment?.summary?.duration ?? 0) / 60,
+            }))
+          : [{ distance_km, duration_min }];
+
+        return jsonResponse({ distance_km, duration_min, segments });
+      }
+
       const errText = await orsRes.text();
       console.error("ORS error:", orsRes.status, errText);
-
       console.log("Fallback: usando Haversine para calcular distância");
-      const segments: { distance_km: number; duration_min: number }[] = [];
-      let totalDist = 0;
-      let totalDur = 0;
-      for (let i = 1; i < normalizedCoordinates.length; i++) {
-        const [lon1, lat1] = normalizedCoordinates[i - 1];
-        const [lon2, lat2] = normalizedCoordinates[i];
-        const d = haversineKm(lat1, lon1, lat2, lon2) * 1.3; // road factor
-        const dur = estimateDurationMin(d);
-        segments.push({ distance_km: Math.round(d * 100) / 100, duration_min: Math.round(dur * 100) / 100 });
-        totalDist += d;
-        totalDur += dur;
-      }
-      return jsonResponse({
-        distance_km: Math.round(totalDist * 100) / 100,
-        duration_min: Math.round(totalDur * 100) / 100,
-        segments,
-        fallback: true,
-      });
     }
 
-    const orsData = await orsRes.json();
-    console.log("Resposta API:", orsData);
-    const route = orsData.routes?.[0];
-    const summary = route?.summary;
-
-    if (!summary) {
-      return jsonResponse({ error: "No route found between points" }, 404);
+    const segments: { distance_km: number; duration_min: number }[] = [];
+    let totalDist = 0;
+    let totalDur = 0;
+    for (let i = 1; i < normalizedCoordinates.length; i++) {
+      const [lon1, lat1] = normalizedCoordinates[i - 1];
+      const [lon2, lat2] = normalizedCoordinates[i];
+      const d = haversineKm(lat1, lon1, lat2, lon2) * 1.3; // road factor
+      const dur = estimateDurationMin(d);
+      segments.push({ distance_km: Math.round(d * 100) / 100, duration_min: Math.round(dur * 100) / 100 });
+      totalDist += d;
+      totalDur += dur;
     }
-
-    const distance_km = Number(summary.distance ?? 0) / 1000;
-    const duration_min = Number(summary.duration ?? 0) / 60;
-    const segments = Array.isArray(route?.segments) && route.segments.length > 0
-      ? route.segments.map((segment: any) => ({
-          distance_km: Number(segment?.distance ?? segment?.summary?.distance ?? 0) / 1000,
-          duration_min: Number(segment?.duration ?? segment?.summary?.duration ?? 0) / 60,
-        }))
-      : [{ distance_km, duration_min }];
-
-    return jsonResponse({ distance_km, duration_min, segments });
+    return jsonResponse({
+      distance_km: Math.round(totalDist * 100) / 100,
+      duration_min: Math.round(totalDur * 100) / 100,
+      segments,
+      fallback: true,
+    });
   } catch (error) {
     console.error("calculate-route error:", error);
     return jsonResponse({ error: error instanceof Error ? error.message : "Internal error" }, 500);

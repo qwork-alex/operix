@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useWorkspace, type MembershipRole } from "./useWorkspace";
 import { toast } from "sonner";
+import { withPromiseTimeout } from "@/lib/asyncGuard";
 
 export interface WorkspaceInviteRow {
   id: string;
@@ -28,20 +29,23 @@ export function useOutgoingInvites() {
   return useQuery({
     queryKey: ["workspace-invites-out", workspaceId],
     enabled: !!workspaceId,
+    retry: 0,
+    staleTime: 60_000,
+    placeholderData: (previousData) => previousData ?? [],
     queryFn: async (): Promise<WorkspaceInviteRow[]> => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await withPromiseTimeout<any>((supabase as any)
         .from(TABLE)
         .select("id, workspace_id, target_profile_id, role, status, created_by, created_at, responded_at")
         .eq("workspace_id", workspaceId)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false }), 10000, "workspace_invites_out");
       if (error) throw error;
       const rows = (data || []) as WorkspaceInviteRow[];
       if (!rows.length) return rows;
       const ids = Array.from(new Set(rows.map((r) => r.target_profile_id)));
-      const { data: profs } = await supabase
+      const { data: profs } = await withPromiseTimeout<any>(supabase
         .from("profiles")
         .select("id, full_name, email, display_code")
-        .in("id", ids);
+        .in("id", ids), 10000, "workspace_invites_out_profiles");
       const pmap = new Map<string, any>((profs || []).map((p: any) => [p.id, p]));
       return rows.map((r) => ({
         ...r,
@@ -59,21 +63,24 @@ export function useIncomingInvites() {
   return useQuery({
     queryKey: ["workspace-invites-in", user?.id],
     enabled: !!user?.id,
+    retry: 0,
+    staleTime: 60_000,
+    placeholderData: (previousData) => previousData ?? [],
     queryFn: async (): Promise<WorkspaceInviteRow[]> => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await withPromiseTimeout<any>((supabase as any)
         .from(TABLE)
         .select("id, workspace_id, target_profile_id, role, status, created_by, created_at, responded_at")
         .eq("target_profile_id", user!.id)
         .eq("status", "pending")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false }), 10000, "workspace_invites_in");
       if (error) throw error;
       const rows = (data || []) as WorkspaceInviteRow[];
       if (!rows.length) return rows;
       const wsIds = Array.from(new Set(rows.map((r) => r.workspace_id)));
-      const { data: wss } = await supabase
+      const { data: wss } = await withPromiseTimeout<any>(supabase
         .from("workspaces")
         .select("id, name")
-        .in("id", wsIds);
+        .in("id", wsIds), 10000, "workspace_invites_in_workspaces");
       const wmap = new Map<string, string>((wss || []).map((w: any) => [w.id, w.name]));
       return rows.map((r) => ({ ...r, workspace_name: wmap.get(r.workspace_id) ?? null }));
     },

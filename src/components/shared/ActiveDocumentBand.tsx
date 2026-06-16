@@ -45,7 +45,7 @@ export function ActiveDocumentBand({ file, onClose, initialState, onStateChange,
     updatedAt: new Date().toISOString(),
   }), [file?.name, name, rotation, zoom]);
 
-  useEffect(() => { onStateChange?.(currentState); }, [currentState]);
+  useEffect(() => { onStateChange?.(currentState); }, [currentState, onStateChange]);
 
   const objectUrl = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
   useEffect(() => () => { if (objectUrl) URL.revokeObjectURL(objectUrl); }, [objectUrl]);

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
+import { uploadFile } from "@/lib/storage";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { useWorkspaceTechnicians } from "@/hooks/useFinancialPeriods";
 import { useQueryClient } from "@tanstack/react-query";
@@ -134,10 +135,7 @@ export function ImportReceiptDialog({
       // 1) Upload to storage
       const ext = file.name.split(".").pop() || "bin";
       const storagePath = `${userId}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
-      const { error: upErr } = await supabase.storage
-        .from("accounting-receipts")
-        .upload(storagePath, file, { contentType: file.type, upsert: false });
-      if (upErr) throw upErr;
+      await uploadFile("accounting-receipts", storagePath, file, file.type);
 
       // 2) Document row (entity_type='accounting_receipt')
       const { data: doc, error: docErr } = await supabase

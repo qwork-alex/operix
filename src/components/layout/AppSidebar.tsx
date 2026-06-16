@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Link } from "react-router-dom";
 import {
   LayoutDashboard, FileText, CreditCard, TrendingUp, BarChart3,
@@ -37,7 +38,7 @@ type NavGroup = {
   items: NavItem[];
 };
 
-export function AppSidebar() {
+export const AppSidebar = memo(function AppSidebar() {
   const { state, isMobile, setOpenMobile } = useSidebar();
   const collapsed = state === "collapsed";
   const { t } = useLanguage();
@@ -67,46 +68,49 @@ export function AppSidebar() {
       ],
     },
     {
-      label: "Operações",
+      label: t("nav.group.operations", "Operações"),
       items: [
-        { title: "Produção", url: "/production", icon: Wrench, module: "service_orders", action: "view" },
+        { title: t("nav.production", "Produção"), url: "/production", icon: Wrench, module: "service_orders", action: "view" },
         { title: t("nav.serviceOrders"), url: "/service-orders", icon: FileText, module: "service_orders", action: "view" },
         { title: t("nav.paymentOrders"), url: "/payment-orders", icon: CreditCard, module: "payment_orders", action: "view" },
       ],
     },
     {
-      label: "Contabilidade",
+      label: t("nav.group.accounting", "Contabilidade"),
       items: [
-        { title: "Faturamento", url: "/billing", icon: Receipt, module: "accounting", action: "view" },
+        { title: t("nav.billing", "Faturamento"), url: "/billing", icon: Receipt, module: "accounting", action: "view" },
         { title: t("nav.financial"), url: "/financial", icon: TrendingUp, module: "financial", action: "view" },
-        { title: "Plataforma", url: "/platform", icon: Shield, module: "dashboard", action: "view", enabled: isPlatformOwner },
+        { title: t("nav.platform", "Plataforma"), url: "/platform", icon: Shield, module: "dashboard", action: "view", enabled: isPlatformOwner },
       ],
     },
     {
-      label: "Inteligência",
+      label: t("nav.group.intelligence", "Inteligência"),
       items: [
-        { title: "Automações", url: "/automations", icon: Zap, module: "settings", action: "edit" },
-        { title: "QWork AI", url: "/ai", icon: Brain, module: "dashboard", action: "view" },
+        { title: t("nav.automations", "Automações"), url: "/automations", icon: Zap, module: "settings", action: "edit" },
+        { title: t("nav.ai", "QWork AI"), url: "/ai", icon: Brain, module: "dashboard", action: "view" },
       ],
     },
     {
-      label: "Oportunidades",
+      label: t("nav.group.opportunities", "Oportunidades"),
       items: [
         { title: t("nav.fleet"), url: "/fleet", icon: Car, module: "fleet", action: "view" },
-        { title: "Marketplace", url: "/marketplace", icon: Store, module: "dashboard", action: "view" },
+        { title: t("nav.marketplace", "Mercado"), url: "/marketplace", icon: Store, module: "dashboard", action: "view" },
       ],
     },
     {
-      label: "Contas",
+      label: t("nav.group.accounts", "Contas"),
       items: [
         { title: t("nav.users"), url: "/users", icon: Users, module: "users", action: "view" },
-        { title: "Assinaturas", url: "/subscription", icon: Shield, module: "dashboard", action: "view" },
+        { title: t("nav.subscription", "Assinaturas"), url: "/subscription", icon: Shield, module: "dashboard", action: "view" },
       ],
     },
   ];
 
   const visibleGroups: NavGroup[] = permsLoading
-    ? []
+    ? groups.map((g) => ({
+        ...g,
+        items: g.items.filter((i) => i.enabled === undefined || i.enabled),
+      }))
     : groups
         .map((g) => ({
           ...g,
@@ -183,4 +187,4 @@ export function AppSidebar() {
       </SidebarContent>
     </Sidebar>
   );
-}
+});

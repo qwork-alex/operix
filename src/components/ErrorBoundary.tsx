@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
+  resetKey?: string | number | null;
 }
 
 interface State {
@@ -64,6 +65,12 @@ export class ErrorBoundary extends Component<Props, State> {
     console.error("[ErrorBoundary] Component Stack:", info.componentStack);
   }
 
+  componentDidUpdate(prevProps: Props) {
+    if (this.state.hasError && prevProps.resetKey !== this.props.resetKey) {
+      this.setState({ hasError: false, error: null });
+    }
+  }
+
   render() {
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback;
@@ -106,7 +113,7 @@ export class ErrorBoundary extends Component<Props, State> {
               variant="ghost"
               size="sm"
               onClick={() => {
-                navigator.clipboard.writeText(`${category}: ${details}`);
+                void navigator.clipboard?.writeText?.(`${category}: ${details}`);
               }}
             >
               <Copy className="h-4 w-4 mr-2" />

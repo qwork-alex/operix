@@ -9,7 +9,7 @@ export function useVirtualEngineerBoot(): void {
   useEffect(() => {
     return scheduleDeferredBoot("VirtualEngineer", () => {
       VirtualEngineer.start();
-    }, { delayMs: 1800 });
+    }, { delayMs: 6500, idleTimeoutMs: 10000 });
   }, []);
 }
 

@@ -42,12 +42,7 @@ function fetchPartialsForParticipant(participantName: string) {
       if (!Array.isArray(snap)) return false;
       return snap.some((s: any) => s?.participant_name === participantName);
     });
-    // eslint-disable-next-line no-console
-    console.debug("[PartialPaymentsList] week-based filter", {
-      participantName,
-      before,
-      after: filtered.length,
-    });
+    void before;
 
     return filtered.map((so: any) => ({
       id: so.id,

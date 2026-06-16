@@ -9,24 +9,21 @@ import { QueryClient } from "@tanstack/react-query";
  * query to refetch — which looks identical to an auth/session remount.
  */
 declare global {
-  // eslint-disable-next-line no-var
   var __QUERY_CLIENT__: QueryClient | undefined;
 }
 
 function createQueryClient(): QueryClient {
-  console.log("[BOOT] QueryClient singleton created (should appear ONCE)");
   return new QueryClient({
     defaultOptions: {
       queries: {
-        retry: 1,
+        retry: 0,
         refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
         staleTime: 30_000,
         gcTime: 5 * 60_000,
       },
       mutations: {
-        onError: (error) => {
-          console.error("[Mutation Error]", error);
-        },
+        onError: () => {},
       },
     },
   });

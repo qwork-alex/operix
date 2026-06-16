@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   useProductionOrders, PRODUCTION_STATUSES, PRIORITY_META,
   type ProductionOrder, type ProductionStatus,
@@ -19,7 +20,35 @@ export function TechnicianHub() {
   const { data: orders = [], update, isLoading } = useProductionOrders({ technicianOnly: true });
   const [open, setOpen] = useState<ProductionOrder | null>(null);
 
-  if (isLoading) return <div className="p-8 text-center text-muted-foreground">Carregando…</div>;
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Card key={i} className="p-4 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-4 w-16" />
+                </div>
+                <Skeleton className="h-6 w-40" />
+                <Skeleton className="h-4 w-56" />
+              </div>
+              <div className="flex flex-col items-end gap-2">
+                <Skeleton className="h-5 w-20 rounded-md" />
+                <Skeleton className="h-4 w-4 rounded-full" />
+              </div>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {Array.from({ length: 4 }).map((__, b) => (
+                <Skeleton key={b} className="h-12 w-full rounded-md" />
+              ))}
+            </div>
+          </Card>
+        ))}
+      </div>
+    );
+  }
   if (!orders.length) {
     return <div className="p-12 text-center text-muted-foreground">Nenhuma ordem atribuída.</div>;
   }

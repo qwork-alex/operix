@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CloudHail, Loader2, MapPin, Camera } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { uploadFile, getFileUrl } from "@/lib/storage";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
 
@@ -57,11 +58,9 @@ export function HailReportDialog() {
       if (photo) {
         const ext = photo.name.split(".").pop() || "jpg";
         const path = `${user.id}/${Date.now()}.${ext}`;
-        const { error: upErr } = await supabase.storage
-          .from("hail-reports").upload(path, photo, { contentType: photo.type, upsert: false });
-        if (upErr) throw upErr;
+        await uploadFile("hail-reports", path, photo, photo.type);
         photo_storage_path = path;
-        photo_url = supabase.storage.from("hail-reports").getPublicUrl(path).data.publicUrl;
+        photo_url = getFileUrl("hail-reports", path);
       }
 
       // Confidence: photo +0.3, has size +0.2, base 0.3

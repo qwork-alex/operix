@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useWorkspace } from "./useWorkspace";
 import { toast } from "sonner";
+import { withAbortableTimeout, withPromiseTimeout } from "@/lib/asyncGuard";
+import { uploadFile, deleteFiles, getFileUrl } from "@/lib/storage";
 
 export type PhotoCategory = "before" | "during" | "after" | "damage" | "validation";
 
@@ -56,19 +58,25 @@ export function useProductionPhotos(orderId: string | null) {
   const query = useQuery({
     queryKey: ["production_photos", orderId],
     enabled: !!orderId,
+    retry: 0,
+    staleTime: 30_000,
+    placeholderData: (previousData) => previousData ?? [],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("production_photos")
-        .select("*")
-        .eq("production_order_id", orderId)
-        .order("created_at", { ascending: false });
+      const { data, error } = await withAbortableTimeout<{ data: any; error: any }>(
+        async (signal) => ((supabase as any)
+          .from("production_photos")
+          .select("*")
+          .eq("production_order_id", orderId)
+          .order("created_at", { ascending: false }) as any).abortSignal(signal),
+        10000,
+        "production_photos_list",
+      );
       if (error) throw error;
       // Generate signed URLs
       const list = (data ?? []) as ProductionPhoto[];
-      await Promise.all(list.map(async (p) => {
-        const { data: s } = await supabase.storage.from("production-photos").createSignedUrl(p.storage_path, 3600);
-        p.signed_url = s?.signedUrl;
-      }));
+      for (const p of list) {
+        p.signed_url = getFileUrl("production-photos", p.storage_path);
+      }
       return list;
     },
   });
@@ -79,14 +87,19 @@ export function useProductionPhotos(orderId: string | null) {
       const blob = file.type.startsWith("image/") ? await compress(file) : file;
       const ext = "jpg";
       const path = `${workspaceId}/${orderId}/${Date.now()}_${category}.${ext}`;
-      const { error: upErr } = await supabase.storage.from("production-photos").upload(path, blob, {
-        contentType: "image/jpeg", upsert: false,
-      });
-      if (upErr) throw upErr;
-      const { error: insErr } = await (supabase as any).from("production_photos").insert({
-        production_order_id: orderId, workspace_id: workspaceId, category, storage_path: path,
-        caption: caption ?? null, size_bytes: (blob as Blob).size,
-      });
+      await withPromiseTimeout<any>(
+        uploadFile("production-photos", path, blob, "image/jpeg"),
+        10000,
+        "production_photos_upload",
+      );
+      const { error: insErr } = await withAbortableTimeout<{ data: any; error: any }>(
+        async (signal) => ((supabase as any).from("production_photos").insert({
+          production_order_id: orderId, workspace_id: workspaceId, category, storage_path: path,
+          caption: caption ?? null, size_bytes: (blob as Blob).size,
+        }) as any).abortSignal(signal),
+        10000,
+        "production_photos_insert",
+      );
       if (insErr) throw insErr;
     },
     onSuccess: () => {
@@ -99,8 +112,16 @@ export function useProductionPhotos(orderId: string | null) {
 
   const remove = useMutation({
     mutationFn: async (photo: ProductionPhoto) => {
-      await supabase.storage.from("production-photos").remove([photo.storage_path]);
-      const { error } = await (supabase as any).from("production_photos").delete().eq("id", photo.id);
+      await withPromiseTimeout<any>(
+        deleteFiles("production-photos", [photo.storage_path]),
+        10000,
+        "production_photos_remove_storage",
+      );
+      const { error } = await withAbortableTimeout<{ data: any; error: any }>(
+        async (signal) => ((supabase as any).from("production_photos").delete().eq("id", photo.id) as any).abortSignal(signal),
+        10000,
+        "production_photos_remove_row",
+      );
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["production_photos", orderId] }),

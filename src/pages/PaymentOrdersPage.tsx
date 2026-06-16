@@ -38,6 +38,7 @@ import { getCurrentUser } from "@/lib/authUser";
 import { supabase } from "@/integrations/supabase/client";
 import { useContextualWorkspace } from "@/hooks/useContextualWorkspace";
 import { ContextualWorkspacePicker } from "@/components/workspace/ContextualWorkspacePicker";
+import { withPromiseTimeout } from "@/lib/asyncGuard";
 
 export default function PaymentOrdersPage() {
   const { t, formatCurrency } = useLanguage();
@@ -76,12 +77,9 @@ export default function PaymentOrdersPage() {
     const ctxDefaults = hierarchyDefaults(hCtx);
     const targetYear = hCtx.year ?? null;
     addFiles(files, async (file, onStatus) => {
-      const storedDocument = await storeFileInDocuments(file, "payment_order", user?.id, "orders", targetYear).then((doc) => {
-        queryClient.invalidateQueries({ queryKey: ["embedded-docs", "payment_order"] });
-        return doc;
-      });
       onStatus("uploading" as QueueItemStatus);
-      await new Promise(r => setTimeout(r, 200));
+      const storedDocument = await storeFileInDocuments(file, "payment_order", user?.id, "orders", targetYear);
+      queryClient.invalidateQueries({ queryKey: ["embedded-docs", "payment_order"] });
       onStatus("processing" as QueueItemStatus);
       try {
         const result = await extract(file);
@@ -103,15 +101,15 @@ export default function PaymentOrdersPage() {
           _ocrVersion: 0,
         }]);
         if (result.confidence === "low") {
-          toast.warning("Low confidence — please review carefully.");
+          toast.warning(t("paymentOrders.lowConfidence", "Extração com baixa confiança. Revise com atenção."));
         }
       } catch (err) {
-        const msg = (err as Error).message || "Unknown extraction error";
+        const msg = (err as Error).message || t("paymentOrders.extractUnknown", "Erro desconhecido na extração.");
         toast.error(msg, { duration: 8000 });
         throw err;
       }
     });
-  }, [addFiles, extract, user?.id, queryClient, hCtx]);
+  }, [addFiles, extract, user?.id, queryClient, hCtx, t]);
 
   const handleSave = async (extractionId: string, rows: ExtractedPaymentOrder[]) => {
     const extraction = extractions.find((e) => e._id === extractionId);
@@ -219,28 +217,40 @@ export default function PaymentOrdersPage() {
     const start = new Date(Date.UTC(y, 0, 1)).toISOString();
     const end = new Date(Date.UTC(y + 1, 0, 1)).toISOString();
     try {
-      const poIdsRes = await supabase
-        .from("payment_orders")
-        .select("id")
-        .gte("created_at", start)
-        .lt("created_at", end);
+      const poIdsRes = await withPromiseTimeout<any>(
+        supabase
+          .from("payment_orders")
+          .select("id")
+          .gte("created_at", start)
+          .lt("created_at", end),
+        12000,
+        "payment_orders_delete_year_ids",
+      );
       const poIds = (poIdsRes.data ?? []).map((r: any) => r.id);
       if (poIds.length > 0) {
-        await supabase.from("reconciliations").delete().in("payment_order_id", poIds);
-        await supabase.from("financial_records").delete().in("payment_order_id", poIds);
+        await withPromiseTimeout<any>(supabase.from("reconciliations").delete().in("payment_order_id", poIds), 12000, "payment_orders_delete_year_reconciliations");
+        await withPromiseTimeout<any>(supabase.from("financial_records").delete().in("payment_order_id", poIds), 12000, "payment_orders_delete_year_financial_records");
       }
-      const ordersRes = await supabase
-        .from("payment_orders")
-        .delete()
-        .gte("created_at", start)
-        .lt("created_at", end);
+      const ordersRes = await withPromiseTimeout<any>(
+        supabase
+          .from("payment_orders")
+          .delete()
+          .gte("created_at", start)
+          .lt("created_at", end),
+        12000,
+        "payment_orders_delete_year_orders",
+      );
       if (ordersRes.error) throw ordersRes.error;
-      await supabase
-        .from("documents")
-        .delete()
-        .eq("entity_type", "payment_order")
-        .gte("created_at", start)
-        .lt("created_at", end);
+      await withPromiseTimeout<any>(
+        supabase
+          .from("documents")
+          .delete()
+          .eq("entity_type", "payment_order")
+          .gte("created_at", start)
+          .lt("created_at", end),
+        12000,
+        "payment_orders_delete_year_documents",
+      );
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["payment_orders"] }),
         queryClient.invalidateQueries({ queryKey: ["embedded-docs", "payment_order"] }),
@@ -360,4 +370,3 @@ export default function PaymentOrdersPage() {
     </div>
   );
 }
-

@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Clock, User, AlertTriangle } from "lucide-react";
 import {
   useProductionOrders, PRODUCTION_STATUSES, PRIORITY_META,
@@ -21,7 +22,31 @@ export function ProductionBoard({ onOpen }: Props) {
     return m;
   }, [orders]);
 
-  if (isLoading) return <div className="p-8 text-center text-muted-foreground">Carregando…</div>;
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-1 gap-3 pb-4 md:flex md:gap-3 md:overflow-x-auto">
+        {Array.from({ length: 3 }).map((_, colIdx) => (
+          <div
+            key={colIdx}
+            className="min-w-0 rounded-xl bg-muted/30 p-3 md:w-72 md:flex-shrink-0 md:max-h-[calc(100svh-280px)] md:overflow-y-auto"
+          >
+            <div className="mb-3 flex items-center justify-between py-2 md:py-1">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-2 w-2 rounded-full" />
+                <Skeleton className="h-4 w-28" />
+              </div>
+              <Skeleton className="h-5 w-8 rounded-md" />
+            </div>
+            <div className="space-y-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-24 w-full rounded-lg" />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   const onDrop = (e: React.DragEvent, status: string) => {
     e.preventDefault();

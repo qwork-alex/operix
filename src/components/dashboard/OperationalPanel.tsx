@@ -141,8 +141,8 @@ export function OperationalPanel({
   }, [mode, onClose]);
 
   /* ---- nearby compute (impact radius = max(radius_km, 80)) ---- */
-  const RADIUS = Math.max(event.radius_km || 0, 80);
-  const center = { lat: event.lat, lng: event.lng };
+  const RADIUS = useMemo(() => Math.max(event.radius_km || 0, 80), [event.radius_km]);
+  const center = useMemo(() => ({ lat: event.lat, lng: event.lng }), [event.lat, event.lng]);
 
   const nearbyTeams = useMemo(() => {
     return teams
@@ -150,7 +150,7 @@ export function OperationalPanel({
       .filter((t) => t.dist <= RADIUS)
       .sort((a, b) => a.dist - b.dist)
       .slice(0, 8);
-  }, [teams, event.id]);
+  }, [teams, center, RADIUS]);
 
   const nearbyOrders = useMemo(() => {
     return orders
@@ -158,7 +158,7 @@ export function OperationalPanel({
       .filter((o) => o.dist <= RADIUS)
       .sort((a, b) => a.dist - b.dist)
       .slice(0, 12);
-  }, [orders, event.id]);
+  }, [orders, center, RADIUS]);
 
   const openOrders = nearbyOrders.filter((o) =>
     /(progress|andamento|aberta|open)/i.test(o.status || "")
@@ -625,7 +625,7 @@ function IntelligenceBlock({
       </>
     );
   } catch (e) {
-    console.warn("[IntelligenceBlock] failsafe — render skipped:", e);
+    void e;
     return null;
   }
 }
@@ -684,7 +684,5 @@ function DeferredDemandSection({
     </ErrorBoundary>
   );
 }
-
-
 
 

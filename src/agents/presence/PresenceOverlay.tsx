@@ -36,7 +36,7 @@ function Orb() {
   useEffect(() => {
     if (snapshot.mode === "safe") return;
     let raf = 0;
-    let t0 = performance.now();
+    const t0 = performance.now();
     const loop = (t: number) => {
       const dt = (t - t0) / 1000;
       setBreath(Math.sin(dt * 1.6) * 0.04);

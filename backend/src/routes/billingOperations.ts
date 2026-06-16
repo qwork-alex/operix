@@ -3,6 +3,7 @@ import { Router, type NextFunction, type Response } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import type { AuthenticatedRequest } from "../middleware/auth.js";
+import { isEmailConfigured, sendEmail } from "../lib/email/resend.js";
 
 export const operationalBillingRouter = Router();
 
@@ -1130,22 +1131,72 @@ operationalBillingRouter.post("/admin/ops/invoices/:invoiceId/send", async (req:
         ? `data:application/pdf;base64,${input.pdf_base64}`
         : null;
 
+    const escapeHtml = (value: string) =>
+      value
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+
+    const recipient = input.recipient.trim().toLowerCase();
+    const cc = input.cc?.trim() || null;
+    const subject = input.subject.trim();
+    const body = input.message?.trim() || null;
+
+    let provider: string = "simulated";
+    let status: string = "sent";
+    let errorText: string | null = null;
+    let providerMessageId: string | null = null;
+    let sentAt: Date | null = new Date();
+
+    if (isEmailConfigured()) {
+      provider = "smtp";
+      const html = `<!doctype html><html><body style="font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;color:#111827">
+<h2 style="margin:0 0 12px">${escapeHtml(subject)}</h2>
+${body ? `<p style="margin:0 0 12px;white-space:pre-wrap">${escapeHtml(body)}</p>` : ""}
+<p style="margin:12px 0 0;font-size:12px;color:#6b7280">QWork Nexus · Fatura ${escapeHtml(invoice.invoiceNumber)}</p>
+</body></html>`;
+
+      const attachments =
+        input.pdf_base64 && input.pdf_file_name
+          ? [{ filename: input.pdf_file_name, contentBase64: input.pdf_base64 }]
+          : null;
+
+      const sendResult = await sendEmail({
+        to: recipient,
+        cc,
+        subject,
+        html,
+        text: body ?? undefined,
+        attachments,
+      });
+
+      if (!sendResult.ok) {
+        status = "failed";
+        errorText = sendResult.error;
+        sentAt = null;
+      } else {
+        providerMessageId = sendResult.id;
+      }
+    }
+
     const log = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const created = await tx.invoiceSendLog.create({
         data: {
           invoiceId,
-          recipient: input.recipient.trim().toLowerCase(),
-          cc: input.cc?.trim() || null,
-          subject: input.subject.trim(),
-          body: input.message?.trim() || null,
-          provider: "simulated",
-          status: "sent",
-          error: null,
+          recipient,
+          cc,
+          subject,
+          body,
+          provider,
+          status,
+          error: errorText,
           idempotencyKey: input.idempotency_key?.trim() || null,
           pdfPath,
           kind: input.kind,
           sentBy: req.auth?.userId ?? null,
-          sentAt: new Date(),
+          sentAt,
         },
       });
 
@@ -1160,16 +1211,28 @@ operationalBillingRouter.post("/admin/ops/invoices/:invoiceId/send", async (req:
           recipient: created.recipient,
           provider: created.provider,
           kind: created.kind,
+          provider_message_id: providerMessageId,
         } as Prisma.InputJsonValue,
       });
 
       return created;
     });
 
+    if (log.status !== "sent") {
+      return res.status(502).json({
+        ok: false,
+        provider: log.provider,
+        simulated: false,
+        message: "Falha ao enviar email.",
+        error: log.error,
+        log: mapSendLog(log),
+      });
+    }
+
     return res.json({
       ok: true,
       provider: log.provider,
-      simulated: true,
+      simulated: log.provider === "simulated",
       log: mapSendLog(log),
     });
   } catch (error) {

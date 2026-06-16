@@ -7,6 +7,9 @@ import { operationalBillingRouter } from "./billingOperations.js";
 import { createStripeClient, getConfiguredStripeEnvironment, type StripeEnv, verifyStripeWebhookSignature } from "../lib/stripe.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
 import { WORKSPACE_TIERS, findWorkspaceTier } from "../lib/subscription.js";
+import { buildSimplePdf } from "../lib/pdf/simplePdf.js";
+import { isEmailConfigured, sendEmail } from "../lib/email/resend.js";
+import { reportEmail } from "../lib/email/templates.js";
 
 export const billingRouter = Router();
 
@@ -1967,12 +1970,181 @@ billingRouter.post("/invoices/:invoiceId/pdf", async (req: AuthenticatedRequest,
         ? invoice.metadata.currency
         : "EUR";
 
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>${invoice.invoiceNumber}</title></head><body><h1>${invoice.invoiceNumber}</h1><p>Workspace: ${invoice.workspace.name}</p><p>Emitida: ${invoice.issueDate.toISOString()}</p><p>Total: ${invoice.total.toFixed(2)} ${currency}</p></body></html>`;
-    const signedUrl = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+    const pdf = buildSimplePdf({
+      title: `Fatura ${invoice.invoiceNumber}`,
+      lines: [
+        `Workspace: ${invoice.workspace.name}`,
+        `Emitida: ${invoice.issueDate.toISOString().slice(0, 10)}`,
+        invoice.dueDate ? `Vencimento: ${invoice.dueDate.toISOString().slice(0, 10)}` : "Vencimento: —",
+        `Total: ${invoice.total.toFixed(2)} ${currency}`,
+      ],
+    });
+    const signedUrl = `data:application/pdf;base64,${pdf.toString("base64")}`;
 
     return res.json({
       signedUrl,
     });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+billingRouter.post("/reports/financial/pdf", async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    if (req.auth!.role !== "admin") {
+      return res.status(403).json({ message: "Forbidden." });
+    }
+
+    const schema = z.object({
+      periodMonths: z.number().int().min(1).max(36).default(6),
+      generatedAt: z.string().optional(),
+      kpis: z.object({
+        totalRevenue: z.number(),
+        totalExpenses: z.number(),
+        received: z.number(),
+        overdueAmount: z.number(),
+        pendingAmount: z.number(),
+        profit: z.number(),
+        inadimplenciaPct: z.number(),
+      }),
+      monthly: z.array(z.object({
+        label: z.string(),
+        revenue: z.number(),
+        expenses: z.number(),
+        received: z.number(),
+        profit: z.number(),
+        overdue: z.number(),
+      })).max(36),
+    });
+
+    const input = schema.parse((req as AuthenticatedRequest & { body: unknown }).body);
+    const now = input.generatedAt ? new Date(input.generatedAt) : new Date();
+
+    const money = (v: number) => (Number.isFinite(v) ? v : 0).toFixed(2) + " EUR";
+    const lines: string[] = [];
+    lines.push(`Gerado: ${now.toISOString().slice(0, 19).replace("T", " ")}`);
+    lines.push(`Período: últimos ${input.periodMonths} meses`);
+    lines.push("");
+    lines.push(`Faturamento: ${money(input.kpis.totalRevenue)}`);
+    lines.push(`Despesas: ${money(input.kpis.totalExpenses)}`);
+    lines.push(`Recebido: ${money(input.kpis.received)}`);
+    lines.push(`Lucro: ${money(input.kpis.profit)}`);
+    lines.push(`Inadimplência: ${input.kpis.inadimplenciaPct.toFixed(1)}%`);
+    lines.push(`Em atraso: ${money(input.kpis.overdueAmount)}`);
+    lines.push(`Pendente: ${money(input.kpis.pendingAmount)}`);
+    lines.push("");
+    lines.push("Resumo mensal:");
+    for (const m of input.monthly.slice(0, input.periodMonths)) {
+      lines.push(`${m.label} · Rev ${money(m.revenue)} · Exp ${money(m.expenses)} · Rec ${money(m.received)} · Luc ${money(m.profit)} · Atr ${money(m.overdue)}`);
+    }
+
+    const pdf = buildSimplePdf({
+      title: "Relatório Financeiro",
+      lines,
+    });
+    const signedUrl = `data:application/pdf;base64,${pdf.toString("base64")}`;
+
+    return res.json({ signedUrl });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+billingRouter.post("/reports/financial/email", async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    if (req.auth!.role !== "admin") {
+      return res.status(403).json({ message: "Forbidden." });
+    }
+    if (!isEmailConfigured()) {
+      return res.status(503).json({ message: "Email provider not configured." });
+    }
+
+    const schema = z.object({
+      periodMonths: z.number().int().min(1).max(36).default(6),
+      generatedAt: z.string().optional(),
+      kpis: z.object({
+        totalRevenue: z.number(),
+        totalExpenses: z.number(),
+        received: z.number(),
+        overdueAmount: z.number(),
+        pendingAmount: z.number(),
+        profit: z.number(),
+        inadimplenciaPct: z.number(),
+      }),
+      monthly: z.array(z.object({
+        label: z.string(),
+        revenue: z.number(),
+        expenses: z.number(),
+        received: z.number(),
+        profit: z.number(),
+        overdue: z.number(),
+      })).max(36),
+    });
+    const input = schema.parse((req as AuthenticatedRequest & { body: unknown }).body);
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.auth!.userId },
+      select: { id: true, email: true, fullName: true, appUser: { select: { workspaceId: true } } },
+    });
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    const money = (v: number) => (Number.isFinite(v) ? v : 0).toFixed(2) + " EUR";
+    const lines: string[] = [
+      `Gerado: ${(input.generatedAt ? new Date(input.generatedAt) : new Date()).toISOString().slice(0, 19).replace("T", " ")}`,
+      `Período: últimos ${input.periodMonths} meses`,
+      "",
+      `Faturamento: ${money(input.kpis.totalRevenue)}`,
+      `Despesas: ${money(input.kpis.totalExpenses)}`,
+      `Recebido: ${money(input.kpis.received)}`,
+      `Lucro: ${money(input.kpis.profit)}`,
+      `Inadimplência: ${input.kpis.inadimplenciaPct.toFixed(1)}%`,
+      `Em atraso: ${money(input.kpis.overdueAmount)}`,
+      `Pendente: ${money(input.kpis.pendingAmount)}`,
+      "",
+      "Resumo mensal:",
+      ...input.monthly.slice(0, input.periodMonths).map((m: (typeof input.monthly)[number]) =>
+        `${m.label} · Rev ${money(m.revenue)} · Exp ${money(m.expenses)} · Rec ${money(m.received)} · Luc ${money(m.profit)} · Atr ${money(m.overdue)}`),
+    ];
+    const pdf = buildSimplePdf({
+      title: "Relatório Financeiro",
+      lines,
+    });
+    const tpl = reportEmail({
+      title: "Relatório Financeiro QWork Nexus",
+      body: `Segue o relatório financeiro dos últimos ${input.periodMonths} meses.`,
+    });
+    const sendResult = await sendEmail({
+      to: user.email,
+      subject: tpl.subject,
+      html: tpl.html,
+      text: tpl.text,
+      attachments: [{
+        filename: `relatorio-financeiro-${new Date().toISOString().slice(0, 10)}.pdf`,
+        contentBase64: pdf.toString("base64"),
+      }],
+    });
+    if (!sendResult.ok) {
+      return res.status(502).json({ message: sendResult.error });
+    }
+
+    await prisma.backendEventLog.create({
+      data: {
+        tableName: "reports",
+        rowId: null,
+        action: "report.financial.email.sent",
+        actorUserId: user.id,
+        workspaceId: user.appUser?.workspaceId ?? null,
+        payload: {
+          provider: sendResult.provider,
+          email_id: sendResult.id,
+          period_months: input.periodMonths,
+        } as Prisma.InputJsonValue,
+      },
+    });
+
+    return res.status(204).send();
   } catch (error) {
     return next(error);
   }

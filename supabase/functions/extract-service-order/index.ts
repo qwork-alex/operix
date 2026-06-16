@@ -1,17 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { fetchAIChatCompletions } from "../_shared/ai.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-serve(async (req) => {
+serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
-
     const { imageBase64, mimeType, fileName } = await req.json();
     if (!imageBase64) throw new Error("No image data provided");
 
@@ -62,92 +60,91 @@ Remember: it's better to return null with low confidence than to guess wrong. Th
       },
     ];
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages,
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "extract_service_orders",
-              description: "Extract structured service order data with per-field confidence",
-              parameters: {
-                type: "object",
-                properties: {
-                  orders: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        client: { type: "string", description: "Client/owner name — NOT the technician" },
-                        platform: { type: "string" },
-                        technician: { type: "string", description: "Person doing the work" },
-                        week: { type: "string" },
-                        car_name: { type: "string" },
-                        license_plate: { type: "string" },
-                        service_1_name: { type: "string" },
-                        service_1_price: { type: "number" },
-                        service_2_name: { type: "string" },
-                        service_2_price: { type: "number" },
-                        service_3_name: { type: "string" },
-                        service_3_price: { type: "number" },
-                        service_4_name: { type: "string" },
-                        service_4_price: { type: "number" },
-                        total: { type: "number" },
-                        field_confidence: {
+    const { response } = await fetchAIChatCompletions({
+      model: "google/gemini-2.5-flash",
+      messages,
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "extract_service_orders",
+            description: "Extract structured service order data with per-field confidence",
+            parameters: {
+              type: "object",
+              properties: {
+                orders: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      client: { type: "string", description: "Client/owner name — NOT the technician" },
+                      platform: { type: "string" },
+                      technician: { type: "string", description: "Person doing the work" },
+                      week: { type: "string" },
+                      car_name: { type: "string" },
+                      license_plate: { type: "string" },
+                      service_1_name: { type: "string" },
+                      service_1_price: { type: "number" },
+                      service_2_name: { type: "string" },
+                      service_2_price: { type: "number" },
+                      service_3_name: { type: "string" },
+                      service_3_price: { type: "number" },
+                      service_4_name: { type: "string" },
+                      service_4_price: { type: "number" },
+                      total: { type: "number" },
+                      field_confidence: {
+                        type: "object",
+                        properties: {
+                          client: { type: "string", enum: ["high", "medium", "low"] },
+                          platform: { type: "string", enum: ["high", "medium", "low"] },
+                          technician: { type: "string", enum: ["high", "medium", "low"] },
+                          week: { type: "string", enum: ["high", "medium", "low"] },
+                          car_name: { type: "string", enum: ["high", "medium", "low"] },
+                          license_plate: { type: "string", enum: ["high", "medium", "low"] },
+                          service_1_name: { type: "string", enum: ["high", "medium", "low"] },
+                          service_1_price: { type: "string", enum: ["high", "medium", "low"] },
+                          service_2_name: { type: "string", enum: ["high", "medium", "low"] },
+                          service_2_price: { type: "string", enum: ["high", "medium", "low"] },
+                          service_3_name: { type: "string", enum: ["high", "medium", "low"] },
+                          service_3_price: { type: "string", enum: ["high", "medium", "low"] },
+                          service_4_name: { type: "string", enum: ["high", "medium", "low"] },
+                          service_4_price: { type: "string", enum: ["high", "medium", "low"] },
+                          total: { type: "string", enum: ["high", "medium", "low"] },
+                        },
+                      },
+                      handwritten_corrections: {
+                        type: "array",
+                        items: {
                           type: "object",
                           properties: {
-                            client: { type: "string", enum: ["high", "medium", "low"] },
-                            platform: { type: "string", enum: ["high", "medium", "low"] },
-                            technician: { type: "string", enum: ["high", "medium", "low"] },
-                            week: { type: "string", enum: ["high", "medium", "low"] },
-                            car_name: { type: "string", enum: ["high", "medium", "low"] },
-                            license_plate: { type: "string", enum: ["high", "medium", "low"] },
-                            service_1_name: { type: "string", enum: ["high", "medium", "low"] },
-                            service_1_price: { type: "string", enum: ["high", "medium", "low"] },
-                            service_2_name: { type: "string", enum: ["high", "medium", "low"] },
-                            service_2_price: { type: "string", enum: ["high", "medium", "low"] },
-                            service_3_name: { type: "string", enum: ["high", "medium", "low"] },
-                            service_3_price: { type: "string", enum: ["high", "medium", "low"] },
-                            service_4_name: { type: "string", enum: ["high", "medium", "low"] },
-                            service_4_price: { type: "string", enum: ["high", "medium", "low"] },
-                            total: { type: "string", enum: ["high", "medium", "low"] },
+                            field: { type: "string" },
+                            original_value: { type: "string" },
+                            corrected_value: { type: "string" },
                           },
+                          required: ["field", "corrected_value"],
                         },
-                        handwritten_corrections: {
-                          type: "array",
-                          items: {
-                            type: "object",
-                            properties: {
-                              field: { type: "string" },
-                              original_value: { type: "string" },
-                              corrected_value: { type: "string" },
-                            },
-                            required: ["field", "corrected_value"],
-                          },
-                        },
-                        total_mismatch: { type: "boolean" },
                       },
-                      required: ["client", "car_name"],
+                      total_mismatch: { type: "boolean" },
                     },
+                    required: ["client", "car_name"],
                   },
-                  confidence: { type: "string", enum: ["high", "medium", "low"] },
-                  notes: { type: "string", description: "Issues found: unclear fields, quality problems, crossed-out values" },
                 },
-                required: ["orders", "confidence"],
-                additionalProperties: false,
+                confidence: { type: "string", enum: ["high", "medium", "low"] },
+                notes: { type: "string", description: "Issues found: unclear fields, quality problems, crossed-out values" },
               },
+              required: ["orders", "confidence"],
+              additionalProperties: false,
             },
           },
-        ],
-        tool_choice: { type: "function", function: { name: "extract_service_orders" } },
-      }),
+        },
+      ],
+      tool_choice: { type: "function", function: { name: "extract_service_orders" } },
+    }, {
+      modelByProvider: {
+        gemini: "gemini-2.5-flash",
+        openai: "gpt-4o-mini",
+        lovable: "google/gemini-2.5-flash",
+      },
     });
 
     if (!response.ok) {

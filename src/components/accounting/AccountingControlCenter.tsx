@@ -219,8 +219,9 @@ export function AccountingControlCenter({ embedded = false }: { embedded?: boole
   // Stabilized Phase 5D: no continuous render loop in the mounted financial route.
   useEffect(() => {
     applyOrbitToDom();
+    const raf = rafRef.current;
     return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      if (raf) cancelAnimationFrame(raf);
     };
   }, [applyOrbitToDom]);
 

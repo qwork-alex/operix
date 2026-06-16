@@ -2,6 +2,7 @@ import { useState } from "react";
 import { TableLoadingRow } from "@/components/shared/TableStatusRows";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { uploadFile, deleteFiles, getFileUrl } from "@/lib/storage";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
+import { withPromiseTimeout } from "@/lib/asyncGuard";
 
 const entityTypeLabels: Record<string, string> = {
   vehicle_document: "Documento Veículo",
@@ -102,33 +104,53 @@ export default function FleetDocumentsModule() {
 
   // Upload
   const uploadDoc = async (file: File) => {
-    const path = `fleet/docs/${Date.now()}_${file.name}`;
-    const { error: upErr } = await supabase.storage.from("uploads").upload(path, file);
-    if (upErr) { toast.error(upErr.message); return; }
+    try {
+      const safeName = (file.name || "document").replace(/[^\w.\-()]+/g, "_").slice(0, 160);
+      const path = `fleet/docs/${Date.now()}_${safeName}`;
+      await withPromiseTimeout<any>(
+        uploadFile("uploads", path, file, file.type || undefined),
+        10000,
+        "fleet_documents_upload",
+      );
 
-    const { error } = await supabase.from("documents").insert({
-      name: file.name,
-      type: "file",
-      entity_type: uploadType,
-      storage_path: path,
-      mime_type: file.type,
-      size_bytes: file.size,
-      parent_id: parentId,
-      module: "fleet",
-    });
-    if (error) toast.error(error.message);
-    else {
+      const { error } = await withPromiseTimeout<any>(
+        supabase.from("documents").insert({
+          name: safeName,
+          type: "file",
+          entity_type: uploadType,
+          storage_path: path,
+          mime_type: file.type,
+          size_bytes: file.size,
+          parent_id: parentId,
+          module: "fleet",
+        }),
+        10000,
+        "fleet_documents_insert",
+      );
+      if (error) { toast.error(error.message); return; }
       qc.invalidateQueries({ queryKey: ["fleet_documents"] });
       toast.success("Documento enviado");
       setUploadOpen(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Falha no upload.");
     }
   };
 
   // Delete
   const remove = useMutation({
     mutationFn: async (doc: any) => {
-      if (doc.storage_path) await supabase.storage.from("uploads").remove([doc.storage_path]);
-      const { error } = await supabase.from("documents").delete().eq("id", doc.id);
+      if (doc.storage_path) {
+        await withPromiseTimeout<any>(
+          deleteFiles("uploads", [doc.storage_path]),
+          10000,
+          "fleet_documents_remove_storage",
+        );
+      }
+      const { error } = await withPromiseTimeout<any>(
+        supabase.from("documents").delete().eq("id", doc.id),
+        10000,
+        "fleet_documents_remove_row",
+      );
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["fleet_documents"] }); toast.success("Removido"); },
@@ -196,47 +218,35 @@ export default function FleetDocumentsModule() {
   };
 
   // File actions
-  const handlePreview = async (doc: any) => {
+  const handlePreview = (doc: any) => {
     if (doc.storage_path) {
-      const { data } = await supabase.storage.from("uploads").createSignedUrl(doc.storage_path, 600);
-      if (data?.signedUrl) {
-        setPreviewUrl(data.signedUrl);
-        setPreviewName(doc.name);
-      }
+      setPreviewUrl(getFileUrl("uploads", doc.storage_path));
+      setPreviewName(doc.name);
     }
   };
 
-  const handleDownload = async (doc: any) => {
+  const handleDownload = (doc: any) => {
     if (doc.storage_path) {
-      const { data } = await supabase.storage.from("uploads").createSignedUrl(doc.storage_path, 300);
-      if (data?.signedUrl) {
-        const a = document.createElement("a");
-        a.href = data.signedUrl;
-        a.download = doc.name;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      }
+      const a = document.createElement("a");
+      a.href = getFileUrl("uploads", doc.storage_path);
+      a.download = doc.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     }
   };
 
-  const handlePrint = async (doc: any) => {
+  const handlePrint = (doc: any) => {
     if (doc.storage_path) {
-      const { data } = await supabase.storage.from("uploads").createSignedUrl(doc.storage_path, 300);
-      if (data?.signedUrl) {
-        const w = window.open(data.signedUrl, "_blank");
-        if (w) setTimeout(() => w.print(), 1500);
-      }
+      const w = window.open(getFileUrl("uploads", doc.storage_path), "_blank");
+      if (w) setTimeout(() => w.print(), 1500);
     }
   };
 
   const handleShare = async (doc: any) => {
     if (doc.storage_path) {
-      const { data } = await supabase.storage.from("uploads").createSignedUrl(doc.storage_path, 86400);
-      if (data?.signedUrl) {
-        await navigator.clipboard.writeText(data.signedUrl);
-        toast.success("Link copiado (válido 24h)");
-      }
+      await navigator.clipboard.writeText(getFileUrl("uploads", doc.storage_path));
+      toast.success("Link copiado");
     }
   };
 

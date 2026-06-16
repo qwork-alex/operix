@@ -10,6 +10,7 @@ import { Building2, Loader2, Save } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { getCurrentUserId, logSaveError, logSavePayload } from "@/lib/authUser";
 import { toast } from "sonner";
+import { withPromiseTimeout } from "@/lib/asyncGuard";
 
 import { COUNTRIES } from "@/lib/countries";
 
@@ -44,12 +45,19 @@ export function CompanyDataCard() {
   const { data, isLoading } = useQuery({
     queryKey: ["company-settings-full", user?.id],
     enabled: !!user?.id,
+    retry: 0,
+    staleTime: 60_000,
+    placeholderData: (previousData) => previousData ?? null,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("company_settings")
-        .select("*")
-        .eq("user_id", user!.id)
-        .maybeSingle();
+      const { data, error } = await withPromiseTimeout<any>(
+        supabase
+          .from("company_settings")
+          .select("*")
+          .eq("user_id", user!.id)
+          .maybeSingle(),
+        10000,
+        "company_settings_full",
+      );
       if (error) throw error;
       return data;
     },
@@ -86,16 +94,29 @@ export function CompanyDataCard() {
       ].filter(Boolean).join(", ");
       const payload: any = { ...form, address: joinedAddress, updated_at: new Date().toISOString() };
       logSavePayload("CompanyData:upsert", currentUserId, payload);
-      const { data: existing } = await supabase
-        .from("company_settings")
-        .select("id")
-        .eq("user_id", currentUserId)
-        .maybeSingle();
+      const { data: existing, error: existingError } = await withPromiseTimeout<any>(
+        supabase
+          .from("company_settings")
+          .select("id")
+          .eq("user_id", currentUserId)
+          .maybeSingle(),
+        10000,
+        "company_settings_existing",
+      );
+      if (existingError) throw existingError;
       if (existing) {
-        const { error } = await (supabase as any).from("company_settings").update(payload).eq("user_id", currentUserId);
+        const { error } = await withPromiseTimeout<any>(
+          (supabase as any).from("company_settings").update(payload).eq("user_id", currentUserId),
+          10000,
+          "company_settings_update",
+        );
         if (error) { logSaveError("CompanyData:update", error); throw error; }
       } else {
-        const { error } = await (supabase as any).from("company_settings").insert(payload);
+        const { error } = await withPromiseTimeout<any>(
+          (supabase as any).from("company_settings").insert(payload),
+          10000,
+          "company_settings_insert",
+        );
         if (error) { logSaveError("CompanyData:insert", error); throw error; }
       }
     },

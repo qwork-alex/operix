@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import {
   Receipt, CreditCard, GitMerge, CalendarClock, Building2, BarChart3,
@@ -29,17 +29,18 @@ import ReconciliationScreen from "@/components/billing/ReconciliationScreen";
 import UpcomingBillsScreen from "@/components/billing/UpcomingBillsScreen";
 import ClientsScreen from "@/components/billing/ClientsScreen";
 import ReportsScreen from "@/components/billing/ReportsScreen";
+import { useLanguage } from "@/hooks/useLanguage";
 
 // ─────────────────────────────────────────────────────────────
 // Sub-nav definition
 // ─────────────────────────────────────────────────────────────
 const SUB_NAV = [
-  { slug: "faturas",         label: "Faturas",          icon: Receipt },
-  { slug: "pagamentos",      label: "Pagamentos",       icon: CreditCard },
-  { slug: "conciliacao",     label: "Conciliação",      icon: GitMerge },
-  { slug: "contas-a-vencer", label: "Contas a vencer",  icon: CalendarClock },
-  { slug: "clientes",        label: "Clientes",         icon: Building2 },
-  { slug: "relatorios",      label: "Relatórios",       icon: BarChart3 },
+  { slug: "faturas", icon: Receipt },
+  { slug: "pagamentos", icon: CreditCard },
+  { slug: "conciliacao", icon: GitMerge },
+  { slug: "contas-a-vencer", icon: CalendarClock },
+  { slug: "clientes", icon: Building2 },
+  { slug: "relatorios", icon: BarChart3 },
 ] as const;
 
 type Slug = typeof SUB_NAV[number]["slug"];
@@ -85,15 +86,6 @@ const DATASETS: Record<Slug, Row[]> = {
   "relatorios":      seed("REL", 9),
 };
 
-const TITLES: Record<Slug, { title: string; subtitle: string; primaryLabel: string }> = {
-  "faturas":         { title: "Faturas",          subtitle: "Gestão de faturas emitidas e recebidas", primaryLabel: "Nova fatura" },
-  "pagamentos":      { title: "Pagamentos",       subtitle: "Histórico e processamento de pagamentos", primaryLabel: "Registrar pagamento" },
-  "conciliacao":     { title: "Conciliação",      subtitle: "Cruzamento entre faturas e pagamentos",   primaryLabel: "Nova conciliação" },
-  "contas-a-vencer": { title: "Contas a vencer",  subtitle: "Faturas em aberto com vencimento próximo", primaryLabel: "Adicionar conta" },
-  "clientes":        { title: "Clientes",         subtitle: "Cadastro geral de clientes empresariais e particulares", primaryLabel: "Novo cliente" },
-  "relatorios":      { title: "Relatórios",       subtitle: "Exportação e análise de faturamento",       primaryLabel: "Gerar relatório" },
-};
-
 // ─────────────────────────────────────────────────────────────
 // Status badge
 // ─────────────────────────────────────────────────────────────
@@ -116,6 +108,15 @@ function StatusBadge({ status }: { status: Row["status"] }) {
 // Reusable sub-page
 // ─────────────────────────────────────────────────────────────
 function SubPage({ slug }: { slug: Slug }) {
+  const { t } = useLanguage();
+  const TITLES: Record<Slug, { title: string; subtitle: string; primaryLabel: string }> = {
+    "faturas":         { title: t("nav.billing", "Faturamento"),          subtitle: t("billing.faturas.subtitle", "Gestão de faturas emitidas e recebidas"), primaryLabel: t("billing.faturas.new", "Nova fatura") },
+    "pagamentos":      { title: t("billing.pagamentos", "Pagamentos"),    subtitle: t("billing.pagamentos.subtitle", "Histórico e processamento de pagamentos"), primaryLabel: t("billing.pagamentos.new", "Registrar pagamento") },
+    "conciliacao":     { title: t("billing.conciliacao", "Conciliação"),  subtitle: t("billing.conciliacao.subtitle", "Cruzamento entre faturas e pagamentos"), primaryLabel: t("billing.conciliacao.new", "Nova conciliação") },
+    "contas-a-vencer": { title: t("billing.upcoming", "Contas a vencer"), subtitle: t("billing.upcoming.subtitle", "Faturas em aberto com vencimento próximo"), primaryLabel: t("billing.upcoming.new", "Adicionar conta") },
+    "clientes":        { title: t("billing.clients", "Clientes"),         subtitle: t("billing.clients.subtitle", "Cadastro geral de clientes empresariais e particulares"), primaryLabel: t("billing.clients.new", "Novo cliente") },
+    "relatorios":      { title: t("billing.reports", "Relatórios"),       subtitle: t("billing.reports.subtitle", "Exportação e análise de faturamento"), primaryLabel: t("billing.reports.new", "Gerar relatório") },
+  };
   const meta = TITLES[slug];
   const data = DATASETS[slug];
 
@@ -317,12 +318,21 @@ function SubPage({ slug }: { slug: Slug }) {
 // ─────────────────────────────────────────────────────────────
 // Layout with sub-nav
 // ─────────────────────────────────────────────────────────────
-function BillingLayout({ children }: { children: React.ReactNode }) {
+function BillingLayout({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
+  const { t } = useLanguage();
+  const subNav = [
+    { slug: "faturas", label: t("nav.billing", "Faturamento"), icon: Receipt },
+    { slug: "pagamentos", label: t("billing.pagamentos", "Pagamentos"), icon: CreditCard },
+    { slug: "conciliacao", label: t("billing.conciliacao", "Conciliação"), icon: GitMerge },
+    { slug: "contas-a-vencer", label: t("billing.upcoming", "Contas a vencer"), icon: CalendarClock },
+    { slug: "clientes", label: t("billing.clients", "Clientes"), icon: Building2 },
+    { slug: "relatorios", label: t("billing.reports", "Relatórios"), icon: BarChart3 },
+  ] as const;
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-1 overflow-x-auto rounded-lg border border-border/50 bg-card/40 backdrop-blur-sm p-1">
-        {SUB_NAV.map((item) => {
+        {subNav.map((item) => {
           const to = `/billing/${item.slug}`;
           const active = pathname.startsWith(to);
           const Icon = item.icon;

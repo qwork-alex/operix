@@ -23,6 +23,7 @@ import { BillingProfileCard } from "@/components/billing/BillingProfileCard";
 import { WorkspacePlanMatrix } from "@/components/billing/WorkspacePlanMatrix";
 import { useWorkspaceStripeSync } from "@/hooks/useWorkspaceStripeSync";
 import { fetchWorkspaceTiers, resolveTier, type WorkspaceTier } from "@/lib/billing";
+import { useLanguage } from "@/hooks/useLanguage";
 
 
 const STATUS_META: Record<SubscriptionStatus, { label: string; tone: string; icon: typeof CheckCircle2 }> = {
@@ -41,6 +42,7 @@ function priceForTier(techCount: number, cycle: "monthly" | "yearly", tiers: Wor
 }
 
 export default function SubscriptionPage() {
+  const { t } = useLanguage();
   const { workspaceName, isAdmin } = useWorkspace();
   const { data: snapshot, isLoading } = useSubscription();
   const { data: stripeSync } = useWorkspaceStripeSync();
@@ -51,7 +53,15 @@ export default function SubscriptionPage() {
   const [tab, setTab] = useState("overview");
   const [tiers, setTiers] = useState<WorkspaceTier[]>([]);
 
-  useEffect(() => { void fetchWorkspaceTiers().then(setTiers); }, []);
+  useEffect(() => {
+    let active = true;
+    void fetchWorkspaceTiers().then((next) => {
+      if (active) setTiers(next);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const techCount = snapshot?.usage?.technician_count ?? 0;
   const sim = simTechs ?? techCount;
@@ -61,7 +71,7 @@ export default function SubscriptionPage() {
   if (isLoading) {
     return (
       <div className="module-shell">
-        <PageHeader icon={CreditCard} title="Portal financeiro" subtitle="A carregar plano…" />
+        <PageHeader icon={CreditCard} title={t("subscription.portal", "Portal financeiro")} subtitle={t("subscription.loadingPlan", "A carregar plano…")} />
         <LoadingState variant="cards" />
       </div>
     );
@@ -70,9 +80,9 @@ export default function SubscriptionPage() {
   if (!isAdmin && !isPlatformOwner) {
     return (
       <div className="module-shell">
-        <PageHeader icon={CreditCard} title="Portal financeiro" />
+        <PageHeader icon={CreditCard} title={t("subscription.portal", "Portal financeiro")} />
         <Card className="p-8 text-center text-sm text-muted-foreground surface-card">
-          Apenas administradores da workspace podem ver o portal financeiro.
+          {t("subscription.adminOnly", "Apenas administradores da workspace podem ver o portal financeiro.")}
         </Card>
       </div>
     );
@@ -81,9 +91,9 @@ export default function SubscriptionPage() {
   if (!snapshot?.exists || !snapshot.plan || !snapshot.subscription) {
     return (
       <div className="module-shell">
-        <PageHeader icon={CreditCard} title="Portal financeiro" />
+        <PageHeader icon={CreditCard} title={t("subscription.portal", "Portal financeiro")} />
         <Card className="p-8 text-center text-sm text-muted-foreground surface-card">
-          Nenhuma assinatura encontrada para esta workspace.
+          {t("subscription.none", "Nenhuma assinatura encontrada para esta workspace.")}
         </Card>
       </div>
     );
@@ -98,7 +108,7 @@ export default function SubscriptionPage() {
     <div className="module-shell space-y-6">
       <PageHeader
         icon={CreditCard}
-        title="Portal financeiro"
+        title={t("subscription.portal", "Portal financeiro")}
         subtitle={workspaceName ?? undefined}
         actions={
           <div className="flex gap-2 flex-wrap">
@@ -113,11 +123,11 @@ export default function SubscriptionPage() {
 
       <Tabs value={tab} onValueChange={setTab} className="space-y-5">
         <TabsList className="h-10 bg-card/40 border border-border/40 rounded-lg p-1 backdrop-blur">
-          <TabsTrigger value="overview" className="text-xs gap-2"><LayoutDashboard className="h-3.5 w-3.5" /> Visão geral</TabsTrigger>
-          <TabsTrigger value="invoices" className="text-xs gap-2"><FileText className="h-3.5 w-3.5" /> Faturas</TabsTrigger>
-          <TabsTrigger value="payment" className="text-xs gap-2"><Wallet className="h-3.5 w-3.5" /> Pagamento</TabsTrigger>
-          <TabsTrigger value="billing" className="text-xs gap-2"><Building2 className="h-3.5 w-3.5" /> Faturação</TabsTrigger>
-          <TabsTrigger value="history" className="text-xs gap-2"><History className="h-3.5 w-3.5" /> Histórico</TabsTrigger>
+          <TabsTrigger value="overview" className="text-xs gap-2"><LayoutDashboard className="h-3.5 w-3.5" /> {t("subscription.overview", "Visão geral")}</TabsTrigger>
+          <TabsTrigger value="invoices" className="text-xs gap-2"><FileText className="h-3.5 w-3.5" /> {t("subscription.invoices", "Faturas")}</TabsTrigger>
+          <TabsTrigger value="payment" className="text-xs gap-2"><Wallet className="h-3.5 w-3.5" /> {t("subscription.payment", "Pagamento")}</TabsTrigger>
+          <TabsTrigger value="billing" className="text-xs gap-2"><Building2 className="h-3.5 w-3.5" /> {t("subscription.billing", "Faturação")}</TabsTrigger>
+          <TabsTrigger value="history" className="text-xs gap-2"><History className="h-3.5 w-3.5" /> {t("subscription.history", "Histórico")}</TabsTrigger>
         </TabsList>
 
         {/* ─── OVERVIEW ─── */}

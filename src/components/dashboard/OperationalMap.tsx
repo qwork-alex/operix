@@ -19,6 +19,7 @@ import {
 } from "./OperationalOpportunities";
 import { HailReportDialog } from "./HailReportDialog";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { withAbortableTimeout } from "@/lib/asyncGuard";
 
 /* ------------------------------------------------------------------ */
 /*  Hail severity → premium color palette                              */
@@ -225,30 +226,142 @@ export function OperationalMap() {
   /* -------- data: service orders (orders + operations inferred) ----- */
   const { data: serviceOrders = [], isLoading: loadingSO } = useQuery({
     queryKey: ["op-map-orders"],
+    retry: 0,
+    staleTime: 60_000,
+    placeholderData: (previousData) => previousData ?? [],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("service_orders")
-        .select("id, platform, car_name, license_plate, technician_name, created_at, status")
-        .order("created_at", { ascending: false })
-        .limit(500);
-      if (error) throw error;
-      return data ?? [];
+      // #region debug-point E:operational-map-orders-start
+      void fetch("http://127.0.0.1:7777/event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: "route-loading-stall",
+          runId: "pre-fix",
+          hypothesisId: "E",
+          location: "src/components/dashboard/OperationalMap.tsx:orders:start",
+          msg: "[DEBUG] DATA_START",
+          data: { source: "operational-map-orders" },
+          ts: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+      try {
+        const data = await withAbortableTimeout(async (signal) => {
+          const { data, error } = await ((supabase
+            .from("service_orders")
+            .select("id, platform, car_name, license_plate, technician_name, created_at, status")
+            .order("created_at", { ascending: false })
+            .limit(500)) as any)
+            .abortSignal(signal);
+          if (error) throw error;
+          return data ?? [];
+        }, 10000, "operational_map_orders");
+        // #region debug-point E:operational-map-orders-success
+        void fetch("http://127.0.0.1:7777/event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: "route-loading-stall",
+            runId: "pre-fix",
+            hypothesisId: "E",
+            location: "src/components/dashboard/OperationalMap.tsx:orders:success",
+            msg: "[DEBUG] DATA_SUCCESS",
+            data: { source: "operational-map-orders", rows: data.length },
+            ts: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
+        return data;
+      } catch (error) {
+        // #region debug-point E:operational-map-orders-error
+        void fetch("http://127.0.0.1:7777/event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: "route-loading-stall",
+            runId: "pre-fix",
+            hypothesisId: "E",
+            location: "src/components/dashboard/OperationalMap.tsx:orders:error",
+            msg: "[DEBUG] DATA_ERROR",
+            data: { source: "operational-map-orders", error: error instanceof Error ? error.message : String(error) },
+            ts: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
+        throw error;
+      }
     },
   });
 
   /* -------- data: geo checkins (teams) ------------------------------ */
   const { data: geoCheckins = [], isLoading: loadingGeo } = useQuery({
     queryKey: ["op-map-geo"],
+    retry: 0,
+    staleTime: 60_000,
+    placeholderData: (previousData) => previousData ?? [],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("backend_event_logs")
-        .select("payload, actor_user_id, created_at")
-        .eq("table_name", "geolocation")
-        .eq("action", "CHECKIN")
-        .order("created_at", { ascending: false })
-        .limit(300);
-      if (error) throw error;
-      return (data ?? []).filter((d: any) => d.payload?.lat && d.payload?.lng);
+      // #region debug-point E:operational-map-geo-start
+      void fetch("http://127.0.0.1:7777/event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: "route-loading-stall",
+          runId: "pre-fix",
+          hypothesisId: "E",
+          location: "src/components/dashboard/OperationalMap.tsx:geo:start",
+          msg: "[DEBUG] DATA_START",
+          data: { source: "operational-map-geo" },
+          ts: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+      try {
+        const rows = await withAbortableTimeout(async (signal) => {
+          const { data, error } = await ((supabase
+            .from("backend_event_logs")
+            .select("payload, actor_user_id, created_at")
+            .eq("table_name", "geolocation")
+            .eq("action", "CHECKIN")
+            .order("created_at", { ascending: false })
+            .limit(300)) as any)
+            .abortSignal(signal);
+          if (error) throw error;
+          return (data ?? []).filter((d: any) => d.payload?.lat && d.payload?.lng);
+        }, 10000, "operational_map_geo");
+        // #region debug-point E:operational-map-geo-success
+        void fetch("http://127.0.0.1:7777/event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: "route-loading-stall",
+            runId: "pre-fix",
+            hypothesisId: "E",
+            location: "src/components/dashboard/OperationalMap.tsx:geo:success",
+            msg: "[DEBUG] DATA_SUCCESS",
+            data: { source: "operational-map-geo", rows: rows.length },
+            ts: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
+        return rows;
+      } catch (error) {
+        // #region debug-point E:operational-map-geo-error
+        void fetch("http://127.0.0.1:7777/event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: "route-loading-stall",
+            runId: "pre-fix",
+            hypothesisId: "E",
+            location: "src/components/dashboard/OperationalMap.tsx:geo:error",
+            msg: "[DEBUG] DATA_ERROR",
+            data: { source: "operational-map-geo", error: error instanceof Error ? error.message : String(error) },
+            ts: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
+        throw error;
+      }
     },
   });
 
@@ -256,6 +369,7 @@ export function OperationalMap() {
   const queryClient = useQueryClient();
   const { data: hailEvents = [] } = useQuery<HailEvent[]>({
     queryKey: ["op-map-hail"],
+    retry: 0,
     queryFn: async () => {
       // 7-day window: keeps replay meaningful while ensuring operational
       // entities remain visible even when no fresh ingest happened recently.
@@ -263,17 +377,22 @@ export function OperationalMap() {
       const nowIso = new Date().toISOString();
       // Operational radar = only non-closed events whose TTL has not elapsed.
       // Closed/expired events are kept in the DB for history but never rendered.
-      const { data, error } = await supabase
-        .from("hail_events")
-        .select("*")
-        .neq("status", "closed")
-        .or(`expires_at.is.null,expires_at.gte.${nowIso}`)
-        .or(`forecast_time.gte.${since},observed_time.gte.${since},created_at.gte.${since}`)
-        .order("forecast_time", { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as HailEvent[];
+      const data = await withAbortableTimeout(async (signal) => {
+        const { data, error } = await ((supabase
+          .from("hail_events")
+          .select("*")
+          .neq("status", "closed")
+          .or(`expires_at.is.null,expires_at.gte.${nowIso}`)
+          .or(`forecast_time.gte.${since},observed_time.gte.${since},created_at.gte.${since}`)
+          .order("forecast_time", { ascending: true })) as any)
+          .abortSignal(signal);
+        if (error) throw error;
+        return (data ?? []) as HailEvent[];
+      }, 10000, "operational_map_hail");
+      return data;
     },
     staleTime: 60_000,
+    placeholderData: (previousData) => previousData ?? [],
   });
 
   // Realtime: refresh on any hail_events / hail_reports change (shared via RealtimeHub)
@@ -290,19 +409,25 @@ export function OperationalMap() {
   /* -------- data: community hail reports (lifecycle window) -------- */
   const { data: hailReports = [] } = useQuery<any[]>({
     queryKey: ["op-map-hail-reports"],
+    retry: 0,
     queryFn: async () => {
       // 30-day lifecycle window: live/recent/history (archived = older, not fetched here)
       const since = new Date(Date.now() - 30 * 24 * 3600_000).toISOString();
-      const { data, error } = await supabase
-        .from("hail_reports")
-        .select("id, hail_event_id, lat, lng, city, region, country, severity, status, hail_size_mm, photo_url, confidence_score, corroboration_count, observed_at, notes")
-        .gte("observed_at", since)
-        .order("observed_at", { ascending: false })
-        .limit(500);
-      if (error) throw error;
-      return data ?? [];
+      const data = await withAbortableTimeout(async (signal) => {
+        const { data, error } = await ((supabase
+          .from("hail_reports")
+          .select("id, hail_event_id, lat, lng, city, region, country, severity, status, hail_size_mm, photo_url, confidence_score, corroboration_count, observed_at, notes")
+          .gte("observed_at", since)
+          .order("observed_at", { ascending: false })
+          .limit(500)) as any)
+          .abortSignal(signal);
+        if (error) throw error;
+        return data ?? [];
+      }, 10000, "operational_map_hail_reports");
+      return data;
     },
     staleTime: 60_000,
+    placeholderData: (previousData) => previousData ?? [],
   });
 
   /* -------- Reports indexed per hail event ------------------------- */
@@ -550,7 +675,6 @@ export function OperationalMap() {
       probe.getContext("webgl") ||
       probe.getContext("experimental-webgl");
     if (!gl) {
-      console.warn("[OperationalMap] WebGL unavailable — fallback mode");
       setMapError("WebGL indisponível neste dispositivo");
       return;
     }
@@ -575,7 +699,6 @@ export function OperationalMap() {
         minZoom: 2,
       });
     } catch (err) {
-      console.error("[OperationalMap] init failed", err);
       setMapError((err as Error)?.message ?? "init failed");
       if (initRetryRef.current < 3) {
         initRetryRef.current += 1;
@@ -594,11 +717,9 @@ export function OperationalMap() {
         window.clearInterval(radarIntervalRef.current);
         radarIntervalRef.current = null;
       }
-      console.warn("[OperationalMap] WebGL context lost — awaiting restore");
       setMapError("Contexto GPU perdido — restaurando…");
     };
     const onCtxRestored = () => {
-      console.info("[OperationalMap] WebGL context restored");
       gpuContextLostRef.current = false;
       setMapError(null);
       try {
@@ -615,7 +736,6 @@ export function OperationalMap() {
       // Isolated: tile/style/zoom errors won't crash the map
       const msg = e?.error?.message ?? String(e);
       if (/zoom|tile|404|aborted/i.test(msg)) return; // expected, ignore
-      console.warn("[OperationalMap] maplibre error", msg);
     });
 
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
@@ -899,20 +1019,24 @@ export function OperationalMap() {
       });
       setMapReady(true);
       } catch (e) {
-        console.warn("[OperationalMap] layer bootstrap isolated", e);
+        void e;
         setMapReady(true);
       }
     });
 
     mapRef.current = map;
 
+    const radarTimer = radarTimerRef.current;
+    const initTimer = initTimerRef.current;
+    const radarStaggerTimer = radarStaggerTimerRef.current;
+
     return () => {
-      if (radarTimerRef.current) window.clearTimeout(radarTimerRef.current);
-      if (initTimerRef.current) window.clearTimeout(initTimerRef.current);
-      if (radarStaggerTimerRef.current) window.clearTimeout(radarStaggerTimerRef.current);
+      if (radarTimer) window.clearTimeout(radarTimer);
+      if (initTimer) window.clearTimeout(initTimer);
+      if (radarStaggerTimer) window.clearTimeout(radarStaggerTimer);
       try { canvas.removeEventListener("webglcontextlost", onCtxLost); } catch {}
       try { canvas.removeEventListener("webglcontextrestored", onCtxRestored); } catch {}
-      try { map.remove(); } catch (e) { console.warn("[OperationalMap] remove failed", e); }
+      try { map.remove(); } catch {}
       mapRef.current = null;
       setMapReady(false);
     };
@@ -926,7 +1050,7 @@ export function OperationalMap() {
       const src = map.getSource(id) as GeoJSONSource | undefined;
       src?.setData(data);
     } catch (e) {
-      console.warn(`[OperationalMap] setData(${id}) skipped`, e);
+      void e;
     }
   }, []);
 
@@ -984,12 +1108,12 @@ export function OperationalMap() {
   const syncActiveSources = useCallback(() => {
     const map = mapRef.current;
     if (!map || !(map as any).style || gpuContextLostRef.current) return;
-    try { (map.getSource("orders") as GeoJSONSource | undefined)?.setData(ordersGeo as any); } catch (e) { console.warn("[OperationalMap] recover orders skipped", e); }
-    try { (map.getSource("teams") as GeoJSONSource | undefined)?.setData(teamsGeo as any); } catch (e) { console.warn("[OperationalMap] recover teams skipped", e); }
-    try { (map.getSource("operations") as GeoJSONSource | undefined)?.setData(operationsGeo as any); } catch (e) { console.warn("[OperationalMap] recover operations skipped", e); }
-    try { (map.getSource("hail") as GeoJSONSource | undefined)?.setData(hailGeo as any); } catch (e) { console.warn("[OperationalMap] recover hail skipped", e); }
-    try { (map.getSource("hail-reports") as GeoJSONSource | undefined)?.setData(hailReportsGeo as any); } catch (e) { console.warn("[OperationalMap] recover hail reports skipped", e); }
-    try { (map.getSource("pdr-heat") as GeoJSONSource | undefined)?.setData(pdrHeatGeo as any); } catch (e) { console.warn("[OperationalMap] recover pdr skipped", e); }
+    try { (map.getSource("orders") as GeoJSONSource | undefined)?.setData(ordersGeo as any); } catch (e) { void e; }
+    try { (map.getSource("teams") as GeoJSONSource | undefined)?.setData(teamsGeo as any); } catch (e) { void e; }
+    try { (map.getSource("operations") as GeoJSONSource | undefined)?.setData(operationsGeo as any); } catch (e) { void e; }
+    try { (map.getSource("hail") as GeoJSONSource | undefined)?.setData(hailGeo as any); } catch (e) { void e; }
+    try { (map.getSource("hail-reports") as GeoJSONSource | undefined)?.setData(hailReportsGeo as any); } catch (e) { void e; }
+    try { (map.getSource("pdr-heat") as GeoJSONSource | undefined)?.setData(pdrHeatGeo as any); } catch (e) { void e; }
   }, [ordersGeo, teamsGeo, operationsGeo, hailGeo, hailReportsGeo, pdrHeatGeo]);
 
   useEffect(() => {
@@ -1115,7 +1239,7 @@ export function OperationalMap() {
       } catch (e: any) {
         // Network/abort/5xx — silently degrade. Hail + base map continue working.
         if (e?.name !== "AbortError") {
-          console.warn("[OperationalMap] radar sync_failure — degrading", e?.message ?? e);
+          void e;
         }
         return;
       } finally {
@@ -1172,7 +1296,7 @@ export function OperationalMap() {
           reconcile("storms", !!layers.storms);
         }
       } catch (e) {
-        console.warn("[OperationalMap] radar layer reconcile failed", e);
+        void e;
       }
 
       // Animate: cycle frames smoothly — only for currently-active layers.

@@ -460,7 +460,7 @@ export default function TripsModule() {
         setGpsLoading(null);
       },
     );
-  }, [points, activeTripId]);
+  }, [points]);
 
   /* ─── Point management ─── */
   const addIntermediatePoint = () => {
@@ -662,7 +662,7 @@ export default function TripsModule() {
   };
 
   /* ─── Open / Resume trip ─── */
-  const openTripDialog = async (tripId?: string) => {
+  const openTripDialog = useCallback(async (tripId?: string) => {
     if (tripId) {
       const trip = trips.find((t: any) => t.id === tripId);
       if (!trip) return;
@@ -728,7 +728,7 @@ export default function TripsModule() {
       setActiveTripId(null);
     }
     setOpen(true);
-  };
+  }, [assignments, trips]);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -742,7 +742,7 @@ export default function TripsModule() {
     };
     window.addEventListener("fleet:resume-trip", handler);
     return () => window.removeEventListener("fleet:resume-trip", handler);
-  }, [trips, assignments]);
+  }, [openTripDialog, trips]);
 
   const isActiveSession = !!activeTripId;
 

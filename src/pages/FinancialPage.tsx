@@ -48,7 +48,7 @@ export default function FinancialPage() {
   );
   const hasAlerts = financialAlerts.length > 0;
 
-  const isLoading = summaryLoading;
+  const isLoading = summaryLoading && !summary;
   const baseSummary = summary ?? {
     expectedRevenue: 0, receivedRevenue: 0, totalDifference: 0, discrepancyPct: 0,
     matched: 0, mismatched: 0, missing: 0, pending: 0, expenses: 0, profit: 0,
@@ -73,20 +73,7 @@ export default function FinancialPage() {
     profit: receivedRevenue - baseSummary.expenses,
   };
 
-  const dbg = aggregation?.debug;
-  const aggDisconnected = !!dbg && dbg.serviceOrdersUsed === 0 && dbg.serviceOrdersTotal > 0;
   const hasNoData = s.serviceOrderCount === 0 && s.paymentOrderCount === 0;
-
-  if (isLoading) {
-    return (
-      <div className="space-y-6 animate-fade-in">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
-        </div>
-        <Skeleton className="h-80 rounded-xl" />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6 animate-fade-in min-w-0 max-w-full w-full overflow-x-hidden">
@@ -163,7 +150,14 @@ export default function FinancialPage() {
       </div>
 
       {/* No-data empty state */}
-      {hasNoData && (
+      {isLoading ? (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
+          </div>
+          <Skeleton className="h-56 rounded-xl" />
+        </div>
+      ) : hasNoData && (
         <Card className="border-border/50 bg-muted/30">
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <BarChart3 className="h-12 w-12 text-muted-foreground/40 mb-4" />

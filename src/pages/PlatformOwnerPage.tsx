@@ -130,6 +130,24 @@ function shortenId(value: string | null | undefined) {
 export default function PlatformOwnerPage() {
   const { data: isOwner, isLoading: ownerLoading } = useIsPlatformOwner();
 
+  if (!ownerLoading) {
+    // #region debug-point E:platform-owner-ready
+    void fetch("http://127.0.0.1:7777/event", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "route-loading-menu-lag",
+        runId: "pre-fix",
+        hypothesisId: "E",
+        location: "src/pages/PlatformOwnerPage.tsx:owner",
+        msg: "[DEBUG] AUTH_READY",
+        data: { route: "/platform", isOwner: !!isOwner, ownerLoading: false },
+        ts: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+  }
+
   if (ownerLoading) return <div className="module-shell"><LoadingState variant="cards" /></div>;
   if (!isOwner) return <Navigate to="/" replace />;
 
@@ -179,9 +197,65 @@ export default function PlatformOwnerPage() {
 function OverviewTab() {
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["platform-subscriptions-overview"],
+    retry: 0,
+    staleTime: 60_000,
+    placeholderData: (previousData) => previousData ?? [],
     queryFn: async (): Promise<PlatformSubscriptionRow[]> => {
-      const data = await apiRequest<{ subscriptions: PlatformSubscriptionRow[] }>("/billing/admin/overview");
-      return data.subscriptions ?? [];
+      try {
+        // #region debug-point E:platform-overview-start
+        void fetch("http://127.0.0.1:7777/event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: "route-loading-menu-lag",
+            runId: "pre-fix",
+            hypothesisId: "E",
+            location: "src/pages/PlatformOwnerPage.tsx:OverviewTab:start",
+            msg: "[DEBUG] DATA_START",
+            data: { route: "/platform", source: "overview" },
+            ts: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
+        const data = await apiRequest<{ subscriptions: PlatformSubscriptionRow[] }>("/billing/admin/overview");
+        const result = data.subscriptions ?? [];
+        // #region debug-point E:platform-overview-success
+        void fetch("http://127.0.0.1:7777/event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: "route-loading-menu-lag",
+            runId: "pre-fix",
+            hypothesisId: "E",
+            location: "src/pages/PlatformOwnerPage.tsx:OverviewTab:success",
+            msg: "[DEBUG] DATA_SUCCESS",
+            data: { route: "/platform", rows: result.length },
+            ts: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
+        return result;
+      } catch (error) {
+        // #region debug-point E:platform-overview-error
+        void fetch("http://127.0.0.1:7777/event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: "route-loading-menu-lag",
+            runId: "pre-fix",
+            hypothesisId: "E",
+            location: "src/pages/PlatformOwnerPage.tsx:OverviewTab:error",
+            msg: "[DEBUG] DATA_ERROR",
+            data: {
+              route: "/platform",
+              error: error instanceof Error ? error.message : String(error),
+            },
+            ts: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
+        throw error;
+      }
     },
   });
 
@@ -257,8 +331,11 @@ function BankAccountsTab() {
   const qc = useQueryClient();
   const { data: accounts = [], isLoading } = useQuery({
     queryKey: ["platform-bank-accounts-admin"],
+    retry: 0,
+    staleTime: 60_000,
+    placeholderData: (previousData) => previousData ?? [],
     queryFn: async (): Promise<PlatformBankAccount[]> => {
-      const data = await apiRequest<{ accounts: PlatformBankAccount[] }>("/billing/admin/bank-accounts");
+      const data = await apiRequest<{ accounts: PlatformBankAccount[] }>("/billing/admin/bank-accounts", { timeoutMs: 8000 });
       return data.accounts ?? [];
     },
   });
@@ -344,8 +421,11 @@ function BankAccountsTab() {
 function SubscriptionsTab() {
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["platform-subs-full"],
+    retry: 0,
+    staleTime: 60_000,
+    placeholderData: (previousData) => previousData ?? [],
     queryFn: async (): Promise<PlatformSubscriptionRow[]> => {
-      const data = await apiRequest<{ subscriptions: PlatformSubscriptionRow[] }>("/billing/admin/subscriptions");
+      const data = await apiRequest<{ subscriptions: PlatformSubscriptionRow[] }>("/billing/admin/subscriptions", { timeoutMs: 8000 });
       return data.subscriptions ?? [];
     },
   });
@@ -389,8 +469,11 @@ function SubscriptionsTab() {
 function PaymentsTab() {
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["platform-payments"],
+    retry: 0,
+    staleTime: 60_000,
+    placeholderData: (previousData) => previousData ?? [],
     queryFn: async (): Promise<PlatformPaymentRow[]> => {
-      const data = await apiRequest<{ payments: PlatformPaymentRow[] }>("/billing/admin/payments");
+      const data = await apiRequest<{ payments: PlatformPaymentRow[] }>("/billing/admin/payments", { timeoutMs: 8000 });
       return data.payments ?? [];
     },
   });
@@ -443,8 +526,11 @@ function PaymentsTab() {
 function VatTab() {
   const { data: rules = [], isLoading } = useQuery({
     queryKey: ["platform-vat-rules"],
+    retry: 0,
+    staleTime: 60_000,
+    placeholderData: (previousData) => previousData ?? [],
     queryFn: async (): Promise<PlatformVatRule[]> => {
-      const data = await apiRequest<{ rules: PlatformVatRule[] }>("/billing/admin/vat-rules");
+      const data = await apiRequest<{ rules: PlatformVatRule[] }>("/billing/admin/vat-rules", { timeoutMs: 8000 });
       return data.rules ?? [];
     },
   });
@@ -533,8 +619,11 @@ function VatTab() {
 function InvoicesTab() {
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["platform-invoices"],
+    retry: 0,
+    staleTime: 60_000,
+    placeholderData: (previousData) => previousData ?? [],
     queryFn: async (): Promise<PlatformInvoiceRow[]> => {
-      const data = await apiRequest<{ invoices: PlatformInvoiceRow[] }>("/billing/admin/invoices");
+      const data = await apiRequest<{ invoices: PlatformInvoiceRow[] }>("/billing/admin/invoices", { timeoutMs: 8000 });
       return data.invoices ?? [];
     },
   });
@@ -587,8 +676,11 @@ function InvoicesTab() {
 function WebhooksTab() {
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["platform-webhooks"],
+    retry: 0,
+    staleTime: 15_000,
+    placeholderData: (previousData) => previousData ?? [],
     queryFn: async (): Promise<PlatformWebhookRow[]> => {
-      const data = await apiRequest<{ events: PlatformWebhookRow[] }>("/billing/admin/webhooks");
+      const data = await apiRequest<{ events: PlatformWebhookRow[] }>("/billing/admin/webhooks", { timeoutMs: 8000 });
       return data.events ?? [];
     },
     refetchInterval: 15_000,
@@ -638,8 +730,11 @@ function LifecycleTab() {
   const qc = useQueryClient();
   const { data: subs = [], isLoading } = useQuery({
     queryKey: ["platform-lifecycle-subs"],
+    retry: 0,
+    staleTime: 60_000,
+    placeholderData: (previousData) => previousData ?? [],
     queryFn: async (): Promise<PlatformSubscriptionRow[]> => {
-      const data = await apiRequest<{ subscriptions: PlatformSubscriptionRow[] }>("/billing/admin/lifecycle/subscriptions");
+      const data = await apiRequest<{ subscriptions: PlatformSubscriptionRow[] }>("/billing/admin/lifecycle/subscriptions", { timeoutMs: 8000 });
       return data.subscriptions ?? [];
     },
   });
@@ -765,8 +860,11 @@ function AuditTab() {
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["platform-audit-logs"],
     refetchInterval: 30_000,
+    retry: 0,
+    staleTime: 30_000,
+    placeholderData: (previousData) => previousData ?? [],
     queryFn: async (): Promise<PlatformAuditLog[]> => {
-      const data = await apiRequest<{ logs: PlatformAuditLog[] }>("/billing/admin/audit-logs");
+      const data = await apiRequest<{ logs: PlatformAuditLog[] }>("/billing/admin/audit-logs", { timeoutMs: 8000 });
       return data.logs ?? [];
     },
   });

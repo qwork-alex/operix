@@ -13,6 +13,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { uploadFile } from "@/lib/storage";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -22,7 +24,10 @@ import {
 import {
   renderPdfFirstPageToCanvas,
   pdfFirstPageToImageBase64,
+  pdfPagesToImageBase64,
+  fileToBase64,
 } from "@/lib/pdfUtils";
+import { withPromiseTimeout } from "@/lib/asyncGuard";
 import { PaymentListsSelector } from "@/components/billing/PaymentListsSelector";
 import type { BillingPaymentList } from "@/hooks/usePaymentListsConsolidated";
 import { useContextualWorkspace } from "@/hooks/useContextualWorkspace";
@@ -34,28 +39,52 @@ type Stage = "idle" | "uploading" | "rendering" | "ocr" | "extracting" | "valida
 type Extracted = {
   invoice_number: string;
   supplier_name: string;
+  supplier_tax_id: string;
   customer_name: string;
+  customer_tax_id: string;
   issue_date: string;
   due_date: string;
   total_amount: string;
   tax_amount: string;
+  net_amount: string;
   currency: string;
   notes: string;
 };
 
+type ExtractedLineItem = {
+  description: string;
+  quantity: string;
+  unit_price: string;
+  tax_rate: string;
+  tax_amount: string;
+  total: string;
+};
+
 type FieldConfidence = Partial<Record<
-  "invoice_number" | "supplier_name" | "customer_name" | "issue_date" | "due_date" | "total_amount" | "tax_amount",
+  | "invoice_number"
+  | "supplier_name"
+  | "supplier_tax_id"
+  | "customer_name"
+  | "customer_tax_id"
+  | "issue_date"
+  | "due_date"
+  | "total_amount"
+  | "tax_amount"
+  | "net_amount",
   "high" | "medium" | "low"
 >>;
 
 const emptyExtracted = (): Extracted => ({
   invoice_number: "",
   supplier_name: "",
+  supplier_tax_id: "",
   customer_name: "",
+  customer_tax_id: "",
   issue_date: new Date().toISOString().slice(0, 10),
   due_date: "",
   total_amount: "",
   tax_amount: "",
+  net_amount: "",
   currency: "EUR",
   notes: "",
 });
@@ -79,7 +108,9 @@ export default function ImportInvoiceDialog({
   const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<File | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [storagePath, setStoragePath] = useState<string | null>(null);
   const [extracted, setExtracted] = useState<Extracted>(emptyExtracted());
+  const [lineItems, setLineItems] = useState<ExtractedLineItem[]>([]);
   const [fieldConf, setFieldConf] = useState<FieldConfidence>({});
   const [stage, setStage] = useState<Stage>("idle");
   const [stageMsg, setStageMsg] = useState<string>("");
@@ -97,7 +128,9 @@ export default function ImportInvoiceDialog({
     if (imageUrl) URL.revokeObjectURL(imageUrl);
     setFile(null);
     setImageUrl(null);
+    setStoragePath(null);
     setExtracted(emptyExtracted());
+    setLineItems([]);
     setFieldConf({});
     setStage("idle");
     setStageMsg("");
@@ -114,7 +147,7 @@ export default function ImportInvoiceDialog({
       try {
         await renderPdfFirstPageToCanvas(file, pdfCanvasRef.current!, { maxWidth: 900 });
       } catch (e) {
-        if (!cancelled) console.error("PDF render error:", e);
+        if (!cancelled) void e;
       }
     })();
     return () => { cancelled = true; };
@@ -135,30 +168,89 @@ export default function ImportInvoiceDialog({
     setStep("review");
 
     try {
+      setStage("uploading");
+      setStageMsg("Guardando documento…");
+      try {
+        const safeName = f.name.replace(/[^\w.\-]+/g, "_").slice(0, 160);
+        const path = `billing/invoices/${Date.now()}-${safeName}`;
+        await withPromiseTimeout<any>(
+          uploadFile("uploads", path, f, f.type || undefined),
+          10000,
+          "billing_invoice_upload",
+        );
+        setStoragePath(path);
+      } catch (e) {
+        void e;
+      }
+
       // Stage 1: render preview
       setStage("rendering"); setStageMsg("Preparando pré-visualização…");
+      let ocrBase64 = "";
+      let ocrMimeType = "";
+      let ocrPages: Array<{ base64: string; mimeType: string; pageNumber: number }> = [];
       if (f.type === "application/pdf") {
         const r = await pdfFirstPageToImageBase64(f, { maxWidth: 1600 });
         setImageUrl(`data:${r.mimeType};base64,${r.base64}`);
+        ocrBase64 = r.base64;
+        ocrMimeType = r.mimeType;
+        ocrPages = await pdfPagesToImageBase64(f, { maxWidth: 1600, maxPages: 6 });
       } else {
         if (imageUrl) URL.revokeObjectURL(imageUrl);
         const url = URL.createObjectURL(f);
         setImageUrl(url);
+        ocrBase64 = await fileToBase64(f);
+        ocrMimeType = f.type;
       }
 
-      setStage("validating");
-      setStageMsg("Pré-visualização pronta. Reveja os dados antes de confirmar.");
       const fileStem = f.name.replace(/\.[^.]+$/, "").slice(0, 120);
+      setStage("ocr");
+      setStageMsg("Executando OCR e extração…");
+      const { data, error } = await withPromiseTimeout<any>(
+        supabase.functions.invoke("extract-invoice", {
+          body: { fileBase64: ocrBase64, mimeType: ocrMimeType, fileName: f.name, pages: ocrPages },
+        }),
+        15000,
+        "billing_invoice_extract",
+      );
+      if (error) throw error;
+
+      const total = typeof data?.total_amount === "number" ? data.total_amount : null;
+      const tax = typeof data?.tax_amount === "number" ? data.tax_amount : null;
+      const net = typeof data?.net_amount === "number" ? data.net_amount : null;
+
       const next: Extracted = {
         ...emptyExtracted(),
-        invoice_number: fileStem,
+        invoice_number: (data?.invoice_number || fileStem || "").toString(),
+        supplier_name: (data?.supplier_name || "").toString(),
+        supplier_tax_id: (data?.supplier_tax_id || "").toString(),
+        customer_name: (data?.customer_name || "").toString(),
+        customer_tax_id: (data?.customer_tax_id || "").toString(),
+        issue_date: (data?.issue_date || emptyExtracted().issue_date).toString(),
+        due_date: (data?.due_date || "").toString(),
+        total_amount: total != null ? total.toFixed(2) : "",
+        tax_amount: tax != null ? tax.toFixed(2) : "",
+        net_amount: net != null ? net.toFixed(2) : "",
+        currency: (data?.currency || "EUR").toString(),
+        notes: (data?.notes || "").toString(),
       };
       setExtracted(next);
-      setFieldConf({});
+      setFieldConf((data?.field_confidence ?? {}) as FieldConfidence);
+      setLineItems(
+        Array.isArray(data?.line_items)
+          ? data.line_items.map((item: any) => ({
+              description: String(item?.description ?? ""),
+              quantity: item?.quantity != null ? String(item.quantity) : "",
+              unit_price: item?.unit_price != null ? String(item.unit_price) : "",
+              tax_rate: item?.tax_rate != null ? String(item.tax_rate) : "",
+              tax_amount: item?.tax_amount != null ? String(item.tax_amount) : "",
+              total: item?.total != null ? String(item.total) : "",
+            }))
+          : [],
+      );
+
       setStage("done");
-      setStageMsg("Preencha os dados da fatura e confirme a importação.");
+      setStageMsg("OCR concluído. Revise os dados e confirme a importação.");
     } catch (e: any) {
-      console.error("Pipeline error:", e);
       setStage("error");
       setStageMsg(e?.message ?? "Erro no processamento");
       toast.error(e?.message ?? "Falha na extração OCR");
@@ -173,6 +265,10 @@ export default function ImportInvoiceDialog({
       setStage("uploading"); setStageMsg("Enviando para o backend…");
 
       const total = Number(extracted.total_amount.replace(",", ".")) || 0;
+      const taxAmount = Number(extracted.tax_amount.replace(",", ".")) || 0;
+      const netAmount =
+        Number(extracted.net_amount.replace(",", ".")) ||
+        Math.max(0, total - taxAmount);
       const attachmentDataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => {
@@ -203,6 +299,11 @@ export default function ImportInvoiceDialog({
           invoice_number: extracted.invoice_number.trim(),
           type: "incoming",
           customer_name: extracted.customer_name || extracted.supplier_name || null,
+          customer_snapshot: extracted.customer_name || extracted.customer_tax_id ? {
+            name: extracted.customer_name || null,
+            tax_id: extracted.customer_tax_id || null,
+            currency: extracted.currency || "EUR",
+          } : null,
           issue_date: extracted.issue_date,
           due_date: extracted.due_date || null,
           total_amount: total,
@@ -220,6 +321,24 @@ export default function ImportInvoiceDialog({
             // expanded PO ids — required by status-propagation trigger
             linked_payment_order_ids,
             linked_payment_orders: linked_payment_order_ids,
+            attachment_storage_path: storagePath,
+            ocr: {
+              engine: "extract-invoice",
+              field_confidence: fieldConf,
+              extracted: {
+                ...extracted,
+                net_amount: netAmount,
+                tax_amount: taxAmount,
+                line_items: lineItems.map((item) => ({
+                  description: item.description,
+                  quantity: Number(item.quantity || 0),
+                  unit_price: Number(item.unit_price || 0),
+                  tax_rate: Number(item.tax_rate || 0),
+                  tax_amount: Number(item.tax_amount || 0),
+                  total: Number(item.total || 0),
+                })),
+              },
+            },
           },
           attachment: {
             file_name: file.name,
@@ -403,10 +522,20 @@ export default function ImportInvoiceDialog({
                       onChange={(e) => setExtracted({ ...extracted, supplier_name: e.target.value })}
                       className="h-9" placeholder="Empresa que emitiu" />
                   </Field>
+                  <Field label="NIF / TVA fornecedor" conf={fieldConf.supplier_tax_id}>
+                    <Input value={extracted.supplier_tax_id}
+                      onChange={(e) => setExtracted({ ...extracted, supplier_tax_id: e.target.value })}
+                      className="h-9" placeholder="NIF / VAT fornecedor" />
+                  </Field>
                   <Field label="Cliente / Destinatário" conf={fieldConf.customer_name}>
                     <Input value={extracted.customer_name}
                       onChange={(e) => setExtracted({ ...extracted, customer_name: e.target.value })}
                       className="h-9" placeholder="Quem recebeu" />
+                  </Field>
+                  <Field label="NIF / TVA cliente" conf={fieldConf.customer_tax_id}>
+                    <Input value={extracted.customer_tax_id}
+                      onChange={(e) => setExtracted({ ...extracted, customer_tax_id: e.target.value })}
+                      className="h-9" placeholder="NIF / VAT cliente" />
                   </Field>
                   <div className="grid grid-cols-2 gap-3">
                     <Field label="Data emissão" conf={fieldConf.issue_date}>
@@ -420,7 +549,12 @@ export default function ImportInvoiceDialog({
                         className="h-9" />
                     </Field>
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-4 gap-3">
+                    <Field label="Base líquida" conf={fieldConf.net_amount}>
+                      <Input value={extracted.net_amount}
+                        onChange={(e) => setExtracted({ ...extracted, net_amount: e.target.value })}
+                        className="h-9 tabular-nums" placeholder="0.00" />
+                    </Field>
                     <Field label="Total" conf={fieldConf.total_amount}>
                       <Input value={extracted.total_amount}
                         onChange={(e) => setExtracted({ ...extracted, total_amount: e.target.value })}
@@ -449,6 +583,40 @@ export default function ImportInvoiceDialog({
                       onChange={(e) => setExtracted({ ...extracted, notes: e.target.value })}
                       className="text-xs" />
                   </Field>
+
+                  <div className="pt-3 mt-3 border-t border-border/50">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                        Linhas extraídas
+                      </p>
+                      <span className="text-[10px] text-muted-foreground">{lineItems.length} itens</span>
+                    </div>
+                    {lineItems.length === 0 ? (
+                      <p className="text-[11px] text-muted-foreground">
+                        Nenhuma linha foi identificada automaticamente.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {lineItems.map((item, index) => (
+                          <div key={`${index}-${item.description}`} className="grid grid-cols-12 gap-2 rounded-md border border-border/50 p-2">
+                            <div className="col-span-12">
+                              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Descrição</Label>
+                              <Input
+                                value={item.description}
+                                onChange={(e) => setLineItems((prev) => prev.map((entry, i) => i === index ? { ...entry, description: e.target.value } : entry))}
+                                className="h-8 mt-1"
+                              />
+                            </div>
+                            <MiniField label="Qtd" value={item.quantity} onChange={(value) => setLineItems((prev) => prev.map((entry, i) => i === index ? { ...entry, quantity: value } : entry))} />
+                            <MiniField label="Unitário" value={item.unit_price} onChange={(value) => setLineItems((prev) => prev.map((entry, i) => i === index ? { ...entry, unit_price: value } : entry))} />
+                            <MiniField label="TVA %" value={item.tax_rate} onChange={(value) => setLineItems((prev) => prev.map((entry, i) => i === index ? { ...entry, tax_rate: value } : entry))} />
+                            <MiniField label="TVA" value={item.tax_amount} onChange={(value) => setLineItems((prev) => prev.map((entry, i) => i === index ? { ...entry, tax_amount: value } : entry))} />
+                            <MiniField label="Total" value={item.total} onChange={(value) => setLineItems((prev) => prev.map((entry, i) => i === index ? { ...entry, total: value } : entry))} />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
                   {/* Vinculação direta a payment_orders (fonte única de verdade) */}
                   <div className="pt-3 mt-3 border-t border-border/50">
@@ -544,6 +712,23 @@ function Field({ label, children, conf }: { label: string; children: ReactNode; 
         {label} {confDot(conf)}
       </Label>
       <div className="mt-1">{children}</div>
+    </div>
+  );
+}
+
+function MiniField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="col-span-6 sm:col-span-2">
+      <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</Label>
+      <Input value={value} onChange={(e) => onChange(e.target.value)} className="h-8 mt-1" />
     </div>
   );
 }

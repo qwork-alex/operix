@@ -22,7 +22,7 @@ export function PhotoUploader({ orderId, fixedCategory, hideOthers, readOnly }: 
       try {
         await upload.mutateAsync({ file, category });
       } catch (err) {
-        console.error("[PhotoUploader] upload failed", err);
+        void err;
       }
     }
     setBusy(false);

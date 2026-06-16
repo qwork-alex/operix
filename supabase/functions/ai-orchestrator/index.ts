@@ -2,6 +2,7 @@
 // SAFE MODE: no tenancy/auth/RBAC mutations. Read-only context, workspace-scoped writes.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { fetchAIChatCompletions } from "../_shared/ai.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,8 +14,6 @@ const corsHeaders = {
 const SUPA_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPA_ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SUPA_SVC = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
-const MODEL = "google/gemini-3-flash-preview";
 
 type TaskKind =
   | "interpret_os"
@@ -182,21 +181,20 @@ const RESULT_TOOL = {
 
 // ---- AI Gateway call --------------------------------------------------------
 async function callAI(system: string, userPayload: unknown) {
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
-      "Content-Type": "application/json",
+  const { response: res, body } = await fetchAIChatCompletions({
+    model: "google/gemini-3-flash-preview",
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: JSON.stringify(userPayload).slice(0, 60_000) },
+    ],
+    tools: [RESULT_TOOL],
+    tool_choice: { type: "function", function: { name: "emit_result" } },
+  }, {
+    modelByProvider: {
+      gemini: "gemini-2.5-flash",
+      openai: "gpt-4o-mini",
+      lovable: "google/gemini-3-flash-preview",
     },
-    body: JSON.stringify({
-      model: MODEL,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: JSON.stringify(userPayload).slice(0, 60_000) },
-      ],
-      tools: [RESULT_TOOL],
-      tool_choice: { type: "function", function: { name: "emit_result" } },
-    }),
   });
   if (!res.ok) {
     const txt = await res.text();
@@ -208,6 +206,7 @@ async function callAI(system: string, userPayload: unknown) {
   if (!args) throw new Error("AI gateway returned no tool call");
   return {
     parsed: JSON.parse(args),
+    model: typeof body.model === "string" ? body.model : "unknown",
     usage: json.usage ?? {},
   };
 }
@@ -271,7 +270,7 @@ async function persistItems(svc: any, task: TaskKind, workspace_id: string, mode
   if (scores.length) await svc.from("ai_scores").insert(scores);
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -327,14 +326,14 @@ Deno.serve(async (req) => {
     }
 
     const system = promptFor(body.task);
-    const { parsed, usage } = await callAI(system, { task: body.task, params: body.params ?? null, context: ctx });
+    const { parsed, usage, model } = await callAI(system, { task: body.task, params: body.params ?? null, context: ctx });
 
     // Cache
     await svc.from("ai_cache").upsert({
       workspace_id: body.workspace_id,
       task: body.task,
       context_hash: contextHash,
-      model: MODEL,
+      model,
       result: parsed,
       explanation: parsed.explanation ?? null,
       confidence: parsed.confidence ?? null,
@@ -344,7 +343,7 @@ Deno.serve(async (req) => {
     }, { onConflict: "workspace_id,task,context_hash" });
 
     if (body.persist !== false) {
-      await persistItems(svc, body.task, body.workspace_id, MODEL, parsed);
+      await persistItems(svc, body.task, body.workspace_id, model, parsed);
     }
 
     return new Response(JSON.stringify({ cached: false, result: parsed, explanation: parsed.explanation, confidence: parsed.confidence }), {

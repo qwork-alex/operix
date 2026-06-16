@@ -10,7 +10,7 @@
  */
 export function formatLicensePlate(raw: string | null | undefined): string {
   if (!raw) return "";
-  const clean = raw.replace(/[\s\-]/g, "").toUpperCase();
+  const clean = raw.replace(/[\s-]/g, "").toUpperCase();
   if (!clean) return "";
 
   switch (clean.length) {

@@ -25,6 +25,7 @@ import {
   streamMultimodalReply, fileToDataUrl, dataUrlToBase64,
   RateLimitedError, type ConvTurn, type ContentPart,
 } from "@/lib/agentMultimodal";
+import { useWorkspace } from "@/hooks/useWorkspace";
 
 type Attachment =
   | { kind: "image"; id: string; dataUrl: string; name: string }
@@ -55,6 +56,7 @@ interface Props {
 export function AgentConversationPanel({ autoAttachSnapshot = true, className }: Props) {
   const ctx = useAgentContext();
   const { signals, recent } = useOperationalSignals();
+  const { workspaceId } = useWorkspace();
 
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const [input, setInput] = useState("");
@@ -171,6 +173,10 @@ export function AgentConversationPanel({ autoAttachSnapshot = true, className }:
   async function handleSend() {
     const text = input.trim();
     if ((!text && pending.length === 0) || busy) return;
+    if (!workspaceId) {
+      toast.error("Workspace ativo não encontrado.");
+      return;
+    }
 
     const userBubble: Bubble = {
       id: `u-${Date.now()}`,
@@ -230,6 +236,7 @@ export function AgentConversationPanel({ autoAttachSnapshot = true, className }:
           route: ctx.pathname,
           module: ctx.label,
           online: ctx.online,
+          workspaceId,
           signals,
           recentEvents: recent,
           attachRuntimeSnapshot: autoAttachSnapshot,

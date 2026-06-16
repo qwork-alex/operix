@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { apiRequest } from "@/lib/api";
 import { clearStoredAuthSession, readStoredAuthSession, type AuthUser, writeStoredAuthSession } from "@/lib/authSession";
 import { queryClient } from "@/lib/queryClient";
@@ -109,25 +109,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
   };
 
-  const recoverSession = () => {
+  const recoverSession = useCallback(() => {
     clearStoredAuthSession();
     cleanupSessionRuntime();
     applySession(null, null);
     setLoading(false);
     if (typeof window !== "undefined") window.location.replace("/auth");
-  };
+  }, []);
 
   useEffect(() => {
     mounted.current = true;
     const boot = async () => {
       const stored = readStoredAuthSession();
       if (!stored?.token) {
+        // #region debug-point A:auth-anonymous
+        void fetch("http://127.0.0.1:7777/event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: "route-loading-stall",
+            runId: "pre-fix",
+            hypothesisId: "A",
+            location: "src/hooks/useAuth.tsx:boot:no-token",
+            msg: "[DEBUG] AUTH_READY",
+            data: { authenticated: false, reason: "no_stored_token" },
+            ts: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
         applySession(null, null);
         setLoading(false);
         return;
       }
 
       try {
+        // #region debug-point A:auth-start
+        void fetch("http://127.0.0.1:7777/event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: "route-loading-stall",
+            runId: "pre-fix",
+            hypothesisId: "A",
+            location: "src/hooks/useAuth.tsx:boot:start",
+            msg: "[DEBUG] DATA_START",
+            data: { source: "auth.restore", hasStoredToken: true },
+            ts: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
         const data = await withTimeout<{ user: AuthUser }>(
           apiRequest("/auth/me", {
             headers: {
@@ -142,14 +172,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           user: data.user,
         });
         applySession(data.user, stored.token);
+        // #region debug-point A:auth-success
+        void fetch("http://127.0.0.1:7777/event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: "route-loading-stall",
+            runId: "pre-fix",
+            hypothesisId: "A",
+            location: "src/hooks/useAuth.tsx:boot:success",
+            msg: "[DEBUG] DATA_SUCCESS",
+            data: { source: "auth.restore", userId: data.user.id, email: data.user.email },
+            ts: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
         try { registerCurrentDevice(); } catch { /* device registration must not block auth */ }
       } catch (error) {
-        console.error("[Auth] restore session failed:", error);
+        // #region debug-point A:auth-error
+        void fetch("http://127.0.0.1:7777/event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: "route-loading-stall",
+            runId: "pre-fix",
+            hypothesisId: "A",
+            location: "src/hooks/useAuth.tsx:boot:error",
+            msg: "[DEBUG] DATA_ERROR",
+            data: {
+              source: "auth.restore",
+              error: error instanceof Error ? error.message : String(error),
+            },
+            ts: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
         clearStoredAuthSession();
         cleanupSessionRuntime();
         applySession(null, null);
       } finally {
         setLoading(false);
+        // #region debug-point A:auth-loading-end
+        void fetch("http://127.0.0.1:7777/event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: "route-loading-stall",
+            runId: "pre-fix",
+            hypothesisId: "A",
+            location: "src/hooks/useAuth.tsx:boot:finally",
+            msg: "[DEBUG] LOADING_END",
+            data: { source: "auth", loading: false },
+            ts: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
       }
     };
 
@@ -160,7 +237,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = useCallback(async (email: string, password: string) => {
     try {
       const data = await withTimeout<{ token: string; user: AuthUser }>(
         apiRequest("/auth/login", {
@@ -188,7 +265,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       return { error: null };
     } catch (err) {
-      console.error("[Auth] signIn error:", err);
       logSecurityEvent({
         type: "login_failed",
         severity: "warn",
@@ -197,9 +273,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       return { error: err instanceof Error ? err : new Error("Login indisponível no momento.") };
     }
-  };
+  }, []);
 
-  const signUp = async (
+  const signUp = useCallback(async (
     email: string,
     password: string,
     fullName: string,
@@ -227,12 +303,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       applySession(data.user, data.token);
       return { error: null };
     } catch (err) {
-      console.error("[Auth] signUp error:", err);
       return { error: err instanceof Error ? err : new Error("Falha ao criar conta.") };
     }
-  };
+  }, []);
 
-  const changePassword = async (password: string) => {
+  const changePassword = useCallback(async (password: string) => {
     try {
       const stored = readStoredAuthSession();
       if (!stored?.token) {
@@ -255,19 +330,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       return { error: err instanceof Error ? err : new Error("Erro ao alterar senha.") };
     }
-  };
+  }, []);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     clearStoredAuthSession();
     cleanupSessionRuntime();
     applySession(null, null);
     logSecurityEvent({ type: "logout", severity: "info" });
     if (typeof window !== "undefined") window.location.replace("/auth");
-  };
+  }, []);
 
   const value = useMemo(
     () => ({ session, user, profile, loading, degraded, recoverSession, signIn, signUp, changePassword, signOut }),
-    [session, user, profile, loading, degraded],
+    [session, user, profile, loading, degraded, recoverSession, signIn, signUp, changePassword, signOut],
   );
 
   return (

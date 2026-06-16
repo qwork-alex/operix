@@ -15,9 +15,9 @@
 import type { OperationalSignal } from "@/hooks/useOperationalSignals";
 import type { AgentEvent } from "./agentEventBus";
 import { getDiagnosticsSnapshot } from "./runtimeDiagnostics";
+import { getAccessToken } from "./authSession";
 
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/agent-chat`;
-const PUBLIC_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
+const CHAT_URL = `${(import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_SUPABASE_URL}/functions/v1/agent-chat`;
 
 const MIN_INTERVAL_MS = 1500; // rate limit local
 let lastCallAt = 0;
@@ -28,6 +28,7 @@ export interface AgentLLMContext {
   route: string;
   module: string;
   online: boolean;
+  workspaceId: string;
   signals: OperationalSignal[];
   recentEvents: AgentEvent[];
 }
@@ -51,11 +52,16 @@ export async function streamAgentReply(opts: StreamOptions): Promise<void> {
     throw new RateLimitedError();
   }
   lastCallAt = now;
+  const token = getAccessToken();
+  if (!token) {
+    throw new Error("Sessão inválida. Faça login novamente.");
+  }
 
   const diag = getDiagnosticsSnapshot();
 
   const payload = {
     messages: opts.history,
+    workspace_id: opts.context.workspaceId,
     context: {
       route: opts.context.route,
       module: opts.context.module,
@@ -76,7 +82,7 @@ export async function streamAgentReply(opts: StreamOptions): Promise<void> {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${PUBLIC_KEY}`,
+      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(payload),
     signal: opts.signal,

@@ -4,14 +4,20 @@ import { env } from "../config/env.js";
 
 export type StripeEnv = "sandbox" | "live";
 
+function getDefaultStripeEnvironment(): StripeEnv {
+  return env.NODE_ENV === "production" ? "live" : "sandbox";
+}
+
 function getStripeApiKey(environment: StripeEnv) {
   return environment === "live" ? env.STRIPE_LIVE_API_KEY || "" : env.STRIPE_SANDBOX_API_KEY || "";
 }
 
 function getWebhookSecret(environment: StripeEnv) {
-  return environment === "live"
+  const secret = environment === "live"
     ? env.PAYMENTS_LIVE_WEBHOOK_SECRET || ""
     : env.PAYMENTS_SANDBOX_WEBHOOK_SECRET || "";
+
+  return secret || env.STRIPE_WEBHOOK_SECRET || "";
 }
 
 export function getConfiguredStripeEnvironment(preferred?: string | null): StripeEnv | null {
@@ -23,12 +29,15 @@ export function getConfiguredStripeEnvironment(preferred?: string | null): Strip
     return "sandbox";
   }
 
-  if (env.STRIPE_SANDBOX_API_KEY) {
-    return "sandbox";
-  }
+  const defaultEnvironment = getDefaultStripeEnvironment();
+  const fallbackOrder: StripeEnv[] = defaultEnvironment === "live"
+    ? ["live", "sandbox"]
+    : ["sandbox", "live"];
 
-  if (env.STRIPE_LIVE_API_KEY) {
-    return "live";
+  for (const environment of fallbackOrder) {
+    if (getStripeApiKey(environment)) {
+      return environment;
+    }
   }
 
   return null;

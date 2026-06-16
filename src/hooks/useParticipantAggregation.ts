@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { partialPaymentsStore } from "@/lib/partialPaymentsStore";
+import { withPromiseTimeout } from "@/lib/asyncGuard";
 import {
   toCents,
   centsToEuros,
@@ -95,11 +96,12 @@ export function useParticipantAggregation() {
 
   return useQuery<ParticipantAggregation>({
     queryKey: ["participant-aggregation"],
-    staleTime: 0,
-    refetchOnWindowFocus: true,
-    refetchOnMount: "always",
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    retry: 0,
     queryFn: async () => {
-      const [soRes, rulesRes, ruleItemsRes] = await Promise.all([
+      const [soRes, rulesRes, ruleItemsRes] = await withPromiseTimeout(Promise.all([
         supabase
           .from("service_orders")
           .select(
@@ -112,7 +114,7 @@ export function useParticipantAggregation() {
         supabase
           .from("profit_rule_items")
           .select("rule_id, participant_name, percentage"),
-      ]);
+      ]), 12000, "participant_aggregation");
 
       const serviceOrders = soRes.data ?? [];
       const rules = rulesRes.data ?? [];
@@ -296,7 +298,6 @@ export function useParticipantAggregation() {
         }
       }
 
-      // eslint-disable-next-line no-console
       console.debug("[ParticipantAggregation] per-OS trace", traceRows);
 
       // FINAL conversion: integer cents → euros (via shared centsToEuros).
@@ -334,7 +335,6 @@ export function useParticipantAggregation() {
       ).length;
 
       // Debug log — week-based, no date filter
-      // eslint-disable-next-line no-console
       console.debug("[ParticipantAggregation] week-based aggregation", {
         serviceOrdersBeforeFilter: serviceOrders.length,
         serviceOrdersAfterFilter: serviceOrdersUsed,
@@ -376,4 +376,3 @@ export function getParticipantYearAgg(
   if (!data) return emptyAgg(participantName);
   return data.byParticipant[participantName] ?? emptyAgg(participantName);
 }
-

@@ -16,7 +16,6 @@
 
 const PHASE_LOG = (name: string, detail?: string) => {
   // Single consistent prefix so the user can grep `[BOOT]` in the console.
-  // eslint-disable-next-line no-console
   console.log(`[BOOT] ${name}${detail ? ` — ${detail}` : ""}`);
 };
 
@@ -69,7 +68,6 @@ export function scheduleDeferredBoot(
     try {
       dispose = start();
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.warn(`[BOOT] ${name} threw during start — isolated`, err);
     }
   };

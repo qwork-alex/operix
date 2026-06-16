@@ -2,6 +2,7 @@ import { useState } from "react";
 import { TableLoadingRow } from "@/components/shared/TableStatusRows";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { uploadFile } from "@/lib/storage";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Plus, Save, Trash2, Pencil, Loader2, AlertTriangle, CheckCircle2 } from "lucide-react";
 import DocumentCapture from "./DocumentCapture";
+import { withAbortableTimeout, withPromiseTimeout } from "@/lib/asyncGuard";
 
 interface VehicleForm {
   license_plate: string;
@@ -198,17 +200,33 @@ export default function VehiclesModule() {
       setOcrNotes(data?.notes || null);
 
       // Store document
-      const path = `fleet/vehicles/${Date.now()}_${file.name}`;
-      await supabase.storage.from("uploads").upload(path, file);
-      await supabase.from("documents").insert({
-        name: file.name, type: "file", entity_type: "vehicle_document",
-        storage_path: path, mime_type: file.type, size_bytes: file.size,
-        module: "fleet",
-      });
+      const safeName = (file.name || "document").replace(/[^\w.\-()]+/g, "_").slice(0, 160);
+      const path = `fleet/vehicles/${Date.now()}_${safeName}`;
+      await withPromiseTimeout<any>(
+        uploadFile("uploads", path, file, file.type || undefined),
+        10000,
+        "fleet_vehicle_doc_upload",
+      );
+
+      const { error: docErr } = await withAbortableTimeout<{ data: any; error: any }>(
+        async (signal) =>
+          ((supabase as any).from("documents").insert({
+            name: safeName,
+            type: "file",
+            entity_type: "vehicle_document",
+            storage_path: path,
+            mime_type: file.type || null,
+            size_bytes: file.size,
+            module: "fleet",
+          }) as any).abortSignal(signal),
+        10000,
+        "fleet_vehicle_doc_insert",
+      );
+      if (docErr) throw new Error(docErr.message);
 
       toast.success("Dados extraídos — verifique e corrija antes de salvar");
     } catch (err) {
-      console.error("[VehicleOCR] Extraction failed:", err);
+      void err;
       toast.error("Erro na extração do documento. Os campos estão disponíveis para preenchimento manual.");
     } finally {
       setExtracting(false);

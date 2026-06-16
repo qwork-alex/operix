@@ -10,6 +10,6 @@ export function useAgentRuntimeBoot() {
   useEffect(() => {
     return scheduleDeferredBoot("AgentRuntime", () => {
       AgentRuntime.start();
-    }, { delayMs: 1400 });
+    }, { delayMs: 5000, idleTimeoutMs: 10000 });
   }, []);
 }

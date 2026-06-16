@@ -20,9 +20,12 @@ export function useUserProfile() {
   const query = useQuery({
     queryKey: ["user-profile", user?.id],
     enabled: !!user?.id,
+    retry: 0,
+    staleTime: 5 * 60_000,
+    placeholderData: (previousData) => previousData ?? null,
     queryFn: async (): Promise<UserProfile | null> => {
       if (!user?.id) return null;
-      const data = await apiRequest<{ profile: UserProfile | null }>("/account/profile");
+      const data = await apiRequest<{ profile: UserProfile | null }>("/account/profile", { timeoutMs: 8000 });
       return data.profile ?? null;
     },
   });

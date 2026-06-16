@@ -53,10 +53,9 @@ export function buildLookupKey(planCode: string, cycle: BillingCycle): string {
 /** List the active workspace tiers (server-validated). */
 export async function fetchWorkspaceTiers(): Promise<WorkspaceTier[]> {
   try {
-    const data = await apiRequest<{ tiers: WorkspaceTier[] }>("/billing/workspace-tiers");
+    const data = await apiRequest<{ tiers: WorkspaceTier[] }>("/billing/workspace-tiers", { timeoutMs: 8000 });
     return data.tiers ?? [];
-  } catch (error) {
-    console.error("[billing] fetchWorkspaceTiers", error);
+  } catch {
     return [];
   }
 }

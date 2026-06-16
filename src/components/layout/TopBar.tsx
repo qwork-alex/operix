@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bell, LogOut, Check, Trash2, FileText, CreditCard, AlertTriangle, Info, Clock, User as UserIcon, Settings as SettingsIcon } from "lucide-react";
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
@@ -37,7 +38,7 @@ function timeAgo(dateStr: string, t: (k: string, fb?: string) => string): string
   return `${days}d`;
 }
 
-export function TopBar() {
+export const TopBar = memo(function TopBar() {
   const navigate = useNavigate();
   const { profile, signOut } = useAuth();
   const { profile: userProfile } = useUserProfile();
@@ -198,17 +199,17 @@ export function TopBar() {
           <DropdownMenuContent align="end" className="z-[1002] bg-card border-border w-56 max-w-[calc(100vw-1.5rem)]">
             <div className="px-3 py-2">
               <p className="text-sm font-medium text-foreground truncate">
-                {workspaceName && workspaceName.toLowerCase() !== "default workspace" ? workspaceName : (profile?.full_name || t("common.user"))}
+                {workspaceName && workspaceName.toLowerCase() !== "default workspace" ? workspaceName : (profile?.full_name || t("common.user", "Utilizador"))}
               </p>
             </div>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => navigate("/profile")} className="text-sm cursor-pointer">
               <UserIcon className="h-3.5 w-3.5 mr-2" />
-              Perfil
+              {t("common.profile", "Perfil")}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => navigate("/settings")} className="text-sm cursor-pointer">
               <SettingsIcon className="h-3.5 w-3.5 mr-2" />
-              Configurações
+              {t("nav.settings", "Configurações")}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={signOut} className="text-sm cursor-pointer text-destructive">
@@ -220,4 +221,4 @@ export function TopBar() {
       </div>
     </header>
   );
-}
+});

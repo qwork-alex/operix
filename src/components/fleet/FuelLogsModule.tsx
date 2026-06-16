@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { TableLoadingRow } from "@/components/shared/TableStatusRows";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { uploadFile, deleteFiles } from "@/lib/storage";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Save, Trash2, Pencil, Loader2, FileText, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import DocumentCapture from "./DocumentCapture";
+import { withAbortableTimeout, withPromiseTimeout } from "@/lib/asyncGuard";
 
 interface FuelForm {
   vehicle_id: string;
@@ -117,7 +119,7 @@ export default function FuelLogsModule() {
       setConfidence(data?.confidence || {});
       toast.success("Dados extraídos do comprovante");
     } catch (err) {
-      console.error("[FuelOCR] Extraction failed:", err);
+      void err;
       toast.error("Erro na extração. Preencha manualmente.");
     } finally {
       setIsExtracting(false);
@@ -136,16 +138,30 @@ export default function FuelLogsModule() {
 
       let receiptPath: string | null = null;
       if (receiptFile) {
-        const path = `fleet/fuel/${form.vehicle_id}/${Date.now()}_${receiptFile.name}`;
-        const { error: upErr } = await supabase.storage.from("uploads").upload(path, receiptFile);
-        if (upErr) throw new Error(`Erro no upload: ${upErr.message}`);
+        const safeName = (receiptFile.name || "document").replace(/[^\w.\-()]+/g, "_").slice(0, 160);
+        const path = `fleet/fuel/${form.vehicle_id}/${Date.now()}_${safeName}`;
+        await withPromiseTimeout<any>(
+          uploadFile("uploads", path, receiptFile, receiptFile.type || undefined),
+          10000,
+          "fleet_fuel_receipt_upload",
+        );
         receiptPath = path;
 
-        await supabase.from("documents").insert({
-          name: receiptFile.name, type: "file", entity_type: "fuel_receipt",
-          storage_path: path, mime_type: receiptFile.type, size_bytes: receiptFile.size,
-          module: "fleet",
-        });
+        const { error: docErr } = await withAbortableTimeout<{ data: any; error: any }>(
+          async (signal) =>
+            ((supabase as any).from("documents").insert({
+              name: safeName,
+              type: "file",
+              entity_type: "fuel_receipt",
+              storage_path: path,
+              mime_type: receiptFile.type || null,
+              size_bytes: receiptFile.size,
+              module: "fleet",
+            }) as any).abortSignal(signal),
+          10000,
+          "fleet_fuel_receipt_insert",
+        );
+        if (docErr) throw new Error(docErr.message);
       }
 
       const payload: any = {
@@ -161,10 +177,20 @@ export default function FuelLogsModule() {
       if (receiptPath) payload.receipt_storage_path = receiptPath;
 
       if (editId) {
-        const { error } = await supabase.from("fleet_fuel_logs").update(payload).eq("id", editId);
+        const { error } = await withAbortableTimeout<{ data: any; error: any }>(
+          async (signal) =>
+            ((supabase as any).from("fleet_fuel_logs").update(payload).eq("id", editId) as any).abortSignal(signal),
+          12000,
+          "fleet_fuel_logs_update",
+        );
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("fleet_fuel_logs").insert(payload);
+        const { error } = await withAbortableTimeout<{ data: any; error: any }>(
+          async (signal) =>
+            ((supabase as any).from("fleet_fuel_logs").insert(payload) as any).abortSignal(signal),
+          12000,
+          "fleet_fuel_logs_insert",
+        );
         if (error) throw error;
       }
     },
@@ -180,8 +206,19 @@ export default function FuelLogsModule() {
 
   const remove = useMutation({
     mutationFn: async (log: any) => {
-      if (log.receipt_storage_path) await supabase.storage.from("uploads").remove([log.receipt_storage_path]);
-      const { error } = await supabase.from("fleet_fuel_logs").delete().eq("id", log.id);
+      if (log.receipt_storage_path) {
+        await withPromiseTimeout<any>(
+          deleteFiles("uploads", [log.receipt_storage_path]),
+          10000,
+          "fleet_fuel_receipt_remove_storage",
+        );
+      }
+      const { error } = await withAbortableTimeout<{ data: any; error: any }>(
+        async (signal) =>
+          ((supabase as any).from("fleet_fuel_logs").delete().eq("id", log.id) as any).abortSignal(signal),
+        12000,
+        "fleet_fuel_logs_delete",
+      );
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["fleet_fuel_logs"] }); toast.success("Removido"); },

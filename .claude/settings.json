@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /home/deploy/apps/nexus/QW-Nexus- diff HEAD src/components/production/OrderDetailDialog.tsx)",
+      "Bash(docker compose *)"
+    ]
+  }
+}

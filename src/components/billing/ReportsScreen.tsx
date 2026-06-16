@@ -18,6 +18,7 @@ import {
 import { toast } from "sonner";
 import { format, subMonths, startOfMonth, endOfMonth, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
+import { apiRequest } from "@/lib/api";
 
 // ─────────────────────────────────────────────────────────────
 // Types & helpers
@@ -76,6 +77,8 @@ export default function ReportsScreen() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [periodMonths, setPeriodMonths] = useState<number>(6);
   const [view, setView] = useState<"overview" | "fleet" | "trends">("overview");
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [emailingPdf, setEmailingPdf] = useState(false);
 
   useEffect(() => { void load(); }, []);
 
@@ -213,8 +216,49 @@ export default function ReportsScreen() {
     toast.success("CSV exportado");
   }
 
-  function exportPDF() {
-    window.print();
+  async function exportPDF() {
+    if (exportingPdf) return;
+    setExportingPdf(true);
+    try {
+      const data = await apiRequest<{ signedUrl: string }>("/billing/reports/financial/pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          periodMonths,
+          generatedAt: new Date().toISOString(),
+          kpis,
+          monthly,
+        }),
+      });
+      if (!data?.signedUrl) throw new Error("PDF indisponível");
+      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    } catch (e: any) {
+      toast.error("Falha ao gerar PDF", { description: e?.message ?? "Erro desconhecido" });
+    } finally {
+      setExportingPdf(false);
+    }
+  }
+
+  async function emailPDF() {
+    if (emailingPdf) return;
+    setEmailingPdf(true);
+    try {
+      await apiRequest("/billing/reports/financial/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          periodMonths,
+          generatedAt: new Date().toISOString(),
+          kpis,
+          monthly,
+        }),
+      });
+      toast.success("Relatório enviado por email");
+    } catch (e: any) {
+      toast.error("Falha ao enviar relatório", { description: e?.message ?? "Erro desconhecido" });
+    } finally {
+      setEmailingPdf(false);
+    }
   }
 
   const STATUS_COLORS: Record<string, string> = {
@@ -252,9 +296,13 @@ export default function ReportsScreen() {
             <FileSpreadsheet className="h-3.5 w-3.5 mr-1.5" />
             CSV
           </Button>
-          <Button variant="outline" size="sm" className="h-8" onClick={exportPDF}>
+          <Button variant="outline" size="sm" className="h-8" onClick={exportPDF} disabled={exportingPdf}>
             <FileText className="h-3.5 w-3.5 mr-1.5" />
             PDF
+          </Button>
+          <Button variant="outline" size="sm" className="h-8" onClick={emailPDF} disabled={emailingPdf}>
+            {emailingPdf ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <FileText className="h-3.5 w-3.5 mr-1.5" />}
+            Email
           </Button>
         </div>
       </div>

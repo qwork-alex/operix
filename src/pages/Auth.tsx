@@ -60,7 +60,7 @@ export default function Auth() {
     }
 
     // Hard guard: a workspace signup MUST NOT carry any invite token.
-    try { localStorage.removeItem("invite_token"); sessionStorage.removeItem("invite_token"); } catch {}
+    try { localStorage.removeItem("invite_token"); sessionStorage.removeItem("invite_token"); } catch { /* best effort */ }
 
     setSubmitting(true);
     try {
@@ -98,7 +98,7 @@ export default function Auth() {
       return;
     }
     // Technician signup must NOT carry any invite token or workspace flag.
-    try { localStorage.removeItem("invite_token"); sessionStorage.removeItem("invite_token"); } catch {}
+    try { localStorage.removeItem("invite_token"); sessionStorage.removeItem("invite_token"); } catch { /* best effort */ }
     setSubmitting(true);
     try {
       const { error } = await signUp(email, password, fullName, "technician");

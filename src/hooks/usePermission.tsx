@@ -5,6 +5,7 @@ import { RealtimeHub } from "@/lib/realtime/RealtimeHub";
 import { useAuth } from "./useAuth";
 import { useRole } from "./useRole";
 import { useImpersonation } from "./useImpersonation";
+import { useWorkspaceOptional } from "./useWorkspace";
 
 
 /**
@@ -35,10 +36,12 @@ function useMyPermissionsMap() {
   const { user } = useAuth();
   const { dbRole, isAdmin, isLoading: roleLoading } = useRole();
   const { effectiveUserId, isImpersonating } = useImpersonation();
+  const workspace = useWorkspaceOptional();
   const qc = useQueryClient();
   // When impersonating, evaluate permissions for the target user so the UI
   // matches what they would see. isAdmin already reflects the impersonated role.
   const permUserId = isImpersonating ? effectiveUserId : user?.id;
+  const workspaceId = workspace?.workspaceId ?? null;
 
   useEffect(() => {
     if (!permUserId) {
@@ -54,26 +57,84 @@ function useMyPermissionsMap() {
 
 
   return useQuery({
-    queryKey: [...PERMS_QUERY_KEY, permUserId, dbRole, isImpersonating],
+    queryKey: [...PERMS_QUERY_KEY, permUserId, dbRole, isImpersonating, workspaceId],
     enabled: !!permUserId && !roleLoading,
     staleTime: 30_000,
     retry: 0,
+    placeholderData: (previousData) => previousData ?? { admin: false, map: {} },
     queryFn: async (): Promise<{ admin: boolean; map: Record<string, Entry> }> => {
       if (!permUserId) return { admin: false, map: {} };
       if (isAdmin) return { admin: true, map: {} };
 
       try {
-        const suffix = permUserId ? `?userId=${encodeURIComponent(permUserId)}` : "";
+        // #region debug-point C:permissions-start
+        void fetch("http://127.0.0.1:7777/event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: "route-loading-stall",
+            runId: "pre-fix",
+            hypothesisId: "C",
+            location: "src/hooks/usePermission.tsx:query:start",
+            msg: "[DEBUG] DATA_START",
+            data: { source: "permissions", permUserId, dbRole, isImpersonating },
+            ts: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
+        const params = new URLSearchParams();
+        if (permUserId) params.set("userId", permUserId);
+        if (workspaceId) params.set("workspaceId", workspaceId);
+        const suffix = params.size > 0 ? `?${params.toString()}` : "";
         const data = await apiRequest<{
           admin: boolean;
           map: Record<string, Entry>;
-        }>(`/account/permissions${suffix}`);
+        }>(`/account/permissions${suffix}`, { timeoutMs: 8000 });
+        // #region debug-point C:permissions-success
+        void fetch("http://127.0.0.1:7777/event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: "route-loading-stall",
+            runId: "pre-fix",
+            hypothesisId: "C",
+            location: "src/hooks/usePermission.tsx:query:success",
+            msg: "[DEBUG] DATA_SUCCESS",
+            data: {
+              source: "permissions",
+              admin: data.admin,
+              entries: Object.keys(data.map ?? {}).length,
+            },
+            ts: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
         return {
           admin: data.admin,
           map: data.map ?? {},
         };
       } catch (error) {
-        if (DEBUG) console.error("[usePermission] permissions fetch error", error);
+        // #region debug-point C:permissions-error
+        void fetch("http://127.0.0.1:7777/event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: "route-loading-stall",
+            runId: "pre-fix",
+            hypothesisId: "C",
+            location: "src/hooks/usePermission.tsx:query:error",
+            msg: "[DEBUG] DATA_ERROR",
+            data: {
+              source: "permissions",
+              error: error instanceof Error ? error.message : String(error),
+            },
+            ts: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
+        if (DEBUG) {
+          void error;
+        }
         return { admin: false, map: {} };
       }
     },

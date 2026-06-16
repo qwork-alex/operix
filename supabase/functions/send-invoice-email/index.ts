@@ -64,13 +64,14 @@ const MailgunProvider: EmailProvider = {
 };
 
 function selectProvider(): EmailProvider {
-  const choice = (Deno.env.get("EMAIL_PROVIDER") ?? "mock").toLowerCase();
-  if (choice === "resend" && Deno.env.get("RESEND_API_KEY")) return ResendProvider;
+  const choice = (Deno.env.get("EMAIL_PROVIDER") ?? "").toLowerCase();
+  if (choice === "mock") return MockProvider;
+  if (Deno.env.get("RESEND_API_KEY")) return ResendProvider;
   if (choice === "mailgun") return MailgunProvider;
   return MockProvider;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {

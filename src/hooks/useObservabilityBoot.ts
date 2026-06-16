@@ -25,7 +25,7 @@ export function useObservabilityBoot() {
       ErrorCorrelation.start();
       SystemHealthEngine.start();
       IncidentGenerator.start();
-    }, { delayMs: 2200 });
+    }, { delayMs: 8000, idleTimeoutMs: 12000 });
   }, []);
 }
 

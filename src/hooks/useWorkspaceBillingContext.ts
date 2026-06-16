@@ -17,13 +17,15 @@ export function useWorkspaceBillingContext() {
   return useQuery({
     queryKey: ["workspace-billing-context", workspaceId],
     enabled: !!workspaceId,
+    retry: 0,
     staleTime: 60_000,
+    placeholderData: (previousData) => previousData ?? null,
     queryFn: async (): Promise<WorkspaceBillingContextPayload | null> => {
       if (!workspaceId) {
         return null;
       }
 
-      return apiRequest<WorkspaceBillingContextPayload>(`/workspaces/${workspaceId}/billing-context`);
+      return apiRequest<WorkspaceBillingContextPayload>(`/workspaces/${workspaceId}/billing-context`, { timeoutMs: 8000 });
     },
   });
 }

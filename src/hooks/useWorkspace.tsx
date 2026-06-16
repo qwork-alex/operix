@@ -71,16 +71,28 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   // is the OPERATIONAL context, never the identity.
   const [selectedId, setSelectedId] = useState<string | null>(() => readSelected());
 
-  useEffect(() => {
-    console.log("[MOUNT] WorkspaceProvider");
-    return () => console.log("[UNMOUNT] WorkspaceProvider");
-  }, []);
-
   const { data: wsData, isLoading: wsLoading } = useQuery({
     queryKey: ["my-workspace", userId, selectedId],
     enabled: !!userId,
+    retry: 0,
+    staleTime: 5 * 60_000,
     queryFn: async () => {
       if (!userId) return null;
+      // #region debug-point B:workspace-start
+      void fetch("http://127.0.0.1:7777/event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: "route-loading-stall",
+          runId: "pre-fix",
+          hypothesisId: "B",
+          location: "src/hooks/useWorkspace.tsx:my-workspace:start",
+          msg: "[DEBUG] DATA_START",
+          data: { source: "workspace", userId, selectedId },
+          ts: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
       const data = await apiRequest<{
         appUserId: string | null;
         workspaces: Array<{
@@ -90,9 +102,24 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           membershipRole: MembershipRole | null;
           membershipStatus: string;
         }>;
-      }>("/account/workspaces");
+      }>("/account/workspaces", { timeoutMs: 8000 });
       const memberships = data.workspaces;
       if (!memberships || memberships.length === 0) {
+        // #region debug-point B:workspace-empty
+        void fetch("http://127.0.0.1:7777/event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: "route-loading-stall",
+            runId: "pre-fix",
+            hypothesisId: "B",
+            location: "src/hooks/useWorkspace.tsx:my-workspace:empty",
+            msg: "[DEBUG] DATA_SUCCESS",
+            data: { source: "workspace", workspaces: 0 },
+            ts: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
         return {
           appUserId: data.appUserId,
           availableWorkspaces: [],
@@ -116,6 +143,26 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           localStorage.setItem(SELECTED_KEY, membership.workspaceId);
         }
       } catch { /* best effort */ }
+      // #region debug-point B:workspace-success
+      void fetch("http://127.0.0.1:7777/event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: "route-loading-stall",
+          runId: "pre-fix",
+          hypothesisId: "B",
+          location: "src/hooks/useWorkspace.tsx:my-workspace:success",
+          msg: "[DEBUG] DATA_SUCCESS",
+          data: {
+            source: "workspace",
+            workspaceId: membership.workspaceId,
+            workspaces: memberships.length,
+            selectedId,
+          },
+          ts: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
       return {
         workspaceId: membership.workspaceId,
         workspaceName: membership.workspaceName,
@@ -134,14 +181,42 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   });
 
   // Members of the active operational workspace.
-  const { data: members = [], isLoading: membersLoading } = useQuery({
+  const { data: members = [] } = useQuery({
     queryKey: ["workspace-members", wsData?.workspaceId],
     enabled: !!wsData?.workspaceId,
+    retry: 0,
+    staleTime: 60_000,
     queryFn: async () => {
-      const data = await apiRequest<{ members: WorkspaceMember[] }>(`/workspaces/${wsData!.workspaceId}/members`);
+      const data = await apiRequest<{ members: WorkspaceMember[] }>(`/workspaces/${wsData!.workspaceId}/members`, { timeoutMs: 8000 });
       return data.members;
     },
+    placeholderData: (previousData) => previousData ?? [],
   });
+
+  useEffect(() => {
+    if (userId && !wsLoading) {
+      // #region debug-point B:workspace-loading-end
+      void fetch("http://127.0.0.1:7777/event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: "route-loading-stall",
+          runId: "pre-fix",
+          hypothesisId: "B",
+          location: "src/hooks/useWorkspace.tsx:loading:end",
+          msg: "[DEBUG] LOADING_END",
+          data: {
+            source: "workspace",
+            loading: false,
+            workspaceId: wsData?.workspaceId ?? null,
+            hasMembers: members.length > 0,
+          },
+          ts: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+    }
+  }, [userId, wsLoading, wsData?.workspaceId, members.length]);
 
   const memberAuthIds = useMemo(
     () => members.filter((m: WorkspaceMember) => m.auth_user_id).map((m: WorkspaceMember) => m.auth_user_id),
@@ -162,8 +237,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         .forEach((k) => sessionStorage.removeItem(k));
     } catch { /* best effort */ }
     setSelectedId(id);
-    // Re-evaluate everything scoped to a workspace. Providers stay mounted.
-    queryClient.invalidateQueries();
+    queryClient.invalidateQueries({ queryKey: ["my-workspace"] });
+    queryClient.invalidateQueries({ queryKey: ["workspace-members"] });
   }, [selectedId, queryClient]);
 
   const value = useMemo<WorkspaceContext>(() => ({
@@ -175,9 +250,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     memberAuthIds,
     myRole,
     isAdmin,
-    isLoading: wsLoading || membersLoading,
+    isLoading: wsLoading,
     switchWorkspace,
-  }), [wsData, members, memberAuthIds, myRole, isAdmin, wsLoading, membersLoading, switchWorkspace]);
+  }), [wsData, members, memberAuthIds, myRole, isAdmin, wsLoading, switchWorkspace]);
 
   return <WorkspaceCtx.Provider value={value}>{children}</WorkspaceCtx.Provider>;
 }
@@ -186,4 +261,8 @@ export function useWorkspace() {
   const ctx = useContext(WorkspaceCtx);
   if (!ctx) throw new Error("useWorkspace must be used within WorkspaceProvider");
   return ctx;
+}
+
+export function useWorkspaceOptional(): WorkspaceContext | null {
+  return useContext(WorkspaceCtx) ?? null;
 }

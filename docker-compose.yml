@@ -17,6 +17,24 @@ services:
       timeout: 5s
       retries: 10
 
+  minio:
+    image: minio/minio:latest
+    container_name: qw_nexus_minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-troque-esta-senha-minio-com-16-chars}
+    ports:
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   api:
     build:
       context: /home/deploy/apps/nexus/QW-Nexus-/backend
@@ -26,6 +44,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      minio:
+        condition: service_healthy
     environment:
       NODE_ENV: production
       PORT: 4000
@@ -33,12 +53,25 @@ services:
       JWT_SECRET: ${JWT_SECRET:-troque-esta-chave-jwt-por-uma-string-com-mais-de-32-caracteres}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_SECURE: ${SMTP_SECURE:-true}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
       STRIPE_SANDBOX_API_KEY: ${STRIPE_SANDBOX_API_KEY:-}
       STRIPE_LIVE_API_KEY: ${STRIPE_LIVE_API_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       STRIPE_PORTAL_SANDBOX_URL: ${STRIPE_PORTAL_SANDBOX_URL:-}
       STRIPE_PORTAL_LIVE_URL: ${STRIPE_PORTAL_LIVE_URL:-}
       PAYMENTS_SANDBOX_WEBHOOK_SECRET: ${PAYMENTS_SANDBOX_WEBHOOK_SECRET:-}
       PAYMENTS_LIVE_WEBHOOK_SECRET: ${PAYMENTS_LIVE_WEBHOOK_SECRET:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://minio:9000}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-troque-esta-senha-minio-com-16-chars}
     ports:
       - "${API_PORT:-4000}:4000"
 
@@ -59,3 +92,4 @@ services:
 
 volumes:
   postgres_data:
+  minio_data:

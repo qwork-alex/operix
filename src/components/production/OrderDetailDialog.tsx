@@ -18,6 +18,8 @@ import {
 import { useAutosave } from "@/hooks/useAutosave";
 import { PhotoUploader } from "./PhotoUploader";
 import { OrderTimeline } from "./OrderTimeline";
+import { FileUploadZone } from "@/components/service-orders/FileUploadZone";
+import { useExtractProductionOrder } from "@/hooks/useExtractProductionOrder";
 
 interface Props {
   order: ProductionOrder | null;
@@ -36,6 +38,7 @@ export function OrderDetailDialog({ order, onClose }: Props) {
   const [activeTab, setActiveTab] = useState("info");
   const isNew = order?.id === "__new__";
   const locked = !isNew && isOrderLocked(order?.status);
+  const { extract, isExtracting } = useExtractProductionOrder();
 
   const draftKey = useMemo(
     () => isNew ? "production-draft-new" : `production-draft-${order?.id ?? "noop"}`,
@@ -69,7 +72,7 @@ export function OrderDetailDialog({ order, onClose }: Props) {
                 to_value: "resumed",
                 actor_user_id: actorUserId,
               });
-            } catch (err) { console.warn("[Production] resume log failed", err); }
+            } catch (err) { void err; }
           })();
         }
       } catch { /* ignore */ }
@@ -96,9 +99,7 @@ export function OrderDetailDialog({ order, onClose }: Props) {
         to_value: type,
         actor_user_id: actorUserId,
       });
-    } catch (err) {
-      // non-blocking — lifecycle log is best-effort
-      console.warn("[Production] lifecycle log failed", err);
+    } catch {
     }
   };
 
@@ -112,7 +113,30 @@ export function OrderDetailDialog({ order, onClose }: Props) {
       clearDraft();
       onClose();
     } catch (err) {
-      console.error("[Production] save failed", err);
+      toast.error(err instanceof Error ? err.message : "Falha ao salvar.");
+    }
+  };
+
+  const applyOcr = async (files: File[]) => {
+    if (!files.length) return;
+    try {
+      const res = await extract(files[0]);
+      const next: Partial<ProductionOrder> = {};
+      const o = res.order;
+      if (o.client && !form.client_name) next.client_name = o.client;
+      if (o.platform && !form.platform) next.platform = o.platform;
+      if (o.license_plate && !form.license_plate) next.license_plate = o.license_plate.toUpperCase();
+      if (o.vin && !form.vin) next.vin = o.vin;
+      if (o.brand && !form.brand) next.brand = o.brand;
+      if (o.model && !form.model) next.model = o.model;
+      if (o.color && !form.color) next.color = o.color;
+      if (o.insurer && !form.insurer) next.insurer = o.insurer;
+      if (o.vehicle_notes && !form.notes) next.notes = o.vehicle_notes;
+      setForm((f) => ({ ...f, ...next }));
+      if (res.confidence === "low") toast.warning("OCR com baixa confiança. Revise os campos.");
+      else toast.success("Dados extraídos. Revise antes de salvar.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha no OCR.");
     }
   };
 
@@ -160,6 +184,21 @@ export function OrderDetailDialog({ order, onClose }: Props) {
           </TabsList>
 
           <TabsContent value="info" className="space-y-4 pt-4">
+            {isNew && !locked && (
+              <div className="rounded-lg border border-border/50 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold">OCR: importar ordem</div>
+                    <div className="text-xs text-muted-foreground">
+                      Envie uma foto/PDF de uma ordem existente para pré-preencher os campos.
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <FileUploadZone onFilesSelected={applyOcr} isProcessing={isExtracting} compact />
+                </div>
+              </div>
+            )}
             <fieldset disabled={locked} className="space-y-4 disabled:opacity-80">
             <div className="grid grid-cols-2 gap-3">
               <Field label="Cliente"><Input value={form.client_name ?? ""} onChange={e => set("client_name", e.target.value)} /></Field>

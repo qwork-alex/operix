@@ -31,7 +31,6 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/api";
@@ -196,8 +195,10 @@ export default function ClientsScreen() {
       };
     },
   });
-  const clients = listData?.clients ?? [];
-  const balances = listData?.balances ?? {};
+  const clientsRaw = listData?.clients;
+  const balancesRaw = listData?.balances;
+  const clients = useMemo(() => clientsRaw ?? [], [clientsRaw]);
+  const balances = useMemo(() => balancesRaw ?? {}, [balancesRaw]);
 
   const filtered = useMemo(() => {
     return clients.filter((c) => {
@@ -477,7 +478,7 @@ export default function ClientsScreen() {
       />
 
       {/* Delete confirm */}
-      <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
+      <AlertDialog open={!!toDelete} onOpenChange={(o: boolean) => !o && setToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Remover cliente?</AlertDialogTitle>
@@ -788,7 +789,7 @@ function ClientFormDialog({
   const isPro = form.kind === "professional";
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={open} onOpenChange={(o: boolean) => !o && onClose()}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{editing ? "Editar cliente" : "Novo cliente"}</DialogTitle>
@@ -1032,9 +1033,9 @@ function ClientDetail({
     },
   });
   const activeClient = detailData?.client ?? client;
-  const invoices = detailData?.invoices ?? [];
-  const payments = detailData?.payments ?? [];
-  const attachments = detailData?.attachments ?? [];
+  const invoices = useMemo(() => detailData?.invoices ?? [], [detailData?.invoices]);
+  const payments = useMemo(() => detailData?.payments ?? [], [detailData?.payments]);
+  const attachments = useMemo(() => detailData?.attachments ?? [], [detailData?.attachments]);
 
   const totals = useMemo(() => {
     if (detailData?.totals) return detailData.totals;
@@ -1086,17 +1087,17 @@ function ClientDetail({
   const Icon = isPro ? Building2 : UserIcon;
 
   return (
-    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
+    <Dialog open={open} onOpenChange={(o: boolean) => !o && onClose()}>
+      <DialogContent className="w-full sm:max-w-xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
             <Icon className={cn("h-4 w-4", isPro ? "text-primary" : "text-cyan-400")} />
             {activeClient.name}
             <Badge variant="outline" className="ml-auto text-[10px]">
               {isPro ? "Profissional" : "Particular"}
             </Badge>
-          </SheetTitle>
-        </SheetHeader>
+          </DialogTitle>
+        </DialogHeader>
 
         <div className="mt-4 space-y-4">
           <div className="grid grid-cols-3 gap-2">
@@ -1217,8 +1218,8 @@ function ClientDetail({
             </Button>
           </div>
         </div>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }
 

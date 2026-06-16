@@ -191,7 +191,10 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
 
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const toggleCollapse = (k: string) => setCollapsedGroups(prev => {
-    const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n;
+    const n = new Set(prev);
+    if (n.has(k)) n.delete(k);
+    else n.add(k);
+    return n;
   });
 
   /** Update amount_paid → derive status server-side write */

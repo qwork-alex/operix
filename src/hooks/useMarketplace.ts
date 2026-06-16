@@ -3,6 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useWorkspace } from "./useWorkspace";
 import { toast } from "sonner";
+import { withPromiseTimeout } from "@/lib/asyncGuard";
+import { uploadFile, deleteFiles, getFileUrl } from "@/lib/storage";
 
 export type MarketplaceCategory =
   | "vehicles" | "parts" | "services" | "tools" | "equipment" | "other";
@@ -76,8 +78,7 @@ export const STATUS_META: Record<MarketplaceStatus, { label: string; tone: strin
 
 export function getPublicPhotoUrl(path: string | null | undefined): string | null {
   if (!path) return null;
-  const { data } = supabase.storage.from("marketplace").getPublicUrl(path);
-  return data.publicUrl;
+  return getFileUrl("marketplace", path);
 }
 
 interface ListingFilters {
@@ -93,6 +94,9 @@ export function useMarketplaceListings(filters: ListingFilters = {}) {
   return useQuery({
     queryKey: ["marketplace_listings", workspaceId, filters],
     enabled: !!user?.id,
+    retry: 0,
+    staleTime: 60_000,
+    placeholderData: (previousData) => previousData ?? [],
     queryFn: async () => {
       let q: any = supabase
         .from("marketplace_listings" as any)
@@ -109,7 +113,7 @@ export function useMarketplaceListings(filters: ListingFilters = {}) {
         const s = filters.search.trim().replace(/[%_]/g, "");
         q = q.or(`title.ilike.%${s}%,description.ilike.%${s}%,manufacturer.ilike.%${s}%,model.ilike.%${s}%`);
       }
-      const { data, error } = await q;
+      const { data, error } = await withPromiseTimeout<any>(q, 10000, "marketplace_listings");
       if (error) throw error;
       return (data ?? []) as MarketplaceListing[];
     },
@@ -120,12 +124,15 @@ export function useMarketplaceListing(id: string | null | undefined) {
   return useQuery({
     queryKey: ["marketplace_listing", id],
     enabled: !!id,
+    retry: 0,
+    staleTime: 60_000,
+    placeholderData: (previousData) => previousData ?? null,
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await withPromiseTimeout<any>((supabase as any)
         .from("marketplace_listings")
         .select("*")
         .eq("id", id!)
-        .maybeSingle();
+        .maybeSingle(), 10000, "marketplace_listing");
       if (error) throw error;
       return data as MarketplaceListing | null;
     },
@@ -136,12 +143,15 @@ export function useMarketplacePhotos(listingId: string | null | undefined) {
   return useQuery({
     queryKey: ["marketplace_photos", listingId],
     enabled: !!listingId,
+    retry: 0,
+    staleTime: 60_000,
+    placeholderData: (previousData) => previousData ?? [],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await withPromiseTimeout<any>((supabase as any)
         .from("marketplace_listing_photos")
         .select("*")
         .eq("listing_id", listingId!)
-        .order("order_index", { ascending: true });
+        .order("order_index", { ascending: true }), 10000, "marketplace_photos");
       if (error) throw error;
       return (data ?? []) as MarketplacePhoto[];
     },
@@ -219,10 +229,7 @@ export function useMarketplaceMutations() {
       if (!user?.id) throw new Error("Não autenticado");
       const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
       const path = `${user.id}/${listingId}/${crypto.randomUUID()}.${ext}`;
-      const { error: upErr } = await supabase.storage
-        .from("marketplace")
-        .upload(path, file, { cacheControl: "3600", upsert: false, contentType: file.type });
-      if (upErr) throw upErr;
+      await uploadFile("marketplace", path, file, file.type);
 
       const { data, error } = await (supabase as any)
         .from("marketplace_listing_photos")
@@ -250,7 +257,7 @@ export function useMarketplaceMutations() {
 
   const deletePhoto = useMutation({
     mutationFn: async (photo: MarketplacePhoto) => {
-      await supabase.storage.from("marketplace").remove([photo.storage_path]);
+      await deleteFiles("marketplace", [photo.storage_path]);
       const { error } = await (supabase as any)
         .from("marketplace_listing_photos")
         .delete()

@@ -44,6 +44,38 @@ export async function pdfFirstPageToImageBase64(
   return { base64, mimeType: "image/jpeg" };
 }
 
+export async function pdfPagesToImageBase64(
+  file: File | Blob,
+  opts: { maxWidth?: number; quality?: number; maxPages?: number } = {}
+): Promise<Array<{ base64: string; mimeType: "image/jpeg"; pageNumber: number }>> {
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjs.getDocument({ data: new Uint8Array(buf) }).promise;
+  const maxPages = Math.min(pdf.numPages, opts.maxPages ?? 5);
+  const pages: Array<{ base64: string; mimeType: "image/jpeg"; pageNumber: number }> = [];
+
+  for (let pageNumber = 1; pageNumber <= maxPages; pageNumber += 1) {
+    const page = await pdf.getPage(pageNumber);
+    const baseViewport = page.getViewport({ scale: 1 });
+    const maxW = opts.maxWidth ?? 1600;
+    const scale = Math.min(2.0, maxW / baseViewport.width);
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.floor(viewport.width);
+    canvas.height = Math.floor(viewport.height);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas 2D context unavailable");
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    const dataUrl = canvas.toDataURL("image/jpeg", opts.quality ?? 0.9);
+    pages.push({
+      base64: dataUrl.split(",")[1] ?? "",
+      mimeType: "image/jpeg",
+      pageNumber,
+    });
+  }
+
+  return pages;
+}
+
 export async function fileToBase64(file: File | Blob): Promise<string> {
   const buf = await file.arrayBuffer();
   let binary = "";

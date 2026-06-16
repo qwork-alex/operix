@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, Mail, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
+import { apiRequest } from "@/lib/api";
 
 interface Props {
   open: boolean;
@@ -26,8 +27,12 @@ export function ForgotPasswordDialog({ open, onOpenChange, defaultEmail = "" }: 
     }
     setSubmitting(true);
     try {
+      await apiRequest("/auth/recover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
       setSent(true);
-      toast.info("Recuperação por email ainda não foi migrada para a API própria.");
     } finally {
       setSubmitting(false);
     }

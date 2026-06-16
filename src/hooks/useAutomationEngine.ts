@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { toast } from "sonner";
+import { withPromiseTimeout } from "@/lib/asyncGuard";
 
 export interface AutomationRule {
   id: string;
@@ -60,11 +61,13 @@ export function useAutomationRules() {
   const list = useQuery({
     queryKey: RULES_KEY(workspaceId),
     enabled: !!workspaceId,
+    retry: 0,
+    placeholderData: (previousData) => previousData ?? [],
     queryFn: async (): Promise<AutomationRule[]> => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await withPromiseTimeout<any>((supabase as any)
         .from("automation_rules").select("*")
         .eq("workspace_id", workspaceId!)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false }), 10000, "automation_rules");
       if (error) throw error;
       return data ?? [];
     },
@@ -163,11 +166,13 @@ export function useAutomationExecutions(limit = 100) {
     queryKey: [...EXECS_KEY(workspaceId), limit],
     enabled: !!workspaceId,
     refetchInterval: 30_000,
+    retry: 0,
+    placeholderData: (previousData) => previousData ?? [],
     queryFn: async (): Promise<AutomationExecution[]> => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await withPromiseTimeout<any>((supabase as any)
         .from("automation_executions").select("*")
         .eq("workspace_id", workspaceId!)
-        .order("created_at", { ascending: false }).limit(limit);
+        .order("created_at", { ascending: false }).limit(limit), 10000, "automation_executions");
       if (error) throw error;
       return data ?? [];
     },
@@ -180,11 +185,13 @@ export function useAutomationDeadLetter() {
     queryKey: DEAD_KEY(workspaceId),
     enabled: !!workspaceId,
     refetchInterval: 60_000,
+    retry: 0,
+    placeholderData: (previousData) => previousData ?? [],
     queryFn: async (): Promise<AutomationDeadLetter[]> => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await withPromiseTimeout<any>((supabase as any)
         .from("automation_dead_letter").select("*")
         .eq("workspace_id", workspaceId!)
-        .order("created_at", { ascending: false }).limit(200);
+        .order("created_at", { ascending: false }).limit(200), 10000, "automation_dead_letter");
       if (error) throw error;
       return data ?? [];
     },
@@ -197,9 +204,10 @@ export function useAutomationStats() {
     queryKey: STATS_KEY(workspaceId),
     enabled: !!workspaceId,
     refetchInterval: 30_000,
+    retry: 0,
     queryFn: async () => {
       const since = new Date(Date.now() - 86_400_000).toISOString();
-      const [execs, pending, dead] = await Promise.all([
+      const [execs, pending, dead] = await withPromiseTimeout(Promise.all([
         (supabase as any).from("automation_executions")
           .select("status", { count: "exact", head: false })
           .eq("workspace_id", workspaceId!).gte("created_at", since),
@@ -209,7 +217,7 @@ export function useAutomationStats() {
         (supabase as any).from("automation_dead_letter")
           .select("id", { count: "exact", head: true })
           .eq("workspace_id", workspaceId!),
-      ]);
+      ]), 12000, "automation_stats");
       const rows = (execs.data ?? []) as { status: string }[];
       return {
         total24h: rows.length,

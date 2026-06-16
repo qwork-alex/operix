@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { uploadFile } from "@/lib/storage";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import { useAuth } from "./useAuth";
 import { useCan } from "./usePermission";
@@ -10,6 +11,8 @@ import { scopeQuery } from "@/lib/workspaceScope";
 import { getCurrentUserId, logSaveError, logSavePayload } from "@/lib/authUser";
 import { toast } from "sonner";
 import type { Json } from "@/integrations/supabase/types";
+import { withAbortableTimeout, withPromiseTimeout } from "@/lib/asyncGuard";
+import { pdfFirstPageToImageBase64 } from "@/lib/pdfUtils";
 
 export type PaymentOrder = Tables<"payment_orders">;
 export type PaymentOrderInsert = TablesInsert<"payment_orders">;
@@ -51,6 +54,11 @@ export function usePaymentOrders(filters?: {
   const query = useQuery({
     queryKey: ["payment_orders", workspaceId, filters, allowed, scope, user?.id],
     enabled: !permsLoading && allowed && !!user?.id,
+    retry: 0,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    placeholderData: (previousData) => previousData ?? [],
     queryFn: async () => {
       logScope("payment_orders", "view", scope, allowed);
       if (!allowed) return [];
@@ -68,7 +76,11 @@ export function usePaymentOrders(filters?: {
       if (filters?.assigned_user_id) q = q.eq("assigned_user_id", filters.assigned_user_id);
       if (filters?.list_name) q = q.eq("list_name", filters.list_name);
 
-      const { data, error } = await q;
+      const { data, error } = await withAbortableTimeout<{ data: any; error: any }>(
+        async (signal) => (q as any).abortSignal(signal),
+        10000,
+        "payment_orders",
+      );
       if (error) throw error;
       return data;
     },
@@ -92,10 +104,15 @@ export function usePaymentOrders(filters?: {
 
       logSavePayload("PaymentOrders:insert", currentUserId, payload);
 
-      const { data, error } = await (supabase as any)
-        .from("payment_orders")
-        .insert(payload)
-        .select();
+      const { data, error } = await withAbortableTimeout<{ data: any; error: any }>(
+        async (signal) =>
+          ((supabase as any)
+            .from("payment_orders")
+            .insert(payload)
+            .select() as any).abortSignal(signal),
+        12000,
+        "payment_orders_insert",
+      );
       if (error) {
         logSaveError("PaymentOrders:insert", error);
         throw error;
@@ -133,12 +150,17 @@ export function usePaymentOrders(filters?: {
 
       logSavePayload("PaymentOrders:update", currentUserId, payload);
 
-      const { data, error } = await (supabase as any)
-        .from("payment_orders")
-        .update(payload)
-        .eq("id", id)
-        .select()
-        .single();
+      const { data, error } = await withAbortableTimeout<{ data: any; error: any }>(
+        async (signal) =>
+          ((supabase as any)
+            .from("payment_orders")
+            .update(payload)
+            .eq("id", id)
+            .select()
+            .single() as any).abortSignal(signal),
+        12000,
+        "payment_orders_update",
+      );
       if (error) {
         logSaveError("PaymentOrders:update", error);
         throw error;
@@ -152,7 +174,6 @@ export function usePaymentOrders(filters?: {
       toast.success("Payment order updated");
     },
     onError: (err) => {
-      console.error("[PaymentOrders] Update error:", err);
       toast.error("Failed to update: " + (err as Error).message);
     },
   });
@@ -191,48 +212,45 @@ export function useExtractPaymentOrder() {
         throw new Error(`Unsupported file type: ${mimeType}. Please upload PDF, JPG, or PNG.`);
       }
 
-      console.log("[Extract] Starting extraction:", { name: file.name, size: file.size, type: mimeType });
-
       // Upload to storage with correct contentType
-      const filePath = `payment-orders/${Date.now()}_${file.name}`;
-      const { error: uploadError } = await supabase.storage
-        .from("uploads")
-        .upload(filePath, file, { contentType: mimeType, upsert: false });
-      if (uploadError) {
-        console.error("[Extract] Upload failed:", uploadError);
-        throw new Error(`File upload failed: ${uploadError.message}. Please check the file and try again.`);
-      }
-      console.log("[Extract] File uploaded to storage:", filePath);
+      const safeName = (file.name || "document").replace(/[^\w.\-()]+/g, "_").slice(0, 160);
+      const filePath = `payment-orders/${Date.now()}_${safeName}`;
+      await withPromiseTimeout<any>(
+        uploadFile("uploads", filePath, file, mimeType),
+        10000,
+        "extract_payment_order_upload",
+      );
 
-      // Convert to base64 for OCR
-      const base64 = await fileToBase64(file);
-      console.log("[Extract] Base64 ready, invoking OCR edge function...");
+      const isPdf = mimeType === "application/pdf";
+      const ocrInput = isPdf
+        ? await pdfFirstPageToImageBase64(file, { maxWidth: 1600, quality: 0.9 })
+        : { base64: await fileToBase64(file), mimeType: (mimeType || "application/octet-stream") as string };
 
       // Call OCR with retry (1 retry on network failure)
       let lastError: Error | null = null;
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
-          const { data, error } = await supabase.functions.invoke("extract-payment-order", {
-            body: { imageBase64: base64, mimeType, fileName: file.name },
-          });
+          const { data, error } = await withPromiseTimeout<any>(
+            supabase.functions.invoke("extract-payment-order", {
+              body: { imageBase64: ocrInput.base64, mimeType: ocrInput.mimeType, fileName: file.name },
+            }),
+            12000,
+            "extract_payment_order_invoke",
+          );
 
           if (error) {
-            console.error(`[Extract] Edge function error (attempt ${attempt + 1}):`, error);
             lastError = new Error(`OCR extraction failed: ${error.message}. Try re-uploading the document.`);
             if (attempt === 0) { await new Promise(r => setTimeout(r, 1500)); continue; }
             throw lastError;
           }
           if (data?.error) {
-            console.error("[Extract] AI processing error:", data.error);
             throw new Error(`AI could not process this document: ${data.error}`);
           }
 
-          console.log("[Extract] OCR success:", { orders: data?.orders?.length, confidence: data?.confidence });
           return data as PaymentExtractionResult;
         } catch (retryErr) {
           lastError = retryErr as Error;
           if (attempt === 0 && (lastError.message.includes("fetch") || lastError.message.includes("network"))) {
-            console.warn("[Extract] Retrying after network error...");
             await new Promise(r => setTimeout(r, 1500));
             continue;
           }
@@ -240,9 +258,6 @@ export function useExtractPaymentOrder() {
         }
       }
       throw lastError || new Error("OCR extraction failed after retries.");
-    } catch (err) {
-      console.error("[Extract] Payment order extraction error:", err);
-      throw err;
     } finally {
       setIsExtracting(false);
     }
@@ -303,12 +318,14 @@ export function useDiscrepancies() {
   return useQuery({
     queryKey: ["discrepancies", allowed],
     enabled: !permsLoading && allowed,
+    retry: 0,
+    placeholderData: (previousData) => previousData ?? [],
     queryFn: async () => {
       if (!allowed) return [];
-      const { data, error } = await supabase
+      const { data, error } = await withPromiseTimeout<any>(supabase
         .from("discrepancies")
         .select("*, service_orders(license_plate, car_name, total, platform, clients(name)), payment_orders(license_plate, car_name, total, platform, clients(name))")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false }), 10000, "discrepancies");
       if (error) throw error;
       return data;
     },
@@ -327,6 +344,7 @@ export function useFinancialSummary() {
   return useQuery({
     queryKey: ["financial-summary", workspaceId, allowed, soView.scope, poView.scope, user?.id],
     enabled: !permsLoading && allowed && !!user?.id,
+    retry: 0,
     queryFn: async () => {
       logScope("financial", "summary", finView.scope, allowed);
       if (!allowed) {
@@ -344,11 +362,11 @@ export function useFinancialSummary() {
       soQ = scopeQuery(soQ, "service_orders", workspaceId);
       poQ = scopeQuery(poQ, "payment_orders", workspaceId);
 
-      const [soRes, poRes, discRes] = await Promise.all([
+      const [soRes, poRes, discRes] = await withPromiseTimeout(Promise.all([
         soQ,
         poQ,
         supabase.from("discrepancies").select("*, service_orders(total, clients(name)), payment_orders(total, clients(name))"),
-      ]);
+      ]), 12000, "financial-summary");
 
       const serviceOrders = soRes.data ?? [];
       const paymentOrders = poRes.data ?? [];

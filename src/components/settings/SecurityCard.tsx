@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Shield, Loader2, Eye, EyeOff, Save, KeyRound, Monitor } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { apiRequest } from "@/lib/api";
 import { toast } from "sonner";
 
 export function SecurityCard() {
@@ -33,7 +34,12 @@ export function SecurityCard() {
     if (!user?.email) return;
     setSendingReset(true);
     try {
-      toast.info("Recuperação por email ainda não foi migrada para a API própria.");
+      await apiRequest("/auth/recover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: user.email }),
+      });
+      toast.success("Se este email existir, enviamos um link de redefinição.");
     } catch (e: any) {
       toast.error(e.message || "Erro ao enviar recuperação");
     } finally { setSendingReset(false); }

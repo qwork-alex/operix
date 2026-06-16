@@ -1,17 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { fetchAIChatCompletions } from "../_shared/ai.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-serve(async (req) => {
+serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
-
     const { imageBase64, mimeType, documentType } = await req.json();
     if (!imageBase64) throw new Error("No image data provided");
 
@@ -160,27 +158,26 @@ RULES:
       toolName = "extract_driver_data";
     }
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
+    const { response } = await fetchAIChatCompletions({
+      model: "google/gemini-2.5-flash",
+      messages: [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: `Extract data from this ${documentType === "vehicle" ? "vehicle registration" : documentType === "fuel_receipt" ? "fuel receipt" : "driver's license"} document.` },
+            { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
+          ],
+        },
+      ],
+      tools: [toolDef],
+      tool_choice: { type: "function", function: { name: toolName } },
+    }, {
+      modelByProvider: {
+        gemini: "gemini-2.5-flash",
+        openai: "gpt-4o-mini",
+        lovable: "google/gemini-2.5-flash",
       },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          {
-            role: "user",
-            content: [
-              { type: "text", text: `Extract data from this ${documentType === "vehicle" ? "vehicle registration" : documentType === "fuel_receipt" ? "fuel receipt" : "driver's license"} document.` },
-              { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
-            ],
-          },
-        ],
-        tools: [toolDef],
-        tool_choice: { type: "function", function: { name: toolName } },
-      }),
     });
 
     if (!response.ok) {

@@ -19,6 +19,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { useAI } from "@/agents/ai";
 import { useOperationalSignals, type SignalLevel } from "@/hooks/useOperationalSignals";
+import { useCan } from "@/hooks/usePermission";
 
 const AgentPanel = lazy(() => import("@/components/agent/AgentPanel"));
 
@@ -70,6 +71,7 @@ function RobotHead({ level }: { level: SignalLevel }) {
 export function AIControlCenter() {
   const { snapshot, open, close } = useAI();
   const { signals } = useOperationalSignals();
+  const { can, isLoading: permsLoading } = useCan();
   const [menuOpen, setMenuOpen] = useState(false);
 
   const worst: SignalLevel = useMemo(() => {
@@ -88,6 +90,7 @@ export function AIControlCenter() {
 
   const badge = counts.error + counts.warn;
   const meta = LEVEL_META[worst];
+  const canViewDashboard = can("dashboard", "view").allowed;
 
   // When the AgentPanel emits its own open events, mirror via context.
   useEffect(() => {
@@ -97,6 +100,8 @@ export function AIControlCenter() {
   }, [open]);
 
   const expanded = snapshot.mode === "expanded";
+
+  if (permsLoading || !canViewDashboard) return null;
 
   return (
     <>

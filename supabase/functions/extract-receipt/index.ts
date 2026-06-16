@@ -1,17 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { fetchAIChatCompletions } from "../_shared/ai.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-serve(async (req) => {
+serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
-
     const { fileBase64, mimeType, fileName } = await req.json();
     if (!fileBase64) throw new Error("No file data provided");
     if (!mimeType) throw new Error("Missing mimeType");
@@ -31,48 +29,50 @@ Return null when not present — never fabricate.`;
     const userPrompt = `Extract structured data from this receipt/invoice. Filename: "${fileName ?? "unknown"}".
 Return amount as a plain number. Dates as YYYY-MM-DD. Currency as ISO code.`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          {
-            role: "user",
-            content: [
-              { type: "text", text: userPrompt },
-              { type: "image_url", image_url: { url: `data:${mimeType};base64,${fileBase64}` } },
-            ],
-          },
-        ],
-        tools: [{
-          type: "function",
-          function: {
-            name: "extract_receipt",
-            description: "Extract structured receipt data",
-            parameters: {
-              type: "object",
-              properties: {
-                merchant:        { type: "string", description: "Vendor/merchant name" },
-                document_number: { type: "string" },
-                issue_date:      { type: "string", description: "YYYY-MM-DD" },
-                amount:          { type: "number", description: "Total amount, plain number" },
-                currency:        { type: "string", description: "ISO code (EUR, USD, BRL, GBP)" },
-                category: {
-                  type: "string",
-                  enum: ["fuel", "rent", "tax", "material", "salary", "travel", "other"],
-                },
-                description:     { type: "string", description: "Short human description" },
-                confidence:      { type: "string", enum: ["high", "medium", "low"] },
+    const { response } = await fetchAIChatCompletions({
+      model: "google/gemini-2.5-flash",
+      messages: [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: userPrompt },
+            { type: "image_url", image_url: { url: `data:${mimeType};base64,${fileBase64}` } },
+          ],
+        },
+      ],
+      tools: [{
+        type: "function",
+        function: {
+          name: "extract_receipt",
+          description: "Extract structured receipt data",
+          parameters: {
+            type: "object",
+            properties: {
+              merchant:        { type: "string", description: "Vendor/merchant name" },
+              document_number: { type: "string" },
+              issue_date:      { type: "string", description: "YYYY-MM-DD" },
+              amount:          { type: "number", description: "Total amount, plain number" },
+              currency:        { type: "string", description: "ISO code (EUR, USD, BRL, GBP)" },
+              category: {
+                type: "string",
+                enum: ["fuel", "rent", "tax", "material", "salary", "travel", "other"],
               },
-              required: ["confidence"],
-              additionalProperties: false,
+              description:     { type: "string", description: "Short human description" },
+              confidence:      { type: "string", enum: ["high", "medium", "low"] },
             },
+            required: ["confidence"],
+            additionalProperties: false,
           },
-        }],
-        tool_choice: { type: "function", function: { name: "extract_receipt" } },
-      }),
+        },
+      }],
+      tool_choice: { type: "function", function: { name: "extract_receipt" } },
+    }, {
+      modelByProvider: {
+        gemini: "gemini-2.5-flash",
+        openai: "gpt-4o-mini",
+        lovable: "google/gemini-2.5-flash",
+      },
     });
 
     if (!response.ok) {

@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { getAccessToken } from "@/lib/authSession";
+import { uploadFile as storageUpload, deleteFiles, getFileUrl } from "@/lib/storage";
+import { apiRequest } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { useWorkspace } from "@/hooks/useWorkspace";
 import { SystemPreferencesCard } from "@/components/settings/SystemPreferencesCard";
 import { SecurityCard } from "@/components/settings/SecurityCard";
 import { TempCredentialsCard } from "@/components/settings/TempCredentialsCard";
@@ -31,10 +33,10 @@ import {
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 
-import { UserPermissionsDialog } from "@/components/permissions/UserPermissionsDialog";
 import { Can } from "@/components/Can";
 import { getCurrentUserId, logSaveError, logSavePayload } from "@/lib/authUser";
 import { SYSTEM_METADATA } from "@/config/system";
+import { withPromiseTimeout } from "@/lib/asyncGuard";
 
 // ─── PROFIT DISTRIBUTION ───
 // Moved to src/components/profit/ProfitDistribution.tsx
@@ -818,7 +820,7 @@ export function Documents() {
   const deleteMutation = useMutation({
     mutationFn: async (doc: any) => {
       if (doc.storage_path) {
-        await supabase.storage.from("uploads").remove([doc.storage_path]);
+        await deleteFiles("uploads", [doc.storage_path]);
       }
       const { error } = await supabase.from("documents").delete().eq("id", doc.id);
       if (error) throw error;
@@ -834,7 +836,7 @@ export function Documents() {
     mutationFn: async (ids: string[]) => {
       const docsToDelete = docs.filter((d: any) => ids.includes(d.id));
       const storagePaths = docsToDelete.filter((d: any) => d.storage_path).map((d: any) => d.storage_path);
-      if (storagePaths.length > 0) await supabase.storage.from("uploads").remove(storagePaths);
+      if (storagePaths.length > 0) await deleteFiles("uploads", storagePaths);
       const { error } = await supabase.from("documents").delete().in("id", ids);
       if (error) throw error;
     },
@@ -892,17 +894,30 @@ export function Documents() {
   });
 
   const uploadFile = async (file: File) => {
-    const storagePath = `documents/${Date.now()}_${file.name}`;
-    const { error: uploadErr } = await supabase.storage.from("uploads").upload(storagePath, file);
-    if (uploadErr) { toast.error(uploadErr.message); return; }
-    const { error } = await supabase.from("documents").insert({
-      name: file.name, type: "file", parent_id: parentId, uploaded_by: user?.id,
-      storage_path: storagePath, mime_type: file.type, size_bytes: file.size, entity_type: "documents", module: "global",
-    });
-    if (error) toast.error(error.message);
-    else {
+    try {
+      const safeName = (file.name || "document").replace(/[^\w.\-()]+/g, "_").slice(0, 160);
+      const storagePath = `documents/${Date.now()}_${safeName}`;
+      await withPromiseTimeout<any>(
+        storageUpload("uploads", storagePath, file, file.type || undefined),
+        10000,
+        "documents_global_upload",
+      );
+      const { error } = await withPromiseTimeout<any>(
+        supabase.from("documents").insert({
+          name: safeName, type: "file", parent_id: parentId, uploaded_by: user?.id,
+          storage_path: storagePath, mime_type: file.type, size_bytes: file.size, entity_type: "documents", module: "global",
+        }),
+        10000,
+        "documents_global_insert",
+      );
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
       queryClient.invalidateQueries({ queryKey: ["documents"] });
       toast.success(t("docs.fileUploaded"));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Falha no upload.");
     }
   };
 
@@ -915,30 +930,23 @@ export function Documents() {
     else setPath([...path, { id, name }]);
   };
 
-  const handleDownload = async (doc: any) => {
+  const handleDownload = (doc: any) => {
     if (!doc.storage_path) return;
-    const { data } = await supabase.storage.from("uploads").createSignedUrl(doc.storage_path, 300);
-    if (data?.signedUrl) {
-      const a = document.createElement("a");
-      a.href = data.signedUrl;
-      a.download = doc.name;
-      a.click();
-    }
+    const a = document.createElement("a");
+    a.href = getFileUrl("uploads", doc.storage_path);
+    a.download = doc.name;
+    a.click();
   };
 
-  const handlePreview = async (doc: any) => {
+  const handlePreview = (doc: any) => {
     if (!doc.storage_path) return;
-    const { data } = await supabase.storage.from("uploads").createSignedUrl(doc.storage_path, 300);
-    if (data?.signedUrl) setPreviewDoc({ ...doc, url: data.signedUrl });
+    setPreviewDoc({ ...doc, url: getFileUrl("uploads", doc.storage_path) });
   };
 
-  const handlePrint = async (doc: any) => {
+  const handlePrint = (doc: any) => {
     if (!doc.storage_path) return;
-    const { data } = await supabase.storage.from("uploads").createSignedUrl(doc.storage_path, 300);
-    if (data?.signedUrl) {
-      const w = window.open(data.signedUrl, "_blank");
-      w?.addEventListener("load", () => w.print());
-    }
+    const w = window.open(getFileUrl("uploads", doc.storage_path), "_blank");
+    w?.addEventListener("load", () => w.print());
   };
 
   const selectedArray = Array.from(selectedIds);
@@ -1172,215 +1180,90 @@ export function Documents() {
 }
 
 // ─── USERS ───
-import { useRole, DISPLAY_TO_DB, type AppRole } from "@/hooks/useRole";
-import { useImpersonation } from "@/hooks/useImpersonation";
+import { useRole } from "@/hooks/useRole";
 import { AddExistingUserPanel } from "@/components/users/AddExistingUserPanel";
 
 export function UsersPage() {
-  const { t, formatDate } = useLanguage();
+  const { t, formatDate, formatDateTime } = useLanguage();
   const { user } = useAuth();
+  const { workspaceId, workspaceName } = useWorkspace();
   const queryClient = useQueryClient();
-  const { isAdmin } = useRole();
-  const { startImpersonation, isImpersonating, target: impersonationTarget } = useImpersonation();
-  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string; email: string } | null>(null);
-  const [deleteStep, setDeleteStep] = useState<"checking" | "clean" | "detachable_only" | "blocking">("checking");
-  const [deleteDeps, setDeleteDeps] = useState<any>(null);
-  const [reassignTo, setReassignTo] = useState<string>("");
-  const [deleting, setDeleting] = useState(false);
+  const { isAdmin, isOwner } = useRole();
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState({ email: "", full_name: "", role: "technician" });
   const [creating, setCreating] = useState(false);
   const [tempPassword, setTempPassword] = useState<string | null>(null);
-  const [permsTarget, setPermsTarget] = useState<{ id: string; name: string; role: string } | null>(null);
 
   const roleLabels: Record<string, string> = {
-    admin: t("role.admin"),
-    technician: t("role.technician"),
-    client: t("role.client"),
-    partner: t("role.partner"),
+    owner: "Owner",
+    admin: t("role.admin", "Admin"),
+    technician: "Technicien",
+    client: "Client",
+    partner: "Associe",
   };
 
-  // Fetch all users with their roles
-  const { data: users = [], isLoading } = useQuery({
-    queryKey: ["all-users-with-roles"],
+  const { data, isLoading } = useQuery({
+    queryKey: ["workspace-users-page", workspaceId],
+    enabled: !!workspaceId,
+    retry: 0,
+    staleTime: 60_000,
+    placeholderData: (previousData) => previousData ?? { members: [] as any[] },
     queryFn: async () => {
-      const { data: profiles, error } = await supabase
-        .from("profiles")
-        .select("id, full_name, email, phone, created_at")
-        .order("created_at", { ascending: true });
-      if (error) throw error;
-
-      const { data: roles } = await supabase
-        .from("user_roles")
-        .select("user_id, role");
-
-      const roleMap: Record<string, string> = {};
-      (roles || []).forEach((r: any) => { roleMap[r.user_id] = r.role; });
-
-      // Hide deactivated (banned) users — invisible everywhere in the system.
-      let activeIds: Set<string> | null = null;
-      try {
-        const { data: actives, error: actErr } = await supabase.rpc("active_user_ids");
-        if (!actErr && Array.isArray(actives)) {
-          activeIds = new Set((actives as Array<{ user_id: string }>).map((r) => r.user_id));
-        }
-      } catch {
-        activeIds = null; // fail open
+      if (!workspaceId) {
+        return { members: [] as any[] };
       }
-
-      // Only show users that have a role assigned (real users)
-      // Hide admins from the listing — they exist in DB but stay invisible in the UI.
-      // Hide deactivated users entirely.
-      return (profiles || [])
-        .filter((p: any) => !!roleMap[p.id] && roleMap[p.id] !== "admin")
-        .filter((p: any) => activeIds === null || activeIds.has(p.id))
-        .map((p: any) => ({
-          ...p,
-          role: roleMap[p.id],
-          isOwner: p.email === "qwork@qworkgroup.com",
-        }));
+      return apiRequest<{ members: any[] }>(`/workspaces/${workspaceId}/members`, { timeoutMs: 10000 });
     },
   });
+  const users = data?.members ?? [];
 
   const updateRoleMutation = useMutation({
-    mutationFn: async ({ userId, newRole }: { userId: string; newRole: string }) => {
-      const { error: delErr } = await supabase.from("user_roles").delete().eq("user_id", userId);
-      if (delErr) throw delErr;
-      const { error } = await supabase.from("user_roles").insert({ user_id: userId, role: newRole as any });
-      if (error) throw error;
+    mutationFn: async ({ membershipId, newRole }: { membershipId: string; newRole: string }) => {
+      if (!workspaceId) throw new Error("Workspace não selecionado.");
+      return apiRequest(`/workspaces/${workspaceId}/members/${membershipId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ role: newRole }),
+        timeoutMs: 10000,
+      });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["all-users-with-roles"] });
+      queryClient.invalidateQueries({ queryKey: ["workspace-users-page"] });
+      queryClient.invalidateQueries({ queryKey: ["workspace-members"] });
       queryClient.invalidateQueries({ queryKey: ["my-role"] });
+      queryClient.invalidateQueries({ queryKey: ["my-permissions"] });
       toast.success(t("toast.updated"));
     },
     onError: (err) => toast.error((err as Error).message),
   });
 
   const handleCreateUser = async () => {
-    if (!createForm.email) return;
+    if (!workspaceId || !createForm.email || !createForm.full_name) return;
     setCreating(true);
     try {
-      const token = getAccessToken();
-      const resp = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-create-user`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token ?? ""}`,
-            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          },
-          body: JSON.stringify({
-            email: createForm.email,
-            full_name: createForm.full_name || undefined,
-            role: createForm.role,
-          }),
-        }
-      );
-      const data = await resp.json();
-      if (!data.success) throw new Error(data.error || "Erro ao criar usuário");
+      const data = await apiRequest<{ temp_password: string }>(`/workspaces/${workspaceId}/members`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: createForm.email,
+          fullName: createForm.full_name,
+          role: createForm.role,
+        }),
+        timeoutMs: 12000,
+      });
       setTempPassword(data.temp_password);
-      queryClient.invalidateQueries({ queryKey: ["all-users-with-roles"] });
-      toast.success("Usuário criado com sucesso");
+      queryClient.invalidateQueries({ queryKey: ["workspace-users-page"] });
+      queryClient.invalidateQueries({ queryKey: ["workspace-members"] });
+      queryClient.invalidateQueries({ queryKey: ["my-workspace"] });
+      toast.success("Membro criado com sucesso");
     } catch (err: any) {
-      toast.error(err.message || "Erro ao criar usuário");
+      toast.error(err.message || "Erro ao criar membro");
     } finally {
       setCreating(false);
-    }
-  };
-
-  const openDeleteDialog = async (target: { id: string; name: string; email: string }) => {
-    setDeleteTarget(target);
-    setDeleteStep("checking");
-    setDeleteDeps(null);
-    setReassignTo("");
-    try {
-      const { data, error } = await supabase.functions.invoke("admin-create-user", {
-        body: { action: "check_user_dependencies", user_id: target.id },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.message || data.error);
-      setDeleteDeps(data);
-      // Classify based on REAL ownership map (audited per-table):
-      // - blocking > 0  → must reassign (NOT NULL ownership in SO/PO)
-      // - detachable>0  → safe detach (nullable refs are nulled on delete)
-      // - both = 0      → clean delete (only identity rows, removed automatically)
-      const blocking = Number(data?.blocking ?? 0);
-      const detachable = Number(data?.detachable ?? 0);
-      if (blocking > 0) setDeleteStep("blocking");
-      else if (detachable > 0) setDeleteStep("detachable_only");
-      else setDeleteStep("clean");
-    } catch (err: any) {
-      toast.error(err.message || "Erro ao verificar dependências");
-      setDeleteTarget(null);
-    }
-  };
-
-  const handleDeleteUser = async (mode: "block" | "reassign" | "detach") => {
-    if (!deleteTarget) return;
-    if (mode === "reassign" && !reassignTo) {
-      toast.error("Selecione um usuário para reatribuição");
-      return;
-    }
-    setDeleting(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("admin-create-user", {
-        body: {
-          action: "delete_user",
-          user_id: deleteTarget.id,
-          mode,
-          reassign_to_user_id: mode === "reassign" ? reassignTo : undefined,
-        },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.message || data.error);
-
-      // Force full refetch of all user/permission/technician-related queries
-      // to avoid ghost users and stale UI after deletion.
-      const keysToInvalidate = [
-        "all-users-with-roles",
-        "users",
-        "technicians",
-        "my-permissions",
-        "user-permissions",
-        "role-permissions",
-        "permissions",
-        "memberships",
-        "app_users",
-        "profiles",
-      ];
-      await Promise.all(
-        keysToInvalidate.map((key) =>
-          queryClient.invalidateQueries({ queryKey: [key] })
-        )
-      );
-      // Also remove cached entries scoped to the deleted user id
-      queryClient.removeQueries({ queryKey: ["user", deleteTarget.id] });
-      queryClient.removeQueries({ queryKey: ["user-permissions", deleteTarget.id] });
-      // Force immediate refetch of the main user list
-      await queryClient.refetchQueries({ queryKey: ["all-users-with-roles"], type: "active" });
-
-      setDeleteTarget(null);
-      toast.success(t("toast.deleted"));
-    } catch (err: any) {
-      toast.error(err.message || "Erro ao remover usuário");
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  const handleToggleActive = async (userId: string, active: boolean) => {
-    try {
-      const { data, error } = await supabase.functions.invoke("admin-create-user", {
-        body: { action: "toggle_active", user_id: userId, active },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      await queryClient.invalidateQueries({ queryKey: ["all-users-with-roles"] });
-      toast.success(active ? "Usuário ativado" : "Usuário desativado");
-    } catch (err: any) {
-      toast.error(err.message);
     }
   };
 
@@ -1389,6 +1272,32 @@ export function UsersPage() {
     setCreateForm({ email: "", full_name: "", role: "technician" });
     setTempPassword(null);
   };
+
+  const formatLastAccess = (value: string | null) => {
+    if (!value) return "Nunca";
+    return formatDateTime ? formatDateTime(value) : formatDate(value);
+  };
+
+  if (!workspaceId) {
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+            <Users className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-lg font-semibold text-foreground">{t("users.title")}</h1>
+            <p className="text-xs text-muted-foreground">Esta conta ainda não pertence a um workspace.</p>
+          </div>
+        </div>
+        <Card className="border-border/50">
+          <CardContent className="py-8 text-sm text-muted-foreground">
+            Utilize convites para entrar num workspace existente ou conclua a criação da sua empresa para começar a gerir membros.
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -1399,246 +1308,121 @@ export function UsersPage() {
           </div>
           <div>
             <h1 className="text-lg font-semibold text-foreground">{t("users.title")}</h1>
-            <p className="text-xs text-muted-foreground">{t("users.subtitle")}</p>
+            <p className="text-xs text-muted-foreground">
+              Membros do workspace atual{workspaceName ? ` · ${workspaceName}` : ""}.
+            </p>
           </div>
         </div>
-          {isAdmin && (
-           <div className="flex items-center gap-2">
-             {/* Adicionar usuário existente por ID — modal premium glass */}
-             <Dialog>
-               <DialogTrigger asChild>
-                 <Button size="sm" variant="outline" className="h-8 px-3 text-xs font-medium">
-                   <Link className="h-3.5 w-3.5 mr-1" />
-                   Adicionar existente
-                 </Button>
-               </DialogTrigger>
-               <DialogContent className="glass-panel border-border/60 max-w-2xl max-h-[85vh] overflow-y-auto">
-                 <DialogHeader>
-                   <DialogTitle className="flex items-center gap-2 text-base">
-                     <Link className="h-4 w-4 text-primary" />
-                     Adicionar usuário existente
-                   </DialogTitle>
-                   <p className="text-xs text-muted-foreground mt-1">
-                     Convide um usuário já cadastrado para este workspace usando o ID dele.
-                     A identidade global e os outros workspaces dele permanecem intactos.
-                   </p>
-                 </DialogHeader>
-                 <div className="pt-2">
-                   <AddExistingUserPanel />
-                 </div>
-               </DialogContent>
-             </Dialog>
-
-             <Dialog open={showCreate} onOpenChange={(v) => { if (!v) closeCreateDialog(); else setShowCreate(true); }}>
+        {isAdmin && (
+          <div className="flex items-center gap-2">
+            <Dialog>
               <DialogTrigger asChild>
-                <Button size="sm" className="h-8 px-3 text-xs font-medium"><Plus className="h-3.5 w-3.5 mr-1" />Novo usuário</Button>
+                <Button size="sm" variant="outline" className="h-8 px-3 text-xs font-medium">
+                  <Link className="h-3.5 w-3.5 mr-1" />
+                  Adicionar existente
+                </Button>
               </DialogTrigger>
-             <DialogContent className="bg-card border-border">
-               <DialogHeader><DialogTitle>Criar novo usuário</DialogTitle></DialogHeader>
-               {tempPassword ? (
-                 <div className="space-y-4 pt-2">
-                   <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3">
-                     <div className="flex items-center gap-2 text-emerald-500">
-                       <Check className="h-5 w-5" />
-                       <span className="font-medium text-sm">Usuário criado com sucesso!</span>
-                     </div>
-                     <div className="space-y-2">
-                       <p className="text-xs text-muted-foreground">Email:</p>
-                       <code className="text-xs bg-muted/50 px-2 py-1 rounded block">{createForm.email}</code>
-                     </div>
-                     <div className="space-y-2">
-                       <p className="text-xs text-muted-foreground">Senha temporária:</p>
-                       <div className="flex items-center gap-2">
-                         <code className="text-sm bg-muted/50 px-3 py-2 rounded block flex-1 font-mono font-bold">{tempPassword}</code>
-                         <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => {
-                           navigator.clipboard.writeText(tempPassword);
-                           toast.success("Senha copiada!");
-                         }}>
-                           <Copy className="h-4 w-4" />
-                         </Button>
-                       </div>
-                     </div>
-                     <p className="text-[11px] text-amber-500 flex items-center gap-1">
-                       <AlertTriangle className="h-3 w-3" />
-                       Envie esta senha ao usuário. Ele deverá alterá-la no primeiro login.
-                     </p>
-                   </div>
-                   <Button className="w-full" onClick={closeCreateDialog}>Fechar</Button>
-                 </div>
-               ) : (
-                 <div className="space-y-4 pt-2">
-                   <div className="space-y-2">
-                     <Label className="text-xs">Email *</Label>
-                     <Input
-                       type="email"
-                       value={createForm.email}
-                       onChange={(e) => setCreateForm(p => ({ ...p, email: e.target.value }))}
-                       placeholder="usuario@empresa.com"
-                     />
-                   </div>
-                   <div className="space-y-2">
-                     <Label className="text-xs">Nome completo</Label>
-                     <Input
-                       value={createForm.full_name}
-                       onChange={(e) => setCreateForm(p => ({ ...p, full_name: e.target.value }))}
-                       placeholder="João Silva"
-                     />
-                   </div>
-                   <div className="space-y-2">
-                     <Label className="text-xs">Função *</Label>
-                     <Select value={createForm.role} onValueChange={(v) => setCreateForm(p => ({ ...p, role: v }))}>
-                       <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                       <SelectContent>
-                         <SelectItem value="admin">{t("role.admin")}</SelectItem>
-                         <SelectItem value="partner">{t("role.partner")}</SelectItem>
-                         <SelectItem value="technician">{t("role.technician")}</SelectItem>
-                         <SelectItem value="client">{t("role.client")}</SelectItem>
-                       </SelectContent>
-                     </Select>
-                   </div>
-                   <Button className="w-full" onClick={handleCreateUser} disabled={creating || !createForm.email}>
-                     {creating ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
-                     Criar usuário
-                   </Button>
-                 </div>
-               )}
-             </DialogContent>
-           </Dialog>
-           </div>
-         )}
-      </div>
-
-      {/* Smart delete dialog with dependency check */}
-      <Dialog open={!!deleteTarget} onOpenChange={(v) => { if (!v && !deleting) setDeleteTarget(null); }}>
-        <DialogContent className="bg-card border-border max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-destructive" />
-              Remover usuário
-            </DialogTitle>
-          </DialogHeader>
-
-          {deleteTarget && (
-            <div className="space-y-4 pt-2">
-              <div className="rounded-md border border-border/50 bg-muted/20 px-3 py-2">
-                <div className="text-sm font-medium text-foreground">{deleteTarget.name || deleteTarget.email}</div>
-                <div className="text-[11px] text-muted-foreground">{deleteTarget.email}</div>
-              </div>
-
-              {deleteStep === "checking" && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  A verificar dados vinculados…
+              <DialogContent className="glass-panel border-border/60 max-w-2xl max-h-[85vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-base">
+                    <Link className="h-4 w-4 text-primary" />
+                    Adicionar usuário existente
+                  </DialogTitle>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Convide uma identidade já existente para entrar neste workspace sem criar outra empresa paralela.
+                  </p>
+                </DialogHeader>
+                <div className="pt-2">
+                  <AddExistingUserPanel />
                 </div>
-              )}
+              </DialogContent>
+            </Dialog>
 
-              {deleteStep === "clean" && (
-                <p className="text-sm text-muted-foreground">
-                  {t("users.deleteWarning")} Nenhum dado vinculado encontrado.
-                </p>
-              )}
-
-              {(deleteStep === "detachable_only" || deleteStep === "blocking") && deleteDeps && (
-                <div className="space-y-3">
-                  <div
-                    role="alert"
-                    className={`rounded-md border p-3 space-y-2 ${
-                      deleteStep === "blocking"
-                        ? "border-destructive/40 bg-destructive/5"
-                        : "border-amber-500/40 bg-amber-500/5"
-                    }`}
-                  >
-                    <div
-                      className={`text-sm font-semibold ${
-                        deleteStep === "blocking" ? "text-destructive" : "text-amber-500"
-                      }`}
-                    >
-                      {deleteStep === "blocking"
-                        ? "Vínculos obrigatórios encontrados — reatribuição necessária."
-                        : "Vínculos opcionais encontrados — podem ser desanexados com segurança."}
-                    </div>
-                    {/* Auditable per-table breakdown straight from get_user_ownership_map */}
-                    <ul className="text-xs text-muted-foreground space-y-0.5 pl-1 font-mono">
-                      {deleteStep === "blocking" &&
-                        Object.entries((deleteDeps.map?.blocking ?? {}) as Record<string, number>)
-                          .filter(([, n]) => Number(n) > 0)
-                          .map(([col, n]) => (
-                            <li key={col}>• {col}: <span className="text-destructive">{n}</span></li>
-                          ))}
-                      {Object.entries((deleteDeps.map?.detachable ?? {}) as Record<string, number>)
-                        .filter(([, n]) => Number(n) > 0)
-                        .map(([col, n]) => (
-                          <li key={col}>• {col}: <span className="text-foreground/80">{n}</span></li>
-                        ))}
-                    </ul>
-                    <p className="text-[11px] text-muted-foreground pt-1">
-                      Totais — bloqueantes: <b>{deleteDeps.blocking ?? 0}</b> · desanexáveis: <b>{deleteDeps.detachable ?? 0}</b> · identidade: <b>{deleteDeps.identity ?? 0}</b>
-                    </p>
-                  </div>
-
-                  {deleteStep === "blocking" && (
-                    <div className="space-y-2">
-                      <Label className="text-xs">Reatribuir dados a outro usuário</Label>
-                      <Select value={reassignTo} onValueChange={setReassignTo}>
-                        <SelectTrigger className="h-9 text-xs">
-                          <SelectValue placeholder="Selecione um usuário…" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {users
-                            .filter((u: any) => u.id !== deleteTarget.id && !u.isOwner)
-                            .map((u: any) => (
-                              <SelectItem key={u.id} value={u.id}>
-                                {u.full_name || u.email} · {roleLabels[u.role] || u.role}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-[11px] text-muted-foreground">
-                        Os registos serão transferidos para o usuário selecionado e o histórico fica preservado.
-                        Para ordens de serviço, o destino tem de ser um técnico.
+            <Dialog open={showCreate} onOpenChange={(v) => { if (!v) closeCreateDialog(); else setShowCreate(true); }}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="h-8 px-3 text-xs font-medium">
+                  <Plus className="h-3.5 w-3.5 mr-1" />
+                  Novo membro
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="bg-card border-border">
+                <DialogHeader><DialogTitle>Criar membro do workspace</DialogTitle></DialogHeader>
+                {tempPassword ? (
+                  <div className="space-y-4 pt-2">
+                    <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3">
+                      <div className="flex items-center gap-2 text-emerald-500">
+                        <Check className="h-5 w-5" />
+                        <span className="font-medium text-sm">Membro criado com sucesso</span>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground">Workspace:</p>
+                        <code className="text-xs bg-muted/50 px-2 py-1 rounded block">{workspaceName || "Workspace atual"}</code>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground">Email:</p>
+                        <code className="text-xs bg-muted/50 px-2 py-1 rounded block">{createForm.email}</code>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground">Senha temporária:</p>
+                        <div className="flex items-center gap-2">
+                          <code className="text-sm bg-muted/50 px-3 py-2 rounded block flex-1 font-mono font-bold">{tempPassword}</code>
+                          <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => {
+                            navigator.clipboard.writeText(tempPassword);
+                            toast.success("Senha copiada!");
+                          }}>
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-amber-500 flex items-center gap-1">
+                        <AlertTriangle className="h-3 w-3" />
+                        Esta conta nasceu dentro do workspace atual e não recebeu workspace próprio.
                       </p>
                     </div>
-                  )}
-                </div>
-              )}
-
-              <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" size="sm" onClick={() => setDeleteTarget(null)} disabled={deleting}>
-                  {t("action.cancel")}
-                </Button>
-                {deleteStep === "clean" && (
-                  <Button variant="destructive" size="sm" onClick={() => handleDeleteUser("block")} disabled={deleting}>
-                    {deleting ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Trash2 className="h-3 w-3 mr-1" />}
-                    {t("action.delete")}
-                  </Button>
+                    <Button className="w-full" onClick={closeCreateDialog}>Fechar</Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4 pt-2">
+                    <div className="space-y-2">
+                      <Label className="text-xs">Email *</Label>
+                      <Input
+                        type="email"
+                        value={createForm.email}
+                        onChange={(e) => setCreateForm((p) => ({ ...p, email: e.target.value }))}
+                        placeholder="utilisateur@entreprise.com"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Nome completo *</Label>
+                      <Input
+                        value={createForm.full_name}
+                        onChange={(e) => setCreateForm((p) => ({ ...p, full_name: e.target.value }))}
+                        placeholder="Jean Dupont"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Função *</Label>
+                      <Select value={createForm.role} onValueChange={(v) => setCreateForm((p) => ({ ...p, role: v }))}>
+                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="admin">Admin</SelectItem>
+                          <SelectItem value="partner">Associe</SelectItem>
+                          <SelectItem value="technician">Technicien</SelectItem>
+                          <SelectItem value="client">Client</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button className="w-full" onClick={handleCreateUser} disabled={creating || !createForm.email || !createForm.full_name}>
+                      {creating ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
+                      Criar membro
+                    </Button>
+                  </div>
                 )}
-                {deleteStep === "detachable_only" && (
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => handleDeleteUser("detach")}
-                    disabled={deleting}
-                  >
-                    {deleting ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Trash2 className="h-3 w-3 mr-1" />}
-                    Desanexar e remover
-                  </Button>
-                )}
-                {deleteStep === "blocking" && (
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => handleDeleteUser("reassign")}
-                    disabled={deleting || !reassignTo}
-                  >
-                    {deleting ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Trash2 className="h-3 w-3 mr-1" />}
-                    Reatribuir e remover
-                  </Button>
-                )}
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+              </DialogContent>
+            </Dialog>
+          </div>
+        )}
+      </div>
 
       {isLoading ? (
         <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
@@ -1652,93 +1436,66 @@ export function UsersPage() {
                 <TableHead>{t("label.name")}</TableHead>
                 <TableHead>{t("label.email")}</TableHead>
                 <TableHead>{t("label.role")}</TableHead>
-                <TableHead>{t("label.actions")}</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Último acesso</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users.map((u: any, idx: number) => {
-                const rolePrefix = u.role === "technician" ? "T" : u.role === "client" ? "C" : u.role === "admin" ? "A" : "S";
-                const userId = `${rolePrefix}-${String(idx + 1).padStart(5, "0")}`;
+              {users.map((u: any) => {
+                const initials = (u.name || u.email || "?")
+                  .split(" ")
+                  .map((part: string) => part[0] || "")
+                  .join("")
+                  .toUpperCase()
+                  .slice(0, 2);
                 return (
-                  <TableRow key={u.id} className="text-xs">
+                  <TableRow key={u.membership_id} className="text-xs">
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <div>
+                        <div className="h-8 w-8 overflow-hidden rounded-full bg-primary/10 text-[10px] font-semibold text-primary flex items-center justify-center">
+                          {u.avatar_url ? (
+                            <img src={u.avatar_url} alt={u.name || u.email} className="h-full w-full object-cover" />
+                          ) : (
+                            <span>{initials}</span>
+                          )}
+                        </div>
+                        <div className="min-w-0">
                           <div className="flex items-center gap-1.5 font-medium">
-                            {u.full_name || "—"}
-                            {u.isOwner && <Crown className="h-3.5 w-3.5 text-amber-500/70" />}
+                            <span className="truncate">{u.name || "—"}</span>
+                            {u.is_workspace_owner && <Crown className="h-3.5 w-3.5 text-amber-500/70" />}
                           </div>
-                          <span className="text-[10px] text-muted-foreground font-mono">{userId}</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {u.has_own_workspace ? "Possui workspace próprio" : "Sem workspace próprio"}
+                          </span>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>{u.email || "—"}</TableCell>
                     <TableCell>
-                      {u.isOwner ? (
-                        <Badge variant="outline" className="text-[10px] border-border text-muted-foreground">{t("role.admin")}</Badge>
-                      ) : isAdmin ? (
-                        <Select value={u.role} onValueChange={(v) => updateRoleMutation.mutate({ userId: u.id, newRole: v })}>
+                      {u.is_workspace_owner ? (
+                        <Badge variant="outline" className="text-[10px] border-border text-muted-foreground">Owner</Badge>
+                      ) : isAdmin && u.auth_user_id !== user?.id ? (
+                        <Select value={u.role} onValueChange={(v) => updateRoleMutation.mutate({ membershipId: u.membership_id, newRole: v })}>
                           <SelectTrigger className="h-7 w-[120px] text-xs">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="admin">{t("role.admin")}</SelectItem>
-                            <SelectItem value="partner">{t("role.partner")}</SelectItem>
-                            <SelectItem value="technician">{t("role.technician")}</SelectItem>
-                            <SelectItem value="client">{t("role.client")}</SelectItem>
+                            <SelectItem value="admin">Admin</SelectItem>
+                            <SelectItem value="partner">Associe</SelectItem>
+                            <SelectItem value="technician">Technicien</SelectItem>
+                            <SelectItem value="client">Client</SelectItem>
                           </SelectContent>
                         </Select>
                       ) : (
-                        <Badge variant="outline" className="text-[10px]">{roleLabels[u.role] || u.role}</Badge>
+                        <Badge variant="outline" className="text-[10px]">{u.role_label || roleLabels[u.role] || u.role}</Badge>
                       )}
                     </TableCell>
                     <TableCell>
-                      <div className="flex gap-1">
-                        {!u.isOwner && isAdmin && u.id !== user?.id && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-amber-500 hover:text-amber-400 hover:bg-amber-500/10"
-                            title={isImpersonating && impersonationTarget?.userId === u.id ? "A visualizar como este utilizador" : "Visualizar como este utilizador"}
-                            disabled={isImpersonating && impersonationTarget?.userId === u.id}
-                            onClick={async () => {
-                              await startImpersonation({
-                                userId: u.id,
-                                fullName: u.full_name || "",
-                                email: u.email || "",
-                                role: u.role || "",
-                              });
-                              // Force every cached query to refetch under the impersonated identity
-                              await queryClient.invalidateQueries();
-                              toast.success(`A ver como ${u.full_name || u.email}`);
-                            }}
-                          >
-                            <Eye className="h-3 w-3" />
-                          </Button>
-                        )}
-                        {!u.isOwner && isAdmin && (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              title="Permissões"
-                              onClick={() => setPermsTarget({ id: u.id, name: u.full_name || u.email, role: u.role })}
-                            >
-                              <Shield className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-destructive"
-                              onClick={() => openDeleteDialog({ id: u.id, name: u.full_name, email: u.email })}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </>
-                        )}
-                      </div>
+                      <Badge variant="outline" className={u.status === "active" ? "text-[10px] border-emerald-500/30 text-emerald-500" : "text-[10px] border-border text-muted-foreground"}>
+                        {u.status === "active" ? "Ativo" : "Inativo"}
+                      </Badge>
                     </TableCell>
+                    <TableCell className="text-muted-foreground">{formatLastAccess(u.last_access_at)}</TableCell>
                   </TableRow>
                 );
               })}
@@ -1746,18 +1503,6 @@ export function UsersPage() {
           </Table>
         </div>
       )}
-
-
-      {/* Dialog de permissões por utilizador */}
-      <UserPermissionsDialog
-        open={!!permsTarget}
-        onOpenChange={(v) => { if (!v) setPermsTarget(null); }}
-        userId={permsTarget?.id ?? null}
-        userName={permsTarget?.name}
-        userRole={permsTarget?.role}
-      />
-
-      {/* "Adicionar usuário existente" agora vive no botão do header (modal premium) */}
     </div>
   );
 }

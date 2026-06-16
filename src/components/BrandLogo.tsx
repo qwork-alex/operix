@@ -1,6 +1,6 @@
 import { brandConfig as appBrand } from "@/brand.config";
 import { useCompanyLogo } from "@/hooks/useCompanyLogo";
-import { useWorkspace } from "@/hooks/useWorkspace";
+import { useWorkspaceOptional } from "@/hooks/useWorkspace";
 import { brandLetter, gradientToCss } from "@/lib/brandStyles";
 
 interface BrandLogoProps {
@@ -32,10 +32,8 @@ export function BrandLogo({
   disableGlow,
 }: BrandLogoProps) {
   const { brandConfig } = useCompanyLogo();
-  let workspaceName: string | null = null;
-  try {
-    workspaceName = useWorkspace().workspaceName;
-  } catch { /* outside provider (auth screens) */ }
+  const workspace = useWorkspaceOptional();
+  const workspaceName = workspace?.workspaceName ?? null;
 
   const displayName =
     nameOverride || brandConfig?.name || workspaceName || appBrand.appName;

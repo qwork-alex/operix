@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/hooks/useLanguage";
@@ -6,13 +6,15 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Car, Users, Route, Fuel, FileText, BarChart3, Link2, Navigation } from "lucide-react";
 
-import VehiclesModule from "@/components/fleet/VehiclesModule";
-import DriversModule from "@/components/fleet/DriversModule";
-import AssignmentsModule from "@/components/fleet/AssignmentsModule";
-import TripsModule from "@/components/fleet/TripsModule";
-import FuelLogsModule from "@/components/fleet/FuelLogsModule";
-import FleetDocumentsModule from "@/components/fleet/FleetDocumentsModule";
-import FleetReportsModule from "@/components/fleet/FleetReportsModule";
+import { withPromiseTimeout } from "@/lib/asyncGuard";
+
+const VehiclesModule = lazy(() => import("@/components/fleet/VehiclesModule"));
+const DriversModule = lazy(() => import("@/components/fleet/DriversModule"));
+const AssignmentsModule = lazy(() => import("@/components/fleet/AssignmentsModule"));
+const TripsModule = lazy(() => import("@/components/fleet/TripsModule"));
+const FuelLogsModule = lazy(() => import("@/components/fleet/FuelLogsModule"));
+const FleetDocumentsModule = lazy(() => import("@/components/fleet/FleetDocumentsModule"));
+const FleetReportsModule = lazy(() => import("@/components/fleet/FleetReportsModule"));
 
 const TAB_COLORS: Record<string, string> = {
   vehicles: "hsl(40 60% 45%)",
@@ -24,33 +26,49 @@ const TAB_COLORS: Record<string, string> = {
   reports: "hsl(36 55% 46%)",
 };
 
+type FleetTab = {
+  value: string;
+  label: string;
+  icon: typeof Car;
+};
+
 export default function FleetPage() {
   const { formatCurrency } = useLanguage();
   const [activeTab, setActiveTab] = useState("vehicles");
 
   const { data: vehicles = [] } = useQuery({
     queryKey: ["fleet_vehicles"],
-    queryFn: async () => { const { data } = await supabase.from("vehicles").select("*"); return data || []; },
+    retry: 0,
+    placeholderData: (previousData: any[] | undefined) => previousData ?? [],
+    queryFn: async () => { const { data } = await withPromiseTimeout<any>(supabase.from("vehicles").select("*"), 10000, "fleet_vehicles"); return data || []; },
   });
 
   const { data: drivers = [] } = useQuery({
     queryKey: ["fleet_drivers"],
-    queryFn: async () => { const { data } = await supabase.from("drivers").select("*"); return (data || []) as any[]; },
+    retry: 0,
+    placeholderData: (previousData: any[] | undefined) => previousData ?? [],
+    queryFn: async () => { const { data } = await withPromiseTimeout<any>(supabase.from("drivers").select("*"), 10000, "fleet_drivers"); return (data || []) as any[]; },
   });
 
   const { data: assignments = [] } = useQuery({
     queryKey: ["fleet_assignments"],
-    queryFn: async () => { const { data } = await supabase.from("vehicle_assignments").select("*").eq("status", "em_uso"); return (data || []) as any[]; },
+    retry: 0,
+    placeholderData: (previousData: any[] | undefined) => previousData ?? [],
+    queryFn: async () => { const { data } = await withPromiseTimeout<any>(supabase.from("vehicle_assignments").select("*").eq("status", "em_uso"), 10000, "fleet_assignments"); return (data || []) as any[]; },
   });
 
   const { data: trips = [] } = useQuery({
     queryKey: ["fleet_trips"],
-    queryFn: async () => { const { data } = await supabase.from("fleet_trips").select("*"); return (data || []) as any[]; },
+    retry: 0,
+    placeholderData: (previousData: any[] | undefined) => previousData ?? [],
+    queryFn: async () => { const { data } = await withPromiseTimeout<any>(supabase.from("fleet_trips").select("*"), 10000, "fleet_trips"); return (data || []) as any[]; },
   });
 
   const { data: fuelLogs = [] } = useQuery({
     queryKey: ["fleet_fuel_logs"],
-    queryFn: async () => { const { data } = await supabase.from("fleet_fuel_logs").select("*"); return (data || []) as any[]; },
+    retry: 0,
+    placeholderData: (previousData: any[] | undefined) => previousData ?? [],
+    queryFn: async () => { const { data } = await withPromiseTimeout<any>(supabase.from("fleet_fuel_logs").select("*"), 10000, "fleet_fuel_logs"); return (data || []) as any[]; },
   });
 
   // Multiple active trips
@@ -78,7 +96,7 @@ export default function FleetPage() {
     { label: "Custo/km", value: totalKm > 0 ? `${costPerKm.toFixed(3)} €/km` : "—", icon: BarChart3 },
   ];
 
-  const tabs = [
+  const tabs = useMemo<FleetTab[]>(() => [
     { value: "vehicles", label: "Veículos", icon: Car },
     { value: "drivers", label: "Condutores", icon: Users },
     { value: "assignments", label: "Atribuições", icon: Link2 },
@@ -86,7 +104,7 @@ export default function FleetPage() {
     { value: "fuel", label: "Combustível", icon: Fuel },
     { value: "documents", label: "Documentos", icon: FileText },
     { value: "reports", label: "Relatórios", icon: BarChart3 },
-  ];
+  ], []);
 
   const handleResume = (tripId: string) => {
     setActiveTab("trips");
@@ -184,13 +202,15 @@ export default function FleetPage() {
         </div>
 
         <div className="mt-2">
-          {activeTab === "vehicles" && <VehiclesModule />}
-          {activeTab === "drivers" && <DriversModule />}
-          {activeTab === "assignments" && <AssignmentsModule />}
-          {activeTab === "trips" && <TripsModule />}
-          {activeTab === "fuel" && <FuelLogsModule />}
-          {activeTab === "documents" && <FleetDocumentsModule />}
-          {activeTab === "reports" && <FleetReportsModule />}
+          <Suspense fallback={<div className="flex items-center justify-center py-12 text-sm text-muted-foreground">A carregar módulo…</div>}>
+            {activeTab === "vehicles" && <VehiclesModule />}
+            {activeTab === "drivers" && <DriversModule />}
+            {activeTab === "assignments" && <AssignmentsModule />}
+            {activeTab === "trips" && <TripsModule />}
+            {activeTab === "fuel" && <FuelLogsModule />}
+            {activeTab === "documents" && <FleetDocumentsModule />}
+            {activeTab === "reports" && <FleetReportsModule />}
+          </Suspense>
         </div>
       </div>
     </div>

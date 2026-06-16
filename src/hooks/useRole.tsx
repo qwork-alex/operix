@@ -1,15 +1,15 @@
-import { createContext, useContext, useEffect, ReactNode } from "react";
+import { createContext, useContext, ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/api";
 import { useAuth } from "./useAuth";
 import { useImpersonation } from "./useImpersonation";
+import { useWorkspaceOptional } from "./useWorkspace";
 
-// app_role enum: admin, partner, technician, client
-// We map to display keys used in the app
-export type AppRole = "admin" | "partner" | "technician" | "client";
+export type AppRole = "owner" | "admin" | "partner" | "technician" | "client";
 
 // Map from DB enum to sidebar/RoleGuard keys used in codebase
 const ROLE_MAP: Record<AppRole, string> = {
+  owner: "admin",
   admin: "admin",
   partner: "socio",
   technician: "tecnico",
@@ -30,6 +30,7 @@ interface RoleContext {
   dbRole: AppRole | null;
   role: DisplayRole | null;
   isAdmin: boolean;
+  isOwner: boolean;
   isLoading: boolean;
 }
 
@@ -38,24 +39,28 @@ const RoleCtx = createContext<RoleContext | undefined>(undefined);
 export function RoleProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { effectiveUserId, isImpersonating } = useImpersonation();
-  useEffect(() => {
-    console.log("[MOUNT] RoleProvider");
-    return () => console.log("[UNMOUNT] RoleProvider");
-  }, []);
+  const workspace = useWorkspaceOptional();
   // When impersonating, resolve the role of the target user so the whole UI
   // (sidebar, guards, dashboards) reflects what they see.
   const lookupId = isImpersonating ? effectiveUserId : user?.id;
+  const workspaceId = workspace?.workspaceId ?? null;
 
-  const { data: dbRole = null, isLoading } = useQuery({
-    queryKey: ["my-role", lookupId, isImpersonating],
+  const { data, isLoading } = useQuery({
+    queryKey: ["my-role", lookupId, isImpersonating, workspaceId],
     enabled: !!lookupId,
     retry: 0,
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
     queryFn: async () => {
-      const suffix = lookupId ? `?userId=${encodeURIComponent(lookupId)}` : "";
-      const data = await apiRequest<{ role: AppRole | null }>(`/account/role${suffix}`);
-      return data.role ?? null;
+      const params = new URLSearchParams();
+      if (lookupId) params.set("userId", lookupId);
+      if (workspaceId) params.set("workspaceId", workspaceId);
+      const suffix = params.size > 0 ? `?${params.toString()}` : "";
+      return apiRequest<{
+        role: AppRole | null;
+        is_workspace_owner?: boolean;
+      }>(`/account/role${suffix}`, { timeoutMs: 8000 });
     },
+    placeholderData: (previousData) => previousData ?? { role: null, is_workspace_owner: false },
   });
 
   // Platform owner safety net — the master account ALWAYS resolves as admin,
@@ -65,13 +70,14 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   const isOwnerEmail =
     !!user?.email && OWNER_EMAILS.includes(user.email.toLowerCase());
 
-  const effectiveDbRole: AppRole | null = isOwnerEmail ? "admin" : dbRole;
+  const effectiveDbRole: AppRole | null = isOwnerEmail ? "owner" : data?.role ?? null;
+  const isOwner = effectiveDbRole === "owner" || data?.is_workspace_owner === true || isOwnerEmail;
   const role = effectiveDbRole ? (ROLE_MAP[effectiveDbRole] as DisplayRole) : null;
-  const isAdmin = effectiveDbRole === "admin";
+  const isAdmin = effectiveDbRole === "owner" || effectiveDbRole === "admin";
 
   return (
     <RoleCtx.Provider
-      value={{ dbRole: effectiveDbRole, role, isAdmin, isLoading: isOwnerEmail ? false : isLoading }}
+      value={{ dbRole: effectiveDbRole, role, isAdmin, isOwner, isLoading: isOwnerEmail ? false : isLoading }}
     >
       {children}
     </RoleCtx.Provider>

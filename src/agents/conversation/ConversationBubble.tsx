@@ -45,7 +45,7 @@ export function ConversationBubble({ onOpenDiagnostic }: Props) {
       setExpanded(false);
       return () => clearTimeout(t);
     }
-  }, [prompt?.id, prompt?.urgency]);
+  }, [prompt]);
 
   if (!prompt && !mounted) return null;
   const p = prompt;
