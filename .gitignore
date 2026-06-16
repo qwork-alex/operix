@@ -26,3 +26,9 @@ backend/.env
 *.sln
 *.sw?
 .env*
+
+# Test/debug artifacts
+.playwright-browsers/
+.dbg/
+debug-*.md
+*.pdf
