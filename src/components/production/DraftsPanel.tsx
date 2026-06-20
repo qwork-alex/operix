@@ -25,37 +25,77 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import type { ProductionOrder } from "@/hooks/useProductionOrders";
 
-const PRODUCTION_DRAFT_KEY = "production-draft-new";
+export const PRODUCTION_DRAFT_PREFIX = "production-draft-new-";
 
-interface Props {
-  onResumeProductionDraft?: () => void;
+interface ProductionDraft {
+  draftId: string;
+  data: Partial<ProductionOrder>;
 }
 
-export function DraftsPanel({ onResumeProductionDraft }: Props) {
+const LEGACY_DRAFT_KEY = "production-draft-new";
+
+function hasMeaningfulData(data: Partial<ProductionOrder>): boolean {
+  return !!(
+    data.license_plate || data.client_name || data.brand ||
+    data.model || data.platform || data.insurer || data.vin
+  );
+}
+
+function readProductionDrafts(): ProductionDraft[] {
+  const drafts: ProductionDraft[] = [];
+  try {
+    // Migrate legacy single-draft key to new format
+    const legacyRaw = localStorage.getItem(LEGACY_DRAFT_KEY);
+    if (legacyRaw) {
+      try {
+        const parsed = JSON.parse(legacyRaw);
+        if (parsed && typeof parsed === "object" && hasMeaningfulData(parsed)) {
+          const migratedId = crypto.randomUUID();
+          localStorage.setItem(`${PRODUCTION_DRAFT_PREFIX}${migratedId}`, legacyRaw);
+        }
+      } catch { /* ignore */ }
+      localStorage.removeItem(LEGACY_DRAFT_KEY);
+    }
+
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key?.startsWith(PRODUCTION_DRAFT_PREFIX)) continue;
+      const draftId = key.slice(PRODUCTION_DRAFT_PREFIX.length);
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object" && hasMeaningfulData(parsed)) {
+          drafts.push({ draftId, data: parsed });
+        }
+      } catch { /* ignore corrupt entry */ }
+    }
+  } catch { /* ignore */ }
+  return drafts;
+}
+
+interface Props {
+  onResumeProductionDraft?: (draftId: string) => void;
+  refreshKey?: number;
+}
+
+export function DraftsPanel({ onResumeProductionDraft, refreshKey = 0 }: Props) {
   const { formatCurrency } = useLanguage();
   const navigate = useNavigate();
   const { data: allOrders = [], isLoading, updateMutation, deleteMutation } = useServiceOrders({});
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
-  const [productionDraft, setProductionDraft] = useState<Partial<ProductionOrder> | null>(null);
-  const [discardingDraft, setDiscardingDraft] = useState(false);
+  const [productionDrafts, setProductionDrafts] = useState<ProductionDraft[]>([]);
+  const [discardingDraftId, setDiscardingDraftId] = useState<string | null>(null);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(PRODUCTION_DRAFT_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === "object" && Object.keys(parsed).length > 0) {
-          setProductionDraft(parsed);
-        }
-      }
-    } catch { /* ignore corrupt drafts */ }
-  }, []);
+    setProductionDrafts(readProductionDrafts());
+  }, [refreshKey]);
 
-  const discardProductionDraft = () => {
-    localStorage.removeItem(PRODUCTION_DRAFT_KEY);
-    setProductionDraft(null);
-    setDiscardingDraft(false);
+  const discardProductionDraft = (draftId: string) => {
+    localStorage.removeItem(`${PRODUCTION_DRAFT_PREFIX}${draftId}`);
+    setProductionDrafts((prev) => prev.filter((d) => d.draftId !== draftId));
+    setDiscardingDraftId(null);
     toast.message("Rascunho descartado.");
   };
 
@@ -93,7 +133,7 @@ export function DraftsPanel({ onResumeProductionDraft }: Props) {
     );
   }
 
-  if (drafts.length === 0 && !productionDraft) {
+  if (drafts.length === 0 && productionDrafts.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-20 text-muted-foreground">
         <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted/50">
@@ -109,69 +149,76 @@ export function DraftsPanel({ onResumeProductionDraft }: Props) {
 
   return (
     <>
-      {/* Production order draft saved in localStorage */}
-      {productionDraft && (
+      {/* Production order drafts (localStorage) */}
+      {productionDrafts.length > 0 && (
         <div className="mb-6">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Nova ordem em edição
+            {productionDrafts.length === 1 ? "Nova ordem em edição" : `${productionDrafts.length} novas ordens em edição`}
           </p>
-          <Card className="border-amber-500/40 bg-amber-500/5 transition-all hover:border-amber-500/60">
-            <CardContent className="px-4 py-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 space-y-1">
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      variant="outline"
-                      className="shrink-0 border-amber-500/40 bg-amber-500/10 text-amber-600 text-[10px]"
-                    >
-                      Não salva
-                    </Badge>
-                    <span className="truncate text-sm font-semibold">
-                      {productionDraft.license_plate || productionDraft.client_name || "Ordem sem identificação"}
-                      {productionDraft.brand ? ` · ${productionDraft.brand}` : ""}
-                    </span>
+          <div className="space-y-2">
+            {productionDrafts.map(({ draftId, data }) => (
+              <Card
+                key={draftId}
+                className="border-amber-500/40 bg-amber-500/5 transition-all hover:border-amber-500/60"
+              >
+                <CardContent className="px-4 py-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          variant="outline"
+                          className="shrink-0 border-amber-500/40 bg-amber-500/10 text-amber-600 text-[10px]"
+                        >
+                          Não salva
+                        </Badge>
+                        <span className="truncate text-sm font-semibold">
+                          {data.license_plate || data.client_name || "Ordem sem identificação"}
+                          {data.brand ? ` · ${data.brand}` : ""}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                        {data.client_name && (
+                          <span className="flex items-center gap-1">
+                            <User className="h-3 w-3" />{data.client_name}
+                          </span>
+                        )}
+                        {data.platform && (
+                          <span className="flex items-center gap-1">
+                            <ExternalLink className="h-3 w-3" />{data.platform}
+                          </span>
+                        )}
+                        {data.model && (
+                          <span className="flex items-center gap-1">
+                            <Car className="h-3 w-3" />{data.model}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 gap-1.5 px-2.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        onClick={() => setDiscardingDraftId(draftId)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Descartar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 gap-1.5 px-3 text-xs border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
+                        onClick={() => onResumeProductionDraft?.(draftId)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        Continuar
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-                    {productionDraft.client_name && (
-                      <span className="flex items-center gap-1">
-                        <User className="h-3 w-3" />{productionDraft.client_name}
-                      </span>
-                    )}
-                    {productionDraft.platform && (
-                      <span className="flex items-center gap-1">
-                        <ExternalLink className="h-3 w-3" />{productionDraft.platform}
-                      </span>
-                    )}
-                    {productionDraft.model && (
-                      <span className="flex items-center gap-1">
-                        <Car className="h-3 w-3" />{productionDraft.model}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 gap-1.5 px-2.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
-                    onClick={() => setDiscardingDraft(true)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Descartar
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 gap-1.5 px-3 text-xs border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
-                    onClick={onResumeProductionDraft}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                    Continuar
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
       )}
 
@@ -303,19 +350,19 @@ export function DraftsPanel({ onResumeProductionDraft }: Props) {
       )}
 
       {/* Discard production draft dialog */}
-      <AlertDialog open={discardingDraft} onOpenChange={(o) => !o && setDiscardingDraft(false)}>
+      <AlertDialog open={!!discardingDraftId} onOpenChange={(o) => !o && setDiscardingDraftId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Descartar rascunho?</AlertDialogTitle>
             <AlertDialogDescription>
-              O rascunho da nova ordem será removido permanentemente. Esta ação não pode ser desfeita.
+              O rascunho será removido permanentemente. Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
-              onClick={discardProductionDraft}
+              onClick={() => discardingDraftId && discardProductionDraft(discardingDraftId)}
             >
               Descartar
             </AlertDialogAction>

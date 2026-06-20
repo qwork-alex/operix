@@ -1,7 +1,14 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { uploadFile, deleteFiles, getFileUrl } from "@/lib/storage";
+import {
+  listDocuments,
+  listFolders,
+  createDocument,
+  updateDocument,
+  deleteDocument,
+  batchDeleteDocuments,
+} from "@/lib/apiDocuments";
 import { useAuth } from "@/hooks/useAuth";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { useLanguage } from "@/hooks/useLanguage";
@@ -21,7 +28,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { blobForCurrentVisualState, getDocumentDisplayName, getDocumentRotation, getDocumentZoom } from "@/lib/documentVisualState";
 import type { DocumentVisualState } from "@/lib/documentVisualState";
-import { withAbortableTimeout, withPromiseTimeout } from "@/lib/asyncGuard";
+import { withPromiseTimeout } from "@/lib/asyncGuard";
 
 interface Props {
   entityType: "service_order" | "payment_order";
@@ -57,7 +64,7 @@ function reportUploadDebug(payload: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       sessionId: "upload-db-timeout",
-      runId: "pre-fix",
+      runId: "migrated-to-api",
       hypothesisId: payload.hypothesisId,
       location: payload.location,
       msg: payload.msg,
@@ -174,33 +181,12 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
 
   const { data: docs = [], isLoading } = useQuery({
     queryKey,
-    queryFn: async () => {
-      let q = supabase
-        .from("documents")
-        .select("*")
-        .eq("entity_type", entityType)
-        .eq("module", moduleName)
-        .order("type", { ascending: true })
-        .order("name");
-      q = parentId ? q.eq("parent_id", parentId) : q.is("parent_id", null);
-      const { data, error } = await q;
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => listDocuments(entityType, moduleName, parentId),
   });
 
   const { data: allFolders = [] } = useQuery({
     queryKey: ["embedded-folders", entityType],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("documents")
-        .select("id, name, parent_id")
-        .eq("entity_type", entityType)
-        .eq("type", "folder")
-        .order("name");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => listFolders(entityType),
     enabled: showMoveDialog,
   });
 
@@ -237,8 +223,8 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
   const clearSelection = () => setSelectedIds(new Set());
 
   const createFolder = useMutation({
-    mutationFn: async () => {
-      const { error } = await supabase.from("documents").insert({
+    mutationFn: () =>
+      createDocument({
         name: folderName,
         type: "folder",
         parent_id: parentId,
@@ -246,9 +232,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
         entity_type: entityType,
         module: moduleName,
         ...(workspaceId ? { workspace_id: workspaceId } : {}),
-      });
-      if (error) throw error;
-    },
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["embedded-docs", entityType] });
       setShowFolderDialog(false);
@@ -263,8 +247,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
       if (doc.storage_path) {
         await deleteFiles("uploads", [doc.storage_path]);
       }
-      const { error } = await supabase.from("documents").delete().eq("id", doc.id);
-      if (error) throw error;
+      await deleteDocument(doc.id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["embedded-docs", entityType] });
@@ -282,8 +265,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
       if (storagePaths.length > 0) {
         await deleteFiles("uploads", storagePaths);
       }
-      const { error } = await supabase.from("documents").delete().in("id", ids);
-      if (error) throw error;
+      await batchDeleteDocuments(ids);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["embedded-docs", entityType] });
@@ -294,13 +276,8 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
   });
 
   const moveMutation = useMutation({
-    mutationFn: async ({ docIds, newParentId }: { docIds: string[]; newParentId: string | null }) => {
-      const { error } = await supabase
-        .from("documents")
-        .update({ parent_id: newParentId })
-        .in("id", docIds);
-      if (error) throw error;
-    },
+    mutationFn: ({ docIds, newParentId }: { docIds: string[]; newParentId: string | null }) =>
+      Promise.all(docIds.map((id) => updateDocument(id, { parent_id: newParentId }))).then(() => undefined),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["embedded-docs", entityType] });
       setShowMoveDialog(false);
@@ -312,14 +289,8 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
   });
 
   const renameMutation = useMutation({
-    mutationFn: async ({ id, name }: { id: string; name: string }) => {
-      const { error } = await (supabase as any).from("documents").update({
-        name,
-        display_name: name,
-        visual_state: { displayName: name, updatedAt: new Date().toISOString() },
-      }).eq("id", id);
-      if (error) throw error;
-    },
+    mutationFn: ({ id, name }: { id: string; name: string }) =>
+      updateDocument(id, { name, display_name: name, visual_state: { displayName: name, updatedAt: new Date().toISOString() } }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["embedded-docs", entityType] });
       setRenamingId(null);
@@ -330,7 +301,7 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
 
   const createFolderInMove = useMutation({
     mutationFn: async (name: string) => {
-      const { data, error } = await supabase.from("documents").insert({
+      const doc = await createDocument({
         name,
         type: "folder",
         parent_id: null,
@@ -338,9 +309,8 @@ export function EmbeddedFileManager({ entityType, module: moduleName = "orders",
         entity_type: entityType,
         module: moduleName,
         ...(workspaceId ? { workspace_id: workspaceId } : {}),
-      }).select("id").single();
-      if (error) throw error;
-      return data.id;
+      });
+      return doc.id;
     },
     onSuccess: (id) => {
       queryClient.invalidateQueries({ queryKey: ["embedded-folders", entityType] });
@@ -1106,27 +1076,24 @@ export async function storeFileInDocuments(
     };
     if (createdAtOverride) insertPayload.created_at = createdAtOverride;
 
-    const { data, error } = await withAbortableTimeout<{ data: any; error: any }>(
-      async (signal) => ((supabase as any).from("documents").insert(insertPayload).select("*").single() as any).abortSignal(signal),
-      10000,
-      "documents_insert",
-    );
-    if (error) {
+    let data: any;
+    try {
+      data = await createDocument(insertPayload);
+    } catch (insertErr) {
       reportUploadDebug({
         hypothesisId: "U",
         location: "src/components/file-manager/EmbeddedFileManager.tsx:storeFileInDocuments:documents:insert:error",
         msg: "[DEBUG] DATA_ERROR",
-        data: { entityType, module, storagePath, error: error.message },
+        data: { entityType, module, storagePath, error: (insertErr as Error).message },
       });
-      throw new Error(error.message);
-    } else {
-      reportUploadDebug({
-        hypothesisId: "U",
-        location: "src/components/file-manager/EmbeddedFileManager.tsx:storeFileInDocuments:success",
-        msg: "[DEBUG] DATA_SUCCESS",
-        data: { entityType, module, storagePath, documentId: (data as any)?.id ?? null },
-      });
+      throw insertErr;
     }
+    reportUploadDebug({
+      hypothesisId: "U",
+      location: "src/components/file-manager/EmbeddedFileManager.tsx:storeFileInDocuments:success",
+      msg: "[DEBUG] DATA_SUCCESS",
+      data: { entityType, module, storagePath, documentId: data?.id ?? null },
+    });
     return data;
   } catch (err) {
     reportUploadDebug({
@@ -1142,21 +1109,12 @@ export async function storeFileInDocuments(
 export async function persistDocumentVisualState(documentId: string | undefined, state: DocumentVisualState, validated = false) {
   if (!documentId) return;
   const visualState = { ...state, validated, updatedAt: new Date().toISOString() };
-  const { error } = await withAbortableTimeout<{ data: any; error: any }>(
-    async (signal) =>
-      ((supabase as any)
-        .from("documents")
-        .update({
-          name: state.displayName,
-          display_name: state.displayName,
-          rotation: state.rotation,
-          zoom: state.zoom,
-          validated,
-          visual_state: visualState,
-        })
-        .eq("id", documentId) as any).abortSignal(signal),
-    8000,
-    "documents_visual_state_update",
-  );
-  if (error) throw error;
+  await updateDocument(documentId, {
+    name: state.displayName,
+    display_name: state.displayName,
+    rotation: state.rotation,
+    zoom: state.zoom,
+    validated,
+    visual_state: visualState,
+  });
 }

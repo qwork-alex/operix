@@ -1,9 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 import { useAuth } from "./useAuth";
 import { useWorkspace, type MembershipRole } from "./useWorkspace";
 import { toast } from "sonner";
-import { withPromiseTimeout } from "@/lib/asyncGuard";
 
 export interface WorkspaceInviteRow {
   id: string;
@@ -14,16 +13,12 @@ export interface WorkspaceInviteRow {
   created_by: string;
   created_at: string;
   responded_at: string | null;
-  // joined
   workspace_name?: string | null;
   target_full_name?: string | null;
   target_email?: string | null;
   target_display_code?: string | null;
 }
 
-const TABLE = "workspace_invites" as any;
-
-/** Convites enviados pelo workspace atual */
 export function useOutgoingInvites() {
   const { workspaceId } = useWorkspace();
   return useQuery({
@@ -33,31 +28,15 @@ export function useOutgoingInvites() {
     staleTime: 60_000,
     placeholderData: (previousData) => previousData ?? [],
     queryFn: async (): Promise<WorkspaceInviteRow[]> => {
-      const { data, error } = await withPromiseTimeout<any>((supabase as any)
-        .from(TABLE)
-        .select("id, workspace_id, target_profile_id, role, status, created_by, created_at, responded_at")
-        .eq("workspace_id", workspaceId)
-        .order("created_at", { ascending: false }), 10000, "workspace_invites_out");
-      if (error) throw error;
-      const rows = (data || []) as WorkspaceInviteRow[];
-      if (!rows.length) return rows;
-      const ids = Array.from(new Set(rows.map((r) => r.target_profile_id)));
-      const { data: profs } = await withPromiseTimeout<any>(supabase
-        .from("profiles")
-        .select("id, full_name, email, display_code")
-        .in("id", ids), 10000, "workspace_invites_out_profiles");
-      const pmap = new Map<string, any>((profs || []).map((p: any) => [p.id, p]));
-      return rows.map((r) => ({
-        ...r,
-        target_full_name: pmap.get(r.target_profile_id)?.full_name ?? null,
-        target_email: pmap.get(r.target_profile_id)?.email ?? null,
-        target_display_code: pmap.get(r.target_profile_id)?.display_code ?? null,
-      }));
+      const data = await apiRequest<{ invites: WorkspaceInviteRow[] }>(
+        `/workspaces/${workspaceId}/invites`,
+        { timeoutMs: 10000 },
+      );
+      return data.invites ?? [];
     },
   });
 }
 
-/** Convites recebidos pelo usuário atual */
 export function useIncomingInvites() {
   const { user } = useAuth();
   return useQuery({
@@ -67,22 +46,11 @@ export function useIncomingInvites() {
     staleTime: 60_000,
     placeholderData: (previousData) => previousData ?? [],
     queryFn: async (): Promise<WorkspaceInviteRow[]> => {
-      const { data, error } = await withPromiseTimeout<any>((supabase as any)
-        .from(TABLE)
-        .select("id, workspace_id, target_profile_id, role, status, created_by, created_at, responded_at")
-        .eq("target_profile_id", user!.id)
-        .eq("status", "pending")
-        .order("created_at", { ascending: false }), 10000, "workspace_invites_in");
-      if (error) throw error;
-      const rows = (data || []) as WorkspaceInviteRow[];
-      if (!rows.length) return rows;
-      const wsIds = Array.from(new Set(rows.map((r) => r.workspace_id)));
-      const { data: wss } = await withPromiseTimeout<any>(supabase
-        .from("workspaces")
-        .select("id, name")
-        .in("id", wsIds), 10000, "workspace_invites_in_workspaces");
-      const wmap = new Map<string, string>((wss || []).map((w: any) => [w.id, w.name]));
-      return rows.map((r) => ({ ...r, workspace_name: wmap.get(r.workspace_id) ?? null }));
+      const data = await apiRequest<{ invites: WorkspaceInviteRow[] }>(
+        "/invites/incoming",
+        { timeoutMs: 10000 },
+      );
+      return data.invites ?? [];
     },
     refetchInterval: 60_000,
   });
@@ -94,13 +62,12 @@ export function useCreateInviteByCode() {
   return useMutation({
     mutationFn: async (args: { displayCode: string; role: MembershipRole }) => {
       if (!workspaceId) throw new Error("Workspace não selecionado");
-      const { data, error } = await (supabase.rpc as any)("create_workspace_invite_by_code", {
-        _workspace_id: workspaceId,
-        _display_code: args.displayCode,
-        _role: args.role,
+      return apiRequest(`/workspaces/${workspaceId}/invites`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ display_code: args.displayCode, role: args.role }),
+        timeoutMs: 10000,
       });
-      if (error) throw error;
-      return data;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["workspace-invites-out"] });
@@ -114,9 +81,10 @@ export function useAcceptInvite() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (inviteId: string) => {
-      const { data, error } = await (supabase.rpc as any)("accept_workspace_invite", { _invite_id: inviteId });
-      if (error) throw error;
-      return data;
+      return apiRequest(`/invites/${inviteId}/accept`, {
+        method: "PATCH",
+        timeoutMs: 10000,
+      });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["workspace-invites-in"] });
@@ -132,9 +100,10 @@ export function useRejectInvite() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (inviteId: string) => {
-      const { data, error } = await (supabase.rpc as any)("reject_workspace_invite", { _invite_id: inviteId });
-      if (error) throw error;
-      return data;
+      return apiRequest(`/invites/${inviteId}/reject`, {
+        method: "PATCH",
+        timeoutMs: 10000,
+      });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["workspace-invites-in"] });
@@ -148,9 +117,10 @@ export function useCancelInvite() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (inviteId: string) => {
-      const { data, error } = await (supabase.rpc as any)("cancel_workspace_invite", { _invite_id: inviteId });
-      if (error) throw error;
-      return data;
+      return apiRequest(`/invites/${inviteId}`, {
+        method: "DELETE",
+        timeoutMs: 10000,
+      });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["workspace-invites-out"] });

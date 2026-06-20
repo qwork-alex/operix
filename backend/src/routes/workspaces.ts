@@ -142,18 +142,22 @@ async function loadLastSeenByAuthUserIds(authUserIds: string[]) {
     return new Map<string, string>();
   }
 
-  const rows = await prisma.$queryRaw<Array<{ user_id: string; last_seen_at: Date | null }>>(Prisma.sql`
-    SELECT user_id, MAX(last_seen_at) AS last_seen_at
-    FROM public.user_devices
-    WHERE user_id IN (${Prisma.join(authUserIds)})
-    GROUP BY user_id
-  `);
+  try {
+    const rows = await prisma.$queryRaw<Array<{ user_id: string; last_seen_at: Date | null }>>(Prisma.sql`
+      SELECT user_id, MAX(last_seen_at) AS last_seen_at
+      FROM public.user_devices
+      WHERE user_id IN (${Prisma.join(authUserIds)})
+      GROUP BY user_id
+    `);
 
-  return new Map(
-    rows
-      .filter((row: { user_id: string; last_seen_at: Date | null }) => !!row.last_seen_at)
-      .map((row: { user_id: string; last_seen_at: Date | null }) => [row.user_id, row.last_seen_at!.toISOString()]),
-  );
+    return new Map(
+      rows
+        .filter((row: { user_id: string; last_seen_at: Date | null }) => !!row.last_seen_at)
+        .map((row: { user_id: string; last_seen_at: Date | null }) => [row.user_id, row.last_seen_at!.toISOString()]),
+    );
+  } catch {
+    return new Map<string, string>();
+  }
 }
 
 workspaceRouter.post("/", async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {

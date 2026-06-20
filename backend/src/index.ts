@@ -12,6 +12,11 @@ import { billingRouter } from "./routes/billing.js";
 import { workspaceRouter } from "./routes/workspaces.js";
 import { extractRouter } from "./routes/extract.js";
 import { storageRouter } from "./routes/storage.js";
+import { documentsRouter } from "./routes/documents.js";
+import { serviceOrdersRouter } from "./routes/serviceOrders.js";
+import { productionOrdersRouter } from "./routes/productionOrders.js";
+import { productionPhotosRouter } from "./routes/productionPhotos.js";
+import { invitesRouter } from "./routes/invites.js";
 
 const app = express();
 
@@ -41,6 +46,11 @@ app.use("/api/billing", billingRouter);
 app.use("/api/workspaces", workspaceRouter);
 app.use("/api/extract", extractRouter);
 app.use("/api/storage", storageRouter);
+app.use("/api/documents", documentsRouter);
+app.use("/api/service-orders", serviceOrdersRouter);
+app.use("/api/production-orders", productionOrdersRouter);
+app.use("/api/production-orders/:orderId/photos", productionPhotosRouter);
+app.use("/api", invitesRouter);
 
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof ZodError) {

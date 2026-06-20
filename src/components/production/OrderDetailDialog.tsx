@@ -9,12 +9,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Save, Trash2, Lock, Minimize2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
-import { getCurrentUserId } from "@/lib/authUser";
 import {
   useProductionOrders, PRODUCTION_STATUSES, PRIORITY_META, isOrderLocked,
   type ProductionOrder, type ProductionStatus, type ProductionPriority,
 } from "@/hooks/useProductionOrders";
+import { useWorkspace } from "@/hooks/useWorkspace";
 import { useAutosave } from "@/hooks/useAutosave";
 import { PhotoUploader } from "./PhotoUploader";
 import { OrderTimeline } from "./OrderTimeline";
@@ -36,10 +35,14 @@ interface Props {
  */
 export function OrderDetailDialog({ order, onClose, draftId }: Props) {
   const { update, remove, create } = useProductionOrders();
+  const { members } = useWorkspace();
   const [form, setForm] = useState<Partial<ProductionOrder>>({});
   const [activeTab, setActiveTab] = useState("info");
-  const isNew = order?.id === "__new__";
-  const locked = !isNew && isOrderLocked(order?.status);
+  // After auto-save on new orders, holds the real persisted ID so photos/timeline work
+  const [promotedId, setPromotedId] = useState<string | null>(null);
+  const isNew = order?.id === "__new__" && !promotedId;
+  const effectiveOrderId = promotedId ?? (isNew ? null : order?.id ?? null);
+  const locked = !isNew && !promotedId && isOrderLocked(order?.status);
   const { extract, isExtracting } = useExtractProductionOrder();
   const [ocrStatus, setOcrStatus] = useState<{ type: "error" | "success"; message: string } | null>(null);
 
@@ -64,27 +67,7 @@ export function OrderDetailDialog({ order, onClose, draftId }: Props) {
   useEffect(() => {
     setForm(order ?? {});
     setActiveTab("info");
-    // Lifecycle: if this existing order had a saved draft (was minimized), log resume
-    if (order && order.id !== "__new__") {
-      try {
-        const had = localStorage.getItem(`production-draft-${order.id}`);
-        if (had) {
-          (async () => {
-            try {
-              const actorUserId = await getCurrentUserId().catch(() => null);
-              await (supabase as any).from("production_events").insert({
-                production_order_id: order.id,
-                workspace_id: order.workspace_id,
-                event_type: "field_updated",
-                from_value: null,
-                to_value: "resumed",
-                actor_user_id: actorUserId,
-              });
-            } catch (err) { void err; }
-          })();
-        }
-      } catch { /* ignore */ }
-    }
+    setPromotedId(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [order?.id]);
 
@@ -95,25 +78,12 @@ export function OrderDetailDialog({ order, onClose, draftId }: Props) {
     setForm(f => ({ ...f, [k]: v }));
   };
 
-  const logLifecycle = async (type: "minimized" | "resumed") => {
-    if (isNew || !order?.id) return;
-    try {
-      const actorUserId = await getCurrentUserId().catch(() => null);
-      await (supabase as any).from("production_events").insert({
-        production_order_id: order.id,
-        workspace_id: order.workspace_id,
-        event_type: "field_updated",
-        from_value: null,
-        to_value: type,
-        actor_user_id: actorUserId,
-      });
-    } catch {
-    }
-  };
-
   const save = async () => {
     try {
-      if (isNew) {
+      if (promotedId) {
+        // Order was auto-created when user navigated to Photos tab — just update remaining fields
+        await update.mutateAsync({ id: promotedId, ...form });
+      } else if (isNew) {
         await create.mutateAsync(form);
       } else {
         await update.mutateAsync({ id: order.id, ...form });
@@ -123,6 +93,22 @@ export function OrderDetailDialog({ order, onClose, draftId }: Props) {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Falha ao salvar.");
     }
+  };
+
+  const handleTabChange = async (tab: string) => {
+    if ((tab === "photos" || tab === "timeline") && order?.id === "__new__" && !promotedId) {
+      // Auto-save before showing photos/timeline on a brand-new order
+      try {
+        const created = await create.mutateAsync(form);
+        setPromotedId(created.id);
+        clearDraft();
+        setActiveTab(tab);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Salve a ordem antes de adicionar fotos.");
+      }
+      return;
+    }
+    setActiveTab(tab);
   };
 
   const applyOcr = async (files: File[]) => {
@@ -152,9 +138,7 @@ export function OrderDetailDialog({ order, onClose, draftId }: Props) {
     }
   };
 
-  const minimize = async () => {
-    // Draft is already persisted by useAutosave. For existing orders, log the pause-to-bg event.
-    if (!isNew) await logLifecycle("minimized");
+  const minimize = () => {
     toast.success(isNew ? "Rascunho guardado · continua disponível" : "Ordem minimizada · continua ativa");
     onClose();
   };
@@ -188,11 +172,11 @@ export function OrderDetailDialog({ order, onClose, draftId }: Props) {
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <Tabs value={activeTab} onValueChange={handleTabChange}>
           <TabsList>
             <TabsTrigger value="info">Dados</TabsTrigger>
-            <TabsTrigger value="photos" disabled={isNew}>Fotos</TabsTrigger>
-            <TabsTrigger value="timeline" disabled={isNew}>Histórico</TabsTrigger>
+            <TabsTrigger value="photos">Fotos</TabsTrigger>
+            <TabsTrigger value="timeline">Histórico</TabsTrigger>
           </TabsList>
 
           <TabsContent value="info" className="space-y-4 pt-4">
@@ -252,14 +236,31 @@ export function OrderDetailDialog({ order, onClose, draftId }: Props) {
               </Field>
 
               <Field label="Técnico Responsável">
-                <Input
-                  value={form.technician_name ?? ""}
-                  placeholder="Digite o nome do técnico"
-                  onChange={(e) => {
-                    set("technician_name", e.target.value || null);
-                    if (form.technician_user_id) set("technician_user_id", null);
+                <Select
+                  value={form.technician_user_id ?? "__none__"}
+                  onValueChange={(v) => {
+                    if (v === "__none__") {
+                      set("technician_user_id", null);
+                      set("technician_name", null);
+                    } else {
+                      const member = members.find((m) => m.auth_user_id === v);
+                      set("technician_user_id", v);
+                      set("technician_name", member?.name ?? member?.email ?? null);
+                    }
                   }}
-                />
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um técnico" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">— Nenhum —</SelectItem>
+                    {members.map((m) => (
+                      <SelectItem key={m.auth_user_id} value={m.auth_user_id}>
+                        {m.name ?? m.email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </Field>
               <Field label="Prazo">
                 <Input type="datetime-local"
@@ -306,26 +307,32 @@ export function OrderDetailDialog({ order, onClose, draftId }: Props) {
           </TabsContent>
 
           <TabsContent value="photos" className="pt-4 space-y-6">
-            <section className="space-y-2">
-              <h4 className="text-sm font-semibold text-foreground">Veículo na entrada</h4>
-              <p className="text-xs text-muted-foreground">Fotos obrigatórias do estado inicial.</p>
-              <PhotoUploader orderId={order.id} fixedCategory="before" hideOthers readOnly={locked} />
-            </section>
-            <div className="h-px bg-border/60" />
-            <section className="space-y-2">
-              <h4 className="text-sm font-semibold text-foreground">Durante o serviço</h4>
-              <p className="text-xs text-muted-foreground">Registo do andamento e etapas intermediárias.</p>
-              <PhotoUploader orderId={order.id} fixedCategory="during" hideOthers readOnly={locked} />
-            </section>
-            <div className="h-px bg-border/60" />
-            <section className="space-y-2">
-              <h4 className="text-sm font-semibold text-foreground">Veículo finalizado</h4>
-              <p className="text-xs text-muted-foreground">Registro do resultado final após o serviço.</p>
-              <PhotoUploader orderId={order.id} fixedCategory="after" hideOthers readOnly={locked} />
-            </section>
+            {effectiveOrderId ? (
+              <>
+                <section className="space-y-2">
+                  <h4 className="text-sm font-semibold text-foreground">Veículo na entrada</h4>
+                  <p className="text-xs text-muted-foreground">Fotos obrigatórias do estado inicial.</p>
+                  <PhotoUploader orderId={effectiveOrderId} fixedCategory="before" hideOthers readOnly={locked} />
+                </section>
+                <div className="h-px bg-border/60" />
+                <section className="space-y-2">
+                  <h4 className="text-sm font-semibold text-foreground">Durante o serviço</h4>
+                  <p className="text-xs text-muted-foreground">Registo do andamento e etapas intermediárias.</p>
+                  <PhotoUploader orderId={effectiveOrderId} fixedCategory="during" hideOthers readOnly={locked} />
+                </section>
+                <div className="h-px bg-border/60" />
+                <section className="space-y-2">
+                  <h4 className="text-sm font-semibold text-foreground">Veículo finalizado</h4>
+                  <p className="text-xs text-muted-foreground">Registro do resultado final após o serviço.</p>
+                  <PhotoUploader orderId={effectiveOrderId} fixedCategory="after" hideOthers readOnly={locked} />
+                </section>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">Salvando ordem…</p>
+            )}
           </TabsContent>
           <TabsContent value="timeline" className="pt-4">
-            <OrderTimeline orderId={order.id} />
+            <OrderTimeline orderId={effectiveOrderId ?? order.id} />
           </TabsContent>
         </Tabs>
       </DialogContent>

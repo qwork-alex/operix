@@ -28,33 +28,58 @@ function getAIConfigs(): AIConfig[] {
   return configs;
 }
 
-async function callProvider(config: AIConfig, payload: Record<string, unknown>): Promise<Response> {
-  return fetch(config.endpoint, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${config.apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ model: config.defaultModel, ...payload }),
-  });
+function hasToolCalls(data: unknown): boolean {
+  return Array.isArray((data as any)?.choices?.[0]?.message?.tool_calls) &&
+    (data as any).choices[0].message.tool_calls.length > 0;
 }
 
 export async function fetchAICompletion(payload: Record<string, unknown>): Promise<Response> {
   const configs = getAIConfigs();
-  let lastResponse: Response | null = null;
+  let lastBody: unknown = null;
+  let lastStatus = 500;
 
-  for (const config of configs) {
-    const res = await callProvider(config, payload);
-    // Retry with next provider on rate limit or auth failure
-    if ((res.status === 429 || res.status === 401 || res.status === 403) && configs.indexOf(config) < configs.length - 1) {
+  for (let i = 0; i < configs.length; i++) {
+    const config = configs[i];
+    const isLast = i === configs.length - 1;
+
+    const res = await fetch(config.endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ model: config.defaultModel, ...payload }),
+    });
+
+    // Always read the body so we can inspect or re-wrap it
+    const body = await res.json().catch(() => null);
+
+    // Fall back on auth/rate-limit errors
+    if ((res.status === 429 || res.status === 401 || res.status === 403) && !isLast) {
       console.warn(`[ai] Provider ${config.endpoint} returned ${res.status}, trying fallback...`);
-      lastResponse = res;
+      lastBody = body;
+      lastStatus = res.status;
       continue;
     }
-    return res;
+
+    // Fall back when provider returned 200 but no tool_calls
+    if (res.ok && !isLast && !hasToolCalls(body)) {
+      console.warn(`[ai] Provider ${config.endpoint} returned no tool_calls, trying fallback...`);
+      lastBody = body;
+      lastStatus = res.status;
+      continue;
+    }
+
+    return new Response(JSON.stringify(body), {
+      status: res.status,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
-  return lastResponse!;
+  return new Response(JSON.stringify(lastBody), {
+    status: lastStatus,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 export function parseToolCall(data: any): unknown {

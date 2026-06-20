@@ -1,9 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { useWorkspace } from "./useWorkspace";
+import { useAuth } from "./useAuth";
 import { toast } from "sonner";
-import { withAbortableTimeout, withPromiseTimeout } from "@/lib/asyncGuard";
 import { uploadFile, deleteFiles, getFileUrl } from "@/lib/storage";
+import { buildAuthHeaders } from "@/lib/authSession";
+
+const API_URL = import.meta.env.VITE_API_URL as string;
 
 export type PhotoCategory = "before" | "during" | "after" | "damage" | "validation";
 
@@ -15,6 +17,7 @@ export interface ProductionPhoto {
   category: PhotoCategory;
   storage_path: string;
   caption: string | null;
+  size_bytes: number | null;
   created_at: string;
   signed_url?: string;
 }
@@ -51,60 +54,73 @@ async function compress(file: File, maxDim = 1600, quality = 0.82): Promise<Blob
   });
 }
 
+async function listPhotos(orderId: string): Promise<ProductionPhoto[]> {
+  const res = await fetch(`${API_URL}/production-orders/${orderId}/photos`, {
+    headers: buildAuthHeaders(),
+  });
+  if (!res.ok) throw new Error("Falha ao carregar fotos.");
+  const list = (await res.json()) as ProductionPhoto[];
+  for (const p of list) {
+    p.signed_url = getFileUrl("production-photos", p.storage_path);
+  }
+  return list;
+}
+
+async function createPhotoRecord(
+  orderId: string,
+  data: { storage_path: string; category: string; workspace_id: string; uploaded_by: string; caption?: string; size_bytes?: number },
+): Promise<ProductionPhoto> {
+  const res = await fetch(`${API_URL}/production-orders/${orderId}/photos`, {
+    method: "POST",
+    headers: buildAuthHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { message?: string }).message ?? "Erro ao registrar foto.");
+  }
+  return res.json();
+}
+
+async function deletePhotoRecord(orderId: string, photoId: string): Promise<void> {
+  const res = await fetch(`${API_URL}/production-orders/${orderId}/photos/${photoId}`, {
+    method: "DELETE",
+    headers: buildAuthHeaders(),
+  });
+  if (!res.ok) throw new Error("Erro ao remover foto.");
+}
+
 export function useProductionPhotos(orderId: string | null) {
   const qc = useQueryClient();
   const { workspaceId } = useWorkspace();
+  const { user } = useAuth();
 
   const query = useQuery({
     queryKey: ["production_photos", orderId],
-    enabled: !!orderId,
+    enabled: !!orderId && orderId !== "__new__",
     retry: 0,
     staleTime: 30_000,
     placeholderData: (previousData) => previousData ?? [],
-    queryFn: async () => {
-      const { data, error } = await withAbortableTimeout<{ data: any; error: any }>(
-        async (signal) => ((supabase as any)
-          .from("production_photos")
-          .select("*")
-          .eq("production_order_id", orderId)
-          .order("created_at", { ascending: false }) as any).abortSignal(signal),
-        10000,
-        "production_photos_list",
-      );
-      if (error) throw error;
-      // Generate signed URLs
-      const list = (data ?? []) as ProductionPhoto[];
-      for (const p of list) {
-        p.signed_url = getFileUrl("production-photos", p.storage_path);
-      }
-      return list;
-    },
+    queryFn: () => listPhotos(orderId!),
   });
 
   const upload = useMutation({
     mutationFn: async ({ file, category, caption }: { file: File; category: PhotoCategory; caption?: string }) => {
       if (!orderId || !workspaceId) throw new Error("Ordem inválida");
       const blob = file.type.startsWith("image/") ? await compress(file) : file;
-      const ext = "jpg";
-      const path = `${workspaceId}/${orderId}/${Date.now()}_${category}.${ext}`;
-      await withPromiseTimeout<any>(
-        uploadFile("production-photos", path, blob, "image/jpeg"),
-        10000,
-        "production_photos_upload",
-      );
-      const { error: insErr } = await withAbortableTimeout<{ data: any; error: any }>(
-        async (signal) => ((supabase as any).from("production_photos").insert({
-          production_order_id: orderId, workspace_id: workspaceId, category, storage_path: path,
-          caption: caption ?? null, size_bytes: (blob as Blob).size,
-        }) as any).abortSignal(signal),
-        10000,
-        "production_photos_insert",
-      );
-      if (insErr) throw insErr;
+      const path = `${workspaceId}/${orderId}/${Date.now()}_${category}.jpg`;
+      await uploadFile("production-photos", path, blob, "image/jpeg");
+      await createPhotoRecord(orderId, {
+        storage_path: path,
+        category,
+        workspace_id: workspaceId,
+        uploaded_by: user?.id ?? "",
+        caption: caption ?? undefined,
+        size_bytes: (blob as Blob).size,
+      });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["production_photos", orderId] });
-      qc.invalidateQueries({ queryKey: ["production_events", orderId] });
       toast.success("Foto enviada");
     },
     onError: (e: any) => toast.error(e.message),
@@ -112,17 +128,8 @@ export function useProductionPhotos(orderId: string | null) {
 
   const remove = useMutation({
     mutationFn: async (photo: ProductionPhoto) => {
-      await withPromiseTimeout<any>(
-        deleteFiles("production-photos", [photo.storage_path]),
-        10000,
-        "production_photos_remove_storage",
-      );
-      const { error } = await withAbortableTimeout<{ data: any; error: any }>(
-        async (signal) => ((supabase as any).from("production_photos").delete().eq("id", photo.id) as any).abortSignal(signal),
-        10000,
-        "production_photos_remove_row",
-      );
-      if (error) throw error;
+      await deleteFiles("production-photos", [photo.storage_path]);
+      await deletePhotoRecord(photo.production_order_id, photo.id);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["production_photos", orderId] }),
     onError: (e: any) => toast.error(e.message),

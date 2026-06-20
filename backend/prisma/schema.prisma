@@ -86,6 +86,7 @@ model Workspace {
   billingInvoices   BillingInvoice[]
   billingAttachments BillingAttachment[]
   backendEventLogs  BackendEventLog[]
+  workspaceInvites  WorkspaceInvite[]
 
   @@map("workspaces")
 }
@@ -416,4 +417,164 @@ model BackendEventLog {
 
   @@index([tableName, rowId, createdAt])
   @@map("backend_event_logs")
+}
+
+model Client {
+  id              String    @id @default(uuid())
+  workspaceId     String?   @map("workspace_id")
+  visibilityScope String    @default("workspace") @map("visibility_scope")
+  name            String
+  address         String?
+  contactEmail    String?   @map("contact_email")
+  contactPhone    String?   @map("contact_phone")
+  displayCode     String?   @map("display_code")
+  notes           String?
+  userId          String?   @map("user_id")
+  createdBy       String?   @map("created_by")
+  deletedAt       DateTime? @map("deleted_at")
+  deletedBy       String?   @map("deleted_by")
+  deletedReason   String?   @map("deleted_reason")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  serviceOrders ServiceOrder[]
+
+  @@index([workspaceId])
+  @@map("clients")
+}
+
+model ServiceOrder {
+  id                   String    @id @default(uuid())
+  workspaceId          String?   @map("workspace_id")
+  visibilityScope      String    @default("workspace") @map("visibility_scope")
+  userId               String    @map("user_id")
+  assignedUserId       String    @map("assigned_user_id")
+  clientId             String?   @map("client_id")
+  clientName           String    @default("") @map("client_name")
+  carName              String?   @map("car_name")
+  licensePlate         String?   @map("license_plate")
+  platform             String?
+  platformId           String?   @map("platform_id")
+  operationalUnit      String?   @map("operational_unit")
+  groupId              String?   @map("group_id")
+  week                 String?
+  yearReference        Int?      @map("year_reference")
+  technicianName       String    @default("") @map("technician_name")
+  technicianEarning    Float?    @map("technician_earning")
+  technicianPercentage Float?    @map("technician_percentage")
+  service1Name         String?   @map("service_1_name")
+  service1Price        Float?    @map("service_1_price")
+  service2Name         String?   @map("service_2_name")
+  service2Price        Float?    @map("service_2_price")
+  service3Name         String?   @map("service_3_name")
+  service3Price        Float?    @map("service_3_price")
+  service4Name         String?   @map("service_4_name")
+  service4Price        Float?    @map("service_4_price")
+  total                Float?
+  status               String    @default("draft")
+  distributionSnapshot Json?     @map("distribution_snapshot")
+  createdBy            String?   @map("created_by")
+  deletedAt            DateTime? @map("deleted_at")
+  deletedBy            String?   @map("deleted_by")
+  deletedReason        String?   @map("deleted_reason")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  client Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, status])
+  @@index([clientId])
+  @@map("service_orders")
+}
+
+model ProductionOrder {
+  id               String    @id @default(uuid())
+  workspaceId      String    @map("workspace_id")
+  code             String
+  clientId         String?   @map("client_id")
+  clientName       String?   @map("client_name")
+  technicianUserId String?   @map("technician_user_id")
+  technicianName   String?   @map("technician_name")
+  platform         String?
+  insurer          String?
+  licensePlate     String?   @map("license_plate")
+  vin              String?
+  brand            String?
+  model            String?
+  color            String?
+  notes            String?
+  priority         String    @default("normal")
+  status           String    @default("new_vehicle")
+  commercialStatus String?   @map("commercial_status")
+  serviceOrderId   String?   @map("service_order_id")
+  dueAt            DateTime? @map("due_at")
+  startedAt        DateTime? @map("started_at")
+  finishedAt       DateTime? @map("finished_at")
+  deliveredAt      DateTime? @map("delivered_at")
+  createdBy        String    @default("") @map("created_by")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  photos ProductionPhoto[]
+
+  @@index([workspaceId, status])
+  @@map("production_orders")
+}
+
+model ProductionPhoto {
+  id                String   @id @default(uuid())
+  productionOrderId String   @map("production_order_id")
+  workspaceId       String   @map("workspace_id")
+  uploadedBy        String   @map("uploaded_by")
+  category          String
+  storagePath       String   @map("storage_path")
+  caption           String?
+  sizeBytes         Int?     @map("size_bytes")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  productionOrder ProductionOrder @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
+
+  @@index([productionOrderId])
+  @@map("production_photos")
+}
+
+model WorkspaceInvite {
+  id              String    @id @default(uuid())
+  workspaceId     String    @map("workspace_id")
+  targetProfileId String    @map("target_profile_id")
+  role            String
+  status          String    @default("pending")
+  createdBy       String    @map("created_by")
+  respondedAt     DateTime? @map("responded_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+  @@index([targetProfileId, status])
+  @@map("workspace_invites")
+}
+
+model Document {
+  id          String   @id @default(uuid())
+  name        String
+  displayName String?  @map("display_name")
+  entityType  String   @map("entity_type")
+  module      String?
+  type        String   @default("file")
+  parentId    String?  @map("parent_id")
+  storagePath String?  @map("storage_path")
+  mimeType    String?  @map("mime_type")
+  sizeBytes   Int?     @map("size_bytes")
+  rotation    Float?   @default(0)
+  zoom        Float?   @default(1)
+  validated   Boolean  @default(false)
+  visualState Json?    @map("visual_state")
+  uploadedBy  String?  @map("uploaded_by")
+  workspaceId String?  @map("workspace_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([entityType, module])
+  @@map("documents")
 }

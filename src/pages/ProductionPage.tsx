@@ -20,11 +20,37 @@ const BLANK: ProductionOrder = {
   created_at: "", updated_at: "",
 };
 
+export const PRODUCTION_DRAFT_PREFIX = "production-draft-new-";
+
 export default function ProductionPage() {
   const { t } = useLanguage();
   const [open, setOpen] = useState<ProductionOrder | null>(null);
+  const [openDraftId, setOpenDraftId] = useState<string | undefined>(undefined);
+  const [draftRefreshKey, setDraftRefreshKey] = useState(0);
   const { data: allOrders = [] } = useServiceOrders({});
   const draftCount = (allOrders as any[]).filter((o) => o.status === "draft").length;
+
+  const handleDialogClose = () => {
+    setOpen(null);
+    setOpenDraftId(undefined);
+    setDraftRefreshKey((k) => k + 1);
+  };
+
+  const handleResumeDraft = (draftId: string) => {
+    try {
+      const raw = localStorage.getItem(`${PRODUCTION_DRAFT_PREFIX}${draftId}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          setOpenDraftId(draftId);
+          setOpen({ ...BLANK, ...parsed, id: "__new__" });
+          return;
+        }
+      }
+    } catch { /* ignore corrupt draft */ }
+    setOpenDraftId(draftId);
+    setOpen(BLANK);
+  };
 
   return (
     <div className="min-w-0 max-w-full space-y-4 md:space-y-6">
@@ -63,11 +89,14 @@ export default function ProductionPage() {
           <OperationalDashboard />
         </TabsContent>
         <TabsContent value="drafts" className="mt-4">
-          <DraftsPanel onResumeProductionDraft={() => setOpen(BLANK)} />
+          <DraftsPanel
+            refreshKey={draftRefreshKey}
+            onResumeProductionDraft={handleResumeDraft}
+          />
         </TabsContent>
       </Tabs>
 
-      <OrderDetailDialog order={open} onClose={() => setOpen(null)} />
+      <OrderDetailDialog order={open} draftId={openDraftId} onClose={handleDialogClose} />
     </div>
   );
 }
