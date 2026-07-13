@@ -1,6 +1,11 @@
 import { useState, useCallback, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  listFinanceTechnicians,
+  listFinancialRecords,
+  createFinancialRecord,
+  deleteFinancialRecordsBy,
+} from "@/lib/apiFinance";
 import { useLanguage } from "@/hooks/useLanguage";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,39 +33,20 @@ import PartialPaymentsList from "./PartialPaymentsList";
 function useTechnicians() {
   return useQuery({
     queryKey: ["tech-detail-list"],
-    queryFn: async () => {
-      // Source of truth: users with role 'technician'
-      const { data: roleRows, error: rErr } = await supabase
-        .from("user_roles")
-        .select("user_id")
-        .eq("role", "technician");
-      if (rErr) throw rErr;
-      const ids = (roleRows || []).map((r) => r.user_id).filter(Boolean) as string[];
-      if (ids.length === 0) return [] as { id: string; name: string }[];
-
-      const { data: profiles, error: pErr } = await supabase
-        .from("profiles")
-        .select("id, full_name, email")
-        .in("id", ids);
-      if (pErr) throw pErr;
-      return (profiles || [])
-        .map((p) => ({ id: p.id, name: p.full_name || p.email || "—" }))
-        .sort((a, b) => a.name.localeCompare(b.name));
-    },
+    retry: 0,
+    // Source of truth: users with role 'technician' (user_roles + profiles via REST)
+    queryFn: () => listFinanceTechnicians(),
   });
 }
 
 function useTechFinancials() {
   return useQuery({
     queryKey: ["tech-financials"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("financial_records")
-        .select("id, label, amount, type, notes, category, assigned_user_id")
-        .in("type", ["expense_spreadsheet", "manual_revenue_expected", "manual_revenue_received", "financial_movements"]);
-      if (error) throw error;
-      return data ?? [];
-    },
+    retry: 0,
+    queryFn: () =>
+      listFinancialRecords({
+        type: ["expense_spreadsheet", "manual_revenue_expected", "manual_revenue_received", "financial_movements"],
+      }),
   });
 }
 
@@ -84,16 +70,8 @@ function useDeleteTechFinancials() {
     mutationFn: async ({ techId }: { techId: string }) => {
       // Delete financial records belonging to this technician (by assigned_user_id),
       // plus legacy rows tagged via the notes marker `tech:<id>`.
-      const { error: frError1 } = await supabase
-        .from("financial_records")
-        .delete()
-        .eq("assigned_user_id", techId);
-      if (frError1) throw frError1;
-      const { error: frError2 } = await supabase
-        .from("financial_records")
-        .delete()
-        .like("notes", `%tech:${techId}%`);
-      if (frError2) throw frError2;
+      await deleteFinancialRecordsBy({ assigned_user_id: techId });
+      await deleteFinancialRecordsBy({ notes_like: `tech:${techId}` });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tech-financials"] });
@@ -108,15 +86,14 @@ function useUpsertRevenue() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ techId, techName, type, amount, year }: { techId: string; techName: string; type: string; amount: number; year: string }) => {
-      await supabase.from("financial_records").delete().eq("type", type).like("notes", `%tech:${techId}:year:${year}%`);
-      const { error } = await supabase.from("financial_records").insert({
+      await deleteFinancialRecordsBy({ type, notes_like: `tech:${techId}:${techName}:year:${year}` });
+      await createFinancialRecord({
         type, source: "manual",
         label: type === "manual_revenue_expected" ? "Receita esperada" : "Receita recebida",
         amount, status: "confirmed",
         notes: `tech:${techId}:${techName}:year:${year}`,
         assigned_user_id: techId,
       });
-      if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tech-financials"] }),
   });
@@ -126,17 +103,16 @@ function useSaveSpreadsheet() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ techId, techName, spreadsheet }: { techId: string; techName: string; spreadsheet: SpreadsheetData }) => {
-      await supabase.from("financial_records").delete().eq("type", "expense_spreadsheet").like("notes", `%tech:${techId}%`);
+      await deleteFinancialRecordsBy({ type: "expense_spreadsheet", notes_like: `tech:${techId}` });
       const grandTotal = spreadsheet.rows.reduce((s, r) =>
         s + spreadsheet.columns.reduce((cs, c) => cs + (r.values[c.id] || 0), 0), 0);
-      const { error } = await supabase.from("financial_records").insert({
+      await createFinancialRecord({
         type: "expense_spreadsheet", source: "manual", label: "Despesas (planilha)",
         amount: grandTotal, status: "confirmed",
         notes: `tech:${techId}:${techName}`,
         category: JSON.stringify(spreadsheet),
         assigned_user_id: techId,
       });
-      if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tech-financials"] }),
   });
@@ -146,16 +122,15 @@ function useSaveMovements() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ techId, techName, movements }: { techId: string; techName: string; movements: FinancialMovement[] }) => {
-      await supabase.from("financial_records").delete().eq("type", "financial_movements").like("notes", `%tech:${techId}%`);
+      await deleteFinancialRecordsBy({ type: "financial_movements", notes_like: `tech:${techId}` });
       const totalLoans = movements.filter((m) => m.type === "loan").reduce((s, m) => s + m.amount, 0);
-      const { error } = await supabase.from("financial_records").insert({
+      await createFinancialRecord({
         type: "financial_movements", source: "manual", label: "Movimentações financeiras",
         amount: totalLoans, status: "confirmed",
         notes: `tech:${techId}:${techName}`,
         category: JSON.stringify(movements),
         assigned_user_id: techId,
       });
-      if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tech-financials"] }),
   });

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { getIntegrityIssues, getIntegritySnapshots, runIntegrityCheck } from "@/lib/apiFinance";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { toast } from "sonner";
 import { useLanguage } from "@/hooks/useLanguage";
@@ -50,19 +50,14 @@ export function useFinancialIntegrity(filters: IntegrityFilters = {}) {
   const issues = useQuery({
     queryKey: ["integrity-issues", workspaceId, year, filters],
     enabled: !!workspaceId,
+    retry: 0,
     queryFn: async () => {
-      let q = (supabase as any)
-        .from("financial_integrity_issues")
-        .select("*")
-        .eq("year_reference", year)
-        .order("detected_at", { ascending: false })
-        .limit(500);
-      if (workspaceId) q = q.eq("workspace_id", workspaceId);
-      if (filters.severity && filters.severity !== "all") q = q.eq("severity", filters.severity);
-      if (filters.issueType && filters.issueType !== "all") q = q.eq("issue_type", filters.issueType);
-      if (filters.status && filters.status !== "all") q = q.eq("status", filters.status);
-      const { data, error } = await q;
-      if (error) throw error;
+      const data = await getIntegrityIssues({
+        year,
+        severity: filters.severity,
+        issueType: filters.issueType,
+        status: filters.status,
+      });
       return (data ?? []) as IntegrityIssue[];
     },
   });
@@ -70,16 +65,9 @@ export function useFinancialIntegrity(filters: IntegrityFilters = {}) {
   const snapshots = useQuery({
     queryKey: ["integrity-snapshots", workspaceId, year],
     enabled: !!workspaceId,
+    retry: 0,
     queryFn: async () => {
-      let q = (supabase as any)
-        .from("financial_integrity_snapshots")
-        .select("*")
-        .eq("year_reference", year)
-        .order("created_at", { ascending: false })
-        .limit(50);
-      if (workspaceId) q = q.eq("workspace_id", workspaceId);
-      const { data, error } = await q;
-      if (error) throw error;
+      const data = await getIntegritySnapshots(year);
       return (data ?? []) as IntegritySnapshot[];
     },
   });
@@ -94,11 +82,7 @@ export function useRunIntegrityCheck() {
 
   return useMutation({
     mutationFn: async (year?: number) => {
-      const { data, error } = await (supabase as any).rpc("run_financial_integrity_check", {
-        _workspace_id: workspaceId ?? null,
-        _year: year ?? new Date().getFullYear(),
-      });
-      if (error) throw error;
+      const data = await runIntegrityCheck(year ?? new Date().getFullYear());
       return data as {
         run_id: string; critical: number; warning: number; info: number;
         totals: { expected: number; received: number };

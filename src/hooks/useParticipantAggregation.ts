@@ -1,8 +1,7 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { getAggregationSource } from "@/lib/apiFinance";
 import { partialPaymentsStore } from "@/lib/partialPaymentsStore";
-import { withPromiseTimeout } from "@/lib/asyncGuard";
 import {
   toCents,
   centsToEuros,
@@ -101,24 +100,10 @@ export function useParticipantAggregation() {
     refetchOnMount: false,
     retry: 0,
     queryFn: async () => {
-      const [soRes, rulesRes, ruleItemsRes] = await withPromiseTimeout(Promise.all([
-        supabase
-          .from("service_orders")
-          .select(
-            "id, total, status, group_id, week, distribution_snapshot",
-          ),
-        supabase
-          .from("profit_rules")
-          .select("id, group_ids, is_active")
-          .eq("is_active", true),
-        supabase
-          .from("profit_rule_items")
-          .select("rule_id, participant_name, percentage"),
-      ]), 12000, "participant_aggregation");
-
-      const serviceOrders = soRes.data ?? [];
-      const rules = rulesRes.data ?? [];
-      const ruleItems = ruleItemsRes.data ?? [];
+      const source = await getAggregationSource();
+      const serviceOrders = source.service_orders ?? [];
+      const rules = source.profit_rules ?? [];
+      const ruleItems = source.profit_rule_items ?? [];
 
       // Index rule items by rule_id
       const itemsByRule = new Map<string, Array<{ name: string; pct: number }>>();

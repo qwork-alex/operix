@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { getParticipationSummary, getParticipationDetail } from "@/lib/apiFinance";
 import { useAuth } from "./useAuth";
 
 export interface ParticipationSummaryRow {
@@ -41,15 +41,10 @@ export function useParticipationSummary(year?: number) {
   return useQuery({
     queryKey: ["participation_summary", uid, year ?? "all"],
     enabled: !!uid,
+    retry: 0,
     queryFn: async () => {
-      let q = supabase
-        .from("v_participation_summary" as any)
-        .select("*")
-        .neq("participant_type", "client");
-      if (year) q = q.eq("year_reference", year);
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data ?? []) as unknown as ParticipationSummaryRow[];
+      const data = await getParticipationSummary(year);
+      return (data ?? []) as ParticipationSummaryRow[];
     },
   });
 }
@@ -62,17 +57,10 @@ export function useParticipationDetail(
   return useQuery({
     queryKey: ["participation_detail", uid, participantName, year ?? "all"],
     enabled: !!uid && !!participantName,
+    retry: 0,
     queryFn: async () => {
-      let q = supabase
-        .from("participation_ledger" as any)
-        .select("*")
-        .eq("participant_name", participantName!)
-        .neq("participant_type", "client")
-        .order("updated_at", { ascending: false });
-      if (year) q = q.eq("year_reference", year);
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data ?? []) as unknown as ParticipationLedgerEntry[];
+      const data = await getParticipationDetail(participantName!, year);
+      return (data ?? []) as ParticipationLedgerEntry[];
     },
   });
 }

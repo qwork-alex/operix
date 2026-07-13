@@ -1,6 +1,8 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { listProfitRules, saveProfitRule, deleteProfitRule, deleteAllProfitRules } from "@/lib/apiFinance";
+import { listServiceOrders } from "@/lib/apiServiceOrders";
+import { useWorkspace } from "@/hooks/useWorkspace";
 import { useLanguage } from "@/hooks/useLanguage";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,7 +29,6 @@ import {
   PieChart as PieChartIcon, Plus, Save, Trash2, Loader2,
   AlertTriangle, Check, Users, FolderPlus, X, ChevronDown, ChevronRight, Search,
 } from "lucide-react";
-import { splitCents, toCents } from "@/lib/distributionMath";
 
 // ─── Types ───
 
@@ -116,25 +117,24 @@ export function ProfitDistribution() {
 
   const toggleOpen = (id: string) => setOpenRules(prev => ({ ...prev, [id]: !prev[id] }));
 
+  const { workspaceId } = useWorkspace();
+
   // ── Queries ──
   const { data: fetchedRules = [], isLoading: rulesLoading } = useQuery({
     queryKey: ["profit-rules"],
+    retry: 0,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("profit_rules")
-        .select("*, profit_rule_items(*)")
-        .order("created_at");
-      if (error) throw error;
-      return (data || []).map((r: any) => ({
+      const data = await listProfitRules();
+      return data.map((r) => ({
         id: r.id,
         rule_name: r.rule_name,
         group_ids: Array.isArray(r.group_ids) ? r.group_ids.filter(Boolean) : [],
         is_active: r.is_active,
-        items: (r.profit_rule_items || []).map((item: any) => ({
+        items: (r.profit_rule_items || []).map((item) => ({
           id: item.id,
           participant_name: item.participant_name,
           percentage: Number(item.percentage),
-          participant_type: item.participant_type,
+          participant_type: item.participant_type as RuleItem["participant_type"],
         })),
       })) as ProfitRule[];
     },
@@ -143,15 +143,10 @@ export function ProfitDistribution() {
   const rules = fetchedRules;
 
   const { data: serviceOrders = [], isLoading: soLoading } = useQuery({
-    queryKey: ["service_orders"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("service_orders")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
+    queryKey: ["service_orders", workspaceId],
+    enabled: !!workspaceId,
+    retry: 0,
+    queryFn: () => listServiceOrders(workspaceId!),
   });
 
   // Group info from service orders
@@ -306,6 +301,8 @@ export function ProfitDistribution() {
   };
 
   // ── Save single rule ──
+  // Itens, distribuições, earnings e snapshot são recalculados
+  // transacionalmente no backend (POST /finance/profit-rules).
   const saveRuleMutation = useMutation({
     mutationFn: async (rule: ProfitRule) => {
       const group_ids = Array.from(new Set(rule.group_ids.filter(Boolean)));
@@ -319,75 +316,16 @@ export function ProfitDistribution() {
       if (group_ids.length === 0) throw new Error("Selecione pelo menos um grupo");
       if (getItemsTotal(rule.items) !== 100) throw new Error("A soma das percentagens deve ser 100%");
 
-      console.log("Saving rule:", { rule_name: rule.rule_name, group_ids, participants, isNew: !!rule._isNew });
+      const saved = await saveProfitRule({
+        id: rule.id,
+        is_new: !!rule._isNew,
+        rule_name: rule.rule_name,
+        group_ids,
+        is_active: rule.is_active,
+        items: participants,
+      });
 
-      let ruleId: string;
-
-      if (rule._isNew) {
-        const { data: savedRule, error: ruleError } = await supabase
-          .from("profit_rules")
-          .insert({ rule_name: rule.rule_name, group_ids, is_active: rule.is_active } as any)
-          .select("id")
-          .single();
-        if (ruleError) throw ruleError;
-        ruleId = savedRule.id;
-      } else {
-        const { error: ruleError } = await supabase
-          .from("profit_rules")
-          .update({ rule_name: rule.rule_name, group_ids, is_active: rule.is_active, updated_at: new Date().toISOString() } as any)
-          .eq("id", rule.id);
-        if (ruleError) throw ruleError;
-        ruleId = rule.id;
-      }
-
-      await supabase.from("profit_rule_items").delete().eq("rule_id", ruleId);
-      const items = participants.map(i => ({
-        rule_id: ruleId,
-        participant_name: i.participant_name,
-        percentage: i.percentage,
-        participant_type: i.participant_type,
-      }));
-      const { error: itemsError } = await supabase.from("profit_rule_items").insert(items);
-      if (itemsError) throw itemsError;
-
-      const allSOs = group_ids.flatMap(gid => getGroupSOs(gid));
-      if (allSOs.length > 0) {
-        const soIds = allSOs.map((so: any) => so.id);
-        await supabase.from("service_order_distributions").delete().in("service_order_id", soIds);
-
-        // Use SHARED canonical integer-cents splitter from
-        // src/lib/distributionMath.ts — same as useParticipantAggregation.
-        const pctsArr = participants.map((p) => p.percentage);
-        const distributions = allSOs.flatMap((so: any) => {
-          const totalCents = toCents(so.total);
-          const parts = splitCents(totalCents, pctsArr);
-          return participants.map((item, i) => ({
-            service_order_id: so.id,
-            participant_name: item.participant_name,
-            percentage: item.percentage,
-            calculated_value: parts[i] / 100,
-          }));
-        });
-        if (distributions.length > 0) {
-          await supabase.from("service_order_distributions").insert(distributions);
-        }
-
-        const techIdx = participants.findIndex(i => i.participant_type === "technician");
-        if (techIdx >= 0) {
-          const techPct = participants[techIdx].percentage;
-          for (const so of allSOs) {
-            const totalCents = toCents((so as any).total);
-            const parts = splitCents(totalCents, pctsArr);
-            await supabase.from("service_orders").update({
-              technician_percentage: techPct,
-              technician_earning: parts[techIdx] / 100,
-              updated_at: new Date().toISOString(),
-            }).eq("id", (so as any).id);
-          }
-        }
-      }
-
-      return ruleId;
+      return saved.id;
     },
     onSuccess: async (_ruleId, savedRule) => {
       setLocalRules(prev => prev.filter(rule => rule.id !== savedRule.id));
@@ -395,6 +333,7 @@ export function ProfitDistribution() {
         queryClient.invalidateQueries({ queryKey: ["profit-rules"] }),
         queryClient.invalidateQueries({ queryKey: ["service_orders"] }),
         queryClient.invalidateQueries({ queryKey: ["technician_earnings_map"] }),
+        queryClient.invalidateQueries({ queryKey: ["participant-aggregation"] }),
       ]);
       toast.success("Regra salva com sucesso");
     },
@@ -403,14 +342,12 @@ export function ProfitDistribution() {
 
   // ── Delete rule ──
   const deleteRuleMutation = useMutation({
-    mutationFn: async (ruleId: string) => {
-      const { error } = await supabase.from("profit_rules").delete().eq("id", ruleId);
-      if (error) throw error;
-    },
+    mutationFn: (ruleId: string) => deleteProfitRule(ruleId),
     onSuccess: () => {
       setDeleteRuleTarget(null);
       queryClient.invalidateQueries({ queryKey: ["profit-rules"] });
       queryClient.invalidateQueries({ queryKey: ["technician_earnings_map"] });
+      queryClient.invalidateQueries({ queryKey: ["participant-aggregation"] });
       toast.success("Regra excluída");
     },
     onError: (err: any) => toast.error(err?.message || "Erro ao excluir"),
@@ -418,15 +355,13 @@ export function ProfitDistribution() {
 
   // ── Delete all rules ──
   const deleteAllMutation = useMutation({
-    mutationFn: async () => {
-      const { error } = await supabase.from("profit_rules").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-      if (error) throw error;
-    },
+    mutationFn: () => deleteAllProfitRules(),
     onSuccess: () => {
       setLocalRules([]);
       setShowDeleteAll(false);
       queryClient.invalidateQueries({ queryKey: ["profit-rules"] });
       queryClient.invalidateQueries({ queryKey: ["technician_earnings_map"] });
+      queryClient.invalidateQueries({ queryKey: ["participant-aggregation"] });
       toast.success("Todas as regras excluídas");
     },
     onError: (err: any) => toast.error(err?.message || "Erro ao excluir"),

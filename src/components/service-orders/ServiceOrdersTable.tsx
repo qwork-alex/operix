@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { updateServiceOrder, deleteServiceOrder } from "@/lib/apiServiceOrders";
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -220,10 +220,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
 
   // --- Delete mutation ---
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { assertedDelete } = await import("@/lib/assertDelete");
-      await assertedDelete("service_orders", (q) => q.eq("id", id));
-    },
+    mutationFn: (id: string) => deleteServiceOrder(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["service_orders"] });
       queryClient.invalidateQueries({ queryKey: ["financial-summary"] });
@@ -234,8 +231,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
 
   const bulkDeleteMutation = useMutation({
     mutationFn: async (ids: string[]) => {
-      const { assertedDelete } = await import("@/lib/assertDelete");
-      await assertedDelete("service_orders", (q) => q.in("id", ids), ids.length);
+      await Promise.all(ids.map((id) => deleteServiceOrder(id)));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["service_orders"] });
@@ -261,12 +257,8 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
         throw new Error(t("validate.inlineError") + ": " + t("validate.zeroTotal").replace("{n}", ""));
       }
 
-      const { data: existing, error: existingError } = await supabase
-        .from("service_orders")
-        .select("*")
-        .eq("id", id)
-        .single();
-      if (existingError) throw existingError;
+      const existing = orders.find((o) => o.id === id);
+      if (!existing) throw new Error("Ordem de serviço não encontrada.");
 
       const resolvedClientId = editForm.client_id === EMPTY_RELATION_VALUE ? null : editForm.client_id;
       const resolvedAssignedUserId = editForm.assigned_user_id === EMPTY_RELATION_VALUE ? null : editForm.assigned_user_id;
@@ -285,8 +277,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
       // Calculate technician earnings from profit distribution rules
       const techEarn = getTechEarnings(techName, total, earningsMap);
 
-      const payload = {
-        ...existing,
+      await updateServiceOrder(id, {
         client_id: resolvedClientId,
         client_name: clientName,
         technician_name: techName,
@@ -307,18 +298,7 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
         total,
         technician_percentage: techEarn?.percentage ?? 0,
         technician_earning: techEarn?.earnings ?? 0,
-        created_by: existing.created_by ?? user?.id ?? null,
-        created_at: existing.created_at ?? new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      delete (payload as any).clients;
-      delete (payload as any).technicians;
-      delete (payload as any).created_by;
-      delete (payload as any).technician_id;
-
-      const { error } = await supabase.from("service_orders").update(payload).eq("id", id);
-      if (error) throw error;
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["service_orders"] });
@@ -331,9 +311,15 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
   });
 
   const startEdit = (o: ServiceOrderRow) => {
+    // OS extraídas por OCR podem ter apenas client_name (sem client_id):
+    // resolve pelo nome para o seletor não abrir vazio.
+    const clientName = (o.client_name || o.clients?.name || "").trim().toLowerCase();
+    const clientByName = !o.client_id && clientName
+      ? clients.find((c) => c.name.trim().toLowerCase() === clientName)
+      : null;
     setEditingId(o.id);
     setEditForm({
-      client_id: o.client_id || EMPTY_RELATION_VALUE,
+      client_id: o.client_id || clientByName?.id || EMPTY_RELATION_VALUE,
       platform: o.platform || "",
       assigned_user_id: o.assigned_user_id || EMPTY_RELATION_VALUE,
       week: o.week || "",
@@ -522,11 +508,11 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
                       <div className="grid grid-cols-1 gap-2">
                         <Select value={editForm.client_id} onValueChange={(value) => updateField("client_id", value)}>
                           <SelectTrigger className="h-11 text-xs bg-background"><SelectValue placeholder={t("label.client")} /></SelectTrigger>
-                          <SelectContent><SelectItem value={EMPTY_RELATION_VALUE}>—</SelectItem>{clients.map((client) => <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>)}</SelectContent>
+                          <SelectContent><SelectItem value={EMPTY_RELATION_VALUE}>—</SelectItem>{editForm.client_id !== EMPTY_RELATION_VALUE && !clients.some((c) => c.id === editForm.client_id) && <SelectItem value={editForm.client_id}>{o.client_name || o.clients?.name || "Cliente atual"}</SelectItem>}{clients.map((client) => <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>)}</SelectContent>
                         </Select>
                         <Select value={editForm.assigned_user_id} onValueChange={(value) => updateField("assigned_user_id", value)}>
                           <SelectTrigger className="h-11 text-xs bg-background"><SelectValue placeholder={t("label.technician")} /></SelectTrigger>
-                          <SelectContent><SelectItem value={EMPTY_RELATION_VALUE}>—</SelectItem>{technicians.map((technician) => <SelectItem key={technician.user_id} value={technician.user_id}>{technician.name}</SelectItem>)}</SelectContent>
+                          <SelectContent><SelectItem value={EMPTY_RELATION_VALUE}>—</SelectItem>{editForm.assigned_user_id !== EMPTY_RELATION_VALUE && !technicians.some((tech) => tech.user_id === editForm.assigned_user_id) && <SelectItem value={editForm.assigned_user_id}>{o.technician_name || o.technicians?.name || "Técnico atual"}</SelectItem>}{technicians.map((technician) => <SelectItem key={technician.user_id} value={technician.user_id}>{technician.name}</SelectItem>)}</SelectContent>
                         </Select>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
@@ -615,6 +601,9 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value={EMPTY_RELATION_VALUE}>—</SelectItem>
+                              {editForm.client_id !== EMPTY_RELATION_VALUE && !clients.some((c) => c.id === editForm.client_id) && (
+                                <SelectItem value={editForm.client_id}>{o.client_name || o.clients?.name || "Cliente atual"}</SelectItem>
+                              )}
                               {clients.map((client) => (
                                 <SelectItem key={client.id} value={client.id}>
                                   {client.name}
@@ -633,6 +622,9 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value={EMPTY_RELATION_VALUE}>—</SelectItem>
+                              {editForm.assigned_user_id !== EMPTY_RELATION_VALUE && !technicians.some((tech) => tech.user_id === editForm.assigned_user_id) && (
+                                <SelectItem value={editForm.assigned_user_id}>{o.technician_name || o.technicians?.name || "Técnico atual"}</SelectItem>
+                              )}
                               {technicians.map((technician) => (
                                 <SelectItem key={technician.user_id} value={technician.user_id}>
                                   <span className="font-medium">{technician.name}</span>

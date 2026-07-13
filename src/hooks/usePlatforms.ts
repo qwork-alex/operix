@@ -1,9 +1,7 @@
-import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { toast } from "@/hooks/use-toast";
-import { RealtimeHub } from "@/lib/realtime/RealtimeHub";
 
 export type PlatformState = "active" | "paused" | "archived" | "degraded";
 
@@ -30,31 +28,22 @@ export function usePlatforms() {
   const query = useQuery({
     queryKey: [...QK, workspaceId],
     enabled: !!workspaceId,
-    queryFn: async (): Promise<Platform[]> => {
-      const { data, error } = await supabase
-        .from("platforms")
-        .select("*")
-        .eq("workspace_id", workspaceId!)
-        .order("name");
-      if (error) throw error;
-      return (data ?? []) as Platform[];
-    },
+    retry: 0,
+    staleTime: 30_000,
+    queryFn: () =>
+      apiRequest<Platform[]>(`/platforms?workspace_id=${encodeURIComponent(workspaceId!)}`, {
+        timeoutMs: 10000,
+      }),
   });
-
-  // Realtime subscription (shared via RealtimeHub)
-  useEffect(() => {
-    if (!workspaceId) return;
-    const off = RealtimeHub.subscribe(
-      { table: "platforms", workspaceId },
-      () => qc.invalidateQueries({ queryKey: [...QK, workspaceId] }),
-    );
-    return off;
-  }, [workspaceId, qc]);
 
   const setState = useMutation({
     mutationFn: async ({ id, state }: { id: string; state: PlatformState }) => {
-      const { error } = await supabase.from("platforms").update({ state }).eq("id", id);
-      if (error) throw error;
+      await apiRequest<Platform>(`/platforms/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ state }),
+        timeoutMs: 10000,
+      });
     },
     onMutate: async ({ id, state }) => {
       await qc.cancelQueries({ queryKey: [...QK, workspaceId] });
@@ -69,6 +58,7 @@ export function usePlatforms() {
       toast({ title: "Erro", description: String((err as any)?.message ?? err), variant: "destructive" });
     },
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [...QK, workspaceId] });
       toast({ title: "Estado actualizado" });
     },
   });
@@ -76,14 +66,12 @@ export function usePlatforms() {
   const create = useMutation({
     mutationFn: async ({ name, slug, state = "active" as PlatformState }: { name: string; slug?: string; state?: PlatformState }) => {
       if (!workspaceId) throw new Error("Sem workspace activo");
-      const finalSlug = (slug ?? name).toLowerCase().trim().replace(/\s+/g, "-");
-      const { data, error } = await supabase
-        .from("platforms")
-        .insert({ workspace_id: workspaceId, name: name.trim(), slug: finalSlug, state })
-        .select()
-        .single();
-      if (error) throw error;
-      return data as Platform;
+      return apiRequest<Platform>("/platforms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspace_id: workspaceId, name: name.trim(), slug, state }),
+        timeoutMs: 10000,
+      });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [...QK, workspaceId] });

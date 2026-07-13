@@ -18,6 +18,9 @@ import { productionOrdersRouter } from "./routes/productionOrders.js";
 import { productionPhotosRouter } from "./routes/productionPhotos.js";
 import { invitesRouter } from "./routes/invites.js";
 import { paymentOrdersRouter } from "./routes/paymentOrders.js";
+import { platformsRouter } from "./routes/platforms.js";
+import { financeRouter } from "./routes/finance.js";
+import { financialRecordsRouter } from "./routes/financialRecords.js";
 
 const app = express();
 
@@ -53,6 +56,9 @@ app.use("/api/production-orders", productionOrdersRouter);
 app.use("/api/production-orders/:orderId/photos", productionPhotosRouter);
 app.use("/api", invitesRouter);
 app.use("/api/payment-orders", paymentOrdersRouter);
+app.use("/api/platforms", platformsRouter);
+app.use("/api/finance", financeRouter);
+app.use("/api/financial-records", financialRecordsRouter);
 
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof ZodError) {

@@ -419,6 +419,26 @@ model BackendEventLog {
   @@map("backend_event_logs")
 }
 
+model Platform {
+  id              String    @id @default(uuid())
+  workspaceId     String    @map("workspace_id")
+  slug            String
+  name            String
+  state           String    @default("active")
+  color           String?
+  metadata        Json      @default("{}")
+  lastHeartbeatAt DateTime? @map("last_heartbeat_at")
+  lastIngestAt    DateTime? @map("last_ingest_at")
+  createdBy       String?   @map("created_by")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId])
+  @@index([state])
+  @@map("platforms")
+}
+
 model Client {
   id              String    @id @default(uuid())
   workspaceId     String?   @map("workspace_id")
@@ -614,4 +634,147 @@ model Document {
 
   @@index([entityType, module])
   @@map("documents")
+}
+
+model FinancialRecord {
+  id             String    @id @default(uuid())
+  workspaceId    String?   @map("workspace_id")
+  type           String
+  source         String    @default("manual")
+  origin         String?
+  category       String?
+  label          String?
+  amount         Float     @default(0)
+  status         String    @default("pending")
+  notes          String?
+  referenceId    String?   @map("reference_id")
+  serviceOrderId String?   @map("service_order_id")
+  paymentOrderId String?   @map("payment_order_id")
+  assignedUserId String?   @map("assigned_user_id")
+  vehicleId      String?   @map("vehicle_id")
+  yearReference  Int?      @map("year_reference")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@index([workspaceId, type, category])
+  @@index([assignedUserId])
+  @@index([yearReference])
+  @@map("financial_records")
+}
+
+model Reconciliation {
+  id               String   @id @default(uuid())
+  serviceOrderId   String?  @map("service_order_id")
+  paymentOrderId   String?  @map("payment_order_id")
+  matchedBy        String   @default("auto") @map("matched_by")
+  confidenceScore  Float    @default(0) @map("confidence_score")
+  differenceAmount Float    @default(0) @map("difference_amount")
+  status           String   @default("pending")
+  notes            String?
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@index([status, matchedBy])
+  @@index([serviceOrderId])
+  @@index([paymentOrderId])
+  @@map("reconciliations")
+}
+
+model ProfitRule {
+  id        String   @id @default(uuid())
+  ruleName  String   @map("rule_name")
+  groupIds  String[] @default([]) @map("group_ids")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdBy String?  @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  items ProfitRuleItem[]
+
+  @@map("profit_rules")
+}
+
+model ProfitRuleItem {
+  id              String   @id @default(uuid())
+  ruleId          String   @map("rule_id")
+  participantName String   @map("participant_name")
+  percentage      Float    @default(0)
+  participantType String   @default("other") @map("participant_type")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  rule ProfitRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId])
+  @@map("profit_rule_items")
+}
+
+model ServiceOrderDistribution {
+  id              String   @id @default(uuid())
+  serviceOrderId  String   @map("service_order_id")
+  ruleItemId      String?  @map("rule_item_id")
+  participantName String   @map("participant_name")
+  percentage      Float    @default(0)
+  calculatedValue Float    @default(0) @map("calculated_value")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([serviceOrderId])
+  @@map("service_order_distributions")
+}
+
+model FinancialEvent {
+  id          String   @id @default(uuid())
+  workspaceId String?  @map("workspace_id")
+  eventType   String   @map("event_type")
+  entityType  String   @map("entity_type")
+  entityId    String?  @map("entity_id")
+  payload     Json     @default("{}")
+  eventHash   String?  @map("event_hash")
+  actorUserId String?  @map("actor_user_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([workspaceId, createdAt])
+  @@index([entityType, entityId])
+  @@map("financial_events")
+}
+
+model FinancialIntegrityIssue {
+  id            String    @id @default(uuid())
+  workspaceId   String?   @map("workspace_id")
+  yearReference Int?      @map("year_reference")
+  severity      String    @default("warning")
+  issueType     String    @map("issue_type")
+  entityType    String?   @map("entity_type")
+  entityId      String?   @map("entity_id")
+  referenceId   String?   @map("reference_id")
+  detectedAt    DateTime  @default(now()) @map("detected_at")
+  resolvedAt    DateTime? @map("resolved_at")
+  status        String    @default("open")
+  detailsJson   Json      @default("{}") @map("details_json")
+  hash          String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@index([workspaceId, yearReference])
+  @@index([status, severity])
+  @@map("financial_integrity_issues")
+}
+
+model FinancialIntegritySnapshot {
+  id               String   @id @default(uuid())
+  workspaceId      String?  @map("workspace_id")
+  yearReference    Int      @map("year_reference")
+  snapshotType     String   @default("manual") @map("snapshot_type")
+  snapshotHash     String?  @map("snapshot_hash")
+  totalReceived    Float    @default(0) @map("total_received")
+  totalExpected    Float    @default(0) @map("total_expected")
+  totalPending     Float    @default(0) @map("total_pending")
+  totalDistributed Float    @default(0) @map("total_distributed")
+  totalExpenses    Float    @default(0) @map("total_expenses")
+  totalProfit      Float    @default(0) @map("total_profit")
+  totalOs          Int      @default(0) @map("total_os")
+  totalOp          Int      @default(0) @map("total_op")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@index([workspaceId, yearReference, createdAt])
+  @@map("financial_integrity_snapshots")
 }

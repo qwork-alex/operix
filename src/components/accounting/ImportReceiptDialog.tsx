@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { supabase } from "@/integrations/supabase/client";
+import { extractReceipt, createFinancialRecord } from "@/lib/apiFinance";
+import { createDocument } from "@/lib/apiDocuments";
 import { uploadFile } from "@/lib/storage";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { useWorkspaceTechnicians } from "@/hooks/useFinancialPeriods";
@@ -100,10 +101,7 @@ export function ImportReceiptDialog({
     setExtracting(true);
     try {
       const fileBase64 = await fileToBase64(f);
-      const { data, error } = await supabase.functions.invoke("extract-receipt", {
-        body: { fileBase64, mimeType: f.type || "application/octet-stream", fileName: f.name },
-      });
-      if (error) throw error;
+      const data = await extractReceipt(fileBase64, f.type || "application/octet-stream", f.name);
       if ((data as any)?.error) throw new Error((data as any).error);
       const ex = data as Extracted;
       setExtracted(ex);
@@ -138,23 +136,18 @@ export function ImportReceiptDialog({
       await uploadFile("accounting-receipts", storagePath, file, file.type);
 
       // 2) Document row (entity_type='accounting_receipt')
-      const { data: doc, error: docErr } = await supabase
-        .from("documents")
-        .insert({
-          workspace_id: workspaceId,
-          name: file.name,
-          display_name: form.description,
-          type: "file",
-          module: "accounting",
-          entity_type: "accounting_receipt",
-          storage_path: `accounting-receipts/${storagePath}`,
-          mime_type: file.type,
-          size_bytes: file.size,
-          uploaded_by: userId,
-        })
-        .select("id")
-        .single();
-      if (docErr) throw docErr;
+      const doc = await createDocument({
+        workspace_id: workspaceId,
+        name: file.name,
+        display_name: form.description,
+        type: "file",
+        module: "accounting",
+        entity_type: "accounting_receipt",
+        storage_path: `accounting-receipts/${storagePath}`,
+        mime_type: file.type,
+        size_bytes: file.size,
+        uploaded_by: userId,
+      });
 
       // 3) Financial record (auto, origin='imported_document', reference_id=doc.id)
       const yr = year ?? (form.issue_date ? Number(form.issue_date.slice(0, 4)) : new Date().getFullYear());
@@ -182,8 +175,7 @@ export function ImportReceiptDialog({
       };
       if (form.techId && form.techId !== "none") payload.assigned_user_id = form.techId;
 
-      const { error: frErr } = await (supabase as any).from("financial_records").insert(payload);
-      if (frErr) throw frErr;
+      await createFinancialRecord(payload);
 
       toast.success("Documento importado e lançamento criado");
       invalidateAccountingDownstream(qc);

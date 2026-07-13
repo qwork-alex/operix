@@ -374,3 +374,84 @@ FIELD RULES:
     return res.status(500).json({ error: msg });
   }
 });
+
+extractRouter.post("/receipt", async (req: Request, res: Response) => {
+  try {
+    const { fileBase64, mimeType, fileName } = req.body;
+    if (!fileBase64) return res.status(400).json({ error: "No file data provided" });
+    if (!mimeType) return res.status(400).json({ error: "Missing mimeType" });
+
+    const aiRes = await fetchAICompletion({
+      messages: [
+        {
+          role: "system",
+          content: `You extract structured data from receipts, invoices, fuel tickets, toll receipts, restaurant tickets and any operational fiscal document (EU: PT, FR, EN, ES, IT, DE).
+Detect amounts, dates, merchant/vendor, currency, document number.
+Classify the most probable expense CATEGORY from this exact set:
+- "fuel"     (combustível, posto, station, gasolina, diesel)
+- "rent"     (aluguel, location, loyer, rental)
+- "tax"      (governo, impôt, taxe, tax, IRS, URSSAF, IRPF)
+- "material" (compras, achats, supplies, peças, parts)
+- "salary"   (salário, retirada, withdrawal, prélèvement)
+- "travel"   (viagem, péage, toll, hotel, parking, transporte)
+- "other"    (anything else — restaurant, miscellaneous)
+Return null when not present — never fabricate.`,
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `Extract structured data from this receipt/invoice. Filename: "${fileName ?? "unknown"}".
+Return amount as a plain number. Dates as YYYY-MM-DD. Currency as ISO code.`,
+            },
+            { type: "image_url", image_url: { url: `data:${mimeType};base64,${fileBase64}` } },
+          ],
+        },
+      ],
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "extract_receipt",
+            description: "Extract structured receipt data",
+            parameters: {
+              type: "object",
+              properties: {
+                merchant: { type: "string", description: "Vendor/merchant name" },
+                document_number: { type: "string" },
+                issue_date: { type: "string", description: "YYYY-MM-DD" },
+                amount: { type: "number", description: "Total amount, plain number" },
+                currency: { type: "string", description: "ISO code (EUR, USD, BRL, GBP)" },
+                category: {
+                  type: "string",
+                  enum: ["fuel", "rent", "tax", "material", "salary", "travel", "other"],
+                },
+                description: { type: "string", description: "Short human description" },
+                confidence: { type: "string", enum: ["high", "medium", "low"] },
+              },
+              required: ["confidence"],
+              additionalProperties: false,
+            },
+          },
+        },
+      ],
+      tool_choice: { type: "function", function: { name: "extract_receipt" } },
+    });
+
+    if (!aiRes.ok) {
+      const errText = await aiRes.text();
+      if (aiRes.status === 429) return res.status(429).json({ error: "Rate limit exceeded. Try again shortly." });
+      if (aiRes.status === 402) return res.status(402).json({ error: "AI credits exhausted." });
+      return res.status(500).json({ error: `AI error: ${aiRes.status} — ${errText}` });
+    }
+
+    const data = await aiRes.json();
+    const extracted = parseToolCall(data);
+    return res.json(extracted);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[extract/receipt]", msg);
+    return res.status(500).json({ error: msg });
+  }
+});

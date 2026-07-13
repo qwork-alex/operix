@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { getAggregationSource } from "@/lib/apiFinance";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -30,19 +30,14 @@ function fetchPartialsForParticipant(participantName: string) {
   return async (): Promise<PartialSO[]> => {
     // NO date filtering — service_orders use `week`, not dates.
     // Year is display-only at the UI level.
-    const { data: sos, error } = await supabase
-      .from("service_orders")
-      .select("id, total, car_name, license_plate, status, week, distribution_snapshot")
-      .eq("status", "partial");
-    if (error) throw error;
+    const source = await getAggregationSource();
+    const sos = (source.service_orders ?? []).filter((so) => so.status === "partial");
 
-    const before = sos?.length ?? 0;
-    const filtered = (sos ?? []).filter((so: any) => {
+    const filtered = sos.filter((so: any) => {
       const snap = so.distribution_snapshot;
       if (!Array.isArray(snap)) return false;
       return snap.some((s: any) => s?.participant_name === participantName);
     });
-    void before;
 
     return filtered.map((so: any) => ({
       id: so.id,

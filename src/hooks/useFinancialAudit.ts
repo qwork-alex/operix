@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { getAuditTimeline, getAuditIntegritySummary, getParticipationDiffs } from "@/lib/apiFinance";
 import { useWorkspace } from "@/hooks/useWorkspace";
 
 /**
  * Phase 4.5 — Financial Observability & Audit Layer (read-only).
  * All hooks here are SELECT-only; no mutation paths.
+ * Fase 2 (onda 2): migrado do Supabase para as rotas REST /api/finance/audit/*.
  */
 
 export interface TimelineFilters {
@@ -18,31 +19,18 @@ export interface TimelineFilters {
 
 export function useFinancialEventTimeline(filters: TimelineFilters = {}) {
   const { workspaceId: currentWorkspaceId } = useWorkspace();
-  const { year, eventType, entityType, entityId, hash, limit = 200 } = filters;
+  const { year, eventType, entityType, hash, limit = 200 } = filters;
 
   return useQuery({
     queryKey: [
       "financial_event_timeline",
       currentWorkspaceId,
-      year, eventType, entityType, entityId, hash, limit,
+      year, eventType, entityType, hash, limit,
     ],
     enabled: !!currentWorkspaceId,
+    retry: 0,
     queryFn: async () => {
-      let q = supabase
-        .from("financial_event_timeline_v" as any)
-        .select("*")
-        .eq("workspace_id", currentWorkspaceId!)
-        .order("created_at", { ascending: false })
-        .limit(limit);
-
-      if (year) q = q.eq("year_reference", year);
-      if (eventType) q = q.eq("event_type", eventType);
-      if (entityType) q = q.eq("entity_type", entityType);
-      if (entityId) q = q.eq("entity_id", entityId);
-      if (hash) q = q.eq("event_hash", hash);
-
-      const { data, error } = await q;
-      if (error) throw error;
+      const data = await getAuditTimeline({ year, eventType, entityType, hash, limit });
       return (data ?? []) as any[];
     },
   });
@@ -53,13 +41,9 @@ export function useFinancialIntegritySummary() {
   return useQuery({
     queryKey: ["financial_integrity_summary", currentWorkspaceId],
     enabled: !!currentWorkspaceId,
+    retry: 0,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("v_financial_integrity_summary" as any)
-        .select("*")
-        .eq("workspace_id", currentWorkspaceId!)
-        .maybeSingle();
-      if (error) throw error;
+      const data = await getAuditIntegritySummary();
       return (data ?? {
         workspace_id: currentWorkspaceId,
         duplicate_hash_count: 0,
@@ -80,16 +64,9 @@ export function useParticipationDiffs(ledgerId?: string | null, limit = 100) {
   return useQuery({
     queryKey: ["participation_diffs", currentWorkspaceId, ledgerId, limit],
     enabled: !!currentWorkspaceId,
+    retry: 0,
     queryFn: async () => {
-      let q = supabase
-        .from("participation_diffs" as any)
-        .select("*")
-        .eq("workspace_id", currentWorkspaceId!)
-        .order("created_at", { ascending: false })
-        .limit(limit);
-      if (ledgerId) q = q.eq("ledger_id", ledgerId);
-      const { data, error } = await q;
-      if (error) throw error;
+      const data = await getParticipationDiffs();
       return (data ?? []) as any[];
     },
   });

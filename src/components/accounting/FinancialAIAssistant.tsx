@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Loader2, Sparkles, AlertTriangle, Info, ShieldAlert, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
+import { getFinancialAIInsights } from "@/lib/apiFinance";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -50,10 +50,7 @@ export function FinancialAIAssistant({ open, onClose, year }: Props) {
     if (!workspaceId) return toast.error("Workspace indisponível");
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("financial-ai-insights", {
-        body: { workspaceId, year },
-      });
-      if (error) throw error;
+      const data = await getFinancialAIInsights(workspaceId, year);
       if ((data as any)?.error) throw new Error((data as any).error);
       setResult(data as Result);
     } catch (e: any) {

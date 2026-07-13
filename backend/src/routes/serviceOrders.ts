@@ -149,6 +149,29 @@ serviceOrdersRouter.patch("/:id", requireAuth, async (req: AuthenticatedRequest,
   return res.json(mapOrder(order));
 });
 
+// DELETE /service-orders/by-year/:year?workspace_id= — apaga o operacional de um ano
+serviceOrdersRouter.delete("/by-year/:year", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const year = Number.parseInt(req.params["year"] as string, 10);
+  const { workspace_id } = req.query as Record<string, string | undefined>;
+  if (!Number.isFinite(year)) return res.status(400).json({ message: "Ano inválido." });
+  if (!workspace_id) return res.status(400).json({ message: "workspace_id é obrigatório." });
+
+  const start = new Date(Date.UTC(year, 0, 1));
+  const end = new Date(Date.UTC(year + 1, 0, 1));
+  const range = { gte: start, lt: end };
+
+  const [orders, documents] = await prisma.$transaction([
+    prisma.serviceOrder.updateMany({
+      where: { workspaceId: workspace_id, deletedAt: null, createdAt: range },
+      data: { deletedAt: new Date(), deletedBy: req.auth?.userId ?? null, deletedReason: `delete_year_${year}` },
+    }),
+    prisma.document.deleteMany({
+      where: { workspaceId: workspace_id, entityType: "service_order", createdAt: range },
+    }),
+  ]);
+  return res.json({ deleted: orders.count, documents_deleted: documents.count });
+});
+
 // DELETE /service-orders/:id (soft delete)
 serviceOrdersRouter.delete("/:id", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   const id = req.params["id"] as string;

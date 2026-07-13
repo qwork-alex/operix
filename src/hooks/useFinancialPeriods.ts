@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { listFinancialRecords, listFinanceTechnicians } from "@/lib/apiFinance";
 import { useWorkspace } from "@/hooks/useWorkspace";
 
 /**
@@ -22,14 +22,10 @@ export function useFinancialYears(techId?: string | null) {
     enabled: !!workspaceId,
     staleTime: 30_000,
     queryFn: async (): Promise<number[]> => {
-      let q = supabase
-        .from("financial_records")
-        .select("year_reference")
-        .eq("workspace_id", workspaceId!)
-        .not("year_reference", "is", null);
-      if (tech) q = q.eq("assigned_user_id", tech);
-      const { data, error } = await q;
-      if (error) throw error;
+      const data = await listFinancialRecords({
+        workspace_id: workspaceId!,
+        assigned_user_id: tech ?? undefined,
+      });
 
       const set = new Set<number>();
       (data || []).forEach((r: any) => {
@@ -52,24 +48,8 @@ export function useWorkspaceTechnicians() {
   return useQuery({
     queryKey: ["workspace-technicians"],
     staleTime: 30_000,
-    queryFn: async () => {
-      const { data: roleRows, error: rErr } = await supabase
-        .from("user_roles")
-        .select("user_id")
-        .eq("role", "technician");
-      if (rErr) throw rErr;
-      const ids = (roleRows || []).map((r: any) => r.user_id).filter(Boolean);
-      if (ids.length === 0) return [] as { id: string; name: string }[];
-
-      const { data: profiles, error: pErr } = await supabase
-        .from("profiles")
-        .select("id, full_name, email")
-        .in("id", ids);
-      if (pErr) throw pErr;
-      return (profiles || [])
-        .map((p: any) => ({ id: p.id, name: p.full_name || p.email || "—" }))
-        .sort((a, b) => a.name.localeCompare(b.name));
-    },
+    retry: 0,
+    queryFn: () => listFinanceTechnicians(),
   });
 }
 

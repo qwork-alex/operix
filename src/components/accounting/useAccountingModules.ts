@@ -1,9 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { getCurrentUserId, logSaveError, logSavePayload } from "@/lib/authUser";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { useAuth } from "@/hooks/useAuth";
 import { invalidateAccountingDownstream } from "@/lib/financialSync";
+import {
+  listFinancialRecords,
+  createFinancialRecord,
+  updateFinancialRecord,
+  deleteFinancialRecord,
+} from "@/lib/apiFinance";
 import type { ModuleEntry } from "./ModulePanel";
 
 type ModuleKey = "rentals" | "expenses" | "fuel" | "travel" | "purchases" | "government" | "withdrawals";
@@ -57,60 +62,23 @@ export function useAccountingModule(
       ? ["accounting-module", "fuel", "fleet-mirror", workspaceId, selectedYear, selectedMonth, selectedTech]
       : ["accounting-module", moduleKey, workspaceId, user?.id, selectedYear, selectedMonth, selectedTech],
     enabled: !!workspaceId,
+    retry: 0,
     queryFn: async () => {
       if (isFuelMirror) {
-        let q = supabase
-          .from("fleet_fuel_logs")
-          .select("id, total_cost, liters, km_at_fuel, date, notes, vehicle_id, created_at, driver_id, vehicles(brand, model, license_plate)");
-        if (workspaceId) q = q.eq("workspace_id", workspaceId);
-        if (selectedYear && !selectedMonth) {
-          q = q.gte("date", `${selectedYear}-01-01`).lte("date", `${selectedYear}-12-31`);
-        }
-        if (selectedYear && selectedMonth) {
-          const mm = String(selectedMonth).padStart(2, "0");
-          const last = new Date(selectedYear, selectedMonth, 0).getDate();
-          q = q.gte("date", `${selectedYear}-${mm}-01`).lte("date", `${selectedYear}-${mm}-${last}`);
-        }
-        const { data, error } = await q.order("date", { ascending: false });
-        if (error) throw error;
-        return (data || []).map((r: any) => {
-          const v = r.vehicles || {};
-          const vehicleLabel = `${v.brand || ""} ${v.model || ""} ${v.license_plate || ""}`.trim();
-          const noteParts = [
-            `${Number(r.liters || 0)}L`,
-            r.km_at_fuel ? `${Number(r.km_at_fuel).toLocaleString()} km` : null,
-            r.notes,
-          ].filter(Boolean);
-          return {
-            id: r.id,
-            label: vehicleLabel ? `Combustível — ${vehicleLabel}` : "Combustível",
-            amount: Number(r.total_cost || 0),
-            notes: noteParts.join(" • "),
-            created_at: r.date || r.created_at,
-          };
-        });
+        // Espelho da Frota: módulo Fleet ainda não migrado do Supabase
+        // (fora da onda 2). Sem dados até a migração da frota.
+        return [] as any[];
       }
 
-      let q = supabase
-        .from("financial_records")
-        .select("*")
-        .eq("type", "expense")
-        .eq("workspace_id", workspaceId!);
-
-      if (config.category) {
-        q = q.eq("category", config.category);
-      } else if (moduleKey === "expenses") {
-        q = q.eq("category", "other");
-      }
-
-      if (selectedYear) q = q.eq("year_reference", selectedYear);
-      if (selectedTech) q = q.eq("assigned_user_id", selectedTech);
-      if (monthRange) q = q.gte("created_at", monthRange.startISO).lte("created_at", monthRange.endISO);
-
-      q = q.order("created_at", { ascending: false });
-      const { data, error } = await q;
-      if (error) throw error;
-      return data || [];
+      return listFinancialRecords({
+        workspace_id: workspaceId!,
+        type: "expense",
+        category: config.category ?? (moduleKey === "expenses" ? "other" : undefined),
+        year_reference: selectedYear ?? undefined,
+        assigned_user_id: selectedTech ?? undefined,
+        created_from: monthRange?.startISO,
+        created_to: monthRange?.endISO,
+      });
     },
   });
 
@@ -151,8 +119,9 @@ export function useAccountingModule(
       if (selectedTech) payload.assigned_user_id = selectedTech;
       if (createdAt) payload.created_at = createdAt;
       logSavePayload("AccountingModule:insert", currentUserId, payload);
-      const { error } = await (supabase as any).from("financial_records").insert(payload);
-      if (error) {
+      try {
+        await createFinancialRecord(payload);
+      } catch (error) {
         logSaveError("AccountingModule:insert", error);
         throw error;
       }
@@ -166,11 +135,9 @@ export function useAccountingModule(
       const currentUserId = await getCurrentUserId();
       const payload = { label: entry.label, amount: entry.amount, notes: entry.notes };
       logSavePayload("AccountingModule:update", currentUserId, payload);
-      const { error } = await (supabase as any)
-        .from("financial_records")
-        .update(payload)
-        .eq("id", id);
-      if (error) {
+      try {
+        await updateFinancialRecord(id, payload);
+      } catch (error) {
         logSaveError("AccountingModule:update", error);
         throw error;
       }
@@ -181,8 +148,7 @@ export function useAccountingModule(
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       if (isFuelMirror) throw new Error("Combustível é gerido na Frota");
-      const { error } = await supabase.from("financial_records").delete().eq("id", id);
-      if (error) throw error;
+      await deleteFinancialRecord(id);
     },
     onSuccess: invalidate,
   });

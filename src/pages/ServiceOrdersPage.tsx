@@ -35,10 +35,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTechnicianEarnings, getTechEarnings } from "@/hooks/useTechnicianEarnings";
 import { Can } from "@/components/Can";
 import { getCurrentUser } from "@/lib/authUser";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 import { useContextualWorkspace } from "@/hooks/useContextualWorkspace";
 import { ContextualWorkspacePicker } from "@/components/workspace/ContextualWorkspacePicker";
-import { withPromiseTimeout } from "@/lib/asyncGuard";
 
 export default function ServiceOrdersPage() {
   const { t, formatCurrency } = useLanguage();
@@ -256,46 +255,15 @@ export default function ServiceOrdersPage() {
   const handleDeleteYear = useCallback(async (year: string) => {
     const y = parseInt(year, 10);
     if (!Number.isFinite(y)) return;
-    const start = new Date(Date.UTC(y, 0, 1)).toISOString();
-    const end = new Date(Date.UTC(y + 1, 0, 1)).toISOString();
+    const workspaceId = ctxWs.resolvedWorkspaceId;
+    if (!workspaceId) {
+      toast.error("Selecione um workspace antes de excluir.");
+      return;
+    }
     try {
-      // Collect SO ids in range to cascade-clean dependents that reference them.
-      const soIdsRes = await withPromiseTimeout<any>(
-        supabase
-          .from("service_orders")
-          .select("id")
-          .gte("created_at", start)
-          .lt("created_at", end),
-        12000,
-        "service_orders_delete_year_ids",
-      );
-      const soIds = (soIdsRes.data ?? []).map((r: any) => r.id);
-      if (soIds.length > 0) {
-        // Cascade dependents (best-effort; ignore errors so the year still wipes).
-        await withPromiseTimeout<any>(supabase.from("service_order_distributions").delete().in("service_order_id", soIds), 12000, "service_orders_delete_year_distributions");
-        await withPromiseTimeout<any>(supabase.from("discrepancies").delete().in("service_order_id", soIds), 12000, "service_orders_delete_year_discrepancies");
-        await withPromiseTimeout<any>(supabase.from("reconciliations").delete().in("service_order_id", soIds), 12000, "service_orders_delete_year_reconciliations");
-        await withPromiseTimeout<any>(supabase.from("financial_records").delete().in("service_order_id", soIds), 12000, "service_orders_delete_year_financial_records");
-      }
-      const ordersRes = await withPromiseTimeout<any>(
-        supabase
-          .from("service_orders")
-          .delete()
-          .gte("created_at", start)
-          .lt("created_at", end),
-        12000,
-        "service_orders_delete_year_orders",
-      );
-      if (ordersRes.error) throw ordersRes.error;
-      await withPromiseTimeout<any>(
-        supabase
-          .from("documents")
-          .delete()
-          .eq("entity_type", "service_order")
-          .gte("created_at", start)
-          .lt("created_at", end),
-        12000,
-        "service_orders_delete_year_documents",
+      await apiRequest<{ deleted: number; documents_deleted: number }>(
+        `/service-orders/by-year/${y}?workspace_id=${encodeURIComponent(workspaceId)}`,
+        { method: "DELETE", timeoutMs: 30000 },
       );
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["service_orders"] }),
@@ -309,7 +277,7 @@ export default function ServiceOrdersPage() {
       toast.error(`Erro ao excluir ${year}: ${(err as Error).message}`, { duration: 8000 });
       throw err;
     }
-  }, [queryClient]);
+  }, [queryClient, ctxWs.resolvedWorkspaceId]);
 
   return (
     <div className="animate-fade-in flex min-h-full w-full min-w-0 flex-col gap-3 overflow-visible md:gap-2">
