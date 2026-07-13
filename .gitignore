@@ -32,3 +32,6 @@ backend/.env
 .dbg/
 debug-*.md
 *.pdf
+
+# Agent local settings (may contain machine-specific credentials/tokens)
+.claude/settings.local.json
