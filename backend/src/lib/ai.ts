@@ -42,14 +42,22 @@ export async function fetchAICompletion(payload: Record<string, unknown>): Promi
     const config = configs[i];
     const isLast = i === configs.length - 1;
 
-    const res = await fetch(config.endpoint, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ model: config.defaultModel, ...payload }),
-    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 75_000);
+    let res: globalThis.Response;
+    try {
+      res = await fetch(config.endpoint, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${config.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ model: config.defaultModel, ...payload }),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
 
     // Always read the body so we can inspect or re-wrap it
     const body = await res.json().catch(() => null);
