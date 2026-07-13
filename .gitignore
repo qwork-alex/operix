@@ -35,3 +35,6 @@ debug-*.md
 
 # Agent local settings (may contain machine-specific credentials/tokens)
 .claude/settings.local.json
+
+# Local API keys archive (never commit)
+keys.txt
