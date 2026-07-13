@@ -17,6 +17,7 @@ import { serviceOrdersRouter } from "./routes/serviceOrders.js";
 import { productionOrdersRouter } from "./routes/productionOrders.js";
 import { productionPhotosRouter } from "./routes/productionPhotos.js";
 import { invitesRouter } from "./routes/invites.js";
+import { paymentOrdersRouter } from "./routes/paymentOrders.js";
 
 const app = express();
 
@@ -51,6 +52,7 @@ app.use("/api/service-orders", serviceOrdersRouter);
 app.use("/api/production-orders", productionOrdersRouter);
 app.use("/api/production-orders/:orderId/photos", productionPhotosRouter);
 app.use("/api", invitesRouter);
+app.use("/api/payment-orders", paymentOrdersRouter);
 
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof ZodError) {

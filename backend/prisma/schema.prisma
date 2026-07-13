@@ -438,6 +438,7 @@ model Client {
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
   serviceOrders ServiceOrder[]
+  paymentOrders PaymentOrder[]
 
   @@index([workspaceId])
   @@map("clients")
@@ -485,6 +486,42 @@ model ServiceOrder {
   @@index([workspaceId, status])
   @@index([clientId])
   @@map("service_orders")
+}
+
+model PaymentOrder {
+  id              String    @id @default(uuid())
+  workspaceId     String?   @map("workspace_id")
+  visibilityScope String    @default("workspace") @map("visibility_scope")
+  userId          String    @map("user_id")
+  assignedUserId  String    @map("assigned_user_id")
+  clientId        String?   @map("client_id")
+  clientName      String?   @map("client_name")
+  carName         String?   @map("car_name")
+  licensePlate    String?   @map("license_plate")
+  platform        String?
+  operationalUnit String?   @map("operational_unit")
+  groupId         String?   @map("group_id")
+  listName        String?   @map("list_name")
+  yearReference   Int?      @map("year_reference")
+  technicianId    String?   @map("technician_id")
+  technicianName  String?   @map("technician_name")
+  services        Json?
+  serviceOrderId  String?   @map("service_order_id")
+  amountPaid      Float     @default(0) @map("amount_paid")
+  total           Float?
+  status          String    @default("pending")
+  createdBy       String?   @map("created_by")
+  deletedAt       DateTime? @map("deleted_at")
+  deletedBy       String?   @map("deleted_by")
+  deletedReason   String?   @map("deleted_reason")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  client Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, status])
+  @@index([clientId])
+  @@map("payment_orders")
 }
 
 model ProductionOrder {

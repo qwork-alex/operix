@@ -238,3 +238,139 @@ A document may have MULTIPLE rows. Extract ALL of them.`,
     return res.status(500).json({ error: msg });
   }
 });
+
+extractRouter.post("/payment-order", async (req: Request, res: Response) => {
+  try {
+    const { imageBase64, mimeType, fileName } = req.body;
+    if (!imageBase64) return res.status(400).json({ error: "No image data provided" });
+
+    const aiRes = await fetchAICompletion({
+      messages: [
+        {
+          role: "system",
+          content: `You are a pragmatic data extraction assistant for QWork Nexus, an automotive payment tracking system.
+Your job: extract structured payment data from payment order lists (PDFs, photos, screenshots).
+
+PRIORITIES:
+1. STRUCTURE FIRST: Identify rows. Each row = one vehicle/service entry.
+2. NUMBERS MATTER MOST: Get prices and totals right.
+3. TEXT IS SECONDARY: Client/platform/technician names can be corrected by the user.
+
+CONFIDENCE SCORING:
+- "high": clearly printed/typed, no ambiguity
+- "medium": readable but could be misread
+- "low": handwritten, blurry, or uncertain
+
+FIELD RULES:
+- "client" = company or person who owns/manages the vehicles (e.g. Quality Work, PDR-Team)
+- "platform" = service platform name if present
+- "list_name" = list or batch identifier (e.g. list number, week reference)
+- "technician" = person performing the work (if different from client)
+- services = array of {name, price} pairs per vehicle
+- total = grand total for this vehicle entry
+- A document may have MULTIPLE rows. Extract ALL of them.
+- If a price is "NaN" or unreadable, return null.`,
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `Extract payment order data from this document. File: "${fileName}". For each vehicle row, extract: client, platform, list_name, technician, car_name, license_plate, services (array of {name, price}), total. Also provide overall confidence and any notes.`,
+            },
+            { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
+          ],
+        },
+      ],
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "extract_payment_orders",
+            description: "Extract structured payment order data with per-field confidence",
+            parameters: {
+              type: "object",
+              properties: {
+                orders: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      client: { type: "string" },
+                      platform: { type: "string" },
+                      list_name: { type: "string" },
+                      technician: { type: "string" },
+                      car_name: { type: "string" },
+                      license_plate: { type: "string" },
+                      services: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          properties: {
+                            name: { type: "string" },
+                            price: { type: "number" },
+                            confidence: { type: "string", enum: ["high", "medium", "low"] },
+                          },
+                          required: ["name"],
+                        },
+                      },
+                      total: { type: "number" },
+                      field_confidence: {
+                        type: "object",
+                        properties: {
+                          client: { type: "string", enum: ["high", "medium", "low"] },
+                          platform: { type: "string", enum: ["high", "medium", "low"] },
+                          list_name: { type: "string", enum: ["high", "medium", "low"] },
+                          technician: { type: "string", enum: ["high", "medium", "low"] },
+                          car_name: { type: "string", enum: ["high", "medium", "low"] },
+                          license_plate: { type: "string", enum: ["high", "medium", "low"] },
+                          total: { type: "string", enum: ["high", "medium", "low"] },
+                        },
+                      },
+                      total_mismatch: { type: "boolean" },
+                    },
+                    required: ["car_name"],
+                  },
+                },
+                confidence: { type: "string", enum: ["high", "medium", "low"] },
+                notes: { type: "string" },
+              },
+              required: ["orders", "confidence"],
+              additionalProperties: false,
+            },
+          },
+        },
+      ],
+      tool_choice: { type: "function", function: { name: "extract_payment_orders" } },
+    });
+
+    if (!aiRes.ok) {
+      const errText = await aiRes.text();
+      if (aiRes.status === 429) return res.status(429).json({ error: "Rate limit exceeded. Try again shortly." });
+      if (aiRes.status === 402) return res.status(402).json({ error: "AI credits exhausted." });
+      return res.status(500).json({ error: `AI error: ${aiRes.status} — ${errText}` });
+    }
+
+    const data = await aiRes.json();
+    const extracted = parseToolCall(data) as any;
+
+    if (extracted?.orders) {
+      for (const order of extracted.orders) {
+        if (!order.field_confidence) order.field_confidence = {};
+        if (order.services?.length > 0) {
+          const computed = order.services.reduce((s: number, svc: any) => s + (svc.price ?? 0), 0);
+          if (order.total != null && Math.abs(computed - order.total) > 0.01) {
+            order.total_mismatch = true;
+            order.field_confidence.total = "low";
+          }
+        }
+      }
+    }
+
+    return res.json(extracted);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[extract/payment-order]", msg);
+    return res.status(500).json({ error: msg });
+  }
+});

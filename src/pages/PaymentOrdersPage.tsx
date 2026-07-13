@@ -32,13 +32,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { useRole } from "@/hooks/useRole";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import type { Json } from "@/integrations/supabase/types";
 import { Can } from "@/components/Can";
 import { getCurrentUser } from "@/lib/authUser";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 import { useContextualWorkspace } from "@/hooks/useContextualWorkspace";
 import { ContextualWorkspacePicker } from "@/components/workspace/ContextualWorkspacePicker";
-import { withPromiseTimeout } from "@/lib/asyncGuard";
 
 export default function PaymentOrdersPage() {
   const { t, formatCurrency } = useLanguage();
@@ -142,7 +140,7 @@ export default function PaymentOrdersPage() {
         operational_unit: ctxDefaults.operational_unit ?? null,
         car_name: r.car_name ?? null,
         license_plate: r.license_plate ? formatLicensePlate(r.license_plate) : null,
-        services: (r.services || []) as unknown as Json,
+        services: (r.services || []) as unknown as any,
         total: r.total ?? null,
         status: "pending",
         group_id: r.list_name ?? ctxDefaults.week ?? null,
@@ -214,55 +212,20 @@ export default function PaymentOrdersPage() {
   const handleDeleteYear = useCallback(async (year: string) => {
     const y = parseInt(year, 10);
     if (!Number.isFinite(y)) return;
-    const start = new Date(Date.UTC(y, 0, 1)).toISOString();
-    const end = new Date(Date.UTC(y + 1, 0, 1)).toISOString();
     try {
-      const poIdsRes = await withPromiseTimeout<any>(
-        supabase
-          .from("payment_orders")
-          .select("id")
-          .gte("created_at", start)
-          .lt("created_at", end),
-        12000,
-        "payment_orders_delete_year_ids",
-      );
-      const poIds = (poIdsRes.data ?? []).map((r: any) => r.id);
-      if (poIds.length > 0) {
-        await withPromiseTimeout<any>(supabase.from("reconciliations").delete().in("payment_order_id", poIds), 12000, "payment_orders_delete_year_reconciliations");
-        await withPromiseTimeout<any>(supabase.from("financial_records").delete().in("payment_order_id", poIds), 12000, "payment_orders_delete_year_financial_records");
-      }
-      const ordersRes = await withPromiseTimeout<any>(
-        supabase
-          .from("payment_orders")
-          .delete()
-          .gte("created_at", start)
-          .lt("created_at", end),
-        12000,
-        "payment_orders_delete_year_orders",
-      );
-      if (ordersRes.error) throw ordersRes.error;
-      await withPromiseTimeout<any>(
-        supabase
-          .from("documents")
-          .delete()
-          .eq("entity_type", "payment_order")
-          .gte("created_at", start)
-          .lt("created_at", end),
-        12000,
-        "payment_orders_delete_year_documents",
-      );
+      const params = new URLSearchParams({ year: String(y) });
+      if (ctxWs.resolvedWorkspaceId) params.set("workspace_id", ctxWs.resolvedWorkspaceId);
+      await apiRequest(`/payment-orders?${params.toString()}`, { method: "DELETE" });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["payment_orders"] }),
         queryClient.invalidateQueries({ queryKey: ["embedded-docs", "payment_order"] }),
-        queryClient.invalidateQueries({ queryKey: ["financial_records"] }),
-        queryClient.invalidateQueries({ queryKey: ["reconciliations"] }),
       ]);
       toast.success(`Operacional de ${year} excluído.`);
     } catch (err) {
       toast.error(`Erro ao excluir ${year}: ${(err as Error).message}`, { duration: 8000 });
       throw err;
     }
-  }, [queryClient]);
+  }, [queryClient, ctxWs.resolvedWorkspaceId]);
 
   return (
     <div className="animate-fade-in flex min-h-full w-full min-w-0 flex-col gap-3 overflow-visible md:gap-2">

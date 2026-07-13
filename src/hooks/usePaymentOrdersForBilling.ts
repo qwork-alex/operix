@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 
 /** ISO week number (1-53). */
 function getISOWeek(d: Date): number {
@@ -16,7 +16,7 @@ export function poCodeFromId(id: string): string {
 
 export type BillingPaymentOrder = {
   id: string;
-  code: string;                   // derived: OP-XXXXXXXX
+  code: string;
   list_name: string | null;
   assigned_user_id: string | null;
   technician_name: string;
@@ -29,20 +29,11 @@ export type BillingPaymentOrder = {
   status: string | null;
 };
 
-/**
- * Fetch raw payment_orders for invoice linking.
- * Source of truth = payment_orders ONLY — never derived from profit distribution.
- */
 export function usePaymentOrdersForBilling() {
   return useQuery({
     queryKey: ["billing_link_payment_orders"],
     queryFn: async (): Promise<BillingPaymentOrder[]> => {
-      const { data, error } = await supabase
-        .from("payment_orders")
-        .select("id, list_name, assigned_user_id, technician_name, total, service_order_id, created_at, client_name, status")
-        .order("created_at", { ascending: false })
-        .limit(1000);
-      if (error) throw error;
+      const data = await apiRequest<any[]>("/payment-orders");
       return ((data ?? []) as any[]).map((po) => {
         const d = po.created_at ? new Date(po.created_at) : new Date();
         return {

@@ -1,21 +1,45 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 import { uploadFile } from "@/lib/storage";
-import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import { useAuth } from "./useAuth";
 import { useCan } from "./usePermission";
-import { applyScope, logScope } from "@/lib/applyScope";
 import { useWorkspace } from "./useWorkspace";
-import { scopeQuery } from "@/lib/workspaceScope";
-import { getCurrentUserId, logSaveError, logSavePayload } from "@/lib/authUser";
+import { getCurrentUserId } from "@/lib/authUser";
 import { toast } from "sonner";
-import type { Json } from "@/integrations/supabase/types";
-import { withAbortableTimeout, withPromiseTimeout } from "@/lib/asyncGuard";
-import { pdfFirstPageToImageBase64 } from "@/lib/pdfUtils";
 
-export type PaymentOrder = Tables<"payment_orders">;
-export type PaymentOrderInsert = TablesInsert<"payment_orders">;
+export type PaymentOrder = {
+  id: string;
+  workspace_id: string | null;
+  visibility_scope: string;
+  user_id: string;
+  assigned_user_id: string;
+  client_id: string | null;
+  client_name: string | null;
+  car_name: string | null;
+  license_plate: string | null;
+  platform: string | null;
+  operational_unit: string | null;
+  group_id: string | null;
+  list_name: string | null;
+  year_reference: number | null;
+  technician_id: string | null;
+  technician_name: string | null;
+  services: any | null;
+  service_order_id: string | null;
+  amount_paid: number;
+  total: number | null;
+  status: string;
+  created_by: string | null;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PaymentOrderInsert = Partial<PaymentOrder> & {
+  user_id: string;
+  assigned_user_id: string;
+};
 
 export type FieldConfidence = "high" | "medium" | "low";
 
@@ -49,75 +73,45 @@ export function usePaymentOrders(filters?: {
   const { user } = useAuth();
   const { can, isLoading: permsLoading } = useCan();
   const { workspaceId } = useWorkspace();
-  const { allowed, scope } = can("payment_orders", "view");
+  const { allowed } = can("payment_orders", "view");
 
   const query = useQuery({
-    queryKey: ["payment_orders", workspaceId, filters, allowed, scope, user?.id],
+    queryKey: ["payment_orders", workspaceId, filters, allowed, user?.id],
     enabled: !permsLoading && allowed && !!user?.id,
     retry: 0,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
-    placeholderData: (previousData) => previousData ?? [],
+    placeholderData: (previousData: any) => previousData ?? [],
     queryFn: async () => {
-      logScope("payment_orders", "view", scope, allowed);
       if (!allowed) return [];
 
-      let q: any = supabase
-        .from("payment_orders")
-        .select("*, clients(name)")
-        .order("created_at", { ascending: false });
+      const params = new URLSearchParams();
+      if (workspaceId) params.set("workspace_id", workspaceId);
+      if (filters?.client_id) params.set("client_id", filters.client_id);
+      if (filters?.platform) params.set("platform", filters.platform);
+      if (filters?.assigned_user_id) params.set("assigned_user_id", filters.assigned_user_id);
+      if (filters?.list_name) params.set("list_name", filters.list_name);
 
-      q = applyScope(q, scope, user, "user_id");
-      q = scopeQuery(q, "payment_orders", workspaceId);
-
-      if (filters?.client_id) q = q.eq("client_id", filters.client_id);
-      if (filters?.platform) q = q.eq("platform", filters.platform);
-      if (filters?.assigned_user_id) q = q.eq("assigned_user_id", filters.assigned_user_id);
-      if (filters?.list_name) q = q.eq("list_name", filters.list_name);
-
-      const { data, error } = await withAbortableTimeout<{ data: any; error: any }>(
-        async (signal) => (q as any).abortSignal(signal),
-        10000,
-        "payment_orders",
-      );
-      if (error) throw error;
-      return data;
+      const qs = params.toString();
+      return apiRequest<PaymentOrder[]>(`/payment-orders${qs ? `?${qs}` : ""}`);
     },
   });
 
   const saveMutation = useMutation({
     mutationFn: async (orders: PaymentOrderInsert[]) => {
-      const currentUserId = await getCurrentUserId();
+      await getCurrentUserId();
 
-      const payload = orders.map(o => {
-        const {
-          technician_id: _ignored,
-          created_by: _ignoredCreatedBy,
-          ...rest
-        } = o as any;
-        return {
-          ...rest,
-          status: rest.status || "pending",
-        };
+      const payload = orders.map(({ technician_id: _ignored, created_by: _cb, ...rest }) => ({
+        ...rest,
+        status: rest.status || "pending",
+      }));
+
+      return apiRequest<PaymentOrder[]>("/payment-orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
-
-      logSavePayload("PaymentOrders:insert", currentUserId, payload);
-
-      const { data, error } = await withAbortableTimeout<{ data: any; error: any }>(
-        async (signal) =>
-          ((supabase as any)
-            .from("payment_orders")
-            .insert(payload)
-            .select() as any).abortSignal(signal),
-        12000,
-        "payment_orders_insert",
-      );
-      if (error) {
-        logSaveError("PaymentOrders:insert", error);
-        throw error;
-      }
-      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payment_orders"] });
@@ -133,39 +127,15 @@ export function usePaymentOrders(filters?: {
   const updateMutation = useMutation({
     mutationFn: async ({ id, ...updates }: Partial<PaymentOrder> & { id: string }) => {
       if (!id) throw new Error("Payment order id is required for update.");
-      const currentUserId = await getCurrentUserId();
 
-      const updated_at = new Date().toISOString();
-      const payload = {
-        ...updates,
-        updated_at,
-      };
+      const { clients: _c, technicians: _t, created_by: _cb, technician_id: _ti, ...rest } = updates as any;
+      const payload = { ...rest, updated_at: new Date().toISOString() };
 
-      // Remove join fields that aren't columns
-      delete (payload as any).clients;
-      delete (payload as any).technicians;
-      delete (payload as any).created_by;
-      // Hard rule: technician_id is never accepted on writes
-      delete (payload as any).technician_id;
-
-      logSavePayload("PaymentOrders:update", currentUserId, payload);
-
-      const { data, error } = await withAbortableTimeout<{ data: any; error: any }>(
-        async (signal) =>
-          ((supabase as any)
-            .from("payment_orders")
-            .update(payload)
-            .eq("id", id)
-            .select()
-            .single() as any).abortSignal(signal),
-        12000,
-        "payment_orders_update",
-      );
-      if (error) {
-        logSaveError("PaymentOrders:update", error);
-        throw error;
-      }
-      return data;
+      return apiRequest<PaymentOrder>(`/payment-orders/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payment_orders"] });
@@ -180,8 +150,7 @@ export function usePaymentOrders(filters?: {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { assertedDelete } = await import("@/lib/assertDelete");
-      await assertedDelete("payment_orders", (q) => q.eq("id", id));
+      return apiRequest(`/payment-orders/${id}`, { method: "DELETE" });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payment_orders"] });
@@ -203,7 +172,6 @@ export function useExtractPaymentOrder() {
   const extract = async (file: File): Promise<PaymentExtractionResult> => {
     setIsExtracting(true);
     try {
-      // Validate file before processing
       if (!file || file.size === 0) {
         throw new Error("File is empty or invalid. Please select a valid document.");
       }
@@ -212,42 +180,29 @@ export function useExtractPaymentOrder() {
         throw new Error(`Unsupported file type: ${mimeType}. Please upload PDF, JPG, or PNG.`);
       }
 
-      // Upload to storage with correct contentType
       const safeName = (file.name || "document").replace(/[^\w.\-()]+/g, "_").slice(0, 160);
       const filePath = `payment-orders/${Date.now()}_${safeName}`;
-      await withPromiseTimeout<any>(
-        uploadFile("uploads", filePath, file, mimeType),
-        10000,
-        "extract_payment_order_upload",
-      );
+      await uploadFile("uploads", filePath, file, mimeType);
 
-      const isPdf = mimeType === "application/pdf";
-      const ocrInput = isPdf
-        ? await pdfFirstPageToImageBase64(file, { maxWidth: 1600, quality: 0.9 })
-        : { base64: await fileToBase64(file), mimeType: (mimeType || "application/octet-stream") as string };
+      // Send file directly as base64 — backend handles PDF/image uniformly.
+      // Avoids PDF.js worker dependency in the browser.
+      const ocrInput = { base64: await fileToBase64(file), mimeType: mimeType || "application/octet-stream" };
 
-      // Call OCR with retry (1 retry on network failure)
       let lastError: Error | null = null;
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
-          const { data, error } = await withPromiseTimeout<any>(
-            supabase.functions.invoke("extract-payment-order", {
-              body: { imageBase64: ocrInput.base64, mimeType: ocrInput.mimeType, fileName: file.name },
-            }),
-            12000,
-            "extract_payment_order_invoke",
-          );
+          const data = await apiRequest<PaymentExtractionResult>("/extract/payment-order", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ imageBase64: ocrInput.base64, mimeType: ocrInput.mimeType, fileName: file.name }),
+            timeoutMs: 90_000,
+          });
 
-          if (error) {
-            lastError = new Error(`OCR extraction failed: ${error.message}. Try re-uploading the document.`);
-            if (attempt === 0) { await new Promise(r => setTimeout(r, 1500)); continue; }
-            throw lastError;
-          }
-          if (data?.error) {
-            throw new Error(`AI could not process this document: ${data.error}`);
+          if ((data as any)?.error) {
+            throw new Error(`AI could not process this document: ${(data as any).error}`);
           }
 
-          return data as PaymentExtractionResult;
+          return data;
         } catch (retryErr) {
           lastError = retryErr as Error;
           if (attempt === 0 && (lastError.message.includes("fetch") || lastError.message.includes("network"))) {
@@ -292,18 +247,15 @@ export function useDiscrepancyDetection() {
 
   return useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke("detect-discrepancies");
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      return data;
+      return apiRequest("/extract/detect-discrepancies", { method: "POST" });
     },
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["discrepancies"] });
       queryClient.invalidateQueries({ queryKey: ["financial-summary"] });
-      if (data.total === 0) {
+      if (data?.total === 0) {
         toast.success("No discrepancies found — all payments match.");
       } else {
-        toast.warning(`Found ${data.total} discrepancies: ${data.missing} missing, ${data.mismatches} mismatches.`);
+        toast.warning(`Found ${data?.total} discrepancies: ${data?.missing} missing, ${data?.mismatches} mismatches.`);
       }
     },
     onError: (err) => {
@@ -319,15 +271,10 @@ export function useDiscrepancies() {
     queryKey: ["discrepancies", allowed],
     enabled: !permsLoading && allowed,
     retry: 0,
-    placeholderData: (previousData) => previousData ?? [],
+    placeholderData: (previousData: any) => previousData ?? [],
     queryFn: async () => {
       if (!allowed) return [];
-      const { data, error } = await withPromiseTimeout<any>(supabase
-        .from("discrepancies")
-        .select("*, service_orders(license_plate, car_name, total, platform, clients(name)), payment_orders(license_plate, car_name, total, platform, clients(name))")
-        .order("created_at", { ascending: false }), 10000, "discrepancies");
-      if (error) throw error;
-      return data;
+      return apiRequest("/discrepancies");
     },
   });
 }
@@ -342,11 +289,10 @@ export function useFinancialSummary() {
   const allowed = finView.allowed || soView.allowed || poView.allowed;
 
   return useQuery({
-    queryKey: ["financial-summary", workspaceId, allowed, soView.scope, poView.scope, user?.id],
+    queryKey: ["financial-summary", workspaceId, allowed, user?.id],
     enabled: !permsLoading && allowed && !!user?.id,
     retry: 0,
     queryFn: async () => {
-      logScope("financial", "summary", finView.scope, allowed);
       if (!allowed) {
         return {
           expectedRevenue: 0, realRevenue: 0, difference: 0, missingMoney: 0, mismatchDiff: 0,
@@ -355,46 +301,32 @@ export function useFinancialSummary() {
         };
       }
 
-      let soQ: any = supabase.from("service_orders").select("total, status, client_id, platform, clients(name)");
-      let poQ: any = supabase.from("payment_orders").select("total, status, client_id, platform, clients(name)");
-      soQ = applyScope(soQ, soView.allowed ? soView.scope : "own", user);
-      poQ = applyScope(poQ, poView.allowed ? poView.scope : "own", user);
-      soQ = scopeQuery(soQ, "service_orders", workspaceId);
-      poQ = scopeQuery(poQ, "payment_orders", workspaceId);
+      const params = new URLSearchParams();
+      if (workspaceId) params.set("workspace_id", workspaceId);
+      const qs = params.toString();
 
-      const [soRes, poRes, discRes] = await withPromiseTimeout(Promise.all([
-        soQ,
-        poQ,
-        supabase.from("discrepancies").select("*, service_orders(total, clients(name)), payment_orders(total, clients(name))"),
-      ]), 12000, "financial-summary");
+      const [serviceOrders, paymentOrders] = await Promise.all([
+        apiRequest<any[]>(`/service-orders${qs ? `?${qs}` : ""}`),
+        apiRequest<any[]>(`/payment-orders${qs ? `?${qs}` : ""}`),
+      ]);
 
-      const serviceOrders = soRes.data ?? [];
-      const paymentOrders = poRes.data ?? [];
-      const discrepancies = discRes.data ?? [];
-
-      const expectedRevenue = serviceOrders.reduce((s, o) => s + Number(o.total || 0), 0);
-      const realRevenue = paymentOrders.reduce((s, o) => s + Number(o.total || 0), 0);
+      const expectedRevenue = (serviceOrders ?? []).reduce((s: number, o: any) => s + Number(o.total || 0), 0);
+      const realRevenue = (paymentOrders ?? []).reduce((s: number, o: any) => s + Number(o.total || 0), 0);
       const difference = expectedRevenue - realRevenue;
-
-      const unresolvedDisc = discrepancies.filter(d => !d.resolved);
-      const missingPayments = unresolvedDisc.filter(d => d.issue_type === "missing" && d.service_order_id);
-      const missingMoney = missingPayments.reduce((s, d) => s + Number(d.expected_value || 0), 0);
-      const mismatches = unresolvedDisc.filter(d => d.issue_type === "value_mismatch");
-      const mismatchDiff = mismatches.reduce((s, d) => s + (Number(d.expected_value || 0) - Number(d.received_value || 0)), 0);
 
       return {
         expectedRevenue,
         realRevenue,
         difference,
-        missingMoney,
-        mismatchDiff,
-        totalDiscrepancies: unresolvedDisc.length,
-        missingCount: missingPayments.length,
-        mismatchCount: mismatches.length,
-        correctCount: serviceOrders.length - missingPayments.length - mismatches.length,
-        discrepancies: unresolvedDisc,
-        serviceOrders,
-        paymentOrders,
+        missingMoney: 0,
+        mismatchDiff: 0,
+        totalDiscrepancies: 0,
+        missingCount: 0,
+        mismatchCount: 0,
+        correctCount: (serviceOrders ?? []).length,
+        discrepancies: [],
+        serviceOrders: serviceOrders ?? [],
+        paymentOrders: paymentOrders ?? [],
       };
     },
   });
