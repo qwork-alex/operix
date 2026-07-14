@@ -778,3 +778,32 @@ model FinancialIntegritySnapshot {
   @@index([workspaceId, yearReference, createdAt])
   @@map("financial_integrity_snapshots")
 }
+
+model CompanySetting {
+  id              String    @id @default(uuid())
+  userId          String    @unique @map("user_id")
+  companyName     String    @default("") @map("company_name")
+  siret           String    @default("") @map("siret")
+  tvaNnumber      String    @default("") @map("tva_number")
+  address         String    @default("") @map("address")
+  logoUrl         String    @default("") @map("logo_url")
+  brandConfig     Json?     @map("brand_config")
+  invoiceTemplate Json?     @map("invoice_template")
+  bankName        String?   @map("bank_name")
+  iban            String?   @map("iban")
+  swiftBic        String?   @map("swift_bic")
+  city            String?   @map("city")
+  postalCode      String?   @map("postal_code")
+  country         String?   @map("country")
+  companyEmail    String?   @map("company_email")
+  companyPhone    String?   @map("company_phone")
+  streetName      String?   @map("street_name")
+  streetNumber    String?   @map("street_number")
+  companyShare    Float     @default(0) @map("company_share")
+  partnerShare    Float     @default(0) @map("partner_share")
+  techShare       Float     @default(0) @map("tech_share")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@map("company_settings")
+}

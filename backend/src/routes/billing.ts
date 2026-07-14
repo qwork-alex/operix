@@ -1991,17 +1991,14 @@ billingRouter.post("/invoices/:invoiceId/pdf", async (req: AuthenticatedRequest,
 
 billingRouter.post("/reports/financial/pdf", async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
-    if (req.auth!.role !== "admin") {
-      return res.status(403).json({ message: "Forbidden." });
-    }
-
     const schema = z.object({
       periodMonths: z.number().int().min(1).max(36).default(6),
       generatedAt: z.string().optional(),
       kpis: z.object({
         totalRevenue: z.number(),
         totalExpenses: z.number(),
-        received: z.number(),
+        totalReceived: z.number().optional(),
+        received: z.number().optional(),
         overdueAmount: z.number(),
         pendingAmount: z.number(),
         profit: z.number(),
@@ -2019,6 +2016,7 @@ billingRouter.post("/reports/financial/pdf", async (req: AuthenticatedRequest, r
 
     const input = schema.parse((req as AuthenticatedRequest & { body: unknown }).body);
     const now = input.generatedAt ? new Date(input.generatedAt) : new Date();
+    const receivedAmount = input.kpis.totalReceived ?? input.kpis.received ?? 0;
 
     const money = (v: number) => (Number.isFinite(v) ? v : 0).toFixed(2) + " EUR";
     const lines: string[] = [];
@@ -2027,7 +2025,7 @@ billingRouter.post("/reports/financial/pdf", async (req: AuthenticatedRequest, r
     lines.push("");
     lines.push(`Faturamento: ${money(input.kpis.totalRevenue)}`);
     lines.push(`Despesas: ${money(input.kpis.totalExpenses)}`);
-    lines.push(`Recebido: ${money(input.kpis.received)}`);
+    lines.push(`Recebido: ${money(receivedAmount)}`);
     lines.push(`Lucro: ${money(input.kpis.profit)}`);
     lines.push(`Inadimplência: ${input.kpis.inadimplenciaPct.toFixed(1)}%`);
     lines.push(`Em atraso: ${money(input.kpis.overdueAmount)}`);
@@ -2052,9 +2050,6 @@ billingRouter.post("/reports/financial/pdf", async (req: AuthenticatedRequest, r
 
 billingRouter.post("/reports/financial/email", async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
-    if (req.auth!.role !== "admin") {
-      return res.status(403).json({ message: "Forbidden." });
-    }
     if (!isEmailConfigured()) {
       return res.status(503).json({ message: "Email provider not configured." });
     }
@@ -2065,7 +2060,8 @@ billingRouter.post("/reports/financial/email", async (req: AuthenticatedRequest,
       kpis: z.object({
         totalRevenue: z.number(),
         totalExpenses: z.number(),
-        received: z.number(),
+        totalReceived: z.number().optional(),
+        received: z.number().optional(),
         overdueAmount: z.number(),
         pendingAmount: z.number(),
         profit: z.number(),
@@ -2081,6 +2077,7 @@ billingRouter.post("/reports/financial/email", async (req: AuthenticatedRequest,
       })).max(36),
     });
     const input = schema.parse((req as AuthenticatedRequest & { body: unknown }).body);
+    const receivedAmount = input.kpis.totalReceived ?? input.kpis.received ?? 0;
 
     const user = await prisma.user.findUnique({
       where: { id: req.auth!.userId },
@@ -2097,7 +2094,7 @@ billingRouter.post("/reports/financial/email", async (req: AuthenticatedRequest,
       "",
       `Faturamento: ${money(input.kpis.totalRevenue)}`,
       `Despesas: ${money(input.kpis.totalExpenses)}`,
-      `Recebido: ${money(input.kpis.received)}`,
+      `Recebido: ${money(receivedAmount)}`,
       `Lucro: ${money(input.kpis.profit)}`,
       `Inadimplência: ${input.kpis.inadimplenciaPct.toFixed(1)}%`,
       `Em atraso: ${money(input.kpis.overdueAmount)}`,

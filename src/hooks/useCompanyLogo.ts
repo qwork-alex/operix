@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 import type { BrandConfig } from "@/components/layout/BrandNameEditor";
-import { getCurrentUserId, logSaveError, logSavePayload } from "@/lib/authUser";
 
 /**
  * Procedural branding store.
@@ -20,17 +19,8 @@ export function useCompanyLogo() {
     queryFn: async () => {
       const empty = { brandConfig: {} as BrandConfig };
       try {
-        const timeout = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("brand_timeout")), 4000)
-        );
-        const fetchP = supabase
-          .from("company_settings")
-          .select("brand_config")
-          .limit(1)
-          .maybeSingle();
-        const { data, error } = (await Promise.race([fetchP, timeout])) as any;
-        if (error) return empty;
-        return { brandConfig: (data?.brand_config as BrandConfig | null) || {} };
+        const data = await apiRequest<{ settings: any }>("/settings/company");
+        return { brandConfig: (data?.settings?.brand_config as BrandConfig | null) || {} };
       } catch {
         return empty;
       }
@@ -41,38 +31,13 @@ export function useCompanyLogo() {
     refetchOnReconnect: false,
   });
 
-
   const brandMutation = useMutation({
     mutationFn: async (brandConfig: BrandConfig) => {
-      const currentUserId = await getCurrentUserId();
-      const { data: existing } = await supabase
-        .from("company_settings")
-        .select("id")
-        .limit(1)
-        .maybeSingle();
-
-      if (existing) {
-        const payload = { brand_config: brandConfig as any, updated_at: new Date().toISOString() };
-        logSavePayload("CompanyBrand:update", currentUserId, payload);
-        const { error } = await (supabase as any)
-          .from("company_settings")
-          .update(payload)
-          .eq("id", existing.id);
-        if (error) {
-          logSaveError("CompanyBrand:update", error);
-          throw error;
-        }
-      } else {
-        const payload = { brand_config: brandConfig as any };
-        logSavePayload("CompanyBrand:insert", currentUserId, payload);
-        const { error } = await (supabase as any)
-          .from("company_settings")
-          .insert(payload);
-        if (error) {
-          logSaveError("CompanyBrand:insert", error);
-          throw error;
-        }
-      }
+      await apiRequest("/settings/company", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brand_config: brandConfig }),
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["company-brand"] });

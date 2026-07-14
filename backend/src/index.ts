@@ -21,6 +21,7 @@ import { paymentOrdersRouter } from "./routes/paymentOrders.js";
 import { platformsRouter } from "./routes/platforms.js";
 import { financeRouter } from "./routes/finance.js";
 import { financialRecordsRouter } from "./routes/financialRecords.js";
+import { settingsRouter } from "./routes/settings.js";
 
 const app = express();
 
@@ -59,6 +60,7 @@ app.use("/api/payment-orders", paymentOrdersRouter);
 app.use("/api/platforms", platformsRouter);
 app.use("/api/finance", financeRouter);
 app.use("/api/financial-records", financialRecordsRouter);
+app.use("/api/settings", settingsRouter);
 
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof ZodError) {

@@ -5,7 +5,7 @@ import {
   Search, Plus, Filter, FileText, FileSpreadsheet,
   MoreHorizontal, Eye, Pencil, Trash2, ChevronLeft, ChevronRight,
   X, History, Loader2, ArrowDownToLine, ArrowUpFromLine,
-  Printer, FileEdit, FileUp, Send,
+  Printer, FileEdit, FileUp, Send, Save,
 } from "lucide-react";
 import ImportInvoiceDialog from "./ImportInvoiceDialog";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
@@ -640,7 +640,22 @@ export default function InvoicesScreen() {
     });
   };
 
-  const companySettings = useCompanySettings().settings;
+  const { settings: companySettings, saveMutation: saveSettingsMut } = useCompanySettings();
+
+  // Seed invoice options from saved template when settings load and form is new
+  useEffect(() => {
+    if (companySettings?.invoice_template && !editing) {
+      setForm((prev) => ({
+        ...prev,
+        options: { ...defaultOptions(), ...(companySettings.invoice_template as Partial<InvoiceOptions>) },
+      }));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companySettings?.invoice_template]);
+
+  const handleSaveTemplate = () => {
+    saveSettingsMut.mutate({ invoice_template: form.options });
+  };
 
   // ── totals (applies global discount proportionally before tax)
   const totals = useMemo(() => {
@@ -1450,10 +1465,10 @@ export default function InvoicesScreen() {
             <FormSection title="Dados bancários" subtitle="Vindos do perfil da empresa (somente leitura)">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <Field label="IBAN">
-                  <Input value={(companySettings as any)?.bank_iban ?? form.bank_iban} readOnly disabled className="h-9 bg-muted/30" placeholder="Configurar no perfil da empresa" />
+                  <Input value={(companySettings as any)?.iban ?? form.bank_iban} readOnly disabled className="h-9 bg-muted/30" placeholder="Configurar no perfil da empresa" />
                 </Field>
                 <Field label="BIC / SWIFT">
-                  <Input value={(companySettings as any)?.bank_bic ?? form.bank_bic} readOnly disabled className="h-9 bg-muted/30" placeholder="Configurar no perfil da empresa" />
+                  <Input value={(companySettings as any)?.swift_bic ?? form.bank_bic} readOnly disabled className="h-9 bg-muted/30" placeholder="Configurar no perfil da empresa" />
                 </Field>
                 <Field label="Banco">
                   <Input value={(companySettings as any)?.bank_name ?? form.bank_name} readOnly disabled className="h-9 bg-muted/30" placeholder="Configurar no perfil da empresa" />
@@ -1499,6 +1514,7 @@ export default function InvoicesScreen() {
                 <InvoiceOptionsPanel
                   options={form.options}
                   onChange={(next) => setForm({ ...form, options: next })}
+                  onSaveTemplate={handleSaveTemplate}
                 />
               </aside>
             )}
@@ -1629,8 +1645,8 @@ function KpiCard({ label, value, accent }: { label: string; value: string; accen
 }
 
 function InvoiceOptionsPanel({
-  options, onChange,
-}: { options: InvoiceOptions; onChange: (o: InvoiceOptions) => void }) {
+  options, onChange, onSaveTemplate,
+}: { options: InvoiceOptions; onChange: (o: InvoiceOptions) => void; onSaveTemplate?: () => void }) {
   const set = <K extends keyof InvoiceOptions>(k: K, v: InvoiceOptions[K]) =>
     onChange({ ...options, [k]: v });
 
@@ -1813,6 +1829,19 @@ function InvoiceOptionsPanel({
           </p>
         </PanelBlock>
       )}
+
+      {/* Save as default template */}
+      <div className="pt-2 border-t border-border/40">
+        <Button
+          size="sm"
+          variant="outline"
+          className="w-full h-8 text-[11px]"
+          onClick={onSaveTemplate}
+          type="button"
+        >
+          <Save className="h-3 w-3 mr-1" /> Salvar como padrão
+        </Button>
+      </div>
     </div>
   );
 }

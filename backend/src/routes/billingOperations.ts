@@ -1239,3 +1239,13 @@ ${body ? `<p style="margin:0 0 12px;white-space:pre-wrap">${escapeHtml(body)}</p
     return next(error);
   }
 });
+
+operationalBillingRouter.get("/admin/ops/payments", async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!requireAdmin(req, res)) return;
+    // Return empty array for now — billing_payments table not yet migrated
+    return res.json({ payments: [] });
+  } catch (error) {
+    return next(error);
+  }
+});

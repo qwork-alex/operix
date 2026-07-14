@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,9 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Building2, Loader2, Save } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { getCurrentUserId, logSaveError, logSavePayload } from "@/lib/authUser";
 import { toast } from "sonner";
-import { withPromiseTimeout } from "@/lib/asyncGuard";
+import { apiRequest } from "@/lib/api";
 
 import { COUNTRIES } from "@/lib/countries";
 
@@ -49,17 +47,8 @@ export function CompanyDataCard() {
     staleTime: 60_000,
     placeholderData: (previousData) => previousData ?? null,
     queryFn: async () => {
-      const { data, error } = await withPromiseTimeout<any>(
-        supabase
-          .from("company_settings")
-          .select("*")
-          .eq("user_id", user!.id)
-          .maybeSingle(),
-        10000,
-        "company_settings_full",
-      );
-      if (error) throw error;
-      return data;
+      const result = await apiRequest<{ settings: any }>("/settings/company");
+      return result?.settings ?? null;
     },
   });
 
@@ -85,40 +74,17 @@ export function CompanyDataCard() {
 
   const save = useMutation({
     mutationFn: async () => {
-      const currentUserId = await getCurrentUserId();
       // Keep legacy "address" in sync (joined string) for backward compat
       const joinedAddress = [
         [form.street_number, form.street_name].filter(Boolean).join(" "),
         [form.postal_code, form.city].filter(Boolean).join(" "),
         form.country,
       ].filter(Boolean).join(", ");
-      const payload: any = { ...form, address: joinedAddress, updated_at: new Date().toISOString() };
-      logSavePayload("CompanyData:upsert", currentUserId, payload);
-      const { data: existing, error: existingError } = await withPromiseTimeout<any>(
-        supabase
-          .from("company_settings")
-          .select("id")
-          .eq("user_id", currentUserId)
-          .maybeSingle(),
-        10000,
-        "company_settings_existing",
-      );
-      if (existingError) throw existingError;
-      if (existing) {
-        const { error } = await withPromiseTimeout<any>(
-          (supabase as any).from("company_settings").update(payload).eq("user_id", currentUserId),
-          10000,
-          "company_settings_update",
-        );
-        if (error) { logSaveError("CompanyData:update", error); throw error; }
-      } else {
-        const { error } = await withPromiseTimeout<any>(
-          (supabase as any).from("company_settings").insert(payload),
-          10000,
-          "company_settings_insert",
-        );
-        if (error) { logSaveError("CompanyData:insert", error); throw error; }
-      }
+      await apiRequest("/settings/company", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, address: joinedAddress }),
+      });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["company-settings-full"] });

@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -86,8 +85,8 @@ export default function ReportsScreen() {
     setLoading(true);
     try {
       const [inv, pay] = await Promise.all([
-        supabase.from("billing_invoices").select("*").order("issue_date", { ascending: false }).limit(2000),
-        supabase.from("billing_payments").select("*").order("payment_date", { ascending: false }).limit(2000),
+        apiRequest<{ invoices: Invoice[] }>("/billing/admin/ops/invoices").then((d) => ({ data: d?.invoices ?? [], error: null })).catch((e) => ({ data: [] as Invoice[], error: e })),
+        Promise.resolve({ data: [] as Payment[], error: null }),
       ]);
       if (inv.error) throw inv.error;
       if (pay.error) throw pay.error;

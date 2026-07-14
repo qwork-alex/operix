@@ -13,7 +13,6 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/integrations/supabase/client";
 import { uploadFile } from "@/lib/storage";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
@@ -205,14 +204,15 @@ export default function ImportInvoiceDialog({
       const fileStem = f.name.replace(/\.[^.]+$/, "").slice(0, 120);
       setStage("ocr");
       setStageMsg("Executando OCR e extração…");
-      const { data, error } = await withPromiseTimeout<any>(
-        supabase.functions.invoke("extract-invoice", {
-          body: { fileBase64: ocrBase64, mimeType: ocrMimeType, fileName: f.name, pages: ocrPages },
+      const data = await withPromiseTimeout<any>(
+        apiRequest<any>("/extract/invoice", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fileBase64: ocrBase64, mimeType: ocrMimeType, fileName: f.name, pages: ocrPages }),
         }),
         15000,
         "billing_invoice_extract",
       );
-      if (error) throw error;
 
       const total = typeof data?.total_amount === "number" ? data.total_amount : null;
       const tax = typeof data?.tax_amount === "number" ? data.tax_amount : null;
