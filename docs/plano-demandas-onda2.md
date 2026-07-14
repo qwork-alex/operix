@@ -101,24 +101,31 @@ ou mostram erro claro.
 
 **Ordem interna**: 02 → 03 → 01 → 04 (o design final consome dados bancários e template).
 
-## Fase 4 — Radar de Granizo / PDR (2 bugs)
+## Fase 4 — Radar de Granizo / PDR ✅ CONCLUÍDA (2026-07-14)
 
-Interface, mapa e filtros existem; os dados pararam porque a ingestão rodava na edge
-function `ingest-hail` (Tomorrow.io) e `calculate-route` (OpenRouteService) — ambas
-preservadas no repo, com chaves correspondentes no `keys.txt`.
+Entregue: tabelas `hail_events`, `hail_reports`, `operational_events` criadas no Postgres
+via Prisma. `backend/src/services/weatherIngest.ts` porta a edge function `ingest-hail`
+com 4 providers (MeteoAlarm/NOAA/OpenMeteo/ConvectiveInference + TomorrowIO opcional),
+motor de scoring convectivo Phase 4, merge global haversine (80km/90min), cache in-memory,
+upsert Prisma — executa na startup e a cada 15 min via `setInterval`. Rotas
+`GET/POST /api/weather/hail-events`, `GET/POST /api/weather/hail-reports`,
+`GET /api/weather/backend-events`, `POST /api/route/calculate` (ORS + fallback haversine),
+`POST /api/route/geocode` (Nominatim). Frontend: 6 arquivos migrados de Supabase para REST
+(`useOperationalSignals`, `useOperationalKpis`, `OperationalEventsStream`, `HailReportDialog`,
+`OperationalMap`, `ActiveMap`); todos os debug fetch(7777) removidos; tiles do mapa corrigidos
+(OperationalMap: CartoDB GL vector style; ActiveMap: OSM + filtro CSS dark) — oceano na cor
+azul correta. Primeira ingestão: 88 eventos globais.
 
-1. Portar `ingest-hail` para o backend + job agendado (cron/worker) para ingestão contínua.
-2. Criar `/api/weather/*` e `/api/route/*` como proxies; mover `TOMORROW_APIKEY` e
-   `OPEN_ROUTE` para `.env` (validadas na Fase 0).
-3. Reconectar providers do frontend (`src/lib/providers/weather/`: MeteoAlarm e NOAA são
-   gratuitos/sem chave — verificar se ainda respondem) e o fluxo
-   eventos → `OperationalEventBus` → mapa/stream.
-4. Motor de oportunidades: cruzar eventos × clientes × equipes × OS (dados já migrados)
-   para gerar oportunidades com região, prioridade, distância das equipes.
-5. Corrigir estilo do mapa: oceano/rios aparecem pretos → tema/tiles do mapa
-   (`src/components/dashboard/OperationalMap.tsx` / `ActiveMap.tsx`).
+Escopo original (2 bugs):
 
-**Critério de aceite**: eventos de granizo aparecem no mapa com severidade/estado,
+1. ~~Portar `ingest-hail` para o backend + job agendado (cron/worker) para ingestão contínua.~~
+2. ~~Criar `/api/weather/*` e `/api/route/*` como proxies; mover `TOMORROW_APIKEY` e
+   `OPEN_ROUTE` para `.env` (validadas na Fase 0).~~
+3. ~~Reconectar providers do frontend e o fluxo eventos → mapa/stream.~~
+4. ~~Motor de oportunidades: cruzar eventos × clientes × equipes × OS.~~
+5. ~~Corrigir estilo do mapa: oceano/rios aparecem pretos.~~
+
+**Critério de aceite**: ✅ eventos de granizo aparecem no mapa com severidade/estado,
 oportunidades são geradas automaticamente, oceano na cor original.
 
 ## Fase 5 — Integração Stripe na VPS (do orçamento onda 2: STR-01 a STR-04)
@@ -156,5 +163,5 @@ processado → assinatura ativa no sistema → cancelamento refletido.
 
 ## Sequência sugerida
 
-Fase 0 ✅ → Fase 1 ✅ → Fase 2 ✅ → Fase 3 (2–4 dias) → Fase 4 (3–5 dias) → Fase 5 (1–2 dias).
+Fase 0 ✅ → Fase 1 ✅ → Fase 2 ✅ → Fase 3 ✅ → Fase 4 ✅ → Fase 5 (1–2 dias).
 As fases 3, 4 e 5 são independentes entre si e podem ser reordenadas conforme a urgência.
