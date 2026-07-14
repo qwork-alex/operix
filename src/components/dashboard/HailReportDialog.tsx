@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CloudHail, Loader2, MapPin, Camera } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 import { uploadFile, getFileUrl } from "@/lib/storage";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
@@ -69,54 +69,44 @@ export function HailReportDialog() {
       // ---- Attach to nearest active hail_event (≤ 80km), if any -------
       let attachedEventId: string | null = null;
       try {
-        const since = new Date(Date.now() - 7 * 24 * 3600_000).toISOString();
-        const { data: candidates } = await supabase
-          .from("hail_events")
-          .select("id, lat, lng, status, severity, radius_km, observed_time, forecast_time")
-          .or(`observed_time.gte.${since},forecast_time.gte.${since},created_at.gte.${since}`)
-          .limit(200);
-        if (candidates?.length) {
+        const since = new Date(Date.now() - 7*24*3600_000).toISOString();
+        const data = await apiRequest<{ hailEvents: any[] }>(`/weather/hail-events?since=${since}&limit=200`);
+        const candidates = data.hailEvents ?? [];
+        if (candidates.length) {
           const R = 6371;
           const toRad = (d: number) => (d * Math.PI) / 180;
-          const dist = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
-            const dLat = toRad(b.lat - a.lat);
-            const dLng = toRad(b.lng - a.lng);
-            const la1 = toRad(a.lat);
-            const la2 = toRad(b.lat);
-            const x = Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLng / 2) ** 2;
-            return 2 * R * Math.asin(Math.sqrt(x));
+          const dist = (a: {lat:number;lng:number}, b: {lat:number;lng:number}) => {
+            const dLat = toRad(b.lat-a.lat), dLng = toRad(b.lng-a.lng);
+            const x = Math.sin(dLat/2)**2 + Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.sin(dLng/2)**2;
+            return 2*R*Math.asin(Math.sqrt(x));
           };
           const ranked = candidates
-            .map((c: any) => ({
-              id: c.id as string,
-              d: dist(coords, { lat: Number(c.lat), lng: Number(c.lng) }),
-              limit: Math.max(Number(c.radius_km) || 0, 80),
-              activeWeight:
-                c.status === "ongoing" ? 0 : c.status === "confirmed" ? 1 : c.status === "forecast" ? 2 : 3,
-            }))
-            .filter((c) => c.d <= c.limit)
-            .sort((a, b) => a.activeWeight - b.activeWeight || a.d - b.d);
+            .map((c: any) => ({ id: c.id as string, d: dist(coords!, { lat: Number(c.lat), lng: Number(c.lng) }), limit: Math.max(Number(c.radius_km)||0, 80), activeWeight: c.status==="ongoing"?0:c.status==="confirmed"?1:c.status==="forecast"?2:3 }))
+            .filter(c => c.d <= c.limit)
+            .sort((a,b) => a.activeWeight-b.activeWeight || a.d-b.d);
           attachedEventId = ranked[0]?.id ?? null;
         }
       } catch {
         // non-fatal: report is still persisted standalone
       }
 
-      const { error } = await supabase.from("hail_reports").insert({
-        reporter_user_id: user.id,
-        hail_event_id: attachedEventId,
-        lat: coords.lat,
-        lng: coords.lng,
-        city: city || null,
-        hail_size_mm: size ? Number(size) : null,
-        severity,
-        status: photo ? "confirmed" : "partial",
-        confidence_score: confidence,
-        notes: notes || null,
-        photo_storage_path,
-        photo_url,
+      await apiRequest("/weather/hail-reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          hailEventId: attachedEventId,
+          lat: coords!.lat,
+          lng: coords!.lng,
+          city: city || null,
+          hailSizeMm: size ? Number(size) : null,
+          severity,
+          status: photo ? "confirmed" : "partial",
+          confidenceScore: confidence,
+          notes: notes || null,
+          photoStoragePath: photo_storage_path,
+          photoUrl: photo_url,
+        }),
       });
-      if (error) throw error;
 
       toast({ title: "Relato enviado", description: "Obrigado pela contribuição." });
       reset();

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { RealtimeHub } from "@/lib/realtime/RealtimeHub";
+import { apiRequest } from "@/lib/api";
 import { useLanguage } from "@/hooks/useLanguage";
 import { Skeleton } from "@/components/ui/skeleton";
 import maplibregl, { Map as MLMap, GeoJSONSource } from "maplibre-gl";
@@ -19,7 +18,6 @@ import {
 } from "./OperationalOpportunities";
 import { HailReportDialog } from "./HailReportDialog";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { withAbortableTimeout } from "@/lib/asyncGuard";
 
 /* ------------------------------------------------------------------ */
 /*  Hail severity → premium color palette                              */
@@ -94,42 +92,9 @@ function guessCityFromText(text: string): string | null {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Dark premium MapLibre style (raster Carto Dark Matter)             */
+/*  Dark premium MapLibre style (CartoDB GL vector — proper ocean)     */
 /* ------------------------------------------------------------------ */
-const DARK_STYLE: maplibregl.StyleSpecification = {
-  version: 8,
-  glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
-  sources: {
-    "carto-dark": {
-      type: "raster",
-      tiles: [
-        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-      ],
-      tileSize: 256,
-      attribution: "© OpenStreetMap © CARTO",
-      minzoom: 0,
-      maxzoom: 19,
-    },
-  },
-  layers: [
-    {
-      id: "bg-ocean",
-      type: "background",
-      paint: { "background-color": "#0b1f3d" },
-    },
-    {
-      id: "carto-dark",
-      type: "raster",
-      source: "carto-dark",
-      paint: {
-        "raster-opacity": 0.9,
-        "raster-fade-duration": 0,
-      },
-    },
-  ],
-};
+const DARK_STYLE = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
 /* ------------------------------------------------------------------ */
 /*  Layer config                                                       */
@@ -230,66 +195,8 @@ export function OperationalMap() {
     staleTime: 60_000,
     placeholderData: (previousData) => previousData ?? [],
     queryFn: async () => {
-      // #region debug-point E:operational-map-orders-start
-      void fetch("http://127.0.0.1:7777/event", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId: "route-loading-stall",
-          runId: "pre-fix",
-          hypothesisId: "E",
-          location: "src/components/dashboard/OperationalMap.tsx:orders:start",
-          msg: "[DEBUG] DATA_START",
-          data: { source: "operational-map-orders" },
-          ts: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
-      try {
-        const data = await withAbortableTimeout(async (signal) => {
-          const { data, error } = await ((supabase
-            .from("service_orders")
-            .select("id, platform, car_name, license_plate, technician_name, created_at, status")
-            .order("created_at", { ascending: false })
-            .limit(500)) as any)
-            .abortSignal(signal);
-          if (error) throw error;
-          return data ?? [];
-        }, 10000, "operational_map_orders");
-        // #region debug-point E:operational-map-orders-success
-        void fetch("http://127.0.0.1:7777/event", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            sessionId: "route-loading-stall",
-            runId: "pre-fix",
-            hypothesisId: "E",
-            location: "src/components/dashboard/OperationalMap.tsx:orders:success",
-            msg: "[DEBUG] DATA_SUCCESS",
-            data: { source: "operational-map-orders", rows: data.length },
-            ts: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
-        return data;
-      } catch (error) {
-        // #region debug-point E:operational-map-orders-error
-        void fetch("http://127.0.0.1:7777/event", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            sessionId: "route-loading-stall",
-            runId: "pre-fix",
-            hypothesisId: "E",
-            location: "src/components/dashboard/OperationalMap.tsx:orders:error",
-            msg: "[DEBUG] DATA_ERROR",
-            data: { source: "operational-map-orders", error: error instanceof Error ? error.message : String(error) },
-            ts: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
-        throw error;
-      }
+      const data = await apiRequest<{ orders: any[] }>("/service-orders?limit=500");
+      return data.orders ?? [];
     },
   });
 
@@ -300,68 +207,8 @@ export function OperationalMap() {
     staleTime: 60_000,
     placeholderData: (previousData) => previousData ?? [],
     queryFn: async () => {
-      // #region debug-point E:operational-map-geo-start
-      void fetch("http://127.0.0.1:7777/event", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId: "route-loading-stall",
-          runId: "pre-fix",
-          hypothesisId: "E",
-          location: "src/components/dashboard/OperationalMap.tsx:geo:start",
-          msg: "[DEBUG] DATA_START",
-          data: { source: "operational-map-geo" },
-          ts: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
-      try {
-        const rows = await withAbortableTimeout(async (signal) => {
-          const { data, error } = await ((supabase
-            .from("backend_event_logs")
-            .select("payload, actor_user_id, created_at")
-            .eq("table_name", "geolocation")
-            .eq("action", "CHECKIN")
-            .order("created_at", { ascending: false })
-            .limit(300)) as any)
-            .abortSignal(signal);
-          if (error) throw error;
-          return (data ?? []).filter((d: any) => d.payload?.lat && d.payload?.lng);
-        }, 10000, "operational_map_geo");
-        // #region debug-point E:operational-map-geo-success
-        void fetch("http://127.0.0.1:7777/event", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            sessionId: "route-loading-stall",
-            runId: "pre-fix",
-            hypothesisId: "E",
-            location: "src/components/dashboard/OperationalMap.tsx:geo:success",
-            msg: "[DEBUG] DATA_SUCCESS",
-            data: { source: "operational-map-geo", rows: rows.length },
-            ts: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
-        return rows;
-      } catch (error) {
-        // #region debug-point E:operational-map-geo-error
-        void fetch("http://127.0.0.1:7777/event", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            sessionId: "route-loading-stall",
-            runId: "pre-fix",
-            hypothesisId: "E",
-            location: "src/components/dashboard/OperationalMap.tsx:geo:error",
-            msg: "[DEBUG] DATA_ERROR",
-            data: { source: "operational-map-geo", error: error instanceof Error ? error.message : String(error) },
-            ts: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
-        throw error;
-      }
+      const data = await apiRequest<{ events: any[] }>("/weather/backend-events?table_name=geolocation&action=CHECKIN&limit=300");
+      return (data.events ?? []).filter((d: any) => d.payload?.lat && d.payload?.lng);
     },
   });
 
@@ -371,39 +218,21 @@ export function OperationalMap() {
     queryKey: ["op-map-hail"],
     retry: 0,
     queryFn: async () => {
-      // 7-day window: keeps replay meaningful while ensuring operational
-      // entities remain visible even when no fresh ingest happened recently.
       const since = new Date(Date.now() - 7 * 24 * 3600_000).toISOString();
-      const nowIso = new Date().toISOString();
-      // Operational radar = only non-closed events whose TTL has not elapsed.
-      // Closed/expired events are kept in the DB for history but never rendered.
-      const data = await withAbortableTimeout(async (signal) => {
-        const { data, error } = await ((supabase
-          .from("hail_events")
-          .select("*")
-          .neq("status", "closed")
-          .or(`expires_at.is.null,expires_at.gte.${nowIso}`)
-          .or(`forecast_time.gte.${since},observed_time.gte.${since},created_at.gte.${since}`)
-          .order("forecast_time", { ascending: true })) as any)
-          .abortSignal(signal);
-        if (error) throw error;
-        return (data ?? []) as HailEvent[];
-      }, 10000, "operational_map_hail");
-      return data;
+      const data = await apiRequest<{ hailEvents: HailEvent[] }>(`/weather/hail-events?no_expired=true&since=${since}&limit=500`);
+      return data.hailEvents ?? [];
     },
     staleTime: 60_000,
     placeholderData: (previousData) => previousData ?? [],
   });
 
-  // Realtime: refresh on any hail_events / hail_reports change (shared via RealtimeHub)
+  // Polling: refresh hail data every 60 seconds
   useEffect(() => {
-    const offs = [
-      RealtimeHub.subscribe({ table: "hail_events" }, () =>
-        queryClient.invalidateQueries({ queryKey: ["op-map-hail"] })),
-      RealtimeHub.subscribe({ table: "hail_reports" }, () =>
-        queryClient.invalidateQueries({ queryKey: ["op-map-hail-reports"] })),
-    ];
-    return () => { offs.forEach((off) => off()); };
+    const id = setInterval(() => {
+      queryClient.invalidateQueries({ queryKey: ["op-map-hail"] });
+      queryClient.invalidateQueries({ queryKey: ["op-map-hail-reports"] });
+    }, 60000);
+    return () => clearInterval(id);
   }, [queryClient]);
 
   /* -------- data: community hail reports (lifecycle window) -------- */
@@ -411,20 +240,9 @@ export function OperationalMap() {
     queryKey: ["op-map-hail-reports"],
     retry: 0,
     queryFn: async () => {
-      // 30-day lifecycle window: live/recent/history (archived = older, not fetched here)
       const since = new Date(Date.now() - 30 * 24 * 3600_000).toISOString();
-      const data = await withAbortableTimeout(async (signal) => {
-        const { data, error } = await ((supabase
-          .from("hail_reports")
-          .select("id, hail_event_id, lat, lng, city, region, country, severity, status, hail_size_mm, photo_url, confidence_score, corroboration_count, observed_at, notes")
-          .gte("observed_at", since)
-          .order("observed_at", { ascending: false })
-          .limit(500)) as any)
-          .abortSignal(signal);
-        if (error) throw error;
-        return data ?? [];
-      }, 10000, "operational_map_hail_reports");
-      return data;
+      const data = await apiRequest<{ reports: any[] }>(`/weather/hail-reports?since=${since}&limit=500`);
+      return data.reports ?? [];
     },
     staleTime: 60_000,
     placeholderData: (previousData) => previousData ?? [],

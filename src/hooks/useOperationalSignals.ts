@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { agentBus, type AgentEvent } from "@/lib/agentEventBus";
 import "@/lib/operationalObserver"; // ensure singleton observer is started
@@ -8,32 +8,16 @@ import "@/lib/operationalObserver"; // ensure singleton observer is started
 export type SignalLevel = "ok" | "info" | "warn" | "error";
 
 export interface OperationalSignal {
-  id: string;
-  level: SignalLevel;
-  title: string;
-  detail?: string;
+  id: string; level: SignalLevel; title: string; detail?: string;
 }
 
-/**
- * Reads centralized operational signals derived from:
- *  - platforms table (degraded / no heartbeat)
- *  - hail_events freshness (radar ingest age)
- *  - recent agentBus events (runtime errors, network failures)
- *
- * No polling — relies on React Query staleTime + agentBus ticks.
- */
 export function useOperationalSignals() {
   const { workspaceId } = useWorkspace();
-  const [recent, setRecent] = useState<AgentEvent[]>(() =>
-    agentBus.snapshot().slice(-30),
-  );
+  const [recent, setRecent] = useState<AgentEvent[]>(() => agentBus.snapshot().slice(-30));
 
   useEffect(() => {
     const unsub = agentBus.subscribe((e) => {
-      setRecent((prev) => {
-        const next = [...prev, e];
-        return next.length > 30 ? next.slice(-30) : next;
-      });
+      setRecent((prev) => { const next = [...prev, e]; return next.length > 30 ? next.slice(-30) : next; });
     });
     return unsub;
   }, []);
@@ -43,11 +27,8 @@ export function useOperationalSignals() {
     enabled: !!workspaceId,
     staleTime: 60_000,
     queryFn: async () => {
-      const { data } = await supabase
-        .from("platforms")
-        .select("name,state,last_heartbeat_at")
-        .eq("workspace_id", workspaceId!);
-      return data ?? [];
+      const data = await apiRequest<{ platforms: any[] }>(`/platforms?workspace_id=${workspaceId}`);
+      return data.platforms ?? [];
     },
   });
 
@@ -55,24 +36,13 @@ export function useOperationalSignals() {
     queryKey: ["op-signals-last-hail"],
     staleTime: 60_000,
     queryFn: async () => {
-      const { data } = await supabase
-        .from("hail_events")
-        .select("observed_time,forecast_time")
-        .order("observed_time", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      return data;
+      const data = await apiRequest<{ hailEvents: any[] }>("/weather/hail-events?limit=1");
+      return data.hailEvents?.[0] ?? null;
     },
   });
 
-  // ── Operational Intelligence ────────────────────────────────────────
-  // Lightweight, low-frequency probes. All bounded, all read-only, all
-  // silent until they hit a threshold. Never spammy: each insight gets at
-  // most one row in `signals` and is announced at most once per session
-  // by AgentPanel.
-
-  const ACTIVE_STATUSES = ["pending", "draft", "open", "in_progress", "em_andamento", "aguardando", "aberto"];
-  const PAID_STATUSES = ["pago", "paid", "settled", "liquidado"];
+  const ACTIVE_STATUSES = ["pending","draft","open","in_progress","em_andamento","aguardando","aberto"];
+  const PAID_STATUSES = ["pago","paid","settled","liquidado"];
 
   // Stalled service orders — active SO not touched in > 18h
   const { data: stalledSO } = useQuery({
@@ -81,16 +51,11 @@ export function useOperationalSignals() {
     staleTime: 120_000,
     queryFn: async () => {
       const cutoff = new Date(Date.now() - 18 * 3600_000).toISOString();
-      const { data } = await supabase
-        .from("service_orders")
-        .select("id, updated_at, status", { count: "exact", head: false })
-        .eq("workspace_id", workspaceId!)
-        .is("deleted_at", null)
-        .lt("updated_at", cutoff)
-        .in("status", ACTIVE_STATUSES)
-        .order("updated_at", { ascending: true })
-        .limit(5);
-      return data ?? [];
+      const data = await apiRequest<{ orders: any[] }>(`/service-orders?workspace_id=${workspaceId}&limit=200`);
+      return (data.orders ?? [])
+        .filter((o: any) => !o.deleted_at && ACTIVE_STATUSES.includes(o.status) && o.updated_at < cutoff)
+        .sort((a: any, b: any) => a.updated_at < b.updated_at ? -1 : 1)
+        .slice(0, 5);
     },
   });
 
@@ -100,18 +65,14 @@ export function useOperationalSignals() {
     enabled: !!workspaceId,
     staleTime: 300_000,
     queryFn: async () => {
-      const now = Date.now();
-      const startToday = new Date(new Date().setHours(0, 0, 0, 0)).toISOString();
-      const startYesterday = new Date(now - 24 * 3600_000);
-      startYesterday.setHours(0, 0, 0, 0);
+      const startToday = new Date(new Date().setHours(0,0,0,0)).toISOString();
+      const startYesterday = new Date(Date.now() - 24*3600_000); startYesterday.setHours(0,0,0,0);
       const startY = startYesterday.toISOString();
-      const [{ count: today }, { count: yesterday }] = await Promise.all([
-        supabase.from("service_orders").select("id", { count: "exact", head: true })
-          .eq("workspace_id", workspaceId!).is("deleted_at", null).gte("created_at", startToday),
-        supabase.from("service_orders").select("id", { count: "exact", head: true })
-          .eq("workspace_id", workspaceId!).is("deleted_at", null).gte("created_at", startY).lt("created_at", startToday),
-      ]);
-      return { today: today ?? 0, yesterday: yesterday ?? 0 };
+      const data = await apiRequest<{ orders: any[] }>(`/service-orders?workspace_id=${workspaceId}&limit=500`);
+      const orders = data.orders ?? [];
+      const today = orders.filter((o: any) => !o.deleted_at && o.created_at >= startToday).length;
+      const yesterday = orders.filter((o: any) => !o.deleted_at && o.created_at >= startY && o.created_at < startToday).length;
+      return { today, yesterday };
     },
   });
 
@@ -121,15 +82,9 @@ export function useOperationalSignals() {
     enabled: !!workspaceId,
     staleTime: 300_000,
     queryFn: async () => {
-      const cutoff = new Date(Date.now() - 30 * 24 * 3600_000).toISOString();
-      const { count } = await supabase
-        .from("payment_orders")
-        .select("id", { count: "exact", head: true })
-        .eq("workspace_id", workspaceId!)
-        .is("deleted_at", null)
-        .lt("created_at", cutoff)
-        .not("status", "in", `(${PAID_STATUSES.map((s) => `"${s}"`).join(",")})`);
-      return count ?? 0;
+      const cutoff = new Date(Date.now() - 30*24*3600_000).toISOString();
+      const data = await apiRequest<{ orders: any[] }>(`/payment-orders?workspace_id=${workspaceId}&limit=500`);
+      return (data.orders ?? []).filter((o: any) => !o.deleted_at && o.created_at < cutoff && !PAID_STATUSES.includes(o.status)).length;
     },
   });
 
@@ -139,18 +94,15 @@ export function useOperationalSignals() {
     enabled: !!workspaceId,
     staleTime: 600_000,
     queryFn: async () => {
-      const [{ data: techs }, { data: recentSO }] = await Promise.all([
-        supabase.from("memberships")
-          .select("user_id")
-          .eq("workspace_id", workspaceId!).eq("role", "tecnico").eq("status", "active"),
-        supabase.from("service_orders")
-          .select("technician_id")
-          .eq("workspace_id", workspaceId!).is("deleted_at", null)
-          .gte("created_at", new Date(Date.now() - 14 * 24 * 3600_000).toISOString()),
+      const cutoff14d = new Date(Date.now() - 14*24*3600_000).toISOString();
+      const [membersData, soData] = await Promise.all([
+        apiRequest<{ members: any[] }>(`/workspaces/${workspaceId}/members`),
+        apiRequest<{ orders: any[] }>(`/service-orders?workspace_id=${workspaceId}&limit=500`),
       ]);
-      const active = new Set((recentSO ?? []).map((r: any) => r.technician_id).filter(Boolean));
-      const total = (techs ?? []).length;
-      const inactive = (techs ?? []).filter((t: any) => !active.has(t.user_id)).length;
+      const techs = (membersData.members ?? []).filter((m: any) => m.role === "tecnico" && m.status === "active");
+      const active = new Set((soData.orders ?? []).filter((o: any) => o.created_at >= cutoff14d).map((o: any) => o.assigned_user_id).filter(Boolean));
+      const total = techs.length;
+      const inactive = techs.filter((t: any) => !active.has(t.user_id)).length;
       return { total, inactive };
     },
   });
@@ -161,140 +113,41 @@ export function useOperationalSignals() {
     enabled: !!workspaceId,
     staleTime: 600_000,
     queryFn: async () => {
-      const cutoff = new Date(Date.now() - 7 * 24 * 3600_000).toISOString();
-      const { count } = await supabase.from("service_orders")
-        .select("id", { count: "exact", head: true })
-        .eq("workspace_id", workspaceId!).is("deleted_at", null)
-        .gte("created_at", cutoff);
-      return count ?? 0;
+      const cutoff = new Date(Date.now() - 7*24*3600_000).toISOString();
+      const data = await apiRequest<{ orders: any[] }>(`/service-orders?workspace_id=${workspaceId}&limit=200`);
+      return (data.orders ?? []).filter((o: any) => !o.deleted_at && o.created_at >= cutoff).length;
     },
   });
 
   const signals = useMemo<OperationalSignal[]>(() => {
     const out: OperationalSignal[] = [];
-
-    // Platforms degraded
     const degraded = (platforms ?? []).filter((p: any) => p.state === "degraded");
-    if (degraded.length) {
-      out.push({
-        id: "platforms-degraded",
-        level: "warn",
-        title: `${degraded.length} plataforma(s) degradada(s)`,
-        detail: degraded.map((p: any) => p.name).join(", "),
-      });
-    }
-
-    // Radar PDR freshness
+    if (degraded.length) out.push({ id:"platforms-degraded", level:"warn", title:`${degraded.length} plataforma(s) degradada(s)`, detail: degraded.map((p: any) => p.name).join(", ") });
     const lastTs = lastHail?.observed_time || lastHail?.forecast_time;
     if (lastTs) {
       const ageH = (Date.now() - new Date(lastTs).getTime()) / 36e5;
-      if (ageH > 4) {
-        out.push({
-          id: "radar-stale",
-          level: "warn",
-          title: "Ingestão em tempo real parece atrasada",
-          detail: `Último evento de radar há ${Math.round(ageH)}h`,
-        });
-      }
-    } else {
-      out.push({
-        id: "radar-empty",
-        level: "info",
-        title: "Radar PDR sem dados",
-        detail: "Sem eventos ingeridos ainda",
-      });
-    }
-
-    // Stalled service orders
-    if (stalledSO && stalledSO.length) {
+      if (ageH > 4) out.push({ id:"radar-stale", level:"warn", title:"Ingestão em tempo real parece atrasada", detail:`Último evento de radar há ${Math.round(ageH)}h` });
+    } else { out.push({ id:"radar-empty", level:"info", title:"Radar PDR sem dados", detail:"Sem eventos ingeridos ainda" }); }
+    if (stalledSO?.length) {
       const oldest = stalledSO[0];
       const hours = Math.round((Date.now() - new Date(oldest.updated_at as string).getTime()) / 36e5);
-      out.push({
-        id: "so-stalled",
-        level: "info",
-        title: stalledSO.length === 1
-          ? `Esta ordem de serviço está inativa há ${hours}h`
-          : `${stalledSO.length} ordens de serviço inativas`,
-        detail: stalledSO.length > 1 ? `A mais antiga há ${hours}h sem atualização` : undefined,
-      });
+      out.push({ id:"so-stalled", level:"info", title: stalledSO.length === 1 ? `Ordem de serviço inativa há ${hours}h` : `${stalledSO.length} ordens de serviço inativas`, detail: stalledSO.length > 1 ? `A mais antiga há ${hours}h` : undefined });
     }
-
-    // Production drop — needs meaningful yesterday baseline
     if (prodTrend && prodTrend.yesterday >= 3 && prodTrend.today < prodTrend.yesterday * 0.5) {
       const pct = Math.round((1 - prodTrend.today / prodTrend.yesterday) * 100);
-      out.push({
-        id: "production-drop",
-        level: "info",
-        title: "Volume de produção em queda",
-        detail: `Hoje ${prodTrend.today} vs ontem ${prodTrend.yesterday} (-${pct}%)`,
-      });
+      out.push({ id:"production-drop", level:"info", title:"Volume de produção em queda", detail:`Hoje ${prodTrend.today} vs ontem ${prodTrend.yesterday} (-${pct}%)` });
     }
-
-    // Overdue payments
-    if (overduePO && overduePO > 0) {
-      out.push({
-        id: "payments-overdue",
-        level: "warn",
-        title: `${overduePO} pagamento(s) em atraso há mais de 30 dias`,
-      });
-    }
-
-    // Inactive technicians
-    if (inactiveTechs && inactiveTechs.total >= 3 && inactiveTechs.inactive > 0) {
-      out.push({
-        id: "techs-inactive",
-        level: "info",
-        title: `${inactiveTechs.inactive} de ${inactiveTechs.total} técnicos sem atividade recente`,
-        detail: "Sem ordens de serviço nos últimos 14 dias",
-      });
-    }
-
-    // Inactive workspace
-    if (workspaceActivity === 0 && (inactiveTechs?.total ?? 0) > 0) {
-      out.push({
-        id: "workspace-idle",
-        level: "info",
-        title: "Workspace sem nova atividade esta semana",
-        detail: "Zero ordens criadas nos últimos 7 dias",
-      });
-    }
-
-    // Recent runtime errors (last 5 min)
-    const cutoff = Date.now() - 5 * 60_000;
+    if (overduePO && overduePO > 0) out.push({ id:"payments-overdue", level:"warn", title:`${overduePO} pagamento(s) em atraso há mais de 30 dias` });
+    if (inactiveTechs && inactiveTechs.total >= 3 && inactiveTechs.inactive > 0) out.push({ id:"techs-inactive", level:"info", title:`${inactiveTechs.inactive} de ${inactiveTechs.total} técnicos sem atividade recente`, detail:"Sem ordens nos últimos 14 dias" });
+    if (workspaceActivity === 0 && (inactiveTechs?.total ?? 0) > 0) out.push({ id:"workspace-idle", level:"info", title:"Workspace sem nova atividade esta semana", detail:"Zero ordens criadas nos últimos 7 dias" });
+    const cutoff = Date.now() - 5*60_000;
     const errs = recent.filter((e) => e.level === "error" && e.at > cutoff);
-    if (errs.length >= 3) {
-      out.push({
-        id: "alert-spike",
-        level: "error",
-        title: `Pico de alertas — ${errs.length} erros recentes`,
-        detail: errs[errs.length - 1].title,
-      });
-    } else if (errs.length) {
-      out.push({
-        id: "runtime-errors",
-        level: "error",
-        title: `${errs.length} erro(s) recente(s)`,
-        detail: errs[errs.length - 1].title,
-      });
-    }
-
-    if (!out.length) {
-      out.push({
-        id: "all-ok",
-        level: "ok",
-        title: "Sistema operacional estável",
-      });
-    }
+    if (errs.length >= 3) out.push({ id:"alert-spike", level:"error", title:`Pico de alertas — ${errs.length} erros recentes`, detail: errs[errs.length-1].title });
+    else if (errs.length) out.push({ id:"runtime-errors", level:"error", title:`${errs.length} erro(s) recente(s)`, detail: errs[errs.length-1].title });
+    if (!out.length) out.push({ id:"all-ok", level:"ok", title:"Sistema operacional estável" });
     return out;
   }, [platforms, lastHail, recent, stalledSO, prodTrend, overduePO, inactiveTechs, workspaceActivity]);
 
-  const worst: SignalLevel = signals.some((s) => s.level === "error")
-    ? "error"
-    : signals.some((s) => s.level === "warn")
-      ? "warn"
-      : signals.some((s) => s.level === "info" && s.id !== "all-ok")
-        ? "info"
-        : "ok";
-
+  const worst: SignalLevel = signals.some(s => s.level === "error") ? "error" : signals.some(s => s.level === "warn") ? "warn" : signals.some(s => s.level === "info" && s.id !== "all-ok") ? "info" : "ok";
   return { signals, worst, recent };
 }

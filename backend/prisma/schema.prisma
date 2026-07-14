@@ -807,3 +807,90 @@ model CompanySetting {
 
   @@map("company_settings")
 }
+
+model HailEvent {
+  id                String    @id @default(uuid())
+  source            String    @default("manual")
+  externalId        String?   @map("external_id")
+  city              String?
+  region            String?
+  country           String?
+  lat               Float
+  lng               Float
+  radiusKm          Float     @default(15) @map("radius_km")
+  severity          String    @default("low")
+  status            String    @default("forecast")
+  hailSizeMm        Float?    @map("hail_size_mm")
+  probability       Float?
+  intensity         Float?
+  stormSpeedKmh     Float?    @map("storm_speed_kmh")
+  stormDirectionDeg Float?    @map("storm_direction_deg")
+  forecastTime      DateTime? @map("forecast_time")
+  observedTime      DateTime? @map("observed_time")
+  expiresAt         DateTime? @map("expires_at")
+  isDemo            Boolean   @default(false) @map("is_demo")
+  metadata          Json      @default("{}")
+  createdBy         String?   @map("created_by")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  reports HailReport[]
+
+  @@unique([source, externalId])
+  @@index([status])
+  @@index([severity])
+  @@index([lat, lng])
+  @@map("hail_events")
+}
+
+model HailReport {
+  id                 String    @id @default(uuid())
+  reporterUserId     String?   @map("reporter_user_id")
+  hailEventId        String?   @map("hail_event_id")
+  lat                Float
+  lng                Float
+  city               String?
+  region             String?
+  country            String?
+  observedAt         DateTime  @default(now()) @map("observed_at")
+  hailSizeMm         Float?    @map("hail_size_mm")
+  severity           String    @default("low")
+  status             String    @default("partial")
+  confidenceScore    Float     @default(0.3) @map("confidence_score")
+  corroborationCount Int       @default(0) @map("corroboration_count")
+  notes              String?
+  photoStoragePath   String?   @map("photo_storage_path")
+  photoUrl           String?   @map("photo_url")
+  metadata           Json      @default("{}")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  hailEvent HailEvent? @relation(fields: [hailEventId], references: [id], onDelete: SetNull)
+
+  @@index([lat, lng])
+  @@index([observedAt])
+  @@index([status])
+  @@index([hailEventId])
+  @@map("hail_reports")
+}
+
+model OperationalEvent {
+  id             String   @id @default(uuid())
+  workspaceId    String?  @map("workspace_id")
+  source         String
+  kind           String
+  severity       String   @default("info")
+  priority       Int      @default(50)
+  title          String
+  detail         String?
+  correlationKey String?  @map("correlation_key")
+  refTable       String?  @map("ref_table")
+  refId          String?  @map("ref_id")
+  metadata       Json     @default("{}")
+  occurredAt     DateTime @default(now()) @map("occurred_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([workspaceId, occurredAt])
+  @@index([severity, occurredAt])
+  @@map("operational_events")
+}

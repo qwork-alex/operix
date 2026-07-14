@@ -1,6 +1,6 @@
 import { useEffect, useRef, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useLanguage } from "@/hooks/useLanguage";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -71,6 +71,7 @@ const clusterCss = `
   background: hsl(220,14%,11%); color: #e5e5e5; border: 1px solid hsl(220,12%,18%); border-radius: 8px;
 }
 .leaflet-dark-popup .leaflet-popup-tip { background: hsl(220,14%,11%); }
+.map-dark-filter { filter: invert(100%) hue-rotate(180deg) brightness(80%) saturate(0.7); }
 `;
 
 export function ActiveMap() {
@@ -83,13 +84,8 @@ export function ActiveMap() {
   const { data: serviceOrders = [], isLoading } = useQuery({
     queryKey: ["service-orders-map"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("service_orders")
-        .select("id, platform, car_name, license_plate, technician_name")
-        .order("created_at", { ascending: false })
-        .limit(500);
-      if (error) throw error;
-      return data;
+      const data = await apiRequest<{ orders: any[] }>("/service-orders?limit=500");
+      return data.orders ?? [];
     },
   });
 
@@ -97,15 +93,8 @@ export function ActiveMap() {
   const { data: geoCheckins = [] } = useQuery({
     queryKey: ["geo-checkins"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("backend_event_logs")
-        .select("payload, actor_user_id, created_at")
-        .eq("table_name", "geolocation")
-        .eq("action", "CHECKIN")
-        .order("created_at", { ascending: false })
-        .limit(200);
-      if (error) throw error;
-      return (data ?? []).filter((d: any) => d.payload?.lat && d.payload?.lng);
+      const data = await apiRequest<{ events: any[] }>("/weather/backend-events?table_name=geolocation&action=CHECKIN&limit=200");
+      return (data.events ?? []).filter((d: any) => d.payload?.lat && d.payload?.lng);
     },
   });
 
@@ -155,8 +144,10 @@ export function ActiveMap() {
       attributionControl: false,
     });
 
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-      maxZoom: 18,
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      className: "map-dark-filter",
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }).addTo(map);
 
     L.control.zoom({ position: "bottomright" }).addTo(map);

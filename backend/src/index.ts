@@ -22,6 +22,9 @@ import { platformsRouter } from "./routes/platforms.js";
 import { financeRouter } from "./routes/finance.js";
 import { financialRecordsRouter } from "./routes/financialRecords.js";
 import { settingsRouter } from "./routes/settings.js";
+import { weatherRouter } from "./routes/weather.js";
+import { routeCalcRouter } from "./routes/routeCalc.js";
+import { runWeatherIngest } from "./services/weatherIngest.js";
 
 const app = express();
 
@@ -61,6 +64,8 @@ app.use("/api/platforms", platformsRouter);
 app.use("/api/finance", financeRouter);
 app.use("/api/financial-records", financialRecordsRouter);
 app.use("/api/settings", settingsRouter);
+app.use("/api/weather", weatherRouter);
+app.use("/api/route", routeCalcRouter);
 
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof ZodError) {
@@ -85,3 +90,11 @@ app.listen(env.PORT, async () => {
     console.error("[minio] falha ao inicializar buckets:", err);
   }
 });
+
+// Scheduled hail weather ingest every 15 minutes
+setTimeout(() => {
+  runWeatherIngest(prisma).catch((e: Error) => console.error("[weather] startup ingest error:", e.message));
+  setInterval(() => {
+    runWeatherIngest(prisma).catch((e: Error) => console.error("[weather] ingest error:", e.message));
+  }, 15 * 60 * 1000);
+}, 8000);
