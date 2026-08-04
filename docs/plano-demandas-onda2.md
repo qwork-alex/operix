@@ -128,24 +128,36 @@ Escopo original (2 bugs):
 **Critério de aceite**: ✅ eventos de granizo aparecem no mapa com severidade/estado,
 oportunidades são geradas automaticamente, oceano na cor original.
 
-## Fase 5 — Integração Stripe na VPS (do orçamento onda 2: STR-01 a STR-04)
+## Fase 5 — Integração Stripe na VPS (do orçamento onda 2: STR-01 a STR-04) 🔶 EM ANDAMENTO (2026-07-14)
 
 O código de billing já existe (`backend/src/routes/billing.ts`, `billingOperations.ts`;
 compose já repassa `STRIPE_SANDBOX_API_KEY`, `STRIPE_LIVE_API_KEY`,
 `STRIPE_WEBHOOK_SECRET`, portal URLs). O trabalho é de configuração + validação:
 
-1. **STR-01** — Configurar variáveis de ambiente e chaves Stripe no `.env` (chaves test
-   disponíveis no `keys.txt`; live keys a obter com o usuário) + rebuild do frontend
-   (`VITE_PAYMENTS_CLIENT_TOKEN`).
-2. **STR-02** — Atualizar o webhook no Dashboard Stripe para o endpoint da VPS
-   (`https://operix-pro.com/api/...`) e registrar o novo `STRIPE_WEBHOOK_SECRET`.
-3. **STR-03** — Verificar/criar Products & Prices (lookup_keys esperados pelo código) e
-   configurar o Customer Portal.
-4. **STR-04** — Testes end-to-end em sandbox: checkout, recebimento de webhook,
-   portal do cliente e cancelamento.
+1. **STR-01** ✅ — `.env` atualizado com `STRIPE_SANDBOX_API_KEY`/`VITE_PAYMENTS_CLIENT_TOKEN`
+   (a partir das chaves test do `keys.txt`); containers `api`+`frontend` recompilados;
+   confirmado que a API sobe com as env vars (`STRIPE_SANDBOX_API_KEY` presente). Live keys
+   ainda pendentes (usuário precisa fornecer quando for ativar produção).
+2. **STR-02** ✅ (sandbox) — Webhook endpoint criado via Stripe API apontando para
+   `https://operix-pro.com/api/billing/webhooks/stripe?env=sandbox`
+   (id `we_1Tt8NSQMqBsLzFTtI7vuI34M`, eventos: checkout.session.completed,
+   customer.subscription.created/updated/deleted, invoice.paid, invoice.payment_failed);
+   `STRIPE_WEBHOOK_SECRET` gerado e salvo no `.env`. Live webhook ainda não criado.
+3. **STR-03** ✅ — 10 Products/Prices criados via API Stripe (sandbox) com os `lookup_key`
+   esperados pelo código (`starter/pro/scale/enterprise` × `monthly/yearly`, além de
+   `technician_pro_monthly/yearly`); preços: 35/45/55/75€ mensal (350/450/550/750€ anual),
+   technician_pro 24,99€/mês (249,90€/ano). Customer Portal configurado
+   (`bpc_1Tt8OwQMqBsLzFTtd09CkWao`, cancelamento at_period_end, atualização de método de
+   pagamento/endereço, histórico de faturas).
+4. **STR-04** ⏳ pendente — **teste manual a cargo do usuário**: checkout completo com
+   cartão de teste (`4242 4242 4242 4242`) em `/checkout?plan=starter&cycle=monthly`,
+   confirmar que o webhook chega e ativa a assinatura, testar portal do cliente e
+   cancelamento. Não automatizável por API/CLI porque o Stripe Embedded Checkout
+   (`StripeEmbeddedCheckout.tsx`) confirma o pagamento no client-side via Stripe.js.
 
 **Critério de aceite**: assinatura de teste completa em sandbox — checkout → webhook
-processado → assinatura ativa no sistema → cancelamento refletido.
+processado → assinatura ativa no sistema → cancelamento refletido. **Fase 5 fica
+concluída assim que o usuário validar o STR-04 manualmente.**
 
 ---
 

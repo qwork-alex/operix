@@ -40,7 +40,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <ErrorBoundary fallback={<ShellFallback label={t("nav.operations", "menu")} />}>
               <AppSidebar />
             </ErrorBoundary>
-            <div className="flex-1 flex h-full min-h-0 min-w-0 max-w-full flex-col overflow-hidden">
+            <div className="flex-1 flex h-full min-h-0 min-w-0 max-w-full flex-col overflow-hidden pt-[env(safe-area-inset-top)]">
               <ImpersonationBanner />
               <ErrorBoundary fallback={<ShellFallback label={t("nav.dashboard", "header")} />}>
                 <TopBar />

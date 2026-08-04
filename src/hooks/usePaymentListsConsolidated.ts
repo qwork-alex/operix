@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 
 /** ISO week number (1-53). */
 function getISOWeek(d: Date): number {
@@ -35,12 +35,7 @@ export function usePaymentListsConsolidated() {
   return useQuery({
     queryKey: ["billing_link_payment_lists"],
     queryFn: async (): Promise<BillingPaymentList[]> => {
-      const { data, error } = await supabase
-        .from("payment_orders")
-        .select("id, list_name, assigned_user_id, technician_name, total, client_name, created_at")
-        .order("created_at", { ascending: false })
-        .limit(2000);
-      if (error) throw error;
+      const data = await apiRequest<any[]>("/payment-orders");
 
       const map = new Map<string, BillingPaymentList>();
       for (const po of ((data ?? []) as any[])) {

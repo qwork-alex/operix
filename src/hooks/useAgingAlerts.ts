@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { withPromiseTimeout } from "@/lib/asyncGuard";
+import { apiRequest } from "@/lib/api";
 
 export type AlertLevel = "none" | "level1" | "level2" | "level3";
 
@@ -32,30 +31,15 @@ export function useAgingAlerts() {
     retry: 0,
     placeholderData: (previousData) => previousData ?? [],
     queryFn: async () => {
-      // Fetch payment orders
-      const { data: pos } = await withPromiseTimeout<any>(supabase
-        .from("payment_orders")
-        .select("id, list_name, car_name, license_plate, status, created_at")
-        .neq("status", "paid"), 10000, "aging_payment_orders");
+      const [allPos, sos, invsResp] = await Promise.all([
+        apiRequest<any[]>("/payment-orders"),
+        apiRequest<any[]>("/service-orders"),
+        apiRequest<{ invoices: any[] }>("/billing/admin/ops/invoices").catch(() => ({ invoices: [] })),
+      ]);
 
-      // Fetch service orders + their payment status
-      const { data: sos } = await withPromiseTimeout<any>(supabase
-        .from("service_orders")
-        .select("id, week, car_name, license_plate, created_at"), 10000, "aging_service_orders");
-
-      const soIds = (sos || []).map(s => s.id);
-      const { data: linkedPos } = soIds.length > 0
-        ? await withPromiseTimeout<any>(supabase
-            .from("payment_orders")
-            .select("service_order_id, status")
-            .in("service_order_id", soIds), 10000, "aging_linked_payment_orders")
-        : { data: [] };
-
-      // Invoices — unpaid faturas de billing
-      const { data: invs } = await withPromiseTimeout<any>(supabase
-        .from("billing_invoices")
-        .select("id, invoice_number, customer_name, status, remaining_amount, issue_date, created_at")
-        .neq("status", "paid"), 10000, "aging_billing_invoices");
+      const pos = (allPos ?? []).filter((po) => po.status !== "paid");
+      const linkedPos = allPos ?? [];
+      const invs = (invsResp?.invoices ?? []).filter((inv) => inv.status !== "paid");
 
       const soPaymentMap: Record<string, string> = {};
       for (const po of linkedPos || []) {
