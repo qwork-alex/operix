@@ -1,102 +1,148 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, LayoutGrid, BarChart3, Wrench, FileText } from "lucide-react";
+import { Plus, LayoutGrid, Calculator, RefreshCw, AlertTriangle } from "lucide-react";
 import { ProductionBoard } from "@/components/production/ProductionBoard";
-import { TechnicianHub } from "@/components/production/TechnicianHub";
-import { OperationalDashboard } from "@/components/production/OperationalDashboard";
-import { DraftsPanel } from "@/components/production/DraftsPanel";
 import { OrderDetailDialog } from "@/components/production/OrderDetailDialog";
+import { BudgetPanel } from "@/components/production/BudgetPanel";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import type { ProductionOrder } from "@/hooks/useProductionOrders";
 import { useLanguage } from "@/hooks/useLanguage";
-import { useServiceOrders } from "@/hooks/useServiceOrders";
 
 const BLANK: ProductionOrder = {
   id: "__new__", workspace_id: "", code: "", client_id: null, client_name: null,
   technician_user_id: null, technician_name: null, platform: null, insurer: null,
   license_plate: null, vin: null, brand: null, model: null, color: null, notes: null,
-  priority: "normal", status: "new_vehicle", due_at: null, started_at: null,
+  priority: "normal", status: "in_production", due_at: null, started_at: null,
   finished_at: null, delivered_at: null, service_order_id: null, created_by: "",
   created_at: "", updated_at: "",
 };
 
-export const PRODUCTION_DRAFT_PREFIX = "production-draft-new-";
-
 export default function ProductionPage() {
   const { t } = useLanguage();
   const [open, setOpen] = useState<ProductionOrder | null>(null);
-  const [openDraftId, setOpenDraftId] = useState<string | undefined>(undefined);
-  const [draftRefreshKey, setDraftRefreshKey] = useState(0);
-  const { data: allOrders = [] } = useServiceOrders({});
-  const draftCount = (allOrders as any[]).filter((o) => o.status === "draft").length;
 
   const handleDialogClose = () => {
     setOpen(null);
-    setOpenDraftId(undefined);
-    setDraftRefreshKey((k) => k + 1);
-  };
-
-  const handleResumeDraft = (draftId: string) => {
-    try {
-      const raw = localStorage.getItem(`${PRODUCTION_DRAFT_PREFIX}${draftId}`);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === "object") {
-          setOpenDraftId(draftId);
-          setOpen({ ...BLANK, ...parsed, id: "__new__" });
-          return;
-        }
-      }
-    } catch { /* ignore corrupt draft */ }
-    setOpenDraftId(draftId);
-    setOpen(BLANK);
   };
 
   return (
+    <ErrorBoundary
+      fallback={
+        <div className="min-w-0 max-w-full space-y-4 md:space-y-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h1 className="text-xl font-bold tracking-tight md:text-2xl">
+                {t("nav.production", "Produção")}
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                {t("production.subtitle", "Pipeline operacional de veículos em tempo real.")}
+              </p>
+            </div>
+            <Button
+              onClick={() => window.location.reload()}
+              variant="outline"
+              className="h-11 w-full gap-2 sm:w-auto md:h-10"
+            >
+              <RefreshCw className="h-4 w-4" /> Tentar novamente
+            </Button>
+          </div>
+
+          <div className="flex min-h-[360px] flex-col items-center justify-center rounded-xl border border-dashed border-destructive/40 bg-destructive/5 p-10 text-center">
+            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+              <AlertTriangle className="h-7 w-7" />
+            </div>
+            <h2 className="text-lg font-semibold tracking-tight text-foreground">
+              {t("production.pageError", "Erro ao carregar a página de Produção.")}
+            </h2>
+            <p className="mt-2 max-w-lg text-sm leading-relaxed text-muted-foreground">
+              O menu e navegação permanecem disponíveis. Você pode mudar de página ou tentar novamente.
+              <br />
+              <span className="text-xs">
+                Le menu et la navigation restent disponibles. Vous pouvez changer de page ou réessayer.
+              </span>
+            </p>
+            <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+              <Button onClick={() => window.location.reload()} className="gap-2">
+                <RefreshCw className="h-4 w-4" /> Recarregar Produção
+              </Button>
+              <Button variant="outline" onClick={() => window.history.back()} className="gap-2">
+                Voltar
+              </Button>
+            </div>
+            <p className="mt-6 text-[11px] text-muted-foreground/80">
+              Orçamentos · Em Produção · Rascunhos — novas abas serão liberadas após recarga bem-sucedida.
+            </p>
+          </div>
+        </div>
+      }
+    >
     <div className="min-w-0 max-w-full space-y-4 md:space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-bold tracking-tight md:text-2xl">{t("nav.production", "Produção")}</h1>
           <p className="text-sm text-muted-foreground">{t("production.subtitle", "Pipeline operacional de veículos em tempo real.")}</p>
         </div>
-        <Button onClick={() => setOpen(BLANK)} className="h-11 w-full gap-2 sm:w-auto md:h-10">
-          <Plus className="h-4 w-4" /> {t("production.newOrder", "Nova Ordem")}
-        </Button>
       </div>
 
-      <Tabs defaultValue="board" className="min-w-0 max-w-full">
-        <TabsList className="grid h-auto w-full grid-cols-4 gap-1 p-1 md:inline-flex md:w-auto">
-          <TabsTrigger value="board" className="min-h-10 gap-1.5 px-2 text-xs md:text-sm"><LayoutGrid className="h-4 w-4" /> <span className="truncate">{t("production.pipeline", "Pipeline")}</span></TabsTrigger>
-          <TabsTrigger value="my" className="min-h-10 gap-1.5 px-2 text-xs md:text-sm"><Wrench className="h-4 w-4" /> <span className="truncate">{t("production.mine", "Minhas")}</span></TabsTrigger>
-          <TabsTrigger value="dashboard" className="min-h-10 gap-1.5 px-2 text-xs md:text-sm"><BarChart3 className="h-4 w-4" /> <span className="truncate">{t("nav.dashboard", "Painel")}</span></TabsTrigger>
-          <TabsTrigger value="drafts" className="relative min-h-10 gap-1.5 px-2 text-xs md:text-sm">
-            <FileText className="h-4 w-4" />
-            <span className="truncate">Rascunhos</span>
-            {draftCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold text-white">
-                {draftCount > 99 ? "99+" : draftCount}
-              </span>
-            )}
+      <Tabs defaultValue="budgets" className="min-w-0 max-w-full">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 p-1 md:inline-flex md:w-auto">
+          <TabsTrigger value="budgets" className="min-h-10 gap-1.5 px-2 text-xs md:text-sm">
+            <Calculator className="h-4 w-4" />
+            <span className="truncate">Orçamentos</span>
+          </TabsTrigger>
+          <TabsTrigger value="board" className="min-h-10 gap-1.5 px-2 text-xs md:text-sm">
+            <LayoutGrid className="h-4 w-4" />
+            <span className="truncate">Em Produção</span>
           </TabsTrigger>
         </TabsList>
-        <TabsContent value="board" className="mt-4">
-          <ProductionBoard onOpen={setOpen} />
+        <TabsContent value="budgets" className="mt-4">
+          <BudgetPanel onOpenOrder={(order) => { setOpen(order); }} />
         </TabsContent>
-        <TabsContent value="my" className="mt-4">
-          <TechnicianHub />
-        </TabsContent>
-        <TabsContent value="dashboard" className="mt-4">
-          <OperationalDashboard />
-        </TabsContent>
-        <TabsContent value="drafts" className="mt-4">
-          <DraftsPanel
-            refreshKey={draftRefreshKey}
-            onResumeProductionDraft={handleResumeDraft}
-          />
-        </TabsContent>
+        <ErrorBoundary
+          fallback={
+            <div className="mt-4 flex min-h-[320px] flex-col items-center justify-center rounded-xl border border-dashed border-amber-400/40 bg-amber-500/5 p-8 text-center">
+              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                <AlertTriangle className="h-6 w-6" />
+              </div>
+              <h3 className="text-base font-semibold text-foreground">
+                {t("production.kanbanError", "Kanban Em Produção indisponível no momento")}
+              </h3>
+              <p className="mt-2 max-w-md text-xs text-muted-foreground">
+                Tente novamente em instantes — a aba Orçamentos continua disponível.
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-4 gap-2"
+                onClick={() => window.location.reload()}
+              >
+                <RefreshCw className="h-3.5 w-3.5" /> Recarregar
+              </Button>
+            </div>
+          }
+        >
+          <TabsContent value="board" className="mt-4 space-y-4">
+            <div className="flex justify-end">
+              <Button onClick={() => setOpen(BLANK)} className="h-11 w-full gap-2 sm:w-auto md:h-10">
+                <Plus className="h-4 w-4" /> {t("production.newOrder", "Nova Ordem")}
+              </Button>
+            </div>
+            <ProductionBoard onOpen={setOpen} />
+          </TabsContent>
+        </ErrorBoundary>
       </Tabs>
 
-      <OrderDetailDialog order={open} draftId={openDraftId} onClose={handleDialogClose} />
+      <ErrorBoundary
+        fallback={
+          <div className="hidden" aria-hidden>
+            OrderDetailDialog temporarily unavailable
+          </div>
+        }
+      >
+        <OrderDetailDialog order={open} onClose={handleDialogClose} />
+      </ErrorBoundary>
     </div>
+    </ErrorBoundary>
   );
 }

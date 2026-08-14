@@ -15,7 +15,7 @@ export type ProductionStatus =
 
 export type CommercialStatus = "invoiced" | "delivered" | null;
 
-export const LOCKED_STATUSES: ProductionStatus[] = ["finished", "invoiced", "delivered"];
+export const LOCKED_STATUSES: ProductionStatus[] = ["delivered", "invoiced"];
 export const isOrderLocked = (s?: ProductionStatus | null) => !!s && LOCKED_STATUSES.includes(s);
 
 export type ProductionPriority = "low" | "normal" | "high" | "urgent";
@@ -49,12 +49,9 @@ export interface ProductionOrder {
 }
 
 export const PRODUCTION_STATUSES: { value: ProductionStatus; label: string; color: string }[] = [
-  { value: "new_vehicle", label: "Novo Veículo", color: "bg-slate-500" },
-  { value: "triage", label: "Em Triagem", color: "bg-blue-500" },
-  { value: "awaiting_validation", label: "Aguardando Validação", color: "bg-amber-500" },
   { value: "in_production", label: "Em Produção", color: "bg-indigo-500" },
-  { value: "paused", label: "Pausado", color: "bg-orange-500" },
-  { value: "finished", label: "Finalizado", color: "bg-emerald-500" },
+  { value: "paused", label: "Pausado", color: "bg-amber-500" },
+  { value: "delivered", label: "Finalizado", color: "bg-emerald-500" },
 ];
 
 export const PRIORITY_META: Record<ProductionPriority, { label: string; tone: string }> = {
@@ -115,7 +112,7 @@ export function useProductionOrders(filters?: { technicianOnly?: boolean; status
       const clean = normalizeProductionOrderPayload(payload);
       return createProductionOrder({
         priority: "normal",
-        status: "new_vehicle",
+        status: "in_production",
         ...clean,
         workspace_id: workspaceId,
       });
@@ -132,7 +129,6 @@ export function useProductionOrders(filters?: { technicianOnly?: boolean; status
       const clean = normalizeProductionOrderPayload(patch);
       const stamp: Record<string, string> = {};
       if (clean.status === "in_production" && !clean.started_at) stamp.started_at = new Date().toISOString();
-      if (clean.status === "finished" && !clean.finished_at) stamp.finished_at = new Date().toISOString();
       if (clean.status === "delivered" && !clean.delivered_at) stamp.delivered_at = new Date().toISOString();
       return updateProductionOrder(id, { ...clean, ...stamp });
     },

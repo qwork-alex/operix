@@ -2,7 +2,8 @@ import { memo } from "react";
 import { Link } from "react-router-dom";
 import {
   LayoutDashboard, FileText, CreditCard, TrendingUp, BarChart3,
-  Car, Users, Receipt, Shield, Wrench, Store, Zap, Brain,
+  Car, Users, Receipt, Shield, Wrench, Store, Zap, Brain, Workflow,
+  UserPlus,
 } from "lucide-react";
 import { useIsPlatformOwner } from "@/hooks/useSubscription";
 import {
@@ -68,11 +69,18 @@ export const AppSidebar = memo(function AppSidebar() {
       ],
     },
     {
+      // Cliente — flush entre Painel e Operações, com espaçamento visual via className pt-4 abaixo.
+      items: [
+        { title: "Cliente", url: "/clients", icon: UserPlus, module: "accounting", action: "view" },
+      ],
+    },
+    {
       label: t("nav.group.operations", "Operações"),
       items: [
         { title: t("nav.production", "Produção"), url: "/production", icon: Wrench, module: "service_orders", action: "view" },
         { title: t("nav.serviceOrders"), url: "/service-orders", icon: FileText, module: "service_orders", action: "view" },
         { title: t("nav.paymentOrders"), url: "/payment-orders", icon: CreditCard, module: "payment_orders", action: "view" },
+        { title: t("nav.productionWorkflow", "Workflow"), url: "/production-workflow", icon: Workflow, module: "production_workflow", action: "view" },
       ],
     },
     {
@@ -155,7 +163,15 @@ export const AppSidebar = memo(function AppSidebar() {
         {visibleGroups.map((group, idx) => (
           <SidebarGroup
             key={group.label ?? `__top-${idx}`}
-            className={group.label ? "pt-3" : "pt-0"}
+            className={
+              idx === 0
+                ? "pt-0"
+                : idx === 1
+                  ? "pt-3"
+                  : group.label
+                    ? "pt-3"
+                    : "pt-0"
+            }
           >
             {group.label && (
               <SidebarGroupLabel className="text-muted-foreground/50 text-[10px] font-medium uppercase tracking-[0.14em] px-2 mb-1">

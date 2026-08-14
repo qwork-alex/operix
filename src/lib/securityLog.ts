@@ -61,6 +61,18 @@ async function resolveIp(): Promise<string | null> {
 
 export async function logSecurityEvent(p: SecurityEventPayload): Promise<void> {
   try {
+    const apiBase =
+      (
+        (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env
+          ?.VITE_API_URL || ""
+      ).replace(/\/$/, "") || "";
+    const isDirectIpDevBuild = /\/\/72\.62\.27\.129:1010\b/.test(
+      typeof window !== "undefined" ? window.location.origin : "",
+    ) || /72\.62\.27\.129:4010\/api/.test(apiBase);
+    if (import.meta.env.DEV || isDirectIpDevBuild) {
+      console.debug("[securityLog] skipped (DEV non-Supabase build)", p);
+      return;
+    }
     const ip = await resolveIp();
     await supabase.rpc("log_security_event", {
       _event_type: p.type,

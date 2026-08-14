@@ -59,6 +59,17 @@ export async function registerCurrentDevice(workspaceId?: string | null) {
   if (registered) return;
   registered = true;
   try {
+    const apiBase =
+      (
+        (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env
+          ?.VITE_API_URL || ""
+      ).replace(/\/$/, "") || "";
+    const isDirectIpDevBuild = /\/\/72\.62\.27\.129:1010\b/.test(
+      typeof window !== "undefined" ? window.location.origin : "",
+    ) || /72\.62\.27\.129:4010\/api/.test(apiBase);
+    if (import.meta.env.DEV || isDirectIpDevBuild) {
+      return;
+    }
     const { browser, os, deviceType } = parseUA();
     const ip = await resolveIp();
     await supabase.rpc("register_device" as any, {

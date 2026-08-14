@@ -78,6 +78,8 @@ const KNOWN_PERMISSION_KEYS = [
   "profile.edit",
   "notifications.view",
   "notifications.mark_read",
+  "production_workflow.view",
+  "production_workflow.move",
 ] as const;
 
 type Rule = {
@@ -101,6 +103,7 @@ const OWNER_RULES: Rule[] = [
   { module: "settings", actions: "*", scope: "all" },
   { module: "profile", actions: "*", scope: "all" },
   { module: "notifications", actions: "*", scope: "all" },
+  { module: "production_workflow", actions: "*", scope: "all" },
 ];
 
 const ROLE_RULES: Record<Exclude<PermissionRole, "owner">, Rule[]> = {
@@ -119,6 +122,7 @@ const ROLE_RULES: Record<Exclude<PermissionRole, "owner">, Rule[]> = {
     { module: "settings", actions: "*", scope: "all" },
     { module: "profile", actions: "*", scope: "all" },
     { module: "notifications", actions: "*", scope: "all" },
+    { module: "production_workflow", actions: "*", scope: "all" },
   ],
   partner: [
     { module: "dashboard", actions: ["view", "view_dashboard", "report_hail"], scope: "team" },
@@ -135,6 +139,8 @@ const ROLE_RULES: Record<Exclude<PermissionRole, "owner">, Rule[]> = {
     { module: "settings", actions: ["view"], scope: "own" },
     { module: "profile", actions: "*", scope: "own" },
     { module: "notifications", actions: ["view", "mark_read"], scope: "own" },
+    // Move is further restricted at the route level to pre-faturamento transitions only (FR-016).
+    { module: "production_workflow", actions: ["view", "move"], scope: "team" },
   ],
   technician: [
     { module: "dashboard", actions: ["view", "view_dashboard"], scope: "own" },
@@ -146,6 +152,7 @@ const ROLE_RULES: Record<Exclude<PermissionRole, "owner">, Rule[]> = {
     { module: "settings", actions: ["view", "edit", "change_password"], scope: "own" },
     { module: "profile", actions: "*", scope: "own" },
     { module: "notifications", actions: ["view", "mark_read"], scope: "own" },
+    { module: "production_workflow", actions: ["view"], scope: "own" },
   ],
   client: [
     { module: "dashboard", actions: ["view"], scope: "own" },
@@ -156,6 +163,7 @@ const ROLE_RULES: Record<Exclude<PermissionRole, "owner">, Rule[]> = {
     { module: "settings", actions: ["view", "change_password"], scope: "own" },
     { module: "profile", actions: "*", scope: "own" },
     { module: "notifications", actions: ["view", "mark_read"], scope: "own" },
+    { module: "production_workflow", actions: ["view"], scope: "own" },
   ],
 };
 

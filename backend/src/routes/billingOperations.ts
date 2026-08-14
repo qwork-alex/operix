@@ -155,10 +155,64 @@ function resolveInvoiceStatus(status: string, dueDate: Date | null, remainingAmo
   return status;
 }
 
+function formatCustomerDisplayId(num: number): string {
+  return "C-" + String(num).padStart(5, "0");
+}
+
+async function getNextCustomerDisplayNum(
+  tx: Prisma.TransactionClient | PrismaClient,
+  workspaceId: string | null | undefined,
+): Promise<{ num: number; formatted: string }> {
+  const wsSafe = workspaceId ?? null;
+  const existing = await tx.billingClient.aggregate({
+    where: {
+      workspaceId: wsSafe,
+      customerDisplayNum: { not: null },
+    },
+    _max: { customerDisplayNum: true },
+  });
+  const nextNum = (existing._max.customerDisplayNum ?? 0) + 1;
+  if (nextNum > 99999) {
+    throw new Error("Limite máximo de clientes por workspace atingido (C-99999).");
+  }
+  return { num: nextNum, formatted: formatCustomerDisplayId(nextNum) };
+}
+
+async function lazyAssignDisplayIdsToExistingClients(workspaceId: string | null | undefined) {
+  const wsSafe = workspaceId ?? null;
+  const needing = await prisma.billingClient.findMany({
+    where: {
+      workspaceId: wsSafe,
+      customerDisplayNum: null,
+    },
+    select: { id: true, createdAt: true },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+  });
+  if (needing.length === 0) return 0;
+
+  let assigned = 0;
+  for (const row of needing) {
+    await prisma.$transaction(async (tx) => {
+      const { num, formatted } = await getNextCustomerDisplayNum(tx, wsSafe);
+      const updated = await tx.billingClient.updateMany({
+        where: { id: row.id, customerDisplayNum: null },
+        data: {
+          customerDisplayNum: num,
+          customerDisplayId: formatted,
+        },
+      });
+      if (updated.count > 0) assigned += updated.count;
+    });
+  }
+  return assigned;
+}
+
 function mapBillingClient(client: {
   id: string;
   kind: string;
   name: string;
+  customerDisplayNum: number | null;
+  customerDisplayId: string | null;
   siren: string | null;
   siret: string | null;
   tvaIntracom: string | null;
@@ -183,6 +237,8 @@ function mapBillingClient(client: {
     id: client.id,
     kind: client.kind,
     name: client.name,
+    customer_display_num: client.customerDisplayNum,
+    customer_display_id: client.customerDisplayId,
     siren: client.siren,
     siret: client.siret,
     tva_intracom: client.tvaIntracom,
@@ -398,12 +454,21 @@ operationalBillingRouter.get("/admin/ops/clients", async (req: AuthenticatedRequ
     if (!requireAdmin(req, res)) return;
     const querySchema = z.object({
       active_only: z.coerce.boolean().optional().default(false),
+      workspace_id: z.string().uuid().nullable().optional(),
     });
-    const { active_only } = querySchema.parse((req as AuthenticatedRequest & { query: unknown }).query);
+    const { active_only, workspace_id } = querySchema.parse((req as AuthenticatedRequest & { query: unknown }).query);
+
+    await lazyAssignDisplayIdsToExistingClients(workspace_id ?? null);
 
     const clients = await prisma.billingClient.findMany({
-      where: active_only ? { isActive: true } : undefined,
-      orderBy: { name: "asc" },
+      where: {
+        ...(active_only ? { isActive: true } : {}),
+        ...(workspace_id ? { workspaceId: workspace_id } : {}),
+      },
+      orderBy: [
+        { customerDisplayNum: { sort: "asc", nulls: "last" } },
+        { name: "asc" },
+      ],
       take: 500,
     });
 
@@ -440,11 +505,15 @@ operationalBillingRouter.post("/admin/ops/clients", async (req: AuthenticatedReq
     const workspaceId = await ensureWorkspaceExists(input.workspace_id);
 
     const client = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const { num: displayNum, formatted: displayId } = await getNextCustomerDisplayNum(tx, workspaceId);
+
       const created = await tx.billingClient.create({
         data: {
           workspaceId,
           kind: input.kind,
           name: input.name.trim(),
+          customerDisplayNum: displayNum,
+          customerDisplayId: displayId,
           siren: input.kind === "professional" ? normalizeNullableString(input.siren) : null,
           siret: input.kind === "professional" ? normalizeNullableString(input.siret) : null,
           tvaIntracom: input.kind === "professional" ? normalizeNullableString(input.tva_intracom) : null,
@@ -474,6 +543,7 @@ operationalBillingRouter.post("/admin/ops/clients", async (req: AuthenticatedReq
         payload: {
           name: created.name,
           kind: created.kind,
+          customer_display_id: created.customerDisplayId,
           is_active: created.isActive,
         } as Prisma.InputJsonValue,
       });
@@ -594,6 +664,14 @@ operationalBillingRouter.get("/admin/ops/clients/:clientId", async (req: Authent
     if (!requireAdmin(req, res)) return;
     const paramsSchema = z.object({ clientId: z.string().uuid() });
     const { clientId } = paramsSchema.parse((req as AuthenticatedRequest & { params: unknown }).params);
+
+    const preClient = await prisma.billingClient.findUnique({
+      where: { id: clientId },
+      select: { id: true, workspaceId: true },
+    });
+    if (preClient?.workspaceId) {
+      await lazyAssignDisplayIdsToExistingClients(preClient.workspaceId);
+    }
 
     const client = await prisma.billingClient.findUnique({
       where: { id: clientId },

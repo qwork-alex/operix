@@ -2,14 +2,212 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-// Import the supabase client like this:
-// import { supabase } from "@/integrations/supabase/client";
+function isDevOriginBlockedByCors(): boolean {
+  if (import.meta.env.DEV) return true;
+  const apiBase =
+    (
+      (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env
+        ?.VITE_API_URL || ""
+    ).replace(/\/$/, "") || "";
+  const origin =
+    typeof window !== "undefined" ? window.location.origin : "";
+  return (
+    /\/\/72\.62\.27\.129:1010\b/.test(origin) ||
+    /72\.62\.27\.129:4010\/api/.test(apiBase)
+  );
+}
+
+// ----------------------------------------------------------------------------
+// Network-level kill-switch for Supabase requests in dev containers
+//
+// Motivation: Even when we replace our own `supabase` singleton with a no-op,
+// third-party chunks or cached versions of @supabase/supabase-js may call the
+// raw `window.fetch()` API directly against nwjiyfvaoogevqovnyon.supabase.co,
+// producing CORS errors that leak into the console (even inside ErrorBoundaries
+// that suppress the render path) and can trip Chromium's "unhandled promise"
+// handlers. We intercept those requests *before* they leave the browser so
+// no network call is ever made.
+// ----------------------------------------------------------------------------
+const g = globalThis as any;
+
+function installSupabaseFetchBlockerOnce() {
+  if (typeof window === "undefined") return;
+  if (g.__SUPABASE_FETCH_BLOCKER_INSTALLED__) return;
+  g.__SUPABASE_FETCH_BLOCKER_INSTALLED__ = true;
+  const originalFetch = window.fetch.bind(window);
+  const supabaseHost = SUPABASE_URL ? new URL(SUPABASE_URL).host : "";
+  const isSupabaseRequest = (input: any): boolean => {
+    if (!input) return false;
+    try {
+      if (typeof input === "string") {
+        const url = input;
+        if (supabaseHost && url.includes(supabaseHost)) return true;
+        return /nwjiyfvaoogevqovnyon\.supabase\.co/.test(url);
+      }
+      if (input instanceof Request) {
+        const u = input.url;
+        if (supabaseHost && u.includes(supabaseHost)) return true;
+        return /nwjiyfvaoogevqovnyon\.supabase\.co/.test(u);
+      }
+    } catch {
+      /* ignore malformed inputs */
+    }
+    return false;
+  };
+  const fakeErrResponse = () =>
+    new Response(JSON.stringify({ data: null, error: { message: "supabase-blocked-in-dev" } }), {
+      status: 204,
+      statusText: "No Content",
+      headers: { "Content-Type": "application/json" },
+    });
+  window.fetch = function supabaseSafeFetch(input: any, init?: RequestInit): Promise<Response> {
+    if (isSupabaseRequest(input)) {
+      // Return silently — never hit network.
+      return Promise.resolve(fakeErrResponse());
+    }
+    return originalFetch(input, init);
+  } as typeof window.fetch;
+  console.debug("[SUPABASE] fetch() blocker installed for origin", SUPABASE_URL || "(host detection)");
+}
+
+// ----------------------------------------------------------------------------
+// No-op client facade used instead of createClient() in blocked origins.
+//
+// Must survive ANY of these idioms without throwing (or producing unhandled
+// rejections):
+//   supabase.from("x").select("a,b").eq("id", 1).limit(10).then(...)
+//   supabase.rpc("fn", { args }).then(...)
+//   supabase.auth.getSession().then(...)
+//   supabase.storage.from("bucket").upload(...)
+//   supabase.channel("room").on("postgres_changes",{}).subscribe(...)
+//
+// We use a single "omnipotent" Proxy that returns itself for every get/apply
+// interaction and is a .then-able that resolves to { data: null, error: null }.
+// This makes it a valid terminal for method chains as well as await / Promise
+// combinators.
+// ----------------------------------------------------------------------------
+function createOmnipotentThennable<T = any>(resolveWith: T): any {
+  let settled: Promise<T> | null = null;
+  const ensure = () => settled ?? (settled = Promise.resolve(resolveWith));
+  const handler: ProxyHandler<any> = {
+    get(_target, prop, _receiver) {
+      if (prop === "then") return ensure().then.bind(ensure());
+      if (prop === "catch") return ensure().catch.bind(ensure());
+      if (prop === "finally") return ensure().finally.bind(ensure());
+      if (prop === Symbol.iterator) return [][Symbol.iterator].bind([]);
+      if (prop === Symbol.toPrimitive) return (_hint: string) => "[object DevNoop]";
+      if (prop === "valueOf") return () => null;
+      if (prop === "toString") return () => "[object DevNoop]";
+      if (prop === "toJSON") return () => null;
+      return new Proxy(() => {}, handler);
+    },
+    apply(_target, _thisArg, _args) {
+      return new Proxy(() => {}, handler);
+    },
+    has() {
+      return true;
+    },
+    construct() {
+      return new Proxy(() => {}, handler);
+    },
+  };
+  return new Proxy(() => {}, handler);
+}
+
+function noopSupabaseFacade() {
+  const terminal = createOmnipotentThennable({ data: null, error: null });
+  return new Proxy({} as any, {
+    get(_, prop: string | symbol) {
+      if (prop === "auth") {
+        // Sub-facade for auth methods. Most return {data:{session|user|null}, error:null}.
+        const authTerminal = createOmnipotentThennable({
+          data: { session: null, user: null },
+          error: null,
+        });
+        return new Proxy(
+          {
+            getSession: async () => ({ data: { session: null }, error: null }),
+            getUser: async () => ({ data: { user: null }, error: null }),
+            signInWithPassword: async () => ({
+              data: { session: null, user: null },
+              error: new Error("dev-noop"),
+            }),
+            signUp: async () => ({
+              data: { session: null, user: null },
+              error: new Error("dev-noop"),
+            }),
+            signOut: async () => ({ error: null }),
+            onAuthStateChange: () => ({
+              data: {
+                subscription: { unsubscribe: () => {} },
+              },
+            }),
+            updateUser: async () => ({ data: { user: null }, error: new Error("dev-noop") }),
+            resetPasswordForEmail: async () => ({ data: null, error: new Error("dev-noop") }),
+          } as any,
+          {
+            get(t, k, r) {
+              const v = (t as any)[k];
+              if (v !== undefined) return v;
+              return authTerminal;
+            },
+          },
+        );
+      }
+      if (prop === "storage") {
+        const storageTerminal = createOmnipotentThennable({
+          data: { publicUrl: "", signedUrl: "" },
+          error: new Error("dev-noop"),
+        });
+        return new Proxy(
+          {
+            from: () =>
+              new Proxy(
+                {
+                  upload: async () => ({ data: null, error: new Error("dev-noop") }),
+                  getPublicUrl: () => ({ data: { publicUrl: "" } }),
+                  createSignedUrl: async () => ({
+                    data: { signedUrl: "" },
+                    error: new Error("dev-noop"),
+                  }),
+                  list: async () => ({ data: [], error: null }),
+                  remove: async () => ({ data: [], error: null }),
+                } as any,
+                { get: (t, k) => ((t as any)[k] ?? storageTerminal) },
+              ),
+          } as any,
+          { get: (t, k) => ((t as any)[k] ?? storageTerminal) },
+        );
+      }
+      if (prop === "channel") {
+        return (_name: string) =>
+          new Proxy(
+            {
+              on: () => ({
+                subscribe: () => {},
+                unsubscribe: () => {},
+              }),
+              unsubscribe: () => {},
+            } as any,
+            { get: () => terminal },
+          );
+      }
+      if (prop === "removeChannel" || prop === "removeAllChannels") {
+        return async () => {};
+      }
+      if (prop === "realtime") {
+        return { setAuth: () => {} };
+      }
+      // from(), rpc() and everything else resolve via omnipotent builder.
+      return terminal;
+    },
+  });
+}
 
 // Singleton guard — detect accidental double-instantiation across HMR / chunks.
-const g = globalThis as any;
 if (g.__SUPABASE_CLIENT__) {
   console.warn("[SUPABASE] Duplicate createClient detected — reusing existing instance");
 } else {
@@ -18,10 +216,20 @@ if (g.__SUPABASE_CLIENT__) {
 
 export const supabase =
   g.__SUPABASE_CLIENT__ ??
-  (g.__SUPABASE_CLIENT__ = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-    auth: {
-      storage: localStorage,
-      persistSession: true,
-      autoRefreshToken: true,
-    },
-  }));
+  (g.__SUPABASE_CLIENT__ = (() => {
+    const blocked = isDevOriginBlockedByCors();
+    if (blocked) {
+      console.debug(
+        "[SUPABASE] Dev origin detected — installing silent no-op facade + fetch blocker to avoid CORS errors. Use backend API routes for persistence.",
+      );
+      installSupabaseFetchBlockerOnce();
+      return noopSupabaseFacade();
+    }
+    return createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+      auth: {
+        storage: localStorage,
+        persistSession: true,
+        autoRefreshToken: true,
+      },
+    });
+  })());

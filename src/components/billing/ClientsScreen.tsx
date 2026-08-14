@@ -60,6 +60,8 @@ type Client = {
   id: string;
   kind: ClientKind;
   name: string;
+  customer_display_num: number | null;
+  customer_display_id: string | null;
   siren: string | null;
   siret: string | null;
   tva_intracom: string | null;
@@ -376,6 +378,7 @@ export default function ClientsScreen() {
           <Table>
             <TableHeader>
               <TableRow className="text-[10px] uppercase tracking-wider">
+                <TableHead>ID</TableHead>
                 <TableHead>Nome</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Contato</TableHead>
@@ -388,11 +391,11 @@ export default function ClientsScreen() {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-12">
+                <TableRow><TableCell colSpan={9} className="text-center py-12">
                   <Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" />
                 </TableCell></TableRow>
               ) : filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-12 text-xs text-muted-foreground">
+                <TableRow><TableCell colSpan={9} className="text-center py-12 text-xs text-muted-foreground">
                   Nenhum cliente encontrado.
                 </TableCell></TableRow>
               ) : filtered.map((c) => {
@@ -405,6 +408,9 @@ export default function ClientsScreen() {
                     key={c.id} className="text-xs cursor-pointer animate-fade-in"
                     onClick={() => setDetail(c)}
                   >
+                    <TableCell className="font-mono text-[11px] font-semibold text-primary w-[140px] truncate" title={c.id}>
+                      {c.customer_display_id ?? <span className="text-muted-foreground/60 font-normal">—</span>}
+                    </TableCell>
                     <TableCell className="font-medium">{c.name}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className={cn(

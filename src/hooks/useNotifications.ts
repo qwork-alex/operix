@@ -1,9 +1,20 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { RealtimeHub } from "@/lib/realtime/RealtimeHub";
-import { withPromiseTimeout } from "@/lib/asyncGuard";
+import { apiRequest } from "@/lib/api";
+
+type Notification = {
+  id: string;
+  user_id: string | null;
+  type: string;
+  title: string | null;
+  body: string | null;
+  payload: unknown | null;
+  is_read: boolean;
+  created_at: string;
+  updated_at: string;
+};
 
 export function useNotifications() {
   const { user } = useAuth();
@@ -16,30 +27,29 @@ export function useNotifications() {
     staleTime: 30_000,
     placeholderData: (previousData) => previousData ?? [],
     queryFn: async () => {
-      const { data, error } = await withPromiseTimeout<any>(
-        supabase
-        .from("notifications")
-        .select("*")
-        .eq("user_id", user?.id ?? "")
-        .order("created_at", { ascending: false })
-        .limit(50),
-        8000,
-        "notifications",
-      );
-      if (error) throw error;
-      return data;
+      try {
+        const rows = await apiRequest<Notification[]>("/notifications?limit=50", { timeoutMs: 8000 });
+        return (rows || []).map((r) => ({
+          ...r,
+          isRead: r.is_read,
+          user_id: r.user_id,
+        }));
+      } catch {
+        return [] as any[];
+      }
     },
   });
 
-  const unreadCount = notifications.filter((n: any) => !n.is_read).length;
+  const unreadCount = (notifications as any[]).filter((n) => !(n.is_read ?? n.isRead)).length;
 
   const markAsRead = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("notifications")
-        .update({ is_read: true })
-        .eq("id", id);
-      if (error) throw error;
+      await apiRequest<void>(`/notifications/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_read: true }),
+        timeoutMs: 8000,
+      });
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
   });
@@ -47,12 +57,12 @@ export function useNotifications() {
   const markAllRead = useMutation({
     mutationFn: async () => {
       if (!user) return;
-      const { error } = await supabase
-        .from("notifications")
-        .update({ is_read: true })
-        .eq("user_id", user.id)
-        .eq("is_read", false);
-      if (error) throw error;
+      await apiRequest<void>("/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_read: true }),
+        timeoutMs: 8000,
+      });
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
   });
@@ -60,23 +70,27 @@ export function useNotifications() {
   const clearAll = useMutation({
     mutationFn: async () => {
       if (!user) return;
-      const { error } = await supabase
-        .from("notifications")
-        .delete()
-        .eq("user_id", user.id);
-      if (error) throw error;
+      await apiRequest<void>("/notifications", { method: "DELETE", timeoutMs: 8000 });
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
   });
 
-  // Realtime subscription (shared via RealtimeHub)
   useEffect(() => {
-    if (!user) return;
-    const off = RealtimeHub.subscribe(
-      { table: "notifications", event: "INSERT", filter: `user_id=eq.${user.id}` },
-      () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
-    );
-    return off;
+    if (!user) return undefined as unknown as () => void;
+    let off: (() => void) | null = null;
+    try {
+      off = RealtimeHub.subscribe(
+        { table: "notifications", event: "INSERT", filter: `user_id=eq.${user.id}` },
+        () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+      );
+    } catch {
+      off = null;
+    }
+    return () => {
+      if (typeof off === "function") {
+        try { off(); } catch {}
+      }
+    };
   }, [user, queryClient]);
 
   return {

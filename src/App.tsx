@@ -29,6 +29,7 @@ const ChangePasswordPage = lazy(() => import("./pages/ChangePasswordPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const ServiceOrdersPage = lazy(() => import("./pages/ServiceOrdersPage"));
 const PaymentOrdersPage = lazy(() => import("./pages/PaymentOrdersPage"));
+const ProductionWorkflowPage = lazy(() => import("./pages/ProductionWorkflowPage"));
 const FinancialPage = lazy(() => import("./pages/FinancialPage"));
 const ModulePages = () => import("./pages/ModulePages");
 const ProfitDistribution = lazy(() => ModulePages().then((m) => ({ default: m.ProfitDistribution })));
@@ -55,6 +56,7 @@ const PrivacyPage = lazy(() => import("./pages/legal/LegalPages").then((m) => ({
 const GdprPage = lazy(() => import("./pages/legal/LegalPages").then((m) => ({ default: m.GdprPage })));
 const CookiesPage = lazy(() => import("./pages/legal/LegalPages").then((m) => ({ default: m.CookiesPage })));
 const DataProcessingPage = lazy(() => import("./pages/legal/LegalPages").then((m) => ({ default: m.DataProcessingPage })));
+const ClientsScreenBilling = lazy(() => import("./components/billing/ClientsScreen").then((m) => ({ default: m.default })));
 
 /** Subtle, layout-stable fallback used while a route chunk is loading. */
 function RouteFallback() {
@@ -200,11 +202,13 @@ function AuthenticatedShell() {
                     <Route path="/service-orders" element={<PermissionGuard permission="service_orders.view"><ServiceOrdersPage /></PermissionGuard>} />
                     <Route path="/production" element={<PermissionGuard permission="service_orders.view"><ProductionPage /></PermissionGuard>} />
                     <Route path="/payment-orders" element={<PermissionGuard permission="payment_orders.view"><PaymentOrdersPage /></PermissionGuard>} />
+                    <Route path="/production-workflow" element={<PermissionGuard permission="production_workflow.view"><ProductionWorkflowPage /></PermissionGuard>} />
                     <Route path="/financial" element={<PermissionGuard permission="financial.view"><FinancialPage /></PermissionGuard>} />
                     <Route path="/profit" element={<PermissionGuard permission="profit.view"><ProfitDistribution /></PermissionGuard>} />
                     <Route path="/accounting" element={<Navigate to="/financial?tab=accounting" replace />} />
                     <Route path="/fleet" element={<PermissionGuard permission="fleet.view"><FleetPage /></PermissionGuard>} />
                     <Route path="/billing/*" element={<PermissionGuard permission="accounting.view"><BillingPage /></PermissionGuard>} />
+                    <Route path="/clients" element={<PermissionGuard permission="accounting.view"><ClientsScreenBilling /></PermissionGuard>} />
                     <Route path="/documents" element={<PermissionGuard permission="documents.view"><Documents /></PermissionGuard>} />
                     <Route path="/users" element={<PermissionGuard permission="users.view"><UsersPage /></PermissionGuard>} />
                     <Route path="/marketplace" element={<MarketplacePage />} />

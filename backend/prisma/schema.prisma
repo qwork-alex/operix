@@ -257,6 +257,8 @@ model BillingClient {
   visibilityScope   String    @default("workspace") @map("visibility_scope")
   kind              String    @default("professional")
   name              String
+  customerDisplayNum Int?     @map("customer_display_num")
+  customerDisplayId  String?  @unique @map("customer_display_id")
   siren             String?
   siret             String?
   tvaIntracom       String?   @map("tva_intracom")
@@ -281,6 +283,7 @@ model BillingClient {
   invoices     BillingInvoice[]
   attachments  BillingAttachment[]
 
+  @@unique([workspaceId, customerDisplayNum])
   @@map("billing_clients")
 }
 
@@ -893,4 +896,18 @@ model OperationalEvent {
   @@index([workspaceId, occurredAt])
   @@index([severity, occurredAt])
   @@map("operational_events")
+}
+
+model ProductionList {
+  id             String    @id @default(uuid())
+  workspaceId    String?   @map("workspace_id")
+  listName       String    @unique @map("list_name")
+  status         String    @default("em_elaboracao")
+  previousStatus String?   @map("previous_status")
+  updatedBy      String?   @map("updated_by")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@index([workspaceId, status])
+  @@map("production_lists")
 }

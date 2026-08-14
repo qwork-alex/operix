@@ -52,7 +52,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-qwnexus}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-qwnexus}?schema=public
       JWT_SECRET: ${JWT_SECRET:-troque-esta-chave-jwt-por-uma-string-com-mais-de-32-caracteres}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}
+      CORS_ORIGIN: "https://operix-pro.com,http://72.62.27.129:1010"
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
       EMAIL_FROM: ${EMAIL_FROM:-}
       SMTP_HOST: ${SMTP_HOST:-}

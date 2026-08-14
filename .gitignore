@@ -38,3 +38,17 @@ debug-*.md
 
 # Local API keys archive (never commit)
 keys.txt
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# Docker-compose backup artifacts (runtime local, gerados automaticamente em ajustes)
+*.BAK.*
+*.backup-*
+*.bak-*
+
+# Especificações e relatórios de desenvolvimento temporários
+specs/
+reports/
+.specify/
+.claude/worktrees/

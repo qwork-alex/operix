@@ -18,12 +18,15 @@ import { productionOrdersRouter } from "./routes/productionOrders.js";
 import { productionPhotosRouter } from "./routes/productionPhotos.js";
 import { invitesRouter } from "./routes/invites.js";
 import { paymentOrdersRouter } from "./routes/paymentOrders.js";
+import { productionWorkflowRouter } from "./routes/productionWorkflow.js";
 import { platformsRouter } from "./routes/platforms.js";
 import { financeRouter } from "./routes/finance.js";
 import { financialRecordsRouter } from "./routes/financialRecords.js";
 import { settingsRouter } from "./routes/settings.js";
 import { weatherRouter } from "./routes/weather.js";
 import { routeCalcRouter } from "./routes/routeCalc.js";
+import { notificationsRouter } from "./routes/notifications.js";
+import { operationalBillingRouter } from "./routes/billingOperations.js";
 import { runWeatherIngest } from "./services/weatherIngest.js";
 
 const app = express();
@@ -60,12 +63,15 @@ app.use("/api/production-orders", productionOrdersRouter);
 app.use("/api/production-orders/:orderId/photos", productionPhotosRouter);
 app.use("/api", invitesRouter);
 app.use("/api/payment-orders", paymentOrdersRouter);
+app.use("/api/production-workflow", productionWorkflowRouter);
 app.use("/api/platforms", platformsRouter);
 app.use("/api/finance", financeRouter);
 app.use("/api/financial-records", financialRecordsRouter);
 app.use("/api/settings", settingsRouter);
 app.use("/api/weather", weatherRouter);
 app.use("/api/route", routeCalcRouter);
+app.use("/api/notifications", notificationsRouter);
+app.use("/api/billing", operationalBillingRouter);
 
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof ZodError) {
