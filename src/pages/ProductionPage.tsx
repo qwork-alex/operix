@@ -8,6 +8,7 @@ import { BudgetPanel } from "@/components/production/BudgetPanel";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import type { ProductionOrder } from "@/hooks/useProductionOrders";
 import { useLanguage } from "@/hooks/useLanguage";
+import { useWorkspace } from "@/hooks/useWorkspace";
 
 const BLANK: ProductionOrder = {
   id: "__new__", workspace_id: "", code: "", client_id: null, client_name: null,
@@ -20,10 +21,15 @@ const BLANK: ProductionOrder = {
 
 export default function ProductionPage() {
   const { t } = useLanguage();
+  const { workspaceId } = useWorkspace();
   const [open, setOpen] = useState<ProductionOrder | null>(null);
 
   const handleDialogClose = () => {
     setOpen(null);
+  };
+
+  const openNewOrder = () => {
+    setOpen({ ...BLANK, workspace_id: workspaceId ?? "" });
   };
 
   return (
@@ -124,7 +130,7 @@ export default function ProductionPage() {
         >
           <TabsContent value="board" className="mt-4 space-y-4">
             <div className="flex justify-end">
-              <Button onClick={() => setOpen(BLANK)} className="h-11 w-full gap-2 sm:w-auto md:h-10">
+              <Button onClick={openNewOrder} className="h-11 w-full gap-2 sm:w-auto md:h-10">
                 <Plus className="h-4 w-4" /> {t("production.newOrder", "Nova Ordem")}
               </Button>
             </div>

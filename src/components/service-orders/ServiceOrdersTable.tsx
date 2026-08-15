@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Trash2, Pencil, Save, X, Loader2, ChevronDown, ChevronRight, Camera } from "lucide-react";
+import { Trash2, Pencil, Save, X, Loader2, ChevronDown, ChevronRight, Camera, FileText } from "lucide-react";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useAuth } from "@/hooks/useAuth";
 import { useClients } from "@/hooks/useServiceOrders";
@@ -24,6 +24,7 @@ import { useTechnicianEarnings, getTechEarnings } from "@/hooks/useTechnicianEar
 import { Can } from "@/components/Can";
 import { PlatformOpsToggle } from "@/components/service-orders/PlatformOpsToggle";
 import { ServiceOrderPhotosDialog } from "@/components/service-orders/ServiceOrderPhotosDialog";
+import { WeeklogOperationalDocumentDialog, type ServiceOrderLike } from "@/components/service-orders/WeeklogOperationalDocumentDialog";
 
 interface ServiceOrderRow {
   id: string;
@@ -120,6 +121,8 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [photosOpen, setPhotosOpen] = useState(false);
   const [photosOrderId, setPhotosOrderId] = useState<string | null>(null);
+  const [operDocOpen, setOperDocOpen] = useState(false);
+  const [operDocOrder, setOperDocOrder] = useState<ServiceOrderLike | null>(null);
 
   // Use DB-stored status as single source of truth (synced by DB trigger)
   const getPaymentStatus = (o: ServiceOrderRow): PaymentStatus => {
@@ -210,7 +213,13 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
     none: "— Sem dados",
   };
 
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => {
+    const initial = new Set<string>();
+    for (const o of orders) {
+      initial.add(groupKeyOf(o));
+    }
+    return initial;
+  });
   const toggleCollapse = (k: string) => setCollapsedGroups(prev => {
     const n = new Set(prev);
     if (n.has(k)) n.delete(k);
@@ -544,6 +553,9 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
                       <p className="text-xs text-muted-foreground">{services.length ? services.join(", ") : "Sem serviços"}</p>
                       {techEarn && <p className="text-[11px] text-muted-foreground">Tec. {techEarn.percentage}% · <span className="text-foreground">{formatCurrency(techEarn.earnings)}</span></p>}
                       <div className="flex justify-end gap-2 border-t border-border/50 pt-2">
+                        <Button variant="outline" size="sm" className="h-10 bg-indigo-500/5 border-indigo-400/30 hover:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300" onClick={() => { setOperDocOrder({ ...o } as ServiceOrderLike); setOperDocOpen(true); }}>
+                          <FileText className="h-4 w-4 mr-1" /> Doc. Operacional
+                        </Button>
                         <Button variant="outline" size="sm" className="h-10" onClick={() => openPhotos(o.id)}>
                           <Camera className="h-4 w-4 mr-1" /> Fotos
                         </Button>
@@ -743,6 +755,16 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1">
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-500/10" onClick={() => { setOperDocOrder({ ...o } as ServiceOrderLike); setOperDocOpen(true); }} aria-label="Documento Operacional">
+                                  <FileText className="h-3 w-3" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="text-xs">📋 Documento Operacional WEEKLOG</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openPhotos(o.id)} aria-label="Fotos">
                             <Camera className="h-3 w-3" />
                           </Button>
@@ -783,6 +805,23 @@ export function ServiceOrdersTable({ orders, isLoading }: ServiceOrdersTableProp
         onOpenChange={(o) => {
           setPhotosOpen(o);
           if (!o) setPhotosOrderId(null);
+        }}
+      />
+
+      <WeeklogOperationalDocumentDialog
+        open={operDocOpen}
+        onOpenChange={(o) => {
+          setOperDocOpen(o);
+          if (!o) setOperDocOrder(null);
+        }}
+        order={operDocOrder}
+        currentUserId={user?.id ?? null}
+        currentUserName={user?.displayName || user?.name || user?.email || null}
+        onSaved={(latest) => {
+          // Atualiza a lista no cache do react-query para refletir o operational_document novo
+          queryClient.invalidateQueries({ queryKey: ["service-orders"] });
+          // Atualiza a cópia local no dialog (caso reabra imediatamente)
+          setOperDocOrder(latest);
         }}
       />
     </div>

@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from "react";
-import { ClipboardList, FolderTree } from "lucide-react";
+import { ClipboardList, FolderTree, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import {
@@ -288,8 +288,16 @@ export default function ServiceOrdersPage() {
             <ClipboardList className="h-4 w-4 text-primary" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-sm font-semibold text-foreground truncate">{t("so.title") || "Ordens de serviço"}</h1>
-            <p className="text-[11px] text-muted-foreground truncate">{t("so.subtitle") || "Gestão e validação documental operacional"}</p>
+            <h1 className="text-sm font-semibold text-foreground truncate">
+              <span className="font-bold tracking-[0.08em] text-indigo-600 dark:text-indigo-400">WEEKLOG</span>
+              <span className="mx-2 text-muted-foreground/60">·</span>
+              {t("so.title") || "Ordens de serviço"}
+            </h1>
+            <p className="text-[11px] text-muted-foreground truncate">
+              {t("so.subtitle") || "Gestão e validação documental operacional"}
+              <span className="mx-1.5 text-muted-foreground/60">—</span>
+              <span className="text-indigo-500/90 dark:text-indigo-400">Integração Produção (Finalizado) → semana automática</span>
+            </p>
           </div>
         </div>
         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 md:flex md:items-center">
@@ -311,6 +319,7 @@ export default function ServiceOrdersPage() {
             context={hCtx}
             onContextChange={handleHierarchyContextChange}
             onDeleteYear={handleDeleteYear}
+            defaultAllCollapsed
           />
         </SheetContent>
       </Sheet>
@@ -329,6 +338,7 @@ export default function ServiceOrdersPage() {
             collapsed={sidebarCollapsed}
             onCollapsedChange={setSidebarCollapsed}
             onDeleteYear={handleDeleteYear}
+            defaultAllCollapsed
           />
         </aside>
 
@@ -369,7 +379,35 @@ export default function ServiceOrdersPage() {
 
           {!hasExtractions && (
             hCtx.section === "documentos" ? (
-              <EmbeddedFileManager entityType="service_order" module="orders" year={hCtx.year ?? null} />
+              <div className="space-y-3">
+                <EmbeddedFileManager entityType="service_order" module="orders" year={hCtx.year ?? null} />
+                {/* ESTRUTURA ATIVA: documentos/fotos organizados POR SEMANA + VEÍCULO (criados automaticamente ao finalizar Produção) */}
+                <section
+                  className="mt-2 rounded-xl border border-emerald-300/60 bg-emerald-500/5 p-4 dark:bg-emerald-500/[0.03]"
+                  aria-label="Estrutura documentos semana+veículo"
+                >
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <FolderTree className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    <h3 className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 tracking-wide">
+                      WEEKLOG · Estrutura Semana + Veículo (ATIVO · criação automática)
+                    </h3>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground max-w-3xl leading-relaxed">
+                    Ao finalizar um veículo na Produção, a estrutura abaixo é criada automaticamente
+                    neste WEEKLOG e as fotos/documentos do veículo são migradas sem duplicação:
+                  </p>
+                  <ul className="text-[11px] text-muted-foreground mt-2 space-y-0.5 list-disc pl-5">
+                    <li>
+                      Pasta <b className="text-emerald-700 dark:text-emerald-300">Week XX</b> (ex: <code className="px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">Week 32</code>) — raiz da semana operacional.
+                    </li>
+                    <li>
+                      Dentro de cada semana: <b className="text-emerald-700 dark:text-emerald-300">MARCA MODELO - MATRÍCULA</b> (ex: <code className="px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">PEUGEOT 2008 - DN648GM</code>).
+                    </li>
+                    <li>Todas as fotos anexadas à ordem de Produção aparecem automaticamente dentro da pasta do veículo correto — nunca misturadas entre veículos.</li>
+                    <li>Filtros nativos do HierarchyExplorer (ano / semana / veículo / cliente / técnico) já funcionam imediatamente para buscas.</li>
+                  </ul>
+                </section>
+              </div>
             ) : hCtx.section === "relatorios" ? (
               <SectionPlaceholder
                 icon="chart"

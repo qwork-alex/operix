@@ -189,7 +189,11 @@ export function PaymentOrdersTable({ orders, isLoading }: { orders: PaymentOrder
     pending: "● Pendente",
   };
 
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => {
+    const initial = new Set<string>();
+    for (const o of orders) initial.add(groupKeyOf(o));
+    return initial;
+  });
   const toggleCollapse = (k: string) => setCollapsedGroups(prev => {
     const n = new Set(prev);
     if (n.has(k)) n.delete(k);

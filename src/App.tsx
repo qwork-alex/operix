@@ -19,6 +19,7 @@ import { queryClient } from "@/lib/queryClient";
 
 // Eager: routes hit on first paint of an authenticated session.
 import Index from "./pages/Index";
+import ProductionWorkflowPage from "./pages/ProductionWorkflowPage";
 
 // Lazy: every other page is code-split so the initial bundle shrinks
 // dramatically. Navigation feels instant because Vite preloads on hover
@@ -29,7 +30,6 @@ const ChangePasswordPage = lazy(() => import("./pages/ChangePasswordPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const ServiceOrdersPage = lazy(() => import("./pages/ServiceOrdersPage"));
 const PaymentOrdersPage = lazy(() => import("./pages/PaymentOrdersPage"));
-const ProductionWorkflowPage = lazy(() => import("./pages/ProductionWorkflowPage"));
 const FinancialPage = lazy(() => import("./pages/FinancialPage"));
 const ModulePages = () => import("./pages/ModulePages");
 const ProfitDistribution = lazy(() => ModulePages().then((m) => ({ default: m.ProfitDistribution })));

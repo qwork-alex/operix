@@ -4,6 +4,11 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 
+# Force invalidation layer for source when DUMMY build-arg changes
+# (fix for buildkit silently caching COPY . . even with --no-cache)
+ARG DUMMY
+RUN echo "invalidate=$DUMMY" > /tmp/_build_invalidate && cat /tmp/_build_invalidate
+
 COPY . .
 
 ARG VITE_API_URL=http://localhost:4000/api

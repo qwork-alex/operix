@@ -236,8 +236,8 @@ export default function PaymentOrdersPage() {
             <Wallet className="h-4 w-4 text-primary" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-sm font-semibold text-foreground truncate">{t("po.title") || "Ordens de pagamento"}</h1>
-            <p className="text-[11px] text-muted-foreground truncate">{t("po.subtitle") || "Validação e conciliação documental de pagamentos"}</p>
+            <h1 className="text-sm font-semibold text-foreground truncate">LISTA</h1>
+            <p className="text-[11px] text-muted-foreground truncate">{t("po.subtitle") || "Registro de veículos validados e prontos para pagamento"}</p>
           </div>
         </div>
         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 md:flex md:items-center">
@@ -260,6 +260,7 @@ export default function PaymentOrdersPage() {
             onContextChange={handleHierarchyContextChange}
             weekIcon={ClipboardList}
             onDeleteYear={handleDeleteYear}
+            defaultAllCollapsed
           />
         </SheetContent>
       </Sheet>
@@ -278,6 +279,7 @@ export default function PaymentOrdersPage() {
             onCollapsedChange={setSidebarCollapsed}
             weekIcon={ClipboardList}
             onDeleteYear={handleDeleteYear}
+            defaultAllCollapsed
           />
         </aside>
 

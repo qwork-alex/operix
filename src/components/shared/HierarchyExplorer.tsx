@@ -439,6 +439,8 @@ interface Props {
   weekIcon?: LucideIcon;
   /** Phase 1F-C — wipe all data attached to a year. Receives the year as string. */
   onDeleteYear?: (year: string) => Promise<void> | void;
+  /** Force todos os nós da árvore a começarem RECOLHIDOS (padrão novo comportamento). */
+  defaultAllCollapsed?: boolean;
 }
 
 export function HierarchyExplorer({
@@ -453,13 +455,15 @@ export function HierarchyExplorer({
   onCollapsedChange,
   weekIcon,
   onDeleteYear,
+  defaultAllCollapsed = false,
 }: Props) {
   const [internalCollapsed, setInternalCollapsed] = useState<boolean>(() => {
     try {
       const raw = localStorage.getItem(`${storageKey}.collapsed`);
+      if (defaultAllCollapsed) return raw === null ? true : raw === "1";
       return raw === "1";
     } catch {
-      return false;
+      return defaultAllCollapsed ? true : false;
     }
   });
   const collapsed = controlledCollapsed ?? internalCollapsed;
@@ -470,6 +474,7 @@ export function HierarchyExplorer({
   };
 
   const [open, setOpen] = useState<Set<string>>(() => {
+    if (defaultAllCollapsed) return new Set<string>();
     try {
       const raw = localStorage.getItem(`${storageKey}.open`);
       return new Set(raw ? (JSON.parse(raw) as string[]) : []);
