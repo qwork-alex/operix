@@ -80,6 +80,17 @@ const KNOWN_PERMISSION_KEYS = [
   "notifications.mark_read",
   "production_workflow.view",
   "production_workflow.move",
+  "locations.view",
+  "locations.create",
+  "locations.edit",
+  "locations.delete",
+  "people.view",
+  "people.create",
+  "people.edit",
+  "people.delete",
+  "people.upload_document",
+  "country_document_requirements.view",
+  "country_document_requirements.edit",
 ] as const;
 
 type Rule = {
@@ -104,6 +115,9 @@ const OWNER_RULES: Rule[] = [
   { module: "profile", actions: "*", scope: "all" },
   { module: "notifications", actions: "*", scope: "all" },
   { module: "production_workflow", actions: "*", scope: "all" },
+  { module: "locations", actions: "*", scope: "all" },
+  { module: "people", actions: "*", scope: "all" },
+  { module: "country_document_requirements", actions: "*", scope: "all" },
 ];
 
 const ROLE_RULES: Record<Exclude<PermissionRole, "owner">, Rule[]> = {
@@ -123,6 +137,9 @@ const ROLE_RULES: Record<Exclude<PermissionRole, "owner">, Rule[]> = {
     { module: "profile", actions: "*", scope: "all" },
     { module: "notifications", actions: "*", scope: "all" },
     { module: "production_workflow", actions: "*", scope: "all" },
+    { module: "locations", actions: "*", scope: "all" },
+    { module: "people", actions: "*", scope: "all" },
+    { module: "country_document_requirements", actions: "*", scope: "all" },
   ],
   partner: [
     { module: "dashboard", actions: ["view", "view_dashboard", "report_hail"], scope: "team" },
@@ -141,6 +158,9 @@ const ROLE_RULES: Record<Exclude<PermissionRole, "owner">, Rule[]> = {
     { module: "notifications", actions: ["view", "mark_read"], scope: "own" },
     // Move is further restricted at the route level to pre-faturamento transitions only (FR-016).
     { module: "production_workflow", actions: ["view", "move"], scope: "team" },
+    { module: "locations", actions: ["view"], scope: "team" },
+    { module: "people", actions: ["view", "create", "edit", "upload_document"], scope: "team" },
+    { module: "country_document_requirements", actions: ["view"], scope: "team" },
   ],
   technician: [
     { module: "dashboard", actions: ["view", "view_dashboard"], scope: "own" },
@@ -153,6 +173,8 @@ const ROLE_RULES: Record<Exclude<PermissionRole, "owner">, Rule[]> = {
     { module: "profile", actions: "*", scope: "own" },
     { module: "notifications", actions: ["view", "mark_read"], scope: "own" },
     { module: "production_workflow", actions: ["view"], scope: "own" },
+    { module: "locations", actions: ["view"], scope: "own" },
+    { module: "people", actions: ["view", "upload_document"], scope: "own" },
   ],
   client: [
     { module: "dashboard", actions: ["view"], scope: "own" },

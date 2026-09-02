@@ -660,11 +660,11 @@ export default function ProductionWorkflowPage() {
             <div className="flex flex-col justify-end">
               <div className="flex gap-2">
                 <Select
-                  value={filters.pagamento ?? ""}
+                  value={filters.pagamento ?? "any"}
                   onValueChange={(v) =>
                     setFilters((p) => ({
                       ...p,
-                      pagamento: (v as any) || undefined,
+                      pagamento: v === "any" ? undefined : (v as any),
                     }))
                   }
                 >
@@ -672,7 +672,7 @@ export default function ProductionWorkflowPage() {
                     <SelectValue placeholder="Pagamento" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Qualquer</SelectItem>
+                    <SelectItem value="any">Qualquer</SelectItem>
                     <SelectItem value="pendente">Pendente</SelectItem>
                     <SelectItem value="pago">Pago</SelectItem>
                     <SelectItem value="none">Sem Pagamento (ainda)</SelectItem>

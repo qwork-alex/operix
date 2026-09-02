@@ -28,6 +28,9 @@ import { weatherRouter } from "./routes/weather.js";
 import { routeCalcRouter } from "./routes/routeCalc.js";
 import { notificationsRouter } from "./routes/notifications.js";
 import { operationalBillingRouter } from "./routes/billingOperations.js";
+import { locationsRouter } from "./routes/locations.js";
+import { peopleRouter } from "./routes/people.js";
+import { countryDocumentRequirementsRouter } from "./routes/countryDocumentRequirements.js";
 import { runWeatherIngest } from "./services/weatherIngest.js";
 
 const app = express();
@@ -74,6 +77,9 @@ app.use("/api/weather", weatherRouter);
 app.use("/api/route", routeCalcRouter);
 app.use("/api/notifications", notificationsRouter);
 app.use("/api/billing", operationalBillingRouter);
+app.use("/api/locations", locationsRouter);
+app.use("/api/people", peopleRouter);
+app.use("/api/country-document-requirements", countryDocumentRequirementsRouter);
 
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof ZodError) {

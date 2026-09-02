@@ -57,6 +57,9 @@ const GdprPage = lazy(() => import("./pages/legal/LegalPages").then((m) => ({ de
 const CookiesPage = lazy(() => import("./pages/legal/LegalPages").then((m) => ({ default: m.CookiesPage })));
 const DataProcessingPage = lazy(() => import("./pages/legal/LegalPages").then((m) => ({ default: m.DataProcessingPage })));
 const ClientsScreenBilling = lazy(() => import("./components/billing/ClientsScreen").then((m) => ({ default: m.default })));
+const PeoplePage = lazy(() => import("./pages/PeoplePage"));
+const LocationsPage = lazy(() => import("./pages/LocationsPage"));
+const CountryDocumentRequirementsPage = lazy(() => import("./pages/CountryDocumentRequirementsPage"));
 
 /** Subtle, layout-stable fallback used while a route chunk is loading. */
 function RouteFallback() {
@@ -209,6 +212,9 @@ function AuthenticatedShell() {
                     <Route path="/fleet" element={<PermissionGuard permission="fleet.view"><FleetPage /></PermissionGuard>} />
                     <Route path="/billing/*" element={<PermissionGuard permission="accounting.view"><BillingPage /></PermissionGuard>} />
                     <Route path="/clients" element={<PermissionGuard permission="accounting.view"><ClientsScreenBilling /></PermissionGuard>} />
+                    <Route path="/people" element={<PermissionGuard permission="people.view"><PeoplePage /></PermissionGuard>} />
+                    <Route path="/locations" element={<PermissionGuard permission="locations.view"><LocationsPage /></PermissionGuard>} />
+                    <Route path="/country-document-requirements" element={<PermissionGuard permission="country_document_requirements.view"><CountryDocumentRequirementsPage /></PermissionGuard>} />
                     <Route path="/documents" element={<PermissionGuard permission="documents.view"><Documents /></PermissionGuard>} />
                     <Route path="/users" element={<PermissionGuard permission="users.view"><UsersPage /></PermissionGuard>} />
                     <Route path="/marketplace" element={<MarketplacePage />} />

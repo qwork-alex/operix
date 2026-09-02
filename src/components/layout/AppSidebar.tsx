@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import {
   LayoutDashboard, FileText, CreditCard, TrendingUp, BarChart3,
   Car, Users, Receipt, Shield, Wrench, Store, Zap, Brain, Workflow,
-  UserPlus,
+  UserPlus, IdCard, MapPin, FileCheck2,
 } from "lucide-react";
 import { useIsPlatformOwner } from "@/hooks/useSubscription";
 import {
@@ -72,6 +72,14 @@ export const AppSidebar = memo(function AppSidebar() {
       // Cliente — flush entre Painel e Operações, com espaçamento visual via className pt-4 abaixo.
       items: [
         { title: "Cliente", url: "/clients", icon: UserPlus, module: "accounting", action: "view" },
+      ],
+    },
+    {
+      label: t("nav.group.registrations", "Cadastros"),
+      items: [
+        { title: t("nav.people", "Pessoas"), url: "/people", icon: IdCard, module: "people", action: "view" },
+        { title: t("nav.locations", "Locais"), url: "/locations", icon: MapPin, module: "locations", action: "view" },
+        { title: t("nav.countryDocuments", "Documentos por País"), url: "/country-document-requirements", icon: FileCheck2, module: "country_document_requirements", action: "view" },
       ],
     },
     {

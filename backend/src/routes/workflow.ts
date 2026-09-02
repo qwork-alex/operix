@@ -161,7 +161,7 @@ function jsonGet(root: any, path: string[]): any {
   return cur;
 }
 
-function parseValidation(so: SO): {
+function parseValidation(so: SO | null): {
   situation: "oui" | "non" | null;
   assinado: boolean;
   valor_final: number | null;
@@ -173,6 +173,20 @@ function parseValidation(so: SO): {
   payment_order_id: string | null;
   historico_len: number;
 } {
+  if (!so) {
+    return {
+      situation: null,
+      assinado: false,
+      valor_final: null,
+      retificativa: null,
+      week_display: null,
+      week_number: null,
+      year_ref: null,
+      list_name: null,
+      payment_order_id: null,
+      historico_len: 0,
+    };
+  }
   const op =
     (so.distributionSnapshot &&
       typeof so.distributionSnapshot === "object" &&
@@ -298,7 +312,7 @@ function itemFromParts(params: {
   pay: PAY | null;
 }): WorkflowItem {
   const { po, so, pay } = params;
-  const val = so ? parseValidation(so) : parseValidation(null as any);
+  const val = parseValidation(so);
 
   const client_name =
     po?.clientName ?? so?.clientName ?? pay?.clientName ?? null;
